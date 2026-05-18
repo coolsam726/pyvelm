@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 from .domain import domain_to_sql
 from .fields import Field
@@ -62,6 +62,18 @@ class BaseModel(metaclass=MetaModel):
     def __init__(self, env, ids: Iterable[int] = ()) -> None:
         self.env = env
         self._ids: tuple[int, ...] = tuple(ids)
+
+    if TYPE_CHECKING:
+        # Static-analysis-only stubs. Field descriptors + the metaclass
+        # mean every model has attributes Pylance/Pyright can't enumerate;
+        # the descriptor protocol resolves them at runtime, so these
+        # methods are never actually called. Telling the type checker
+        # "any attr is Any" (both read and write) silences descriptor
+        # false positives without changing runtime behavior. Real typos
+        # still raise AttributeError at runtime via the cache/descriptor
+        # chain, or ValueError "Unknown field" from write/create.
+        def __getattr__(self, name: str) -> Any: ...
+        def __setattr__(self, name: str, value: Any) -> None: ...
 
     # ------ recordset protocol ------
 
