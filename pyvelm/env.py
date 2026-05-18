@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .registry import Registry, registry as default_registry
+from .registry import Registry
 
 
 _MISSING = object()
@@ -61,25 +61,89 @@ class Environment:
     def __init__(
         self,
         conn,
+        registry: Registry,
         uid: int = 1,
         context: dict | None = None,
-        registry: Registry | None = None,
     ) -> None:
         self.conn = conn
         self.uid = uid
         self.context = dict(context or {})
-        self.registry = registry or default_registry
+        self.registry = registry
         self.cache = Cache()
-        self._in_compute = False
+        # In-flight transaction depth for nested savepoint support; 0 means
+        # no transaction open, calls auto-commit per-statement.
+        self._tx_depth: int = 0
+        # Compute orchestration flag — set by compute_field, gates writes.
+        self._in_compute: bool = False
 
     def __getitem__(self, model_name: str):
         model_cls = self.registry[model_name]
         return model_cls(self, ())
 
     def with_context(self, **overrides) -> "Environment":
-        new = Environment(self.conn, self.uid, {**self.context, **overrides}, self.registry)
+        new = Environment(
+            self.conn,
+            registry=self.registry,
+            uid=self.uid,
+            context={**self.context, **overrides},
+        )
         new.cache = self.cache
         return new
+
+    # ------ Transactions ------
+
+    def transaction(self):
+        """Return a context manager for an atomic unit of work.
+
+        Outer call opens a real transaction; nested calls use savepoints
+        so partial work can roll back independently.  On exception the
+        active scope rolls back; otherwise it commits / releases.
+
+        This is the explicit boundary that install/migrate flows use to
+        keep schema mutations atomic. CRUD calls outside any transaction
+        are still effectively auto-committed because the connection is
+        configured that way.
+        """
+        env = self
+
+        class _TxContext:
+            def __enter__(self_inner):
+                if env._tx_depth == 0:
+                    if env.conn.autocommit:
+                        env.conn.autocommit = False
+                    env._tx_opened_autocommit = False
+                    env._tx_depth = 1
+                    self_inner._kind = "tx"
+                else:
+                    sp_name = f"_pyvelm_sp{env._tx_depth}"
+                    env.conn.execute(f"SAVEPOINT {sp_name}")
+                    env._tx_depth += 1
+                    self_inner._kind = "sp"
+                    self_inner._sp_name = sp_name
+                return env
+
+            def __exit__(self_inner, exc_type, exc, tb):
+                try:
+                    if self_inner._kind == "tx":
+                        if exc is None:
+                            env.conn.commit()
+                        else:
+                            env.conn.rollback()
+                    else:
+                        sp = self_inner._sp_name
+                        if exc is None:
+                            env.conn.execute(f"RELEASE SAVEPOINT {sp}")
+                        else:
+                            env.conn.execute(f"ROLLBACK TO SAVEPOINT {sp}")
+                finally:
+                    env._tx_depth -= 1
+                    if env._tx_depth == 0:
+                        # Reopen autocommit so subsequent ad-hoc statements
+                        # don't sit in an implicit transaction.
+                        env.conn.autocommit = True
+                return False
+
+        return _TxContext()
 
     # ------ Computed-field orchestration ------
 

@@ -11,8 +11,9 @@ from .fields import (
     One2many,
     Text,
 )
+from . import loader
 from .model import BaseModel
-from .registry import registry
+from .registry import Registry
 
 __all__ = [
     "BaseModel",
@@ -20,12 +21,13 @@ __all__ = [
     "Char",
     "Environment",
     "Field",
-    "depends",
     "Float",
     "Integer",
     "Many2many",
     "Many2one",
     "One2many",
+    "Registry",
     "Text",
-    "registry",
+    "depends",
+    "loader",
 ]

@@ -47,6 +47,7 @@ def _coerce(field, value):
 def domain_to_sql(
     domain: Iterable[tuple[str, str, Any]] | None,
     model_cls,
+    registry,
 ) -> tuple[str, list[Any], str]:
     if not domain:
         return "TRUE", [], ""
@@ -59,8 +60,6 @@ def domain_to_sql(
     # two leaves shares aliases — avoids redundant JOINs.
     join_aliases: dict[tuple, str] = {}
     join_counter = [0]
-
-    from .registry import registry
 
     def _emit_chain(hops) -> str:
         """Emit LEFT JOINs for a Many2one chain; return the alias of the

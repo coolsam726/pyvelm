@@ -1,11 +1,37 @@
 from __future__ import annotations
 
+import contextlib
+import contextvars
 from typing import Iterator
+
+
+# Active registry that newly-defined model classes register into.
+# The loader sets this around each module's import; ad-hoc users set
+# it via `with registry.activate():`. There is no module-global
+# default — defining a model with no active registry is a programming
+# error, not a silent fallback.
+_active: contextvars.ContextVar["Registry | None"] = contextvars.ContextVar(
+    "pyvelm_active_registry", default=None
+)
+
+
+def active_registry() -> "Registry":
+    reg = _active.get()
+    if reg is None:
+        raise RuntimeError(
+            "No active pyvelm registry. Define model classes inside a "
+            "`with my_registry.activate():` block, or let the loader "
+            "handle module imports."
+        )
+    return reg
 
 
 class Registry:
     def __init__(self) -> None:
         self._models: dict[str, type] = {}
+        # Which module each model came from, populated by the loader.
+        # Modules use this to scope schema creation / migrations.
+        self._model_module: dict[str, str] = {}
         # Built by init_db:
         #   _edge_index[(listen_model, listen_attr)] ->
         #       [(dep_model, dep_field, HopEdge), ...]
@@ -15,8 +41,33 @@ class Registry:
         ] = {}
         self._stored_compute_order: dict[str, list[str]] = {}
 
-    def register(self, model_cls: type) -> None:
+    @contextlib.contextmanager
+    def activate(self):
+        """Bind this registry as the active one for model class creation.
+
+        Usage:
+            with reg.activate():
+                class Partner(BaseModel):
+                    _name = "res.partner"
+                    ...
+        """
+        token = _active.set(self)
+        try:
+            yield self
+        finally:
+            _active.reset(token)
+
+    def register(self, model_cls: type, module_name: str | None = None) -> None:
         self._models[model_cls._name] = model_cls
+        if module_name is not None:
+            self._model_module[model_cls._name] = module_name
+
+    def models_of(self, module_name: str) -> list[type]:
+        """Models contributed by a single module, in registration order."""
+        return [
+            cls for cls in self._models.values()
+            if self._model_module.get(cls._name) == module_name
+        ]
 
     def __getitem__(self, name: str) -> type:
         return self._models[name]
@@ -135,6 +186,3 @@ class Registry:
         for cls in self._models.values():
             cls._drop_table(conn)
         self.init_db(conn)
-
-
-registry = Registry()

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 from .domain import domain_to_sql
 from .fields import Field
-from .registry import registry
+from .registry import active_registry
 
 
 class MetaModel(type):
@@ -43,7 +43,7 @@ class MetaModel(type):
                         f"{field.compute!r} must be decorated with @depends(...)"
                     )
                 field.depends_on = tuple(deps)
-            registry.register(cls)
+            active_registry().register(cls)
         return cls
 
 
@@ -389,7 +389,9 @@ class BaseModel(metaclass=MetaModel):
         offset: int = 0,
         order: str | None = None,
     ) -> "BaseModel":
-        where, params, joins = domain_to_sql(domain, self.__class__)
+        where, params, joins = domain_to_sql(
+            domain, self.__class__, self.env.registry
+        )
         base = f'"{self._table}"'
         sql = f'SELECT {base}."id" FROM {base}{joins} WHERE {where}'
         if order:
@@ -402,7 +404,9 @@ class BaseModel(metaclass=MetaModel):
         return self.__class__(self.env, tuple(r[0] for r in rows))
 
     def search_count(self, domain: list[tuple] | None = None) -> int:
-        where, params, joins = domain_to_sql(domain, self.__class__)
+        where, params, joins = domain_to_sql(
+            domain, self.__class__, self.env.registry
+        )
         base = f'"{self._table}"'
         sql = f'SELECT COUNT(*) FROM {base}{joins} WHERE {where}'
         return self.env.conn.execute(sql, params).fetchone()[0]

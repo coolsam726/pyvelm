@@ -77,9 +77,42 @@ Field instances also carry their `column` (the SQL column name, defaulted to
 `name`). The two can diverge — see the `column=` kwarg on `Field.__init__` —
 but Odoo-style projects keep them equal.
 
+## Stage 3 module lifecycle
+
+A pyvelm app is a set of modules, each a Python package with a
+`__pyvelm__.py` manifest declaring `NAME`, `VERSION`, and `DEPENDS`. The
+loader (`pyvelm/loader.py`) discovers them under one or more roots,
+topo-sorts by `DEPENDS`, and installs each module's schema and
+migrations into a `Registry`.
+
+There is **no module-global registry**. Models register into whichever
+`Registry` is "active" at class-creation time, set via
+`with registry.activate():`. The loader brackets each module's models
+import in that context. Defining a model outside any active registry
+raises — silent fallbacks make multi-registry bugs hard to find.
+
+The loader walks specs in topo order and, for each module:
+
+- If absent from `ir_module`: create its tables and FKs, run the install
+  hook, record the version.
+- If present with an older version: run every script under
+  `<module>/migrations/` sorted by filename; bump the version.
+- If present with the same version: no-op.
+
+Each per-module step runs inside `env.transaction()`. The compute graph
+(`_build_compute_graph`) and relational validation
+(`_validate_relations`) run *after* all modules are loaded so cross-module
+references (e.g. `partners.Partner.display_name` depending on
+`base.Region.name`) resolve.
+
+For the full guide, see [module-loading.md](module-loading.md).
+
 ## Multi-pass database init
 
-`registry.init_db(conn)` runs four passes, in order:
+`registry.init_db(conn)` is now the "install everything at once" shortcut
+used by tests and the legacy `reset_db`. Production goes through
+`loader.install` which runs the same passes scoped to one module at a
+time, transaction-wrapped. The pass list is the same either way:
 
 1. **CREATE TABLE for each model.** Stored fields contribute columns;
    non-stored fields (One2many, Many2many, non-stored computes) don't.

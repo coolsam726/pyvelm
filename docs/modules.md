@@ -6,29 +6,41 @@ the code.
 
 ## `pyvelm.registry` — [pyvelm/registry.py](../pyvelm/registry.py)
 
-A single `Registry` instance lives at module scope (`pyvelm.registry`). Model
-classes register themselves at class-creation time via the metaclass; nothing
-else needs to find them.
+`Registry` is a first-class object; there is no module global. Models
+register into whichever registry is "active" (a `contextvars.ContextVar`)
+at class-creation time. The loader sets it around each module's import;
+ad-hoc users set it via `with reg.activate():`.
 
 **Public surface**
 
-- `registry` — the singleton.
+- `Registry()` — a fresh, empty registry.
+- `registry.activate()` — context manager that binds this registry to the
+  active-registry contextvar for the duration of a block.
 - `registry[name]` — look up a model class by `_name`.
-- `registry.init_db(conn)` — run the four-pass init (see
-  [architecture.md](architecture.md#multi-pass-database-init)).
-- `registry.reset_db(conn)` — drop everything and re-init. Drops M2M relation
-  tables explicitly before model tables.
+- `registry.models_of(module_name)` — models contributed by a single
+  module, in registration order.
+- `registry.init_db(conn)` — run the four-pass init across every loaded
+  model. Used by tests and `reset_db`. Production code routes through
+  `loader.install`, which runs the same passes per module.
+- `registry.reset_db(conn)` — drop everything and re-init. Drops M2M
+  relation tables explicitly before model tables.
+- `active_registry()` — module-level function returning the current
+  active registry or raising if none is set.
 
 **Internal but worth knowing**
 
 - `_edge_index`, `_stored_compute_order` — populated by
-  `_build_compute_graph()` during `init_db`. `_edge_index` is keyed by
+  `_build_compute_graph()`. `_edge_index` is keyed by
   `(listen_model, listen_attr)` and stores a `HopEdge` per listening
-  point on every parsed dep path. The `Environment` reads it to drive
-  `notify_changed`.
+  point on every parsed dep path. `Environment.notify_changed` reads it.
+- `_model_module` — `{model_name: source_module_name}`, set by the
+  loader so per-module installs can scope schema work via
+  `models_of(name)`.
 
-**Invariant.** The module-global registry is fine until Stage 3. When module
-loading lands, each loaded module will likely get its own registry slice.
+**Invariant.** Exactly one registry is active at any moment in a given
+context. Multi-tenant runtimes that need parallel registries should use
+threading/asyncio contexts (the contextvar respects both) rather than
+swap a global.
 
 ## `pyvelm.env` — [pyvelm/env.py](../pyvelm/env.py)
 
@@ -37,10 +49,14 @@ recordset.
 
 **Public surface**
 
-- `Environment(conn, uid=1, context=None, registry=None)`
+- `Environment(conn, registry, uid=1, context=None)` — `registry` is
+  required (no implicit default).
 - `env[model_name]` — empty recordset of that model.
 - `env.with_context(**overrides)` — a sibling env sharing the same cache.
 - `env.cache` — `(model, id, field)`-keyed dict with `get/set/contains/invalidate`.
+- `env.transaction()` — context manager opening an atomic unit of work.
+  Outer call opens a real transaction; nested calls become savepoints.
+  Outside any transaction, the connection runs in autocommit mode.
 - `env.compute_field(record, field)` — run a compute method, flush stored
   results to SQL.
 - `env.notify_changed(model, ids, fields)` — BFS the dependency graph
@@ -189,8 +205,29 @@ Parsing happens in `pyvelm.paths.parse_path`; the metaclass simply stashes
 the raw path strings on `field.depends_on`. Validation (does the field
 exist? is each non-leaf relational?) runs once at registry init.
 
+## `pyvelm.loader` — [pyvelm/loader.py](../pyvelm/loader.py)
+
+Discovers `__pyvelm__.py` manifests, resolves dependency order, imports
+each module's models under the active registry, and runs install /
+migrate inside per-module transactions. Tracks installed versions in
+the `ir_module` table.
+
+**Public surface**
+
+- `discover(roots) -> dict[name, ModuleSpec]`
+- `resolve_order(specs) -> list[ModuleSpec]` — topo sort, raises on
+  missing deps or cycles.
+- `install(specs, env)` — per-module schema setup, install hook,
+  migrations. Also rebuilds the cross-module compute graph and runs
+  relational validation once everything is loaded.
+- `load_and_install(roots, env)` — convenience wrapper that runs all
+  three.
+
+See [module-loading.md](module-loading.md) for the manifest contract
+and migration conventions.
+
 ## `pyvelm.__init__` — [pyvelm/__init__.py](../pyvelm/__init__.py)
 
 Re-exports the public API: `BaseModel`, the field classes, `Environment`,
-`registry`, and the `depends` decorator. Nothing imported from here is
-considered private.
+`Registry`, the `depends` decorator, and the `loader` module. Nothing
+imported from here is considered private.
