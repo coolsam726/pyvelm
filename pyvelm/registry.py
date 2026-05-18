@@ -158,6 +158,18 @@ class Registry:
 
     def reset_db(self, conn) -> None:
         """Drop and recreate every registered model's table. Test-only."""
+        from .fields import Many2many
+
+        # Drop Many2many junction tables explicitly so stale schema can't
+        # survive a failed prior run (CREATE TABLE IF NOT EXISTS would
+        # otherwise silently skip recreation).
+        relation_names: set[str] = set()
+        for cls in self._models.values():
+            for f in cls._fields.values():
+                if isinstance(f, Many2many):
+                    relation_names.add(f.resolve_spec(cls, self)[0])
+        for rel in relation_names:
+            conn.execute(f'DROP TABLE IF EXISTS "{rel}" CASCADE')
         for cls in self._models.values():
             cls._drop_table(conn)
         self.init_db(conn)

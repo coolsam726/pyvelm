@@ -149,8 +149,7 @@ def main():
 
         # __set__ accepts the same shapes.
         dave.tag_ids = [eu]
-        got = dave.tag_ids.ids
-        assert got == [eu.id], f"expected {[eu.id]}, got {got}"
+        assert dave.tag_ids.ids == [eu.id]
 
         # Clearing.
         dave.tag_ids = None
