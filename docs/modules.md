@@ -21,9 +21,11 @@ else needs to find them.
 
 **Internal but worth knowing**
 
-- `_direct_deps`, `_m2o_deps`, `_stored_compute_order` — populated by
-  `_build_compute_graph()` during `init_db`. The `Environment` reads them to
-  drive `notify_changed`.
+- `_edge_index`, `_stored_compute_order` — populated by
+  `_build_compute_graph()` during `init_db`. `_edge_index` is keyed by
+  `(listen_model, listen_attr)` and stores a `HopEdge` per listening
+  point on every parsed dep path. The `Environment` reads it to drive
+  `notify_changed`.
 
 **Invariant.** The module-global registry is fine until Stage 3. When module
 loading lands, each loaded module will likely get its own registry slice.
@@ -43,8 +45,9 @@ recordset.
   results to SQL.
 - `env.notify_changed(model, ids, fields)` — BFS the dependency graph
   invalidating downstream cache entries and recomputing stored fields.
-- `env._reverse_m2o(model, m2o_attr, source_ids)` — find target rows whose
-  FK points at source ids. Used by the M2o traversal half of the dep graph.
+  Delegates the actual graph walk to `HopEdge.find_source_ids` (see
+  `paths.py`), so the same code path handles M2o, O2m, and M2m
+  traversals.
 
 **Invariant.** `_in_compute` is the single flag that gates whether
 `Field.__set__` accepts writes to a computed field. Always reset in a
@@ -94,17 +97,51 @@ Field
    does **not** mean "no SQL anywhere" — Many2many is non-stored but owns a
    junction table.
 
-## `pyvelm.domain` — [pyvelm/domain.py](../pyvelm/domain.py)
+## `pyvelm.paths` — [pyvelm/paths.py](../pyvelm/paths.py)
 
-Translates `[(attr, op, value), ...]` into a SQL `WHERE` clause.
+Shared parser for dotted references. Used by the compute-field dep graph
+and by the domain compiler.
 
 **Public surface**
 
-- `domain_to_sql(domain, model_cls)` — returns `(where_sql, params)`.
+- `parse_path(model_cls, path, registry) -> Path` — parses a dotted
+  reference (`country_id.region_id.name`) against a model. Every non-leaf
+  token must name a relational field. Validates as it goes.
+- `Path` — `source_model`, `hops: list[Hop]`, `leaf_model`, `leaf_attr`.
+  Exposes `is_m2o_only()`, `reads()`, and `edges()`.
+- `Hop` and its three concretes: `M2oHop`, `O2mHop`, `M2mHop`. Each
+  implements `reverse_walk(env, ids)` — "given ids on the *target* model,
+  return ids on the *source* model that relate to them via this hop."
+- `HopEdge` — `listen_at: (model, attr)`, `to_source: callable`,
+  `hops_to_walk: list[Hop]`, with `find_source_ids(env, ids)` doing the
+  full walk.
+
+**Invariant.** A Path's `edges()` is the contract between the parser and
+the dep graph. Adding a new hop type means: subclass `Hop`, implement
+`reverse_walk`, and add the right `HopEdge` case in `Path.edges`. Nothing
+else needs to know about your new hop type.
+
+## `pyvelm.domain` — [pyvelm/domain.py](../pyvelm/domain.py)
+
+Translates `[(attr, op, value), ...]` into a SQL `WHERE` clause plus any
+required `LEFT JOIN`s.
+
+**Public surface**
+
+- `domain_to_sql(domain, model_cls)` — returns `(where, params, joins)`
+  where `joins` is the `LEFT JOIN ...` text (or `""`).
 
 **Behavior**
 
-- Attr names validated against `model_cls._fields` (or accepted if `attr == "id"`).
+- Simple attrs validated against `model_cls._fields` (or accepted if
+  `attr == "id"`).
+- Dotted attrs parsed via `paths.parse_path`. M2o-only chains emit
+  `LEFT JOIN`s with generated aliases (`_j1`, `_j2`, …); aliases are
+  memoized per chain so two leaves on the same path share JOINs.
+- Paths containing any O2m/M2m hop emit a per-leaf
+  `EXISTS (SELECT 1 ...)` subquery with aliases in their own
+  `_e<n>_<i>` namespace. Each leaf gets a fresh subquery — semantically
+  correct because two collection leaves can match different members.
 - Values coerced through `field.to_sql_param` so Many2one leaves accept
   recordsets.
 - Operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `like`,
@@ -147,9 +184,10 @@ Tiny module. Defines `depends(*paths)` which stashes the dep tuple on the
 method as `_pyvelm_depends`. The metaclass copies it onto the matching
 field's `depends_on` attribute.
 
-Paths supported in Stage 2: single attr (`"name"`) or one-hop Many2one
-traversal (`"country_id.code"`). Multi-hop and traversal through One2many or
-Many2many are deferred; the parser is shared with future domain traversal.
+Paths supported: any combination of M2o, O2m, and M2m hops at any depth.
+Parsing happens in `pyvelm.paths.parse_path`; the metaclass simply stashes
+the raw path strings on `field.depends_on`. Validation (does the field
+exist? is each non-leaf relational?) runs once at registry init.
 
 ## `pyvelm.__init__` — [pyvelm/__init__.py](../pyvelm/__init__.py)
 

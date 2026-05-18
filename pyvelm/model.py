@@ -377,8 +377,9 @@ class BaseModel(metaclass=MetaModel):
         offset: int = 0,
         order: str | None = None,
     ) -> "BaseModel":
-        where, params = domain_to_sql(domain, self.__class__)
-        sql = f'SELECT "id" FROM "{self._table}" WHERE {where}'
+        where, params, joins = domain_to_sql(domain, self.__class__)
+        base = f'"{self._table}"'
+        sql = f'SELECT {base}."id" FROM {base}{joins} WHERE {where}'
         if order:
             sql += f" ORDER BY {order}"
         if limit is not None:
@@ -389,6 +390,7 @@ class BaseModel(metaclass=MetaModel):
         return self.__class__(self.env, tuple(r[0] for r in rows))
 
     def search_count(self, domain: list[tuple] | None = None) -> int:
-        where, params = domain_to_sql(domain, self.__class__)
-        sql = f'SELECT COUNT(*) FROM "{self._table}" WHERE {where}'
+        where, params, joins = domain_to_sql(domain, self.__class__)
+        base = f'"{self._table}"'
+        sql = f'SELECT COUNT(*) FROM {base}{joins} WHERE {where}'
         return self.env.conn.execute(sql, params).fetchone()[0]

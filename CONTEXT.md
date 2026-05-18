@@ -40,9 +40,13 @@ For the design rationale and the deferred-items rationale, see
 
 - `env.cache` has no LRU or eviction. Fine until working sets get large.
 - Domain language is AND-only, no relational traversal, no polish notation.
-- Multi-hop `@depends` (e.g. `country_id.region_id.name`); only single-hop
-  through Many2one is supported. Traversal through One2many/Many2many is
-  not supported (needs the same dotted-path parser as domain traversal).
+- Universal-quantifier domains on collections: `("tag_ids.name", "!=",
+  "VIP")` reads "has at least one non-VIP tag," not "every tag is
+  non-VIP." The latter needs `NOT EXISTS` semantics or an explicit `all`
+  operator.
+- Old-value invalidation on O2m/M2m: when a child moves from parent A to
+  parent B, only B's dependent computes get invalidated; A's stay stale
+  until the next read. Needs read-before-write in `model.write`.
 - No caching for One2many/Many2many reads — re-queried each access.
 - Stale FK cache on comodel unlink: `ON DELETE SET NULL` updates the DB,
   but the cache still holds the old int. Needs a reverse-FK index.
@@ -57,14 +61,18 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 3, with one architectural pivot up front: build the **dotted-path
-parser** that unlocks both domain traversal and multi-hop `@depends`. That
-parser is the prerequisite for:
+Stage 2.5 is now complete: the dotted-path parser feeds both the
+`@depends` dependency graph and the domain compiler. M2o-only paths emit
+shared `LEFT JOIN` chains; any path containing an O2m/M2m hop emits a
+per-leaf `EXISTS` subquery (`Partner.search([("tag_ids.name", "=",
+"VIP")])` works).
 
-- `Partner.search([("country_id.code", "=", "FR")])`
-- `@depends('country_id.region_id.name')`
-- O2m/M2m caching (uses the same reverse-walk machinery)
+Stage 3 next: module loading + migrations + registry lifecycle. Possibly
+migrate raw SQL to SQLAlchemy Core in the same pass to get a real
+migration tool for free. One smaller follow-up that can slot in before
+Stage 3 if it hurts first:
 
-Then the proper Stage 3 work — module loading, migrations, registry
-lifecycle. Possibly migrate raw SQL to SQLAlchemy Core in the same pass to
-get a real migration tool for free.
+- **O2m/M2m caching + old-value snapshotting** — closes the remaining
+  invalidation gaps (stale FK cache on comodel unlink; lost-parent
+  invalidation when a child re-parents). Worth doing together since both
+  touch the same `model.write` read-before-write hook.

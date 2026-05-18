@@ -24,11 +24,18 @@ from pyvelm import (
 load_dotenv()
 
 
+class Region(BaseModel):
+    _name = "res.region"
+
+    name = Char(required=True)
+
+
 class Country(BaseModel):
     _name = "res.country"
 
     name = Char(required=True)
     code = Char()
+    region_id = Many2one("res.region", ondelete="SET NULL")
     partner_ids = One2many("res.partner", "country_id")
 
 
@@ -55,11 +62,19 @@ class Partner(BaseModel):
     # Stored compute — has a real SQL column, recomputed when `age` changes.
     age_bucket = Char(compute="_compute_age_bucket", store=True)
 
-    @depends("name", "country_id.code")
+    @depends("name", "country_id.code", "country_id.region_id.name")
     def _compute_display_name(self):
         for r in self:
             code = r.country_id.code if r.country_id else None
-            r.display_name = f"{r.name} [{code}]" if code else r.name
+            region = r.country_id.region_id.name if (
+                r.country_id and r.country_id.region_id
+            ) else None
+            parts = [r.name]
+            if code:
+                parts.append(f"[{code}]")
+            if region:
+                parts.append(f"({region})")
+            r.display_name = " ".join(parts)
 
     @depends("age")
     def _compute_age_bucket(self):
@@ -79,8 +94,12 @@ def main():
         Partner = env["res.partner"]
         Country = env["res.country"]
 
-        france = Country.create({"name": "France", "code": "FR"})
-        japan = Country.create({"name": "Japan", "code": "JP"})
+        Region = env["res.region"]
+        europe = Region.create({"name": "Europe"})
+        asia_region = Region.create({"name": "Asia"})
+
+        france = Country.create({"name": "France", "code": "FR", "region_id": europe})
+        japan = Country.create({"name": "Japan", "code": "JP", "region_id": asia_region})
 
         alice = Partner.create({"name": "Alice", "age": 30, "active": True, "country_id": france})
         bob = Partner.create({"name": "Bob", "age": 25, "active": True, "country_id": japan.id})
@@ -162,9 +181,10 @@ def main():
         print("After vip.unlink(), dave.tag_ids =", dave.tag_ids)
 
         # ----- Computed fields -----
-        # alice.country_id = France, so display_name reads name + country code.
+        # alice.country_id = France (Europe). display_name walks two M2o
+        # hops: name + country.code + country.region.name.
         # bob.country_id is None at this point (we cleared it).
-        assert alice.display_name == "Alice [FR]"
+        assert alice.display_name == "Alice [FR] (Europe)"
         assert bob.display_name == "Bob"
         print("alice.display_name =", alice.display_name)
         print("dave.age_bucket =", dave.age_bucket, "(age 50)")
@@ -173,16 +193,22 @@ def main():
 
         # Same-record invalidation: changing `name` invalidates display_name.
         alice.write({"name": "Alicia"})
-        assert alice.display_name == "Alicia [FR]"
+        assert alice.display_name == "Alicia [FR] (Europe)"
         print("after rename:", alice.display_name)
 
-        # M2o-traversal invalidation: changing France.code invalidates the
-        # display_name on every partner whose country_id points at France,
-        # but not partners pointing elsewhere.
+        # One-hop M2o invalidation: France's code changes -> only partners
+        # whose country_id points at France get their display_name dropped.
         france.write({"code": "FRA"})
-        assert alice.display_name == "Alicia [FRA]"
+        assert alice.display_name == "Alicia [FRA] (Europe)"
         assert bob.display_name == "Bob"  # bob has no country, unaffected
         print("after France code change:", alice.display_name)
+
+        # Two-hop M2o invalidation: Europe's name changes -> reverse-walk
+        # finds countries with region_id=Europe, then partners whose
+        # country_id points at those countries.
+        europe.write({"name": "EU"})
+        assert alice.display_name == "Alicia [FRA] (EU)"
+        print("after Europe rename:", alice.display_name)
 
         # Stored compute writes back to the SQL column on dep change.
         dave.write({"age": 28})
@@ -200,6 +226,44 @@ def main():
         # Domain on a Many2one — value can be a recordset.
         in_france = Partner.search([("country_id", "=", france)])
         print("Partners in France:", [p.name for p in in_france])
+
+        # Domain traversal through a Many2one chain: emits LEFT JOINs.
+        # Find partners whose country is in Europe.
+        in_europe = Partner.search([("country_id.region_id.name", "=", "EU")])
+        print("Partners in Europe:", [p.name for p in in_europe])
+        assert alice in in_europe
+        assert bob not in in_europe  # bob has no country
+
+        # Multiple path leaves in one domain reuse the same JOIN chain.
+        french_eu = Partner.search([
+            ("country_id.code", "=", "FRA"),
+            ("country_id.region_id.name", "=", "EU"),
+        ])
+        assert french_eu.ids == [alice.id]
+
+        # Collection-path domains: O2m via EXISTS subquery.
+        # Find partners with at least one child named "Carol".
+        parents_of_carol = Partner.search([("child_ids.name", "=", "Carol")])
+        print("Parents of Carol:", [p.name for p in parents_of_carol])
+        assert parents_of_carol.ids == [alice.id]
+
+        # Collection-path domains: M2m via EXISTS subquery.
+        # Give Alice a couple of tags so the M2m query has signal.
+        alice.write({"tag_ids": [eu, asia]})
+        eu_tagged = Partner.search([("tag_ids.name", "=", "EU")])
+        print("Partners tagged EU:", [p.name for p in eu_tagged])
+        assert alice in eu_tagged
+        assert dave in eu_tagged  # dave still tagged EU from earlier
+
+        # Two M2m leaves on the same attr: each gets its own EXISTS, so
+        # "tagged EU" AND "tagged Asia" matches partners with BOTH tags.
+        both = Partner.search([
+            ("tag_ids.name", "=", "EU"),
+            ("tag_ids.name", "=", "Asia"),
+        ])
+        print("Partners tagged BOTH EU and Asia:", [p.name for p in both])
+        assert alice in both
+        assert dave not in both  # dave is only tagged EU
 
         # Domain typo now raises locally instead of crashing in PG.
         raised = False

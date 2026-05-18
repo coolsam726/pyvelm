@@ -7,12 +7,11 @@ class Registry:
     def __init__(self) -> None:
         self._models: dict[str, type] = {}
         # Built by init_db:
-        #   _direct_deps[(model, field)] -> list[(dep_model, dep_field)]
-        #   _m2o_deps[(comodel, field)]  -> list[(model, m2o_field, dep_field)]
-        #   _stored_compute_order[model] -> [field, ...] (topo)
-        self._direct_deps: dict[tuple[str, str], list[tuple[str, str]]] = {}
-        self._m2o_deps: dict[
-            tuple[str, str], list[tuple[str, str, str]]
+        #   _edge_index[(listen_model, listen_attr)] ->
+        #       [(dep_model, dep_field, HopEdge), ...]
+        #   _stored_compute_order[model] -> [field, ...] in topo order
+        self._edge_index: dict[
+            tuple[str, str], list[tuple[str, str, "HopEdge"]]
         ] = {}
         self._stored_compute_order: dict[str, list[str]] = {}
 
@@ -50,15 +49,13 @@ class Registry:
 
     def _build_compute_graph(self) -> None:
         """Parse @depends paths into the dep graph; detect cycles; topo-sort."""
-        from .fields import Many2one
+        from .paths import parse_path
 
-        self._direct_deps.clear()
-        self._m2o_deps.clear()
+        self._edge_index.clear()
         self._stored_compute_order.clear()
 
         # (model, field) -> list of (dep_model, dep_field) it reads from.
-        # Used for cycle detection and topo sort. Same shape as the inverse
-        # of _direct_deps + _m2o_deps but keyed the other way.
+        # Used for cycle detection and topo sort.
         read_edges: dict[tuple[str, str], list[tuple[str, str]]] = {}
 
         for cls in self._models.values():
@@ -66,48 +63,13 @@ class Registry:
                 if not field.compute:
                     continue
                 reads: list[tuple[str, str]] = []
-                for path in field.depends_on:
-                    tokens = path.split(".")
-                    if len(tokens) > 2:
-                        raise ValueError(
-                            f"{cls._name}.{fname}: dep path {path!r} has more "
-                            f"than one hop; deferred to a later stage"
+                for path_str in field.depends_on:
+                    path = parse_path(cls, path_str, self)
+                    for edge in path.edges():
+                        self._edge_index.setdefault(edge.listen_at, []).append(
+                            (cls._name, fname, edge)
                         )
-                    head = tokens[0]
-                    if head != "id" and head not in cls._fields:
-                        raise ValueError(
-                            f"{cls._name}.{fname}: dep {head!r} not a field"
-                        )
-                    if len(tokens) == 1:
-                        self._direct_deps.setdefault(
-                            (cls._name, head), []
-                        ).append((cls._name, fname))
-                        reads.append((cls._name, head))
-                    else:
-                        head_field = cls._fields[head]
-                        if not isinstance(head_field, Many2one):
-                            raise ValueError(
-                                f"{cls._name}.{fname}: dep {path!r} requires "
-                                f"{head!r} to be a Many2one (got "
-                                f"{type(head_field).__name__})"
-                            )
-                        comodel = self._models[head_field.comodel_name]
-                        tail = tokens[1]
-                        if tail not in comodel._fields:
-                            raise ValueError(
-                                f"{cls._name}.{fname}: "
-                                f"{head_field.comodel_name} has no field {tail!r}"
-                            )
-                        self._m2o_deps.setdefault(
-                            (head_field.comodel_name, tail), []
-                        ).append((cls._name, head, fname))
-                        # Also: this compute reads the head FK itself, so any
-                        # change to country_id should invalidate too.
-                        self._direct_deps.setdefault(
-                            (cls._name, head), []
-                        ).append((cls._name, fname))
-                        reads.append((cls._name, head))
-                        reads.append((head_field.comodel_name, tail))
+                    reads.extend(path.reads())
                 read_edges[(cls._name, fname)] = reads
 
         # Cycle detection over the read graph restricted to compute fields.

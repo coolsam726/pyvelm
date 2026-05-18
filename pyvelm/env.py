@@ -115,27 +115,18 @@ class Environment:
                     [field.to_sql_param(value), rid],
                 )
 
-    def _reverse_m2o(self, model_name: str, m2o_attr: str, source_ids) -> list[int]:
-        """Find records of `model_name` whose `m2o_attr` FK is in `source_ids`."""
-        if not source_ids:
-            return []
-        target_cls = self.registry[model_name]
-        col = target_cls._fields[m2o_attr].column
-        placeholders = ",".join(["%s"] * len(source_ids))
-        rows = self.conn.execute(
-            f'SELECT "id" FROM "{target_cls._table}" '
-            f'WHERE "{col}" IN ({placeholders})',
-            list(source_ids),
-        ).fetchall()
-        return [r[0] for r in rows]
-
     def notify_changed(self, model_name: str, ids, fields) -> None:
         """Propagate field changes through the compute dependency graph.
 
-        Walks dependents BFS-style. For each dependent (m, f, idset):
+        Each `(model_name, field)` change consults `_edge_index` for the
+        listening compute fields. Each `HopEdge.find_source_ids` walks any
+        relational hops backward to land on the source-side ids that need
+        invalidation. BFS through transitive dependents:
+
           - drop the cache entry,
-          - if f is stored, recompute now and UPDATE the SQL column,
-          - regardless, queue further dependents.
+          - if the dependent is stored, recompute now and UPDATE the SQL
+            column (so other sessions see the new value),
+          - enqueue further dependents.
         """
         from collections import deque
 
@@ -146,14 +137,10 @@ class Environment:
 
         def fan_out(m: str, fs, idset):
             for f in fs:
-                for dep_model, dep_field in self.registry._direct_deps.get(
+                for dep_model, dep_field, edge in self.registry._edge_index.get(
                     (m, f), []
                 ):
-                    queue.append((dep_model, dep_field, set(idset)))
-                for dep_model, m2o_attr, dep_field in self.registry._m2o_deps.get(
-                    (m, f), []
-                ):
-                    affected = self._reverse_m2o(dep_model, m2o_attr, idset)
+                    affected = edge.find_source_ids(self, list(idset))
                     if affected:
                         queue.append((dep_model, dep_field, set(affected)))
 
@@ -171,7 +158,6 @@ class Environment:
             self.cache.invalidate(model_name=m, ids=list(new_ids), fields=[f])
             field = self.registry[m]._fields[f]
             if field.is_stored:
-                # Recompute now so the column is up-to-date for SQL queries.
                 recs = self.registry[m](self, tuple(new_ids))
                 self.compute_field(recs, field)
             fan_out(m, [f], new_ids)

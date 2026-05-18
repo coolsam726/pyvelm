@@ -110,9 +110,33 @@ leaves into a `WHERE` clause. Three notable behaviors:
   a recordset as its value; the compiler coerces it to the id.
 
 Operators supported: `=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`,
-`like`, `ilike`. AND-only — no polish notation, no relational traversal.
-Traversal lands together with multi-hop `@depends` since both need the
-same dotted-path parser.
+`like`, `ilike`. AND-only — no polish notation yet.
+
+**Path traversal in domains.** A dotted attr (`country_id.region_id.name`)
+is parsed against the model into a `Path`. Two emission strategies:
+
+- **Pure-M2o chains** emit `LEFT JOIN`s with generated aliases (`_j1`,
+  `_j2`, ...) and qualify the leaf reference against the last-join alias.
+  Aliases are memoized per `(base, ...attr_chain)` so multiple leaves on
+  the same chain share JOINs.
+- **Paths containing any O2m or M2m hop** emit an `EXISTS (SELECT 1 ...)`
+  subquery instead. Each such leaf gets its *own* subquery, with aliases
+  in its own `_e<n>_<i>` namespace, anchored to the outer base via the
+  hop's linkage column (`junction.col1 = base.id` for M2m;
+  `child.inverse_fk = base.id` for O2m).
+
+The per-leaf EXISTS rule is the semantically correct one for collections:
+`[("tag_ids.name", "=", "EU"), ("tag_ids.name", "=", "Asia")]` reads as
+"has an EU-named tag AND has an Asia-named tag" — possibly different
+tags. Two separate `EXISTS` clauses say exactly that. Merging them into
+one body would silently mean "has a single tag that is both EU and
+Asia," which is rarely what anyone wants.
+
+Negated operators in collection paths (`!=`, `not in`) keep their natural
+read: "has at least one member whose value doesn't match." There is no
+`every-member-matches` form yet; use the inverse-side query (e.g.
+`Tag.search([...])` and walk back through `partner_ids`) when you need
+universal quantification.
 
 ## Computed fields with `@depends`
 
@@ -144,29 +168,43 @@ def _compute_display_name(self):
 
 ### The dependency graph
 
-Built once at `registry.init_db()`. Two index shapes:
+Built once at `registry.init_db()` via the path parser (see `paths.py`).
+A single index:
 
 ```
-_direct_deps[(model, attr)]    -> [(dep_model, dep_field), ...]
-_m2o_deps[(comodel, attr)]     -> [(dep_model, m2o_attr, dep_field), ...]
+_edge_index[(listen_model, listen_attr)] -> [(dep_model, dep_field, HopEdge), ...]
 ```
 
-A `@depends("name")` on `res.partner.display_name` adds:
+Each `@depends` path is parsed into a `Path` with zero or more relational
+`Hop` objects. The path emits one `HopEdge` per hop *and* one for the
+leaf — these are the listening points whose changes should invalidate the
+dependent compute field. When a change fires at `(model, attr)`,
+`notify_changed` looks up the matching edges and calls
+`edge.find_source_ids(env, ids)`, which:
 
-```
-_direct_deps[("res.partner", "name")].append(("res.partner", "display_name"))
-```
+1. Runs the edge's `to_source` transform (identity for M2o/M2m, or a
+   read-the-inverse-FK lookup for O2m hops).
+2. Reverse-walks any remaining hops back toward the source model.
 
-A `@depends("country_id.code")` on `res.partner.display_name` adds *both*:
+Concretely, `@depends("country_id.region_id.name")` on
+`res.partner.display_name` registers three edges:
 
-```
-_direct_deps[("res.partner", "country_id")]   .append(("res.partner", "display_name"))
-_m2o_deps[("res.country", "code")]            .append(("res.partner", "country_id", "display_name"))
-```
+| Listening at | Hops to reverse-walk |
+|---|---|
+| `(res.partner, country_id)` | none — partner is already on the source side |
+| `(res.country, region_id)` | walk `country_id` reverse (countries → partners) |
+| `(res.region, name)` | walk `region_id` reverse, then `country_id` reverse |
 
-The first edge handles "the FK itself changed"; the second handles "a field
-on the comodel changed, find all records that point at it." Both edges fire
-their dependent on invalidation.
+The first handles "the FK on the partner changed." The second handles "a
+country's region_id changed — find all partners pointing at those
+countries." The third handles "a region's name changed — chase it back
+through countries to partners."
+
+`HopEdge` is type-agnostic. The same machinery handles M2o, O2m, and M2m
+hops because each hop type implements `reverse_walk(env, ids) -> ids`.
+O2m hops listen on the comodel's inverse-FK attr; M2m hops listen on the
+source-side M2m attr (which fires when the junction is mutated through
+`write`/`_apply_m2m`).
 
 ### Cycle detection
 
@@ -216,9 +254,9 @@ visible.
 | Gap | Why deferred |
 |-----|---|
 | LRU / eviction on `env.cache` | Single env per request, ids are bounded by the working set. Premature optimization until proven a problem. |
-| Relational traversal in domains | Needs a dotted-path parser shared with multi-hop `@depends`. Land them together. |
-| Multi-hop `@depends` | Same parser dependency. Single-hop covers the common cases. |
-| O2m/M2m caching | Re-querying each access is correct; perf gap is acceptable. Adding cache requires inverse-side invalidation, which falls out of the same parser. |
+| Universal-quantifier domains on collections | Today's `("tag_ids.name", "!=", "VIP")` reads as "has at least one non-VIP tag." There is no "every tag is non-VIP" form yet; needs `NOT EXISTS` semantics or an explicit `all=True` operator. |
+| O2m/M2m caching | Re-querying each access is correct; perf gap is acceptable. Adding cache requires writing back through the dep graph on inverse-FK changes. |
+| Old-value invalidation on O2m/M2m | When a child moves from parent A to parent B, only B's compute is invalidated — we don't snapshot the old FK value before write. Needs read-before-write in the model. |
 | Stale FK cache on comodel unlink | The DB sets the FK to NULL via `ON DELETE SET NULL`, but `env.cache` still holds the old int. Fix needs a reverse-FK index. Bundled with O2m caching. |
 | M2M command tuples | Replace-only writes work for everything in the example; `[(0,_,vals), (4,id)]` are an API ergonomics layer, not a capability layer. |
 | Transaction boundaries beyond autocommit | Adds a real unit-of-work concept. Right when multi-statement consistency matters, not before. |
