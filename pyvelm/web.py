@@ -571,9 +571,13 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
     def login_page(request: Request, next: str = Query(default="")):
         from .render import render_login_page
 
-        # Already authenticated via session? Skip the login screen.
-        if request.cookies.get(_SESSION_COOKIE):
-            return RedirectResponse(next or "/", status_code=302)
+        # Already authenticated and the token is valid? Skip the login screen.
+        token = request.cookies.get(_SESSION_COOKIE)
+        if token:
+            with pool.connection() as conn:
+                env = Environment(conn, registry=registry, uid=None)
+                if _resolve_user_from_session(env, token) is not None:
+                    return RedirectResponse(next or "/web/admin", status_code=302)
         return HTMLResponse(render_login_page(next=next))
 
     @app.post("/login")
@@ -583,7 +587,7 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         form = await request.form()
         login_val = (form.get("login") or "").strip()
         password_val = form.get("password") or ""
-        next_url = (form.get("next") or "").strip() or "/"
+        next_url = (form.get("next") or "").strip() or "/web/admin"
 
         # Validate credentials.
         with pool.connection() as conn:

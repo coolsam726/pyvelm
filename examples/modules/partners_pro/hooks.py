@@ -51,3 +51,4 @@ def install(env):
         "perm_write": True,
         "domain": json.dumps([["active", "=", True]]),
     })
+

@@ -210,6 +210,11 @@ def resolve_arch(view) -> dict:
         )
     arch = copy.deepcopy(json.loads(root.arch))
     _apply_chain(root, arch)
+    # Normalize the resolved arch so that any plain-string entries
+    # inserted by before/after/replace operations are promoted to dicts.
+    view_type = root.view_type
+    if view_type:
+        arch = normalize_arch(arch, view_type)
     return arch
 
 

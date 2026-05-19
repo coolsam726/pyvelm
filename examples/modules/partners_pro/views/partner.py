@@ -67,6 +67,16 @@ VIEW_INHERITS: list[ViewInherit] = [
                 "op": "remove",
                 "target": ["sections", "profile", "fields", "parent_id"],
             },
+            # Add a new VIP section with the vip_note field (Stage 7).
+            {
+                "op": "after",
+                "target": ["sections", "relations"],
+                "value": {
+                    "name": "vip",
+                    "title": "VIP Status",
+                    "fields": ["vip_note"],
+                },
+            },
         ],
     },
 ]

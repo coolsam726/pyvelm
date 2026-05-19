@@ -376,7 +376,7 @@ def main():
             form_arch = resp.json()["arch"]
             assert resp.json()["view_type"] == "form"
             section_names = [s["name"] for s in form_arch["sections"]]
-            assert section_names == ["identity", "profile", "relations"]
+            assert section_names == ["identity", "profile", "relations", "vip"]
             # Strings in each section's fields were promoted to dicts.
             id_fields = [f["name"] for f in form_arch["sections"][0]["fields"]]
             assert id_fields == ["name", "code"]
