@@ -257,6 +257,7 @@ class BaseModel(metaclass=MetaModel):
                 )
 
     def create(self, vals: dict[str, Any]) -> "BaseModel":
+        self.env.check_access(self._name, "create")
         column_vals, m2m_vals = self._split_vals(vals)
         # Apply Field.default for any stored field the caller didn't set.
         # Computed fields skip this — they fill themselves via the topo
@@ -310,6 +311,7 @@ class BaseModel(metaclass=MetaModel):
     def write(self, vals: dict[str, Any]) -> None:
         if not self._ids:
             return
+        self.env.check_access(self._name, "write")
         column_vals, m2m_vals = self._split_vals(vals)
         if column_vals:
             assigns = ", ".join(f'"{self._fields[f].column}" = %s' for f in column_vals)
@@ -335,6 +337,7 @@ class BaseModel(metaclass=MetaModel):
     def unlink(self) -> None:
         if not self._ids:
             return
+        self.env.check_access(self._name, "unlink")
         placeholders = ",".join(["%s"] * len(self._ids))
         sql = f'DELETE FROM "{self._table}" WHERE "id" IN ({placeholders})'
         self.env.conn.execute(sql, list(self._ids))
@@ -346,6 +349,7 @@ class BaseModel(metaclass=MetaModel):
         """Bulk-load `fields` for self._ids into the cache."""
         if not self._ids:
             return
+        self.env.check_access(self._name, "read")
         fields = [f for f in fields if self._fields[f].is_stored]
         if not fields:
             return
@@ -400,8 +404,14 @@ class BaseModel(metaclass=MetaModel):
         offset: int = 0,
         order: str | None = None,
     ) -> "BaseModel":
+        self.env.check_access(self._name, "read")
+        # AND every applicable ir.rule's domain into the user's view.
+        full_domain = list(domain or [])
+        rule_leaves = self.env.collect_record_rules(self._name, "read")
+        if rule_leaves:
+            full_domain.extend(rule_leaves)
         where, params, joins = domain_to_sql(
-            domain, self.__class__, self.env.registry
+            full_domain, self.__class__, self.env.registry
         )
         base = f'"{self._table}"'
         sql = f'SELECT {base}."id" FROM {base}{joins} WHERE {where}'
@@ -415,8 +425,13 @@ class BaseModel(metaclass=MetaModel):
         return self.__class__(self.env, tuple(r[0] for r in rows))
 
     def search_count(self, domain: list[tuple] | None = None) -> int:
+        self.env.check_access(self._name, "read")
+        full_domain = list(domain or [])
+        rule_leaves = self.env.collect_record_rules(self._name, "read")
+        if rule_leaves:
+            full_domain.extend(rule_leaves)
         where, params, joins = domain_to_sql(
-            domain, self.__class__, self.env.registry
+            full_domain, self.__class__, self.env.registry
         )
         base = f'"{self._table}"'
         sql = f'SELECT COUNT(*) FROM {base}{joins} WHERE {where}'

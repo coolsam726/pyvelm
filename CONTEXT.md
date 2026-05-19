@@ -51,7 +51,8 @@ For the design rationale and the deferred-items rationale, see
      ⏭ Slice B (deferred): module data (seed records beyond views),
         auto-diff schema migrations (SQLAlchemy Core?), down-migrations
         or formal rollback story.
-4. ⏭ Views (form/list/kanban) as data + generic UI endpoints.
+4. ✅ Views (list/form/kanban) as data + generic UI endpoints. See
+     CONTEXT history for the Slice A..B.6 sub-stages.
      ✅ Slice A: `ir.ui.view` records, `VIEWS` manifest key with
         upsert-by-(module, name), FastAPI app factory with
         `/api/views/{module}/{name}` + `/api/records`, JSON serializer
@@ -92,7 +93,13 @@ For the design rationale and the deferred-items rationale, see
         (`VIEWS: list[View]`, `VIEW_INHERITS: list[ViewInherit]`,
         manifest globals with explicit types) so Pyright/Pylance
         catch typos at edit time.
-5. ACL: groups, model permissions, record rules (domain-based row security).
+5. ⏭ ACL: groups, model permissions, record rules (domain-based row security).
+     ✅ Slice A: res.groups, res.users (bcrypt), ir.model.access,
+        ir.rule. HTTP Basic auth in `pyvelm.web`. Superuser bypass at
+        uid=1. Demo seeds Admin + Partner Manager + record rule.
+     ⏭ Slice B: session cookies + form login. Rate limiting.
+     ⏭ Slice C: admin module (operator UI over the ACL models
+        themselves, via existing form/list views).
 6. Workflows: server actions, automated actions, scheduled jobs, mail threads.
 7. Module inheritance: `_inherit` for models, XPath-style view patches.
 
@@ -121,25 +128,25 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 4 is complete. Slices A through B.6 ship the JSON + HTMX
-surfaces, three view types (list/form/kanban) with the full Odoo-
-position-parity inheritance vocabulary, mutations on both surfaces,
-and TypedDicts so IDEs assist on manifest authoring.
+Stage 5 Slice A landed: ACL + auth foundation. Four models in base
+(res.groups, res.users, ir.model.access, ir.rule), `env.uid` driven
+by HTTP Basic at the FastAPI boundary, every ORM CRUD method goes
+through `env.check_access`, and `search` AND-injects domain leaves
+from `env.collect_record_rules`. Superuser bypass at uid=1 keeps the
+installer and migrations workable. Demo seeds an Admin user, a
+Partner Manager group + user + record rule, and grants public read
+on geography models.
 
-Next: **Stage 5 — ACL / record rules.** The natural pairing with
-mutations. Without row-level security every write endpoint we shipped
-in B.3 is malpractice to expose. Likely shape:
-  - `res.groups` and `res.users` models.
-  - `ir.model.access` granting per-(model, group) CRUD bits.
-  - `ir.rule` for domain-based row filters: each rule adds an
-    AND-clause to searches when the active user is in the matching
-    group.
-  - `Environment.uid` already threads through; we add a "current
-    user's groups" lookup and inject record-rule filters in
-    `model.search` / `model.read`.
-  - Auth at the HTTP boundary: simplest defensible default is HTTP
-    basic against `res.users.password_hash` (bcrypt) with a session
-    cookie. OAuth/SSO is post-Stage-5.
+Next options:
+  - **Slice B — session cookies + login UI.** HTTP Basic works for
+    machine clients but humans want a form login + persisted session.
+    Adds a `res.users.session_token` field, a /login route, and a
+    `set_uid_from_session_cookie` step before the basic-auth check.
+  - **Slice C — admin module.** Operator UI for managing groups,
+    users, access rules, and record rules through the framework's
+    own form/list views.
+  - **Stage 6 — workflows.** Server actions, automated actions,
+    scheduled jobs, mail threads. The mature ERP-feature surface.
 
 Still deferred: cache snapshot on transaction rollback, O2m/M2m
 caching + old-value snapshotting, auto-diff schema migrations,

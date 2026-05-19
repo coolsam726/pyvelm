@@ -75,6 +75,14 @@ class Environment:
         self._tx_depth: int = 0
         # Compute orchestration flag — set by compute_field, gates writes.
         self._in_compute: bool = False
+        # ACL bypass flag — flipped temporarily while resolving the
+        # current user's groups or evaluating ir.model.access rows, to
+        # avoid infinite recursion through check_access.
+        self._acl_bypass: bool = False
+        # Per-(model, perm) access-decision cache so every field read
+        # doesn't re-query ir.model.access. Invalidate on logout / uid
+        # switch by constructing a fresh Environment.
+        self._access_cache: dict[tuple[str, str], bool] = {}
 
     def __getitem__(self, model_name: str):
         model_cls = self.registry[model_name]
@@ -89,6 +97,174 @@ class Environment:
         )
         new.cache = self.cache
         return new
+
+    # ------ ACL ------
+
+    SUPERUSER_ID = 1
+
+    def is_superuser(self) -> bool:
+        """Stage 5 convention: uid=1 bypasses every ACL check.
+
+        Matches Odoo's `SUPERUSER_ID`. The installer, migration scripts,
+        and module install hooks all run as superuser.
+        """
+        return self.uid == self.SUPERUSER_ID
+
+    @property
+    def user_group_ids(self) -> set[int]:
+        """The set of `res.groups` ids the current user belongs to.
+
+        Cached on the Environment for the request lifetime so
+        per-statement ACL checks don't re-query.
+        """
+        cached = getattr(self, "_user_groups_cache", None)
+        if cached is not None:
+            return cached
+        if self.uid is None or "res.users" not in self.registry:
+            result: set[int] = set()
+        else:
+            # Bypass ACL on this lookup — chicken-and-egg otherwise.
+            prev = self._acl_bypass
+            self._acl_bypass = True
+            try:
+                user = self["res.users"].browse(self.uid)
+                # If the recorded uid doesn't exist (deleted user, etc),
+                # treat as anonymous.
+                if not self["res.users"].search([("id", "=", self.uid)]):
+                    result = set()
+                else:
+                    result = set(user.group_ids.ids)
+            finally:
+                self._acl_bypass = prev
+        self._user_groups_cache = result
+        return result
+
+    def check_access(self, model_name: str, perm: str) -> None:
+        """Raise PermissionError if the current user lacks `perm` on
+        `model_name`. No-op for superuser or while bypass is set.
+
+        `perm` is one of: read / write / create / unlink.
+        """
+        if self.is_superuser() or self._acl_bypass:
+            return
+        if "ir.model.access" not in self.registry:
+            # ACL machinery not installed yet (e.g. early in install).
+            return
+        cache_key = (model_name, perm)
+        cached = self._access_cache.get(cache_key)
+        if cached is True:
+            return
+        if cached is False:
+            raise PermissionError(
+                f"Access denied: {perm} on {model_name} (uid={self.uid})"
+            )
+        Access = self["ir.model.access"]
+        # Bypass ACL on the access-table lookup itself — otherwise
+        # recursion. Same reason `user_group_ids` flips the bypass.
+        prev = self._acl_bypass
+        self._acl_bypass = True
+        try:
+            domain = [
+                ("model", "=", model_name),
+                (f"perm_{perm}", "=", True),
+            ]
+            if self.uid is None:
+                # Anonymous: only grants with group_id=None apply.
+                domain.append(("group_id", "=", None))
+            else:
+                # Authenticated: any grant with group_id=None or in the
+                # user's groups applies. We split into two searches to
+                # avoid the `IN (NULL, ...)` SQL-NULL pitfall.
+                ids = self.user_group_ids
+                anyone = Access.search(domain + [("group_id", "=", None)],
+                                       limit=1)
+                granted = bool(anyone)
+                if not granted and ids:
+                    grouped = Access.search(
+                        domain + [("group_id", "in", list(ids))], limit=1,
+                    )
+                    granted = bool(grouped)
+                self._access_cache[cache_key] = granted
+                if not granted:
+                    raise PermissionError(
+                        f"Access denied: {perm} on {model_name} "
+                        f"(uid={self.uid})"
+                    )
+                return
+            # Anonymous branch.
+            granted = bool(Access.search(domain, limit=1))
+            self._access_cache[cache_key] = granted
+            if not granted:
+                raise PermissionError(
+                    f"Access denied: {perm} on {model_name} (anonymous)"
+                )
+        finally:
+            self._acl_bypass = prev
+
+    def collect_record_rules(self, model_name: str, perm: str) -> list:
+        """Return the union of domain leaves to AND-inject into
+        searches on `model_name` for `perm`. Empty for superuser /
+        bypass / when ir.rule isn't installed."""
+        if self.is_superuser() or self._acl_bypass:
+            return []
+        if "ir.rule" not in self.registry:
+            return []
+        Rule = self["ir.rule"]
+        prev = self._acl_bypass
+        self._acl_bypass = True
+        try:
+            domain = [
+                ("model", "=", model_name),
+                (f"perm_{perm}", "=", True),
+            ]
+            if self.uid is None:
+                # Anonymous: only global rules apply.
+                domain.append(("group_id", "=", None))
+                rules = Rule.search(domain)
+            else:
+                ids = self.user_group_ids
+                # Global rules + rules for any of our groups.
+                global_rules = Rule.search(domain + [("group_id", "=", None)])
+                if ids:
+                    group_rules = Rule.search(
+                        domain + [("group_id", "in", list(ids))],
+                    )
+                else:
+                    group_rules = global_rules.__class__(self, ())
+                rules = global_rules
+                if group_rules:
+                    rules = global_rules.__class__(
+                        self, tuple({*global_rules.ids, *group_rules.ids})
+                    )
+            # Read domains while still under bypass — accessing
+            # `r.domain` triggers _read on ir.rule, which re-enters
+            # check_access. Without bypass, that recurses and denies.
+            import json
+            out: list = []
+            for r in rules:
+                raw = json.loads(r.domain)
+                out.extend(self._resolve_rule_leaves(raw))
+        finally:
+            self._acl_bypass = prev
+
+        return out
+
+    def _resolve_rule_leaves(self, raw_domain: list) -> list:
+        """Substitute {placeholder: name} dicts with env-side values."""
+        resolved = []
+        for leaf in raw_domain:
+            if not isinstance(leaf, (list, tuple)):
+                resolved.append(leaf)
+                continue
+            attr, op, value = leaf
+            if isinstance(value, dict) and "placeholder" in value:
+                ph = value["placeholder"]
+                if ph in ("uid", "user_id"):
+                    value = self.uid
+                else:
+                    raise ValueError(f"Unknown ir.rule placeholder {ph!r}")
+            resolved.append((attr, op, value))
+        return resolved
 
     # ------ Transactions ------
 

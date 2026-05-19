@@ -77,6 +77,35 @@ Field instances also carry their `column` (the SQL column name, defaulted to
 `name`). The two can diverge — see the `column=` kwarg on `Field.__init__` —
 but Odoo-style projects keep them equal.
 
+## Stage 5 access control
+
+Four models in the base module — `res.groups`, `res.users`,
+`ir.model.access`, `ir.rule` — plus a thin enforcement layer at the
+ORM and HTTP boundaries.
+
+- `env.uid` carries the active user's id; `uid=1` is the hard-coded
+  superuser and bypasses every check (Odoo's `SUPERUSER_ID`).
+- `BaseModel.search` / `search_count` / `_read` call
+  `env.check_access(model, perm)` and `env.collect_record_rules(model,
+  perm)`. The latter returns domain leaves that get AND-injected into
+  the search's WHERE — that's how row-level filters happen.
+- `BaseModel.create` / `write` / `unlink` only check the perm bit; no
+  rule injection because we don't restrict writes to rows the user
+  already can see (yet).
+- The HTTP layer's `get_env` dependency reads HTTP Basic auth,
+  validates against `res.users` + bcrypt, and sets `env.uid` per
+  request. Failures raise `PermissionError`; the FastAPI exception
+  handler maps anonymous to 401 + WWW-Authenticate, authenticated to
+  403.
+- Passwords are bcrypt-hashed on assignment via a `Password(Char)`
+  field subclass that lives in `examples/modules/base/models/security.py`.
+- Record-rule domains are stored as JSON, with `{"placeholder":
+  "uid"}` dicts substituted at query time. All applicable rules
+  (global + user's group rules) are AND-ed — stricter than Odoo's
+  per-group OR semantics, chosen for simplicity.
+
+See [acl.md](acl.md) for the full guide.
+
 ## Stage 4 web layer & views as data
 
 Views are records. `ir.ui.view` stores `(module, name, model,

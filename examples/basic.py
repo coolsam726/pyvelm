@@ -143,6 +143,10 @@ def main():
     with ConnectionPool(dsn, min_size=1, max_size=2, open=True) as pool:
         app = create_app(reg, pool)
         with TestClient(app) as client:
+            # Default identity for the bulk of the smoke test is the
+            # superuser. ACL-specific assertions further down construct
+            # additional clients with manager / no auth.
+            client.auth = ("admin", "admin")
             # 1. Fetch the resolved view (post-inheritance — partners_pro
             # patched it). Verify it parses and project field names out
             # of the normalized list-of-dicts form.
@@ -445,6 +449,96 @@ def main():
             assert "New res.partner" in resp.text
             print("form new renders empty edit shell")
 
+            # ----- B.5 / Stage 5: ACL behavior -----
+            # Mark Carol inactive so the record rule for Partner Manager
+            # (active=True only) actually filters her out.
+            r = client.get(
+                "/api/records",
+                params={"model": "res.partner",
+                        "domain": '[["name", "=", "Carol"]]',
+                        "fields": "id,name,active"},
+            )
+            assert r.status_code == 200, (r.status_code, r.text)
+            carol_q = r.json()
+            assert carol_q["count"] == 1, carol_q
+            carol_id = carol_q["records"][0]["id"]
+            r = client.patch(
+                f"/api/records/{carol_id}",
+                params={"model": "res.partner"},
+                json={"active": False},
+            )
+            assert r.status_code == 200, r.text
+
+            # Anonymous: 401 with a Basic challenge on partner reads.
+            anon = TestClient(app)
+            r = anon.get("/api/records", params={"model": "res.partner"})
+            assert r.status_code == 401, r.text
+            assert r.headers.get("www-authenticate", "").lower().startswith("basic")
+            # But countries/regions are public-readable (granted to
+            # group_id=None by the partners install hook).
+            r = anon.get("/api/records", params={"model": "res.country"})
+            assert r.status_code == 200, r.text
+            print("anonymous: 401 on partners, 200 on countries")
+
+            # Wrong password: still anonymous (no auth-by-implication).
+            bad = TestClient(app); bad.auth = ("manager", "wrong")
+            r = bad.get("/api/records", params={"model": "res.partner"})
+            assert r.status_code == 401, r.text
+
+            # Partner Manager: sees only active partners (record rule).
+            mgr = TestClient(app); mgr.auth = ("manager", "manager")
+            r = mgr.get(
+                "/api/records",
+                params={"model": "res.partner",
+                        "fields": "name,active",
+                        "order": '"id" ASC'},
+            )
+            assert r.status_code == 200, r.text
+            mgr_view = r.json()
+            names_seen = [rec["name"] for rec in mgr_view["records"]]
+            # Carol was marked inactive above -> hidden from Manager.
+            assert "Carol" not in names_seen, names_seen
+            # Active partners (Alice X, Bob, Dave) ARE visible.
+            assert "Alice X" in names_seen
+            print("Partner Manager sees:", names_seen)
+
+            # Manager can write to a visible partner...
+            alice_q = mgr.get(
+                "/api/records",
+                params={"model": "res.partner",
+                        "domain": '[["name", "=", "Alice X"]]',
+                        "fields": "id"},
+            ).json()
+            alice_id_mgr = alice_q["records"][0]["id"]
+            r = mgr.patch(
+                f"/api/records/{alice_id_mgr}",
+                params={"model": "res.partner"},
+                json={"age": 32},
+            )
+            assert r.status_code == 200, r.text
+            # ... but cannot create or unlink (perms not granted).
+            r = mgr.post(
+                "/api/records",
+                params={"model": "res.partner"},
+                json={"name": "Sneaky"},
+            )
+            assert r.status_code == 403, (r.status_code, r.text)
+            r = mgr.delete(
+                f"/api/records/{alice_id_mgr}",
+                params={"model": "res.partner"},
+            )
+            assert r.status_code == 403, (r.status_code, r.text)
+            print("Partner Manager: write OK, create/unlink denied")
+
+            # Admin remains uncapped: full CRUD goes through. Restore
+            # Carol so later assertions keep working.
+            r = client.patch(
+                f"/api/records/{carol_id}",
+                params={"model": "res.partner"},
+                json={"active": True},
+            )
+            assert r.status_code == 200, r.text
+
             # Section-level inheritance: partners_pro patched the form
             # too (renamed Profile -> Demographics; dropped parent_id;
             # widget-hinted active).
@@ -498,11 +592,16 @@ def _drop_known_tables(conn):
     """Tear down tables we expect to own. Idempotent."""
     tables = [
         "res_partner_res_tag_rel",
+        "res_groups_res_users_rel",
         "res_partner",
         "res_tag",
         "res_country",
         "res_region",
+        "ir_rule",
+        "ir_model_access",
         "ir_ui_view",
+        "res_users",
+        "res_groups",
         "ir_module",
     ]
     for t in tables:

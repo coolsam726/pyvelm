@@ -17,6 +17,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import base64
+import binascii
+
 from fastapi import Body, Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -60,6 +63,8 @@ def serialize_record(record, fields: list[str] | None = None) -> dict[str, Any]:
         ]
     out: dict[str, Any] = {"id": record.id}
     for fname in fields:
+        if fname == "id":
+            continue  # already in `out`, treat as a no-op rather than an error
         if fname not in model_cls._fields:
             raise HTTPException(
                 status_code=400,
@@ -108,6 +113,19 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
 
     app = FastAPI(title="pyvelm")
 
+    @app.exception_handler(PermissionError)
+    def _permission_error(request, exc):
+        msg = str(exc)
+        # Anonymous failures get 401 + WWW-Authenticate so browsers
+        # prompt for credentials; authenticated-but-denied is 403.
+        if "anonymous" in msg or "uid=None" in msg:
+            return Response(
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="pyvelm"'},
+                content=msg,
+            )
+        return Response(status_code=403, content=msg)
+
     # Static assets shipped inside the package (CSS, eventually images).
     from .render import STATIC_DIR
     app.mount(
@@ -116,9 +134,47 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         name="pyvelm-static",
     )
 
-    def get_env():
+    def _resolve_user(env: Environment, header_value: str | None) -> int | None:
+        """Parse an HTTP Basic header and return the authenticated uid.
+
+        Returns None for missing / invalid / failed-login cases. Callers
+        decide whether to reject; the ACL layer will deny most things
+        for an anonymous uid.
+        """
+        if not header_value or not header_value.lower().startswith("basic "):
+            return None
+        try:
+            raw = base64.b64decode(header_value.split(None, 1)[1])
+            login, password = raw.decode("utf-8", errors="ignore").split(":", 1)
+        except (binascii.Error, ValueError):
+            return None
+        if "res.users" not in registry:
+            return None
+        # Bypass ACL on the user lookup itself.
+        env._acl_bypass = True
+        try:
+            users = env["res.users"].search(
+                [("login", "=", login), ("active", "=", True)], limit=1,
+            )
+            if not users:
+                return None
+            user = users
+            user.ensure_one()
+            if not user.check_password(password):
+                return None
+            return user.id
+        finally:
+            env._acl_bypass = False
+
+    def get_env(request: Request):
         with pool.connection() as conn:
-            env = Environment(conn, registry=registry)
+            env = Environment(conn, registry=registry, uid=None)
+            uid = _resolve_user(env, request.headers.get("authorization"))
+            if uid is not None:
+                env.uid = uid
+                # Drop caches keyed on the previous (None) uid.
+                env._user_groups_cache = None  # type: ignore[attr-defined]
+                env._access_cache.clear()
             yield env
 
     def _load_view(env, module: str, name: str):

@@ -4,3 +4,4 @@ DEPENDS: list[str] = ["base"]
 DATA: list[str] = [
     "views/partner.py",
 ]
+INSTALL_HOOK: str = "partners.hooks:install"

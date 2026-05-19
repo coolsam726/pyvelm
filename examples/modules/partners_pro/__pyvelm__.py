@@ -14,3 +14,4 @@ DEPENDS: list[str] = ["partners"]
 DATA: list[str] = [
     "views/partner.py",
 ]
+INSTALL_HOOK: str = "partners_pro.hooks:install"
