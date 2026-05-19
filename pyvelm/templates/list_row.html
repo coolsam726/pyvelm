@@ -1,0 +1,22 @@
+<tr data-record-id="{{ row.id }}" class="hover:bg-gray-50">
+    {% for cell in row.cells %}
+    <td data-field="{{ cell.name }}" class="px-4 py-2.5 align-top">{{ cell.html }}</td>
+    {% endfor %}
+    <td class="px-4 py-2.5 text-right whitespace-nowrap">
+        <button
+            class="text-blue-600 hover:underline text-xs mr-3"
+            hx-get="/web/records/{{ view.module }}/{{ view.name }}/row/{{ row.id }}/edit"
+            hx-target="closest tr"
+            hx-swap="outerHTML">
+            Edit
+        </button>
+        <button
+            class="text-red-600 hover:underline text-xs"
+            hx-delete="/web/records/{{ view.module }}/{{ view.name }}/row/{{ row.id }}"
+            hx-target="closest tr"
+            hx-swap="outerHTML"
+            hx-confirm="Delete this record?">
+            Delete
+        </button>
+    </td>
+</tr>

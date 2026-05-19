@@ -69,8 +69,11 @@ For the design rationale and the deferred-items rationale, see
         fragment endpoint with OOB load-more swap. UI stack uses
         Tailwind CSS via Play CDN (major deviation from Odoo's
         Bootstrap); widgets emit utility classes directly.
-     ⏭ Slice B.3: mutation endpoints (POST/PATCH/DELETE) shared by
-        JSON API + HTMX form submits; click-to-edit in list view.
+     ✅ Slice B.3: mutation endpoints (POST/PATCH/DELETE on
+        /api/records) + HTMX inline edit. Per-field edit-mode widgets,
+        `parse_form_vals` for type coercion, row-level edit/save/
+        cancel/delete/new/create endpoints. Boolean hidden+checkbox
+        pair handles unchecked-as-false correctly.
      ⏭ Slice B.4: form + kanban view types (normalizer + template +
         widget conventions per type).
      ⏭ Slice B.5: `pyvelm.types` TypedDicts for IDE assistance on
@@ -104,24 +107,27 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 4 Slice B.2 landed: the framework now ships a default UI. List
-views render to HTML via a Jinja template that dispatches each field
-through a widget registry; HTMX handles pagination via OOB swaps; a
-minimal CSS skin makes the demo look acceptable. No developer-written
-templates — the arch + widget hints drive everything.
+Stage 4 Slice B.3 landed: mutations exist on both surfaces. JSON
+API gets POST/PATCH/DELETE on `/api/records`; HTMX gets inline-edit
+row endpoints (Edit/Save/Cancel/Delete/+New) with form parsing
+through `parse_form_vals`. Edit-mode widgets are a separate registry
+(`mode="edit"`) keyed the same way as display widgets. Both write
+paths funnel through `env.transaction()`.
 
-Next: **Slice B.3 — mutation endpoints + click-to-edit.** POST/PATCH/
-DELETE on `/api/records`; HTMX-driven inline edit in the list view
-that reuses the same handlers under the hood. This is the largest
-single slice left in Stage 4 because it touches request-body
-validation, write paths, error mapping, and cache-rollback semantics
-that we've been documenting around.
+Next: **Slice B.4 — form + kanban view types.** Form views need a
+sectioned arch (groups of fields with labels), a normalizer entry,
+and a template that places inputs in a 2-column grid (or
+configurable). Kanban needs per-card layout and grouping. The
+widget registry already supports the edit-mode pattern needed for
+form views; what's missing is the structural template work and
+the arch normalizer additions.
 
-After B.3: B.4 (form + kanban view types), B.5 (TypedDicts for IDE
-assistance). Stage 5 (ACL / record rules) is the natural pairing with
-mutations — public write endpoints without row-level security would be
+After B.4: B.5 (TypedDicts for IDE assistance). Stage 5 (ACL /
+record rules) becomes urgent once mutations are exposed beyond a
+demo — public write endpoints without row-level security are
 malpractice.
 
-Still deferred: cache snapshot on transaction rollback,
-O2m/M2m caching + old-value snapshotting, auto-diff schema migrations.
-None pressing.
+Still deferred: cache snapshot on transaction rollback, O2m/M2m
+caching + old-value snapshotting, auto-diff schema migrations,
+field-level validation feedback in the inline-edit form, multi-
+select widget for O2m/M2m editing. None pressing.

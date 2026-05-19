@@ -4,16 +4,17 @@ An Odoo-style ERP framework in Python, built from first principles. The point
 isn't to reinvent Odoo — it's to keep the core ideas visible so the design
 trade-offs stay legible while the framework grows.
 
-Status: **Stage 4 Slice B.2 complete.** Views are records, declared
+Status: **Stage 4 Slice B.3 complete.** Views are records, declared
 in module data files; a FastAPI app exposes both a JSON API
-(`/api/views/{module}/{name}`, `/api/records`) and a bundled HTMX +
-Jinja UI (`/web/views/{module}/{name}`, `/web/records/...` fragments,
-`/web/static/pyvelm.css`). View inheritance is dict-merge with Odoo
-XPath-position parity, and a widget registry dispatches rendering by
-`(field_type, hint)`. Built on Stage 3 (module loader, transactional
-install/upgrade, hand-written migrations) and Stage 2 (ORM with all
-four relational field types, computed fields, dotted-path traversal in
-both `@depends` and domains) — all on PostgreSQL via psycopg 3.
+(`/api/views/{module}/{name}`, `/api/records` with full CRUD) and a
+bundled HTMX + Tailwind UI with inline edit/save/cancel/delete and
+inline create. View inheritance is dict-merge with Odoo
+XPath-position parity, and a two-mode widget registry dispatches
+rendering by `(field_type, hint, mode)`. Built on Stage 3 (module
+loader, transactional install/upgrade, hand-written migrations) and
+Stage 2 (ORM with all four relational field types, computed fields,
+dotted-path traversal in both `@depends` and domains) — all on
+PostgreSQL via psycopg 3.
 
 ## Quickstart
 

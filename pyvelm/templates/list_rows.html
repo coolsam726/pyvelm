@@ -1,9 +1,5 @@
 {% for row in rows %}
-<tr data-record-id="{{ row.id }}" class="hover:bg-gray-50">
-    {% for cell in row.cells %}
-    <td data-field="{{ cell.name }}" class="px-4 py-2.5 align-top">{{ cell.html }}</td>
-    {% endfor %}
-</tr>
+{% include "list_row.html" %}
 {% endfor %}
 {# When HTMX appends a "Load more" response, replace the existing load-more
    button with the next one (or remove it if this was the last page). #}

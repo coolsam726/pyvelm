@@ -248,6 +248,123 @@ def main():
             resp = client.get("/web/static/pyvelm.css")
             assert resp.status_code == 200, resp.text
 
+            # ----- B.3: JSON mutation endpoints -----
+            # Create
+            resp = client.post(
+                "/api/records",
+                params={"model": "res.partner"},
+                json={"name": "Eve", "age": 22, "country_id": france.id},
+            )
+            assert resp.status_code == 201, resp.text
+            eve = resp.json()
+            assert eve["name"] == "Eve"
+            assert eve["country_id"] == [france.id, "France"]
+            print("POST /api/records ->", eve)
+
+            # Patch
+            resp = client.patch(
+                f"/api/records/{eve['id']}",
+                params={"model": "res.partner"},
+                json={"name": "Evelyn", "age": 33},
+            )
+            assert resp.status_code == 200, resp.text
+            evelyn = resp.json()
+            assert evelyn["name"] == "Evelyn" and evelyn["age"] == 33
+            print("PATCH /api/records/{id} ->", evelyn)
+
+            # Delete
+            resp = client.delete(
+                f"/api/records/{eve['id']}",
+                params={"model": "res.partner"},
+            )
+            assert resp.status_code == 204, resp.text
+            # 404 on missing record
+            resp = client.delete(
+                f"/api/records/{eve['id']}",
+                params={"model": "res.partner"},
+            )
+            assert resp.status_code == 404
+
+            # ----- B.3: HTMX inline-edit flow -----
+            # Pull the edit-row fragment for Alice; should include inputs.
+            resp = client.get(
+                f"/web/records/partners/partner.list/row/{alice["id"]}/edit"
+            )
+            assert resp.status_code == 200, resp.text
+            edit_html = resp.text
+            assert 'name="name"' in edit_html
+            assert 'value="Alice"' in edit_html
+            # Many2one rendered as a <select>; France should be the
+            # selected option.
+            assert "<select" in edit_html
+            assert f'value="{france.id}" selected' in edit_html
+            # Save button has hx-post to the row's save endpoint.
+            assert f"row/{alice['id']}" in edit_html
+            print("inline-edit row fragment served with form controls")
+
+            # Save: post form-encoded updates, expect display row back.
+            resp = client.post(
+                f"/web/records/partners/partner.list/row/{alice["id"]}",
+                data={
+                    "name": "Alicia Doe",
+                    "code": "ALI-1",
+                    "country_id": str(france.id),
+                    # active is a Boolean — hidden "" + checked "on"
+                    "active": ["", "on"],
+                },
+            )
+            assert resp.status_code == 200, resp.text
+            saved = resp.text
+            # Display-mode row: Edit/Delete buttons, no <input>s.
+            assert "<input" not in saved
+            assert "Alicia Doe" in saved
+            print("inline save returned updated display row")
+
+            # GET the display row by id (cancel path returns this).
+            resp = client.get(
+                f"/web/records/partners/partner.list/row/{alice["id"]}"
+            )
+            assert "Alicia Doe" in resp.text
+
+            # "+ New" -> empty edit row.
+            resp = client.get("/web/records/partners/partner.list/new")
+            assert resp.status_code == 200, resp.text
+            new_row = resp.text
+            assert 'name="name"' in new_row
+            assert "Create" in new_row
+            print("inline-create row fragment served")
+
+            # POST a brand-new partner via the create endpoint.
+            resp = client.post(
+                "/web/records/partners/partner.list",
+                data={
+                    "name": "Frank",
+                    "code": "FRA-X",
+                    "country_id": str(japan.id),
+                    "active": ["", "on"],
+                },
+            )
+            assert resp.status_code == 200, resp.text
+            created = resp.text
+            assert "Frank" in created
+            assert "<input" not in created  # display row, not edit
+
+            # DELETE: empty body on success, then 404 on repeat.
+            count_before = client.get("/api/records", params={"model": "res.partner"}).json()["count"]
+            # Find Frank's id from the create response (parse out data-record-id)
+            import re
+            m = re.search(r'data-record-id="(\d+)"', created)
+            assert m, created
+            frank_id = int(m.group(1))
+            resp = client.delete(
+                f"/web/records/partners/partner.list/row/{frank_id}"
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.text == ""
+            count_after = client.get("/api/records", params={"model": "res.partner"}).json()["count"]
+            assert count_after == count_before - 1, (count_before, count_after)
+            print("inline delete removed the row")
+
 
 def _drop_known_tables(conn):
     """Tear down tables we expect to own. Idempotent."""

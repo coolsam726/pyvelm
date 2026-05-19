@@ -17,8 +17,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi import Body, Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .env import Environment
@@ -193,6 +193,66 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
             render_list_rows(rec, env, page=page, page_size=page_size)
         )
 
+    def _coerce_json_vals(model_name: str, vals: dict) -> dict:
+        """Validate keys exist on the model. Type coercion is delegated
+        to each field's `to_sql_param`, which the ORM already calls."""
+        cls = registry[model_name]
+        unknown = [k for k in vals if k not in cls._fields]
+        if unknown:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown field(s) on {model_name}: {unknown}",
+            )
+        return vals
+
+    @app.post("/api/records", status_code=201)
+    def create_record(
+        model: str = Query(...),
+        vals: dict = Body(...),
+        env: Environment = Depends(get_env),
+    ):
+        if model not in registry:
+            raise HTTPException(404, f"Unknown model {model!r}")
+        clean = _coerce_json_vals(model, vals)
+        with env.transaction():
+            rec = env[model].create(clean)
+        return serialize_record(rec)
+
+    @app.patch("/api/records/{record_id}")
+    def write_record(
+        record_id: int,
+        model: str = Query(...),
+        vals: dict = Body(...),
+        env: Environment = Depends(get_env),
+    ):
+        if model not in registry:
+            raise HTTPException(404, f"Unknown model {model!r}")
+        rec = env[model].browse(record_id)
+        if not env[model].search([("id", "=", record_id)]):
+            raise HTTPException(404, f"{model}({record_id}) not found")
+        clean = _coerce_json_vals(model, vals)
+        with env.transaction():
+            rec.write(clean)
+        # Reread so the response reflects post-write state (including any
+        # stored compute fields that fired).
+        env.cache.invalidate(model_name=model, ids=[record_id])
+        return serialize_record(env[model].browse(record_id))
+
+    @app.delete("/api/records/{record_id}", status_code=204, response_class=Response)
+    def delete_record(
+        record_id: int,
+        model: str = Query(...),
+        env: Environment = Depends(get_env),
+    ):
+        if model not in registry:
+            raise HTTPException(404, f"Unknown model {model!r}")
+        rec = env[model].browse(record_id)
+        if not env[model].search([("id", "=", record_id)]):
+            raise HTTPException(404, f"{model}({record_id}) not found")
+        with env.transaction():
+            rec.unlink()
+        return Response(status_code=204)
+
     @app.get("/api/records")
     def list_records(
         model: str,
@@ -218,5 +278,97 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
             "count": len(recs),
             "records": serialize_records(recs, field_list),
         }
+
+    # ---- HTMX inline-edit row endpoints ----
+    # Each returns a <tr> fragment. Flow: list page renders rows via
+    # list_row.html with Edit/Delete buttons; Edit hx-gets /edit and
+    # swaps in list_row_edit.html; Save hx-posts here and the response
+    # is the updated display row; Cancel hx-gets the unmodified display
+    # row; Delete unlinks and returns an empty body so hx-swap="outerHTML"
+    # removes the <tr>; "+ New" hx-gets /new for a blank edit row at the
+    # top of the table.
+
+    def _load_record(env, view, record_id: int):
+        Model = env[view.model]
+        if not Model.search([("id", "=", record_id)]):
+            raise HTTPException(404, f"{view.model}({record_id}) not found")
+        return Model.browse(record_id)
+
+    @app.get("/web/records/{module}/{name}/new", response_class=HTMLResponse)
+    def web_row_new(module: str, name: str, env: Environment = Depends(get_env)):
+        from .render import render_new_row
+
+        view = _load_view(env, module, name)
+        return HTMLResponse(render_new_row(view, env))
+
+    @app.get("/web/records/{module}/{name}/row/{record_id}",
+             response_class=HTMLResponse)
+    def web_row_display(
+        module: str, name: str, record_id: int,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import render_list_row
+
+        view = _load_view(env, module, name)
+        rec = _load_record(env, view, record_id)
+        return HTMLResponse(render_list_row(view, rec, env, mode="display"))
+
+    @app.get("/web/records/{module}/{name}/row/{record_id}/edit",
+             response_class=HTMLResponse)
+    def web_row_edit(
+        module: str, name: str, record_id: int,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import render_list_row
+
+        view = _load_view(env, module, name)
+        rec = _load_record(env, view, record_id)
+        return HTMLResponse(render_list_row(view, rec, env, mode="edit"))
+
+    @app.post("/web/records/{module}/{name}/row/{record_id}",
+              response_class=HTMLResponse)
+    async def web_row_save(
+        module: str, name: str, record_id: int, request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import parse_form_vals, render_list_row
+
+        view = _load_view(env, module, name)
+        rec = _load_record(env, view, record_id)
+        form = await request.form()
+        cls = env.registry[view.model]
+        vals = parse_form_vals(cls, form)
+        with env.transaction():
+            rec.write(vals)
+        # Reread for any computed-field follow-on values.
+        env.cache.invalidate(model_name=view.model, ids=[record_id])
+        return HTMLResponse(render_list_row(view, rec, env, mode="display"))
+
+    @app.delete("/web/records/{module}/{name}/row/{record_id}",
+                response_class=HTMLResponse)
+    def web_row_delete(
+        module: str, name: str, record_id: int,
+        env: Environment = Depends(get_env),
+    ):
+        view = _load_view(env, module, name)
+        rec = _load_record(env, view, record_id)
+        with env.transaction():
+            rec.unlink()
+        return HTMLResponse("")
+
+    @app.post("/web/records/{module}/{name}", response_class=HTMLResponse)
+    async def web_row_create(
+        module: str, name: str, request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import parse_form_vals, render_list_row
+
+        view = _load_view(env, module, name)
+        cls = env.registry[view.model]
+        form = await request.form()
+        vals = parse_form_vals(cls, form)
+        with env.transaction():
+            rec = env[view.model].create(vals)
+        return HTMLResponse(render_list_row(view, rec, env, mode="display"))
 
     return app

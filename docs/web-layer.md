@@ -172,15 +172,31 @@ app = create_app(registry, pool)
 # Hand `app` to uvicorn / gunicorn / your favorite ASGI server.
 ```
 
-Slice A is read-only:
+Read endpoints:
 
-- `GET /api/views/{module}/{name}` → view record with parsed arch.
+- `GET /api/views/{module}/{name}` → view record with parsed arch
+  (post-inheritance).
 - `GET /api/records?model=&domain=&fields=&limit=&offset=&order=` →
   paginated rows.
 
 `domain` is a JSON-encoded list of `[attr, op, value]` triples. Path
 traversal (`country_id.region_id.name`) works exactly like the ORM
 domain compiler — that's the same code.
+
+Mutation endpoints (Slice B.3):
+
+- `POST   /api/records?model=...` — body is a JSON vals dict;
+  returns the serialized created record. 201 on success.
+- `PATCH  /api/records/{id}?model=...` — body is a JSON vals dict;
+  applies a partial update and returns the serialized record after
+  any stored compute fields have re-run. 200 on success.
+- `DELETE /api/records/{id}?model=...` — 204 on success.
+
+All three run inside `env.transaction()`, so partial failures leave
+nothing behind. Unknown fields raise 400; unknown records raise 404.
+There is **no authentication or authorization layer** — Stage 5's
+record rules are what'll guard write endpoints. Until then, don't
+expose this to the public internet.
 
 ## JSON serialization
 
@@ -231,12 +247,29 @@ template if needed. The framework supports it but doesn't impose it.
 
 **Routes**
 
+Page + pagination:
 - `GET /web/views/{module}/{name}?page=&page_size=` — full HTML page.
-  Includes a header, the table shell, the first page of rows, and a
-  "Load more" button when there are more rows.
+  Header, the table shell, the first page of rows, "+ New" button, and
+  a "Load more" button when there are more rows.
 - `GET /web/records/{module}/{name}?page=&page_size=` — `<tr>` fragment
   for HTMX `hx-swap="beforeend"`. Also returns an out-of-band swap of
   the load-more button when there are still more rows beyond this page.
+
+Inline edit (per-row):
+- `GET    /web/records/{m}/{n}/row/{id}/edit` — `<tr>` with input
+  controls. Save / Cancel buttons in the Actions column.
+- `GET    /web/records/{m}/{n}/row/{id}` — display `<tr>` (used by
+  Cancel to revert without round-tripping the form state).
+- `POST   /web/records/{m}/{n}/row/{id}` — form-encoded body; applies
+  write and returns the updated display `<tr>`.
+- `DELETE /web/records/{m}/{n}/row/{id}` — unlinks; returns empty body
+  so `hx-swap="outerHTML"` removes the row.
+- `GET    /web/records/{m}/{n}/new` — empty edit `<tr>` for inline
+  creation. Append to the top of the table via `hx-swap="afterbegin"`.
+- `POST   /web/records/{m}/{n}` — form-encoded body; creates and
+  returns the new display `<tr>`.
+
+Static:
 - `GET /web/static/...` — bundled static directory, presently
   containing only a placeholder. App developers can ship their own
   assets by overriding the static mount when they call `create_app`.
@@ -265,6 +298,31 @@ classes by default; just utilities directly on the elements. This
 keeps the framework's CSS surface essentially zero — anyone consuming
 the rendered HTML can audit styling by reading the markup.
 
+**Two modes, one registry.** Each widget can register either a
+`display` renderer (default) or an `edit` renderer (used when a row
+enters inline-edit). The lookup mirrors display: `(field_class, hint,
+mode)` with MRO + hint fallback. Built-in edit widgets:
+
+| Field type | Edit-mode control |
+|---|---|
+| `Char` / `Text` | `<input type="text">` |
+| `Integer` | `<input type="number" step="1">` |
+| `Float` | `<input type="number" step="any">` |
+| `Boolean` (and `+toggle`) | `<input type="checkbox">` with a paired hidden `""` so unchecked submits as false |
+| `Many2one` | `<select>` with options preloaded from the comodel |
+| `One2many` / `Many2many` | display rendering (no multi-select widget yet) |
+
+The Boolean trick — a hidden `name="x" value=""` immediately before
+the checkbox — is necessary because unchecked checkboxes don't submit
+at all. The hidden field guarantees the key is present; if checked,
+the checkbox's `value="on"` is the last value and wins under
+`getlist(...)`.
+
+`parse_form_vals(model_cls, form_data)` is the inverse: it coerces
+strings back to Python types using the model's field metadata
+(int/float casting, `""` → `None`, Many2one ids as ints). Unknown
+keys are ignored so form-private fields can't bleed into vals.
+
 Adding a widget is a decorator one-liner:
 
 ```python
@@ -291,14 +349,19 @@ inheritance resolution.
 
 ## What's deliberately not here
 
-- **Mutation endpoints** (POST/PATCH/DELETE) — Slice B.3.
-- **Click-to-edit / inline editing in the list view** — depends on
-  mutations.
 - **Authentication / authorization** — there's no row-level security
-  yet (Stage 5). Don't expose this to the public internet.
+  yet (Stage 5). Don't expose mutation endpoints to the public internet.
 - **`form` / `kanban` view types** — `view_type = "list"` is the only
   one with a normalizer + renderer today. The 501 from `/web/views/...`
   for other types is intentional, not an oversight.
+- **Many2many / One2many editing widgets** — the edit-mode renderer
+  for these falls through to the display rendering. A real multi-
+  select needs design (chip removal, search-add, etc.) — natural slice
+  once form views land.
+- **Field-level validation feedback in the inline-edit form** — today
+  invalid input raises and HTMX won't swap. The intended UX is to
+  return the edit fragment with inline error messages on 422; that
+  needs a small `errors` plumbing layer in the renderer.
 - **Caching of view responses** — every request hits Postgres for the
   resolved arch. Memoizing per `(module, name)` is cheap and obvious;
   revisit when load matters.

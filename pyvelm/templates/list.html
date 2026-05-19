@@ -9,15 +9,24 @@
 <body class="bg-gray-50 text-gray-900 antialiased min-h-screen">
 <header class="bg-white border-b border-gray-200 px-8 py-6">
     <h1 class="text-2xl font-semibold">{{ view.name }}</h1>
-    <p class="mt-1 text-sm text-gray-500">
-        {{ view.model }}
-        <span class="text-gray-300">·</span>
-        showing {{ rows | length }} of {{ total }}
-        {% if view.module %}
-        <span class="text-gray-300">·</span>
-        from <code class="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-xs">{{ view.module }}</code>
-        {% endif %}
-    </p>
+    <div class="flex items-center justify-between gap-4">
+        <p class="mt-1 text-sm text-gray-500">
+            {{ view.model }}
+            <span class="text-gray-300">·</span>
+            showing {{ rows | length }} of {{ total }}
+            {% if view.module %}
+            <span class="text-gray-300">·</span>
+            from <code class="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-xs">{{ view.module }}</code>
+            {% endif %}
+        </p>
+        <button
+            class="px-3 py-1.5 text-sm border border-blue-600 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+            hx-get="/web/records/{{ view.module }}/{{ view.name }}/new"
+            hx-target="#pyvelm-rows"
+            hx-swap="afterbegin">
+            + New
+        </button>
+    </div>
 </header>
 
 <main class="px-8 py-6">
@@ -31,6 +40,9 @@
                         {{ h.label }}
                     </th>
                     {% endfor %}
+                    <th class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        Actions
+                    </th>
                 </tr>
             </thead>
             <tbody id="pyvelm-rows" class="divide-y divide-gray-200">
