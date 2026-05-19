@@ -529,14 +529,15 @@ class BaseModel(metaclass=MetaModel):
         if rule_leaves:
             full_domain.extend(rule_leaves)
         # Auto-inject company scope when env.company_id is set and the
-        # model has a company_id field. Superuser bypasses the implicit
-        # filter but still sees the records — use with_company(None)
-        # to explicitly lift the scope.
+        # model opted in via `_company_scoped`. Applies to everyone
+        # (including superuser) so the company switcher demos
+        # consistently — to see every record across companies, use
+        # `env.with_company(None)` explicitly. The ACL-bypass path
+        # always skips so installer/migration code can see the world.
         if (
-            not self.env.is_superuser()
-            and not self.env._acl_bypass
+            not self.env._acl_bypass
             and self.env.company_id is not None
-            and "company_id" in self._fields
+            and getattr(self.__class__, "_company_scoped", False)
         ):
             full_domain.append(("company_id", "=", self.env.company_id))
         where, params, joins = domain_to_sql(
@@ -560,10 +561,9 @@ class BaseModel(metaclass=MetaModel):
         if rule_leaves:
             full_domain.extend(rule_leaves)
         if (
-            not self.env.is_superuser()
-            and not self.env._acl_bypass
+            not self.env._acl_bypass
             and self.env.company_id is not None
-            and "company_id" in self._fields
+            and getattr(self.__class__, "_company_scoped", False)
         ):
             full_domain.append(("company_id", "=", self.env.company_id))
         where, params, joins = domain_to_sql(

@@ -54,20 +54,12 @@ def install(env):
                     "perm_unlink": True,
                 })
 
-    # Company-scoped record rule for res.partner: non-superusers see only
-    # partners that belong to their current company (or have no company).
-    # The placeholder is substituted with env.company_id at query time.
-    import json
-    if "ir.rule" in env.registry and "res.partner" in env.registry:
-        env["ir.rule"].create({
-            "name": "res.partner: company scope",
-            "model": "res.partner",
-            "group_id": None,  # global rule — applies to all users
-            "perm_read": True,
-            "perm_write": True,
-            "perm_create": True,
-            "perm_unlink": True,
-            "domain": json.dumps([
-                ["company_id", "in", [{"placeholder": "company_id"}, False]],
-            ]),
-        })
+    # NOTE: company scoping is enforced at the model level by
+    # `BaseModel.search` for any model that opts in via
+    # `_company_scoped = True`. Earlier versions also seeded a global
+    # `ir.rule` for res.partner doing the same job — the rule was
+    # redundant and contradicted the model filter (the rule allowed
+    # records with NULL company_id; the model filter excluded them).
+    # Module-level filter wins; ir.rule company scoping intentionally
+    # NOT seeded. Apps that need richer per-group company logic should
+    # add their own rules.

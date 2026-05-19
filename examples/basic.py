@@ -961,21 +961,35 @@ def main():
                 s8_env.cache.invalidate(model_name="res.partner")
                 print("multi-company: assigned partners to separate companies OK")
 
-                # Non-superuser sees only company-A partners when scoped.
-                # Use a non-superuser env (uid=2 doesn't exist; use bypass to fake it).
-                env_a = scoped_env  # uid=1 superuser bypasses company filter on search
-                # Verify the scoped env attribute is propagated correctly.
-                assert env_a.company_id == my_company.id
+                # 0.7.0: the company filter applies to EVERYONE, including
+                # uid=1, when env.company_id is set on a `_company_scoped`
+                # model. To opt out, use `env.with_company(None)`.
+                assert scoped_env.company_id == my_company.id
+                only_a = scoped_env["res.partner"].search([])
+                a_ids = set(only_a.ids)
+                assert p_a.id in a_ids, "scoped search must include the company-A partner"
+                assert p_b.id not in a_ids, (
+                    "scoped search must hide the company-B partner — superuser bypass "
+                    "of the company filter is intentionally OFF in 0.7.0"
+                )
+                # Without scope, superuser sees everything.
+                everyone = s8_env.with_company(None)["res.partner"].search([])
+                assert p_a.id in everyone.ids and p_b.id in everyone.ids
                 print("multi-company: search scoping via env.company_id OK")
 
-                # Slice C — company_id placeholder in ir.rule domain.
-                # The partner company-scope rule was installed by the install hook.
-                # Verify it exists.
+                # 0.7.0 standardizes on the model-level filter for company
+                # scoping; the global ir.rule duplicating it has been
+                # removed. Only group-scoped rules survive (partners_pro
+                # ships "PM: active partners only").
                 bypass_env = _Env8(s8_conn, registry=reg, uid=1)
                 bypass_env._acl_bypass = True
                 rules = bypass_env["ir.rule"].search([("model", "=", "res.partner")])
-                assert rules, "company-scoped ir.rule for res.partner must be seeded"
-                print(f"multi-company: {len(rules)} ir.rule record(s) for res.partner OK")
+                rule_names = [r.name for r in rules]
+                assert "res.partner: company scope" not in rule_names, (
+                    "0.6.0 global company-scope rule must be pruned in 0.7.0; "
+                    f"found: {rule_names}"
+                )
+                print(f"multi-company: {len(rules)} group-scoped ir.rule(s) (no global)")
 
                 # Slice D — /web/switch-company and /web/companies endpoints.
                 r = client.get("/web/companies")

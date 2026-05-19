@@ -687,6 +687,12 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
                 token = secrets.token_hex(32)
                 with env.transaction():
                     users.write({"session_token": token})
+                # Capture the user's home company so we can pre-set the
+                # company-scope cookie below. Reads through the ACL bypass
+                # so a user without explicit access to res.users on their
+                # own row still resolves the FK.
+                home_company = users.company_id
+                home_company_id = home_company.id if home_company else None
             finally:
                 env._acl_bypass = False
 
@@ -698,6 +704,21 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
             samesite="lax",
             path="/",
         )
+        # Default the active company to the user's home company. Without
+        # this, a freshly-logged-in user lands on /web/admin with no
+        # scope selected and the multi-company filter is invisible until
+        # they click the switcher — surprising UX. The switcher can still
+        # override or clear this cookie post-login.
+        if home_company_id is not None:
+            response.set_cookie(
+                _COMPANY_COOKIE,
+                str(home_company_id),
+                httponly=True,
+                samesite="lax",
+                path="/",
+            )
+        else:
+            response.delete_cookie(_COMPANY_COOKIE, path="/")
         return response
 
     @app.post("/logout")

@@ -1,5 +1,5 @@
 NAME: str = "base"
-VERSION: tuple[int, ...] = (0, 6, 0)
+VERSION: tuple[int, ...] = (0, 7, 0)
 DEPENDS: list[str] = []
 
 # Seed default Admin group + uid=1 superuser on first install so the

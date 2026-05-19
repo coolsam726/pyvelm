@@ -63,7 +63,11 @@ class Password(Char):
 
 class User(BaseModel):
     _name = "res.users"
-    _company_scoped = True
+    # NOT `_company_scoped`. Users carry a `company_id` (their default
+    # company at login) but stay globally visible — an admin in one
+    # company should be able to manage users in any other from the same
+    # screen. Setting `_company_scoped = True` here was the original
+    # design but it hid cross-company users from the admin UI.
 
     name = Char(required=True)
     login = Char(required=True)

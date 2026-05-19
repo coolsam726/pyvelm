@@ -264,13 +264,7 @@ class Environment:
             out: list = []
             for r in rules:
                 raw = json.loads(r.domain)
-                resolved = self._resolve_rule_leaves(raw)
-                # Skip rules that contain unresolvable/null company_id
-                # placeholders — when no company scope is active, company
-                # rules must be a no-op rather than blocking all records.
-                if self._rule_needs_company_skip(resolved):
-                    continue
-                out.extend(resolved)
+                out.extend(self._resolve_rule_leaves(raw))
         finally:
             self._acl_bypass = prev
 
@@ -303,35 +297,13 @@ class Environment:
         if ph in ("uid", "user_id"):
             return self.uid
         if ph == "company_id":
+            # Apps can still write per-group ir.rules that reference
+            # the active company. The model-level filter applied by
+            # `BaseModel.search` for `_company_scoped` models is the
+            # default mechanism; this placeholder is for the
+            # finer-grained case.
             return self.company_id
         raise ValueError(f"Unknown ir.rule placeholder {ph!r}")
-
-    def _rule_needs_company_skip(self, resolved_leaves: list) -> bool:
-        """Return True when a resolved rule domain references a company_id
-        value of None — meaning no company scope is active and the rule
-        would incorrectly block all records. Such rules are treated as a
-        no-op until a company scope is set on the environment."""
-        for leaf in resolved_leaves:
-            if not isinstance(leaf, (list, tuple)):
-                continue
-            attr, op, value = leaf
-            if attr != "company_id":
-                continue
-            # Single-value operators.
-            if op in ("=", "!=") and value is None:
-                return True
-            # List operators: skip if the primary (first) company value is None.
-            if op in ("in", "not in") and isinstance(value, list):
-                # If the first non-False/non-None element is None it means
-                # the placeholder resolved to None.
-                placeholders_in_list = [
-                    v for v in value if v is None or v is False
-                ]
-                non_null = [v for v in value if v is not None and v is not False]
-                # All entries are null/false → no meaningful company filter.
-                if not non_null:
-                    return True
-        return False
 
     # ------ Transactions ------
 

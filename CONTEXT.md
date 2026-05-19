@@ -189,15 +189,38 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 7 Slices A+B complete: `_inherit` model extension. Partners_pro
-now extends `res.partner` with `vip_note` and an overridden compute.
+Stage 8 (multi-company) landed in 0.6.0 but had three UX/design bugs
+that made the demo silently lie:
+  1. `BaseModel.search` skipped the company filter for superuser, so
+     the company switcher did nothing when demoing as admin.
+  2. Login didn't pre-set the `pyvelm_company` cookie from
+     `user.company_id`, so a freshly-logged-in user saw a "scope
+     inactive" view until they manually clicked the switcher.
+  3. The install hook seeded a global `ir.rule` doing the same job
+     as `BaseModel.search`'s `_company_scoped` filter, with
+     contradictory semantics (the rule allowed NULL company_id;
+     the model filter excluded it). `_rule_needs_company_skip`
+     existed only to silence the rule when no scope was active.
 
-Next options:
-  - **Stage 8 — multi-company / multi-tenancy.** `res.company`, a
-    `company_id` on partner and other models, domain rules that scope
-    all searches to the current company.
-  - **Stage 7 Slice C.** XPath/structural view patches beyond the
-    existing dict-op VIEW_INHERITS mechanism.
+**0.7.0 standardizes:** the model-level filter is the single source
+of truth for company scope. It applies to everyone (superuser included)
+whenever `env.company_id` is set on a `_company_scoped` model. Login
+pre-sets `pyvelm_company` from `user.company_id`. The buggy global
+rule is gone (migration `0_6_to_0_7.py` prunes it from older installs).
+`_company_scoped` was also dropped from `res.users` — users carry a
+`company_id` but stay cross-company-visible so the admin UI can
+manage them all.
+
+Next focus: **UI polish using Tailwind CSS + Flowbite components**
+(Flowbite is the chosen component library on top of the existing
+Tailwind Play-CDN stack). Switch from hand-rolled utility-class
+markup to Flowbite-pattern components where it makes sense (cards,
+modals, dropdowns, navbar, tables). Keep the JSON arch contract;
+this is markup-only.
+
+Pending follow-ups, in order of "what'll hurt first":
+  - **Stage 7 Slice C.** XPath/structural view arch patches beyond
+    the existing dict-op VIEW_INHERITS mechanism.
   - **Stage 6 hardening.** Cron runner as a real background task,
     mail dispatch via SMTP, message subtypes, followers/subscriptions.
   - **Stage 5 hardening.** CSRF tokens, rate limiting on /login,
