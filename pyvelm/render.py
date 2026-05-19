@@ -502,6 +502,115 @@ def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = 
     )
 
 
+# ---- kanban view rendering ----
+
+def _render_field_label(record, spec: dict) -> dict:
+    """Render one card field as `{label, html}`."""
+    fname = spec["name"]
+    cls = type(record)
+    if fname not in cls._fields:
+        return {"label": fname, "html": Markup("")}
+    field = cls._fields[fname]
+    label = spec.get("label") or field.string or fname
+    hint = spec.get("widget")
+    renderer = find_renderer(field, hint, mode="display")
+    value = getattr(record, fname)
+    return {"label": label, "html": renderer(value, spec, field)}
+
+
+def _render_field_bare(record, fname: str) -> Markup:
+    """Render the display value of a single named field (no label)."""
+    cls = type(record)
+    if fname not in cls._fields or fname is None:
+        return Markup("")
+    field = cls._fields[fname]
+    renderer = find_renderer(field, None, mode="display")
+    value = getattr(record, fname)
+    return renderer(value, {"name": fname}, field)
+
+
+def _group_records(recordset, group_by_attr: str, env) -> list[dict]:
+    """Bucket recordset by group_by_attr value. Returns
+    `[{key, label, records}, ...]` preserving first-seen order."""
+    cls = env.registry[recordset._name]
+    if group_by_attr not in cls._fields:
+        raise ValueError(
+            f"group_by references unknown field {group_by_attr!r} "
+            f"on {recordset._name}"
+        )
+    field = cls._fields[group_by_attr]
+    from .web import _display_value
+
+    groups: dict = {}
+    for rec in recordset:
+        value = getattr(rec, group_by_attr)
+        if isinstance(field, Many2one):
+            key = value.id if value else None
+            label = _display_value(value) if value else "(no value)"
+        else:
+            key = value
+            label = "(no value)" if value is None else str(value)
+        if key not in groups:
+            groups[key] = {"key": key, "label": label, "records": []}
+        groups[key]["records"].append(rec)
+    return list(groups.values())
+
+
+def render_kanban_page(view, env) -> str:
+    """Render a kanban view: cards optionally grouped into columns.
+
+    Arch shape:
+        {"card": {"title": "<attr>", "subtitle": "<attr>",
+                  "fields": [...], "badges": [...]},
+         "group_by": "<attr>"  (optional),
+         "form_view": "<view_name>"  (optional, makes cards clickable)}
+    """
+    from .views import resolve_arch
+
+    arch = resolve_arch(view)
+    card = arch.get("card", {})
+    group_by = arch.get("group_by")
+    form_view = arch.get("form_view")
+
+    Model = env[view.model]
+    recs = Model.search([], order='"id" ASC')
+
+    if group_by:
+        groups = _group_records(recs, group_by, env)
+    else:
+        groups = [{"key": None, "label": "All", "records": list(recs)}]
+
+    title_attr = card.get("title")
+    subtitle_attr = card.get("subtitle")
+    fields_spec = list(card.get("fields", []))
+    badges_spec = list(card.get("badges", []))
+
+    columns = []
+    for grp in groups:
+        cards = []
+        for rec in grp["records"]:
+            cards.append({
+                "id": rec.id,
+                "title": _render_field_bare(rec, title_attr) if title_attr else Markup(""),
+                "subtitle": _render_field_bare(rec, subtitle_attr) if subtitle_attr else Markup(""),
+                "fields": [_render_field_label(rec, s) for s in fields_spec],
+                "badges": [_render_field_label(rec, s) for s in badges_spec],
+                "link": (
+                    f"/web/views/{view.module}/{form_view}/record/{rec.id}"
+                    if form_view else None
+                ),
+            })
+        columns.append({
+            "label": grp["label"],
+            "key": grp["key"],
+            "count": len(grp["records"]),
+            "cards": cards,
+        })
+
+    template = _env.get_template("kanban.html")
+    return template.render(view=view, columns=columns, total=len(recs))
+
+
 def render_list_page(view, env, *, page: int, page_size: int) -> str:
     """Full HTML page for a list view: head, table shell, first page
     of rows, and an HTMX 'load more' button if there's more."""

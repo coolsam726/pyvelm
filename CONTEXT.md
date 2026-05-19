@@ -81,9 +81,11 @@ For the design rationale and the deferred-items rationale, see
         the same handler. Section-level inheritance verified in the
         example (partners_pro renames a section title and patches
         field attrs across the section path).
-     ⏭ Slice B.5: kanban view type — cards, optional group-by column
-        layout. Largely a template-design slice; widget registry and
-        arch shape mostly carry over.
+     ✅ Slice B.5: kanban view type. Cards grouped into columns by a
+        configurable field (Many2one or scalar); each card carries
+        title/subtitle/fields/badges and optionally links to a form
+        view. Reuses display-mode widget registry; no edit mode in
+        kanban (click → form view for editing).
      ⏭ Slice B.6: `pyvelm.types` TypedDicts for IDE assistance on
         manifest authoring (Manifest, View, Operation).
 5. ACL: groups, model permissions, record rules (domain-based row security).
@@ -115,21 +117,21 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 4 Slice B.4 landed: form views ship. Sectioned arch with
-the same string-or-dict authoring sugar; section-level inheritance
-addresses `["sections", <name>, "fields", <name>]` paths and reuses
-the six-op vocabulary. The form template renders Tailwind-styled
-fieldset cards with a 2-column field grid, swappable display/edit
-modes, and full-page vs body-fragment dispatch on the `HX-Request`
-header.
+Stage 4 Slice B.5 landed: kanban view type. Cards grouped into
+columns by a configurable field; each card carries title, subtitle,
+labeled fields, and badges; cards optionally link to a form view for
+the same model. Render-only; click-through is the editing surface.
+List + form + kanban together cover the "default UI" surface area
+expected of an ERP framework.
 
-Next: **Slice B.5 — kanban view type.** Cards with a `group_by`
-field for column layout. Largely a template-design slice; the arch
-normalizer adds a `card` entry, the widget registry is unchanged.
+Next: **Slice B.6 — TypedDicts for IDE assistance.** Manifest, View,
+ViewInherit, Operation, and the per-view-type arch shapes get
+TypedDict definitions exported from `pyvelm.types`. Lets developers
+annotate `VIEWS: list[View] = [...]` in data files and get
+autocomplete + typo detection in their IDE.
 
-After B.5: B.6 (TypedDicts for IDE assistance). Stage 5 (ACL /
-record rules) becomes urgent once mutations are exposed beyond a
-demo — public write endpoints without row-level security are
+After B.6: Stage 5 (ACL / record rules) is the natural pairing with
+mutations — public write endpoints without row-level security are
 malpractice.
 
 Still deferred: cache snapshot on transaction rollback, O2m/M2m

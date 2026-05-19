@@ -429,12 +429,63 @@ For direct navigation, the routes return a full HTML page. For
 in-place HTMX swaps, the same routes detect the `HX-Request: true`
 header and return only the body fragment.
 
+## Kanban views
+
+A `kanban` view renders records as cards, optionally grouped into
+columns. Arch shape:
+
+```python
+{
+    "name": "partner.kanban",
+    "model": "res.partner",
+    "view_type": "kanban",
+    "arch": {
+        "card": {
+            "title": "name",                # field name (string)
+            "subtitle": "code",
+            "fields": ["age", "country_id"],
+            "badges": [
+                {"name": "active", "widget": "toggle"},
+                "tag_ids",
+            ],
+        },
+        "group_by": "country_id",          # optional
+        "form_view": "partner.form",       # optional, makes cards clickable
+    },
+}
+```
+
+`title` and `subtitle` are single-field references rendered through
+the field's default display widget. `fields` is a list of fields with
+labels; `badges` are tighter chip-style indicators (typically
+booleans, short collections). Strings in `fields` and `badges` are
+promoted to `{"name": str}` on storage, same as list / form views.
+
+When `group_by` is set, the renderer groups all records by that
+field's value (Many2one buckets by id with display-value column
+header; scalar buckets by raw value). Records whose value is null
+land in a `(no value)` column.
+
+When `form_view` is set, each card becomes an anchor linking to
+`/web/views/{module}/{form_view}/record/{id}`. Without `form_view`,
+cards are plain divs.
+
+The route at `GET /web/views/{module}/{name}` dispatches by
+`view_type`:
+- `list` → `render_list_page`
+- `kanban` → `render_kanban_page`
+- `form` → 501 (form views live at `.../record/{id}`)
+
+Inheritance addresses card fields by name the same way list views
+do — `["card", "fields", "country_id"]` reaches the dict with
+`name="country_id"` in the card's fields list. Card-level keys
+(title, subtitle, group_by, form_view) are addressed via simple
+`set`/`remove` ops at the top of the arch.
+
 ## What's deliberately not here
 
 - **Authentication / authorization** — there's no row-level security
   yet (Stage 5). Don't expose mutation endpoints to the public internet.
-- **`kanban` view type** — `list` and `form` ship today. Kanban is a
-  natural next slice; cards + per-column grouping.
 - **Many2many / One2many editing widgets** — the edit-mode renderer
   for these falls through to the display rendering. A real multi-
   select needs design (chip removal, search-add, etc.).

@@ -38,4 +38,28 @@ VIEWS = [
             ],
         },
     },
+    {
+        "name": "partner.kanban",
+        "model": "res.partner",
+        "view_type": "kanban",
+        "arch": {
+            # `title` / `subtitle` are field references rendered with
+            # the field's default display widget. `fields` shows
+            # label/value pairs; `badges` renders small chip-like
+            # indicators (typically booleans or short collections).
+            "card": {
+                "title": "name",
+                "subtitle": "code",
+                "fields": ["age", "country_id"],
+                "badges": [
+                    {"name": "active", "widget": "toggle"},
+                    "tag_ids",
+                ],
+            },
+            # Group cards into columns by country (Many2one).
+            "group_by": "country_id",
+            # Make each card a link to the form view for the same model.
+            "form_view": "partner.form",
+        },
+    },
 ]

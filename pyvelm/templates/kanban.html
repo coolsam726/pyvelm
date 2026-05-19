@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{ view.name }} — {{ view.model }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased min-h-screen">
+<header class="bg-white border-b border-gray-200 px-8 py-6">
+    <h1 class="text-2xl font-semibold">{{ view.name }}</h1>
+    <p class="mt-1 text-sm text-gray-500">
+        {{ view.model }}
+        <span class="text-gray-300">·</span>
+        {{ total }} record{% if total != 1 %}s{% endif %}
+        <span class="text-gray-300">·</span>
+        {{ columns | length }} column{% if (columns | length) != 1 %}s{% endif %}
+        <span class="text-gray-300">·</span>
+        from <code class="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-xs">{{ view.module }}</code>
+    </p>
+</header>
+
+<main class="px-8 py-6">
+    <div class="flex gap-4 overflow-x-auto pb-4">
+        {% for col in columns %}
+        <section class="flex-none w-72 bg-gray-100 rounded-lg p-3">
+            <header class="flex items-center justify-between mb-3 px-1">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-gray-600">
+                    {{ col.label }}
+                </h2>
+                <span class="text-xs text-gray-400">{{ col.count }}</span>
+            </header>
+            <div class="space-y-2">
+                {% for card in col.cards %}
+                <{% if card.link %}a href="{{ card.link }}"{% else %}div{% endif %}
+                    class="block bg-white rounded-md p-3 shadow-sm hover:shadow-md transition {% if card.link %}cursor-pointer{% endif %}"
+                    data-record-id="{{ card.id }}">
+                    {% if card.title %}
+                    <div class="font-semibold text-sm">{{ card.title }}</div>
+                    {% endif %}
+                    {% if card.subtitle %}
+                    <div class="text-xs text-gray-500 mt-0.5">{{ card.subtitle }}</div>
+                    {% endif %}
+                    {% if card.fields %}
+                    <div class="mt-2 space-y-1">
+                        {% for f in card.fields %}
+                        <div class="text-xs">
+                            <span class="text-gray-400">{{ f.label }}:</span>
+                            <span class="text-gray-700">{{ f.html }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% if card.badges %}
+                    <div class="mt-2 flex flex-wrap gap-1">
+                        {% for b in card.badges %}
+                        <span class="inline-flex items-center text-xs">{{ b.html }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </{% if card.link %}a{% else %}div{% endif %}>
+                {% endfor %}
+                {% if not col.cards %}
+                <p class="text-xs text-gray-400 text-center py-4">No records</p>
+                {% endif %}
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+</main>
+</body>
+</html>

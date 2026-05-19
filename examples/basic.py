@@ -458,6 +458,41 @@ def main():
             assert active.get("widget") == "toggle"
             print("section-level inheritance applied to form view")
 
+            # ----- B.5: kanban view -----
+            # Arch normalization: badges with string entries get
+            # promoted to {"name": str} dicts.
+            resp = client.get("/api/views/partners/partner.kanban")
+            assert resp.status_code == 200, resp.text
+            kanban_arch = resp.json()["arch"]
+            assert resp.json()["view_type"] == "kanban"
+            badge_names = [b["name"] for b in kanban_arch["card"]["badges"]]
+            assert badge_names == ["active", "tag_ids"]
+            # Widget hint preserved on the dict form.
+            active_badge = kanban_arch["card"]["badges"][0]
+            assert active_badge.get("widget") == "toggle"
+            assert kanban_arch["group_by"] == "country_id"
+            assert kanban_arch["form_view"] == "partner.form"
+
+            # Kanban page renders columns grouped by country.
+            resp = client.get("/web/views/partners/partner.kanban")
+            assert resp.status_code == 200, resp.text
+            page = resp.text
+            # Three groups: France, Japan, "(no value)" for Carol who has
+            # no country.
+            assert "France" in page
+            assert "Japan" in page
+            assert "(no value)" in page
+            # Each card links to the form view for the same model.
+            assert "/web/views/partners/partner.form/record/" in page
+            # data-record-id attributes match every record.
+            import re as _re
+            card_ids = set(_re.findall(r'data-record-id="(\d+)"', page))
+            partner_ids = {p["id"] for p in client.get(
+                "/api/records", params={"model": "res.partner"}
+            ).json()["records"]}
+            assert card_ids == {str(pid) for pid in partner_ids}, (card_ids, partner_ids)
+            print("kanban page renders grouped cards with form-view links")
+
 
 def _drop_known_tables(conn):
     """Tear down tables we expect to own. Idempotent."""

@@ -160,22 +160,22 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         page_size: int = Query(default=20, ge=1, le=200),
         env: Environment = Depends(get_env),
     ):
-        from .render import render_list_page
+        from .render import render_kanban_page, render_list_page
 
         rec = _load_view(env, module, name)
-        if rec.view_type != "list":
-            # Form views are addressed via /record/{id}; kanban is not
-            # yet implemented. List is the only valid landing for the
-            # bare view URL today.
-            raise HTTPException(
-                status_code=501,
-                detail=(
-                    f"view_type {rec.view_type!r} has no top-level page; "
-                    f"use /record/{{id}} for form views"
-                ),
+        if rec.view_type == "list":
+            return HTMLResponse(
+                render_list_page(rec, env, page=page, page_size=page_size)
             )
-        return HTMLResponse(
-            render_list_page(rec, env, page=page, page_size=page_size)
+        if rec.view_type == "kanban":
+            return HTMLResponse(render_kanban_page(rec, env))
+        # Form views land on /record/{id}; bare URL is meaningless.
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                f"view_type {rec.view_type!r} has no top-level page; "
+                f"form views use /record/{{id}} instead"
+            ),
         )
 
     @app.get("/web/records/{module}/{name}", response_class=HTMLResponse)
