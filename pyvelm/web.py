@@ -15,13 +15,14 @@ intended deployment puts a real authentication layer in front.
 from __future__ import annotations
 
 import json
+import secrets
 from typing import Any
 
 import base64
 import binascii
 
 from fastapi import Body, Depends, FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .env import Environment
@@ -134,7 +135,25 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         name="pyvelm-static",
     )
 
-    def _resolve_user(env: Environment, header_value: str | None) -> int | None:
+    _SESSION_COOKIE = "pyvelm_session"
+
+    def _resolve_user_from_session(env: Environment, token: str | None) -> int | None:
+        """Return uid for a valid session token, or None."""
+        if not token or "res.users" not in registry:
+            return None
+        env._acl_bypass = True
+        try:
+            users = env["res.users"].search(
+                [("session_token", "=", token), ("active", "=", True)], limit=1
+            )
+            if not users:
+                return None
+            users.ensure_one()
+            return users.id
+        finally:
+            env._acl_bypass = False
+
+    def _resolve_user_from_basic(env: Environment, header_value: str | None) -> int | None:
         """Parse an HTTP Basic header and return the authenticated uid.
 
         Returns None for missing / invalid / failed-login cases. Callers
@@ -169,7 +188,14 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
     def get_env(request: Request):
         with pool.connection() as conn:
             env = Environment(conn, registry=registry, uid=None)
-            uid = _resolve_user(env, request.headers.get("authorization"))
+            # Session cookie takes priority; fall back to HTTP Basic auth.
+            uid = _resolve_user_from_session(
+                env, request.cookies.get(_SESSION_COOKIE)
+            )
+            if uid is None:
+                uid = _resolve_user_from_basic(
+                    env, request.headers.get("authorization")
+                )
             if uid is not None:
                 env.uid = uid
                 # Drop caches keyed on the previous (None) uid.
@@ -528,5 +554,91 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         return HTMLResponse(
             render_form_page(view, rec, env, mode="display", body_only=body_only)
         )
+
+    # ---- admin dashboard ----
+
+    @app.get("/web/admin", response_class=HTMLResponse)
+    def web_admin(env: Environment = Depends(get_env)):
+        from .render import render_admin_page
+
+        if env.uid is None:
+            return RedirectResponse("/login?next=/web/admin", status_code=302)
+        return HTMLResponse(render_admin_page())
+
+    # ---- login / logout ----
+
+    @app.get("/login", response_class=HTMLResponse)
+    def login_page(request: Request, next: str = Query(default="")):
+        from .render import render_login_page
+
+        # Already authenticated via session? Skip the login screen.
+        if request.cookies.get(_SESSION_COOKIE):
+            return RedirectResponse(next or "/", status_code=302)
+        return HTMLResponse(render_login_page(next=next))
+
+    @app.post("/login")
+    async def login_submit(request: Request):
+        from .render import render_login_page
+
+        form = await request.form()
+        login_val = (form.get("login") or "").strip()
+        password_val = form.get("password") or ""
+        next_url = (form.get("next") or "").strip() or "/"
+
+        # Validate credentials.
+        with pool.connection() as conn:
+            env = Environment(conn, registry=registry, uid=None)
+            env._acl_bypass = True
+            try:
+                if "res.users" not in registry:
+                    raise HTTPException(503, "User model not loaded")
+                users = env["res.users"].search(
+                    [("login", "=", login_val), ("active", "=", True)], limit=1
+                )
+                if not users or not users.check_password(password_val):
+                    return HTMLResponse(
+                        render_login_page(
+                            error="Invalid username or password.",
+                            next=next_url,
+                            prefill_login=login_val,
+                        ),
+                        status_code=401,
+                    )
+                uid = users.id
+                token = secrets.token_hex(32)
+                with env.transaction():
+                    users.write({"session_token": token})
+            finally:
+                env._acl_bypass = False
+
+        response = RedirectResponse(next_url, status_code=303)
+        response.set_cookie(
+            _SESSION_COOKIE,
+            token,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+        return response
+
+    @app.post("/logout")
+    def logout(request: Request):
+        token = request.cookies.get(_SESSION_COOKIE)
+        if token:
+            with pool.connection() as conn:
+                env = Environment(conn, registry=registry, uid=None)
+                env._acl_bypass = True
+                try:
+                    users = env["res.users"].search(
+                        [("session_token", "=", token)], limit=1
+                    )
+                    if users:
+                        with env.transaction():
+                            users.write({"session_token": None})
+                finally:
+                    env._acl_bypass = False
+        response = RedirectResponse("/login", status_code=303)
+        response.delete_cookie(_SESSION_COOKIE, path="/")
+        return response
 
     return app

@@ -306,6 +306,9 @@ class BaseModel(metaclass=MetaModel):
         changed = list(column_vals) + list(m2m_vals) + stored_order
         if changed:
             self.env.notify_changed(self._name, [new_id], changed)
+        # Fire on_create automation rules after the record is fully set up.
+        from .automation import AutomationEngine
+        AutomationEngine.fire(self.env, self._name, "on_create", new_record)
         return new_record
 
     def write(self, vals: dict[str, Any]) -> None:
@@ -333,11 +336,17 @@ class BaseModel(metaclass=MetaModel):
         changed = list(column_vals) + list(m2m_vals)
         if changed:
             self.env.notify_changed(self._name, list(self._ids), changed)
+        # Fire on_write automation rules after the write is committed to cache.
+        from .automation import AutomationEngine
+        AutomationEngine.fire(self.env, self._name, "on_write", self)
 
     def unlink(self) -> None:
         if not self._ids:
             return
         self.env.check_access(self._name, "unlink")
+        # Fire on_unlink automation rules before the records are deleted.
+        from .automation import AutomationEngine
+        AutomationEngine.fire(self.env, self._name, "on_unlink", self)
         placeholders = ",".join(["%s"] * len(self._ids))
         sql = f'DELETE FROM "{self._table}" WHERE "id" IN ({placeholders})'
         self.env.conn.execute(sql, list(self._ids))

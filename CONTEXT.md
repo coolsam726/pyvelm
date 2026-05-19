@@ -97,11 +97,50 @@ For the design rationale and the deferred-items rationale, see
      ✅ Slice A: res.groups, res.users (bcrypt), ir.model.access,
         ir.rule. HTTP Basic auth in `pyvelm.web`. Superuser bypass at
         uid=1. Demo seeds Admin + Partner Manager + record rule.
-     ⏭ Slice B: session cookies + form login. Rate limiting.
-     ⏭ Slice C: admin module (operator UI over the ACL models
-        themselves, via existing form/list views).
-6. Workflows: server actions, automated actions, scheduled jobs, mail threads.
-7. Module inheritance: `_inherit` for models, XPath-style view patches.
+     ✅ Slice B: session cookies + form login. `res.users.session_token`
+        (Char, nullable) added with migration 0_3_to_0_4. `/login` GET
+        renders Tailwind login form; POST validates credentials, writes
+        a `secrets.token_hex(32)` token, and sets an HttpOnly/SameSite=Lax
+        `pyvelm_session` cookie then 303-redirects. `/logout` POST clears
+        the token in DB and deletes the cookie. `get_env` checks the
+        session cookie first; HTTP Basic auth is the secondary fallback
+        (machine clients still work unchanged).  Base module bumped to
+        (0, 4, 0).
+     ✅ Slice C: admin module. New `examples/modules/admin` depends on
+        `base`; ships list+form views for all four ACL models
+        (res.groups, res.users, ir.model.access, ir.rule) via a `DATA`
+        file. Install hook grants Admin full CRUD on those models.
+        `/web/admin` dashboard (Tailwind card grid) links to all 8
+        views; unauthenticated hits redirect to `/login?next=/web/admin`.
+        All views reuse the existing form/list renderers — no new Python
+        models needed.
+6. ✅ Workflows: server actions, automated actions, scheduled jobs, mail threads.
+     ✅ Slice A: `ir.actions.server` model (`pyvelm/actions.py`).
+        `action_type` ∈ {write, create, unlink, code}. `run(records)`
+        dispatches accordingly; `code` actions use `exec()` with an env
+        containing `env`, `records`, and `action`. Granted to Admin via
+        base hooks; migration in 0_4_to_0_5.
+     ✅ Slice B: `base.automation` model (`pyvelm/automation.py`).
+        Triggers: on_create / on_write / on_unlink. `AutomationEngine.fire()`
+        searches active rules per (model, trigger) and runs the linked
+        `ir.actions.server`. Wired into `BaseModel.create`, `.write`,
+        `.unlink` via lazy import. Errors are logged to stderr, non-fatal.
+        Skips during `_acl_bypass` (system bootstrap) to avoid recursion.
+     ✅ Slice C: `ir.cron` model (`pyvelm/cron.py`). Fields: name,
+        action_id, interval_number, interval_type, nextcall, active.
+        `_DatetimeField` accepts `datetime` objects or ISO strings.
+        `CronJob.run_due(env)` queries active jobs with `nextcall ≤ now`,
+        runs each linked action, advances `nextcall` by the configured
+        interval (minutes/hours/days/weeks), returns set of run job names.
+     ✅ Slice D: `mail.message` model + `MailThread` mixin
+        (`pyvelm/mail.py`). Message fields: model, res_id, author_id,
+        body, message_type, subtype, date. `MailThread.message_post()`
+        creates a `mail.message` keyed to the current record.
+        `message_ids` property queries all messages for the record.
+        Model added to base module and granted to Admin.
+     Base module bumped to 0.5.0; migration 0_4_to_0_5 creates four
+     tables: ir_actions_server, base_automation, ir_cron, mail_message.
+7. ⏭ Module inheritance: `_inherit` for models, XPath-style view patches.
 
 ## Deliberately deferred (will bite us, fix when they do)
 
@@ -128,25 +167,19 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 5 Slice A landed: ACL + auth foundation. Four models in base
-(res.groups, res.users, ir.model.access, ir.rule), `env.uid` driven
-by HTTP Basic at the FastAPI boundary, every ORM CRUD method goes
-through `env.check_access`, and `search` AND-injects domain leaves
-from `env.collect_record_rules`. Superuser bypass at uid=1 keeps the
-installer and migrations workable. Demo seeds an Admin user, a
-Partner Manager group + user + record rule, and grants public read
-on geography models.
+Stage 6 is complete. All four slices (server actions, automated actions,
+scheduled jobs, mail threads) are implemented and tested.
 
 Next options:
-  - **Slice B — session cookies + login UI.** HTTP Basic works for
-    machine clients but humans want a form login + persisted session.
-    Adds a `res.users.session_token` field, a /login route, and a
-    `set_uid_from_session_cookie` step before the basic-auth check.
-  - **Slice C — admin module.** Operator UI for managing groups,
-    users, access rules, and record rules through the framework's
-    own form/list views.
-  - **Stage 6 — workflows.** Server actions, automated actions,
-    scheduled jobs, mail threads. The mature ERP-feature surface.
+  - **Stage 7 — module `_inherit`**: model extension via `_inherit`
+    (add fields or override methods on existing models from another
+    module) and XPath/dict-patch view inheritance for overlapping view
+    changes.
+  - **Stage 6 hardening**: cron runner as a real background task (asyncio
+    scheduled or APScheduler), mail dispatch via SMTP, message subtypes
+    (note/comment/email), followers/subscriptions on MailThread.
+  - **Stage 5 hardening**: CSRF tokens on mutation forms, rate limiting
+    on /login, password-change UI in the admin module.
 
 Still deferred: cache snapshot on transaction rollback, O2m/M2m
 caching + old-value snapshotting, auto-diff schema migrations,

@@ -23,3 +23,23 @@ def install(env):
         "password": "admin",   # bcrypt-hashed by the Password field
         "group_ids": [admin_group],
     })
+
+    # Grant Admin full CRUD on Stage 6 workflow models.
+    if "ir.model.access" in env.registry:
+        Access = env["ir.model.access"]
+        for model in (
+            "ir.actions.server",
+            "base.automation",
+            "ir.cron",
+            "mail.message",
+        ):
+            if model in env.registry:
+                Access.create({
+                    "name": f"Admin/{model}",
+                    "model": model,
+                    "group_id": admin_group,
+                    "perm_read": True,
+                    "perm_write": True,
+                    "perm_create": True,
+                    "perm_unlink": True,
+                })

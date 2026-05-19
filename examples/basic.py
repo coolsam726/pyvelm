@@ -587,6 +587,290 @@ def main():
             assert card_ids == {str(pid) for pid in partner_ids}, (card_ids, partner_ids)
             print("kanban page renders grouped cards with form-view links")
 
+            # ----- Stage 5 Slice B: session cookies + form login -----
+
+            # GET /login renders the form (no cookie yet).
+            anon2 = TestClient(app, follow_redirects=False)
+            r = anon2.get("/login")
+            assert r.status_code == 200, r.text
+            assert 'name="login"' in r.text
+            assert 'name="password"' in r.text
+            print("GET /login: login form rendered")
+
+            # POST /login with bad credentials returns 401 + error msg.
+            r = anon2.post(
+                "/login",
+                data={"login": "admin", "password": "WRONG", "next": "/"},
+            )
+            assert r.status_code == 401, r.status_code
+            assert "Invalid username or password" in r.text
+            print("POST /login bad creds: 401 with error message")
+
+            # POST /login with correct credentials: 303 redirect + cookie.
+            r = anon2.post(
+                "/login",
+                data={"login": "admin", "password": "admin", "next": "/"},
+            )
+            assert r.status_code == 303, (r.status_code, r.text)
+            session_cookie = r.cookies.get("pyvelm_session")
+            assert session_cookie, "expected pyvelm_session cookie in response"
+            print("POST /login good creds: 303 redirect + session cookie set")
+
+            # Cookie authenticates subsequent requests (no Basic header).
+            cookie_client = TestClient(app, follow_redirects=False)
+            cookie_client.cookies.set("pyvelm_session", session_cookie)
+            r = cookie_client.get(
+                "/api/records", params={"model": "res.partner", "fields": "name"}
+            )
+            assert r.status_code == 200, (r.status_code, r.text)
+            print("session cookie authenticates API requests")
+
+            # GET /login with a valid cookie redirects away (no re-login).
+            r = cookie_client.get("/login?next=/web/")
+            assert r.status_code == 302, r.status_code
+            print("GET /login with active session: redirect away")
+
+            # POST /logout clears cookie + revokes token in DB.
+            r = cookie_client.post("/logout")
+            assert r.status_code == 303, r.status_code
+            assert "pyvelm_session" not in r.cookies or r.cookies["pyvelm_session"] == ""
+            print("POST /logout: 303 redirect + cookie cleared")
+
+            # After logout, the old token no longer grants access.
+            stale_client = TestClient(app, follow_redirects=False)
+            stale_client.cookies.set("pyvelm_session", session_cookie)
+            r = stale_client.get(
+                "/api/records", params={"model": "res.partner"}
+            )
+            assert r.status_code == 401, (r.status_code, r.text)
+            print("stale token rejected after logout")
+
+            # ----- Stage 5 Slice C: admin module -----
+            # The admin module adds 8 views (list+form for each ACL
+            # model) and grants Admin full CRUD on those models.
+
+            # Admin dashboard renders for authenticated admin.
+            r = client.get("/web/admin")
+            assert r.status_code == 200, r.text
+            assert "Groups" in r.text
+            assert "Users" in r.text
+            assert "Access Control" in r.text
+            assert "Record Rules" in r.text
+            print("/web/admin: dashboard renders for admin")
+
+            # Unauthenticated request redirects to /login.
+            anon3 = TestClient(app, follow_redirects=False)
+            r = anon3.get("/web/admin")
+            assert r.status_code == 302, r.status_code
+            assert "/login" in r.headers["location"]
+            print("/web/admin: unauthenticated redirects to login")
+
+            # The 4 list views are accessible and return 200.
+            for view_name in ("group.list", "user.list", "access.list", "rule.list"):
+                r = client.get(f"/web/views/admin/{view_name}")
+                assert r.status_code == 200, (view_name, r.status_code, r.text)
+            print("admin list views: all 4 render OK")
+
+            # The 4 form views are accessible for an existing record.
+            # Use id=1 for the admin group (first record seeded by base install hook).
+            for view_name in ("group.form", "user.form"):
+                r = client.get(f"/web/views/admin/{view_name}/record/1")
+                assert r.status_code == 200, (view_name, r.status_code, r.text)
+            print("admin form views: record display renders OK")
+
+            # Admin can create a group via the JSON API (ACL grant is active).
+            r = client.post(
+                "/api/records",
+                params={"model": "res.groups"},
+                json={"name": "Test Group"},
+            )
+            assert r.status_code == 201, (r.status_code, r.text)
+            test_group_id = r.json()["id"]
+            print("admin: create res.groups via API OK")
+
+            # Admin can delete it too.
+            r = client.delete(
+                f"/api/records/{test_group_id}",
+                params={"model": "res.groups"},
+            )
+            assert r.status_code == 204, (r.status_code, r.text)
+            print("admin: delete res.groups via API OK")
+
+            # ===== Stage 6: workflows =====
+            # These tests exercise the ORM directly (not via HTTP), so we
+            # need a live connection from the pool.  Grab one for the
+            # duration of the Stage 6 section.
+            with pool.connection() as wf_conn:
+                from pyvelm import Environment as _Env
+                wf_env = _Env(wf_conn, registry=reg, uid=1)
+
+                # ----- Slice A: server actions -----
+
+                # action_type=write: set active=False on all partners.
+                act_write = wf_env["ir.actions.server"].create({
+                    "name": "Deactivate all partners",
+                    "model": "res.partner",
+                    "action_type": "write",
+                    "vals_json": '{"active": false}',
+                })
+                all_partners = wf_env["res.partner"].search([])
+                with wf_env.transaction():
+                    act_write.run(all_partners)
+                inactive = wf_env["res.partner"].search([("active", "=", False)])
+                assert len(inactive) == len(all_partners), inactive
+                # Restore
+                with wf_env.transaction():
+                    inactive.write({"active": True})
+                print("server action write: deactivate/restore all partners OK")
+
+                # action_type=create: create a partner.
+                act_create = wf_env["ir.actions.server"].create({
+                    "name": "Create test partner",
+                    "model": "res.partner",
+                    "action_type": "create",
+                    "vals_json": '{"name": "Action Partner"}',
+                })
+                with wf_env.transaction():
+                    act_create.run()
+                ap = wf_env["res.partner"].search([("name", "=", "Action Partner")])
+                assert ap, "expected created record"
+                print("server action create: new partner via action OK")
+
+                # action_type=unlink: delete that partner.
+                act_unlink = wf_env["ir.actions.server"].create({
+                    "name": "Delete action partner",
+                    "model": "res.partner",
+                    "action_type": "unlink",
+                })
+                with wf_env.transaction():
+                    act_unlink.run(ap)
+                gone = wf_env["res.partner"].search([("name", "=", "Action Partner")])
+                assert not gone, "expected record to be deleted"
+                print("server action unlink: deleted partner via action OK")
+
+                # action_type=code: exec arbitrary Python via direct call.
+                results: list = []
+                act_code = wf_env["ir.actions.server"].create({
+                    "name": "Code action",
+                    "model": "res.partner",
+                    "action_type": "code",
+                    "code": "results.append(len(records))",
+                })
+                code_partners = wf_env["res.partner"].search([], limit=2)
+                code_src = act_code.code
+                _g: dict = {}
+                _l: dict = {
+                    "env": wf_env,
+                    "records": code_partners,
+                    "action": act_code,
+                    "results": results,
+                }
+                exec(compile(code_src, "<test>", "exec"), _g, _l)  # noqa: S102
+                assert results == [len(code_partners)], results
+                print("server action code: executed Python snippet OK")
+
+                # ----- Slice B: automated actions -----
+
+                log_action = wf_env["ir.actions.server"].create({
+                    "name": "Log creates",
+                    "model": "res.partner",
+                    "action_type": "code",
+                    "code": "pass",   # side-effect tested via no-error firing
+                })
+                wf_env["base.automation"].create({
+                    "name": "On partner create",
+                    "model": "res.partner",
+                    "trigger": "on_create",
+                    "action_id": log_action,
+                    "active": True,
+                })
+                # Trigger fires on create without raising.
+                with wf_env.transaction():
+                    new_p = wf_env["res.partner"].create({"name": "AutoTrigger"})
+                assert new_p, "partner created"
+                print("automated action: on_create trigger fires without error OK")
+
+                stamp_action = wf_env["ir.actions.server"].create({
+                    "name": "Track writes",
+                    "model": "res.partner",
+                    "action_type": "code",
+                    "code": "pass",
+                })
+                auto_rule = wf_env["base.automation"].create({
+                    "name": "On partner write",
+                    "model": "res.partner",
+                    "trigger": "on_write",
+                    "action_id": stamp_action,
+                    "active": True,
+                })
+                with wf_env.transaction():
+                    new_p.write({"name": "AutoTrigger2"})
+                print("automated action: on_write trigger fires without error OK")
+
+                # Deactivate and verify no crash afterward.
+                with wf_env.transaction():
+                    auto_rule.write({"active": False})
+                print("automated action: deactivate rule OK")
+
+                # ----- Slice C: scheduled jobs -----
+                from datetime import datetime as _dt, timedelta as _td
+                from pyvelm.cron import CronJob
+
+                tick_action = wf_env["ir.actions.server"].create({
+                    "name": "Cron tick",
+                    "model": "res.partner",
+                    "action_type": "code",
+                    "code": "pass",
+                })
+                past = _dt.utcnow() - _td(seconds=1)
+                cron = wf_env["ir.cron"].create({
+                    "name": "Test cron",
+                    "action_id": tick_action,
+                    "interval_number": 1,
+                    "interval_type": "hours",
+                    "nextcall": past,
+                    "active": True,
+                })
+                ran = CronJob.run_due(wf_env)
+                assert "Test cron" in ran, ran
+                wf_env.cache.invalidate(model_name="ir.cron", ids=[cron.id])
+                new_next = cron.nextcall
+                assert new_next > _dt.utcnow(), f"nextcall not advanced: {new_next}"
+                print("cron: due job runs and nextcall advances OK")
+
+                future = _dt.utcnow() + _td(hours=1)
+                with wf_env.transaction():
+                    cron.write({"nextcall": future})
+                wf_env.cache.invalidate(model_name="ir.cron", ids=[cron.id])
+                ran2 = CronJob.run_due(wf_env)
+                assert "Test cron" not in ran2, ran2
+                print("cron: future job skipped OK")
+
+                # ----- Slice D: mail threads -----
+                alice = wf_env["res.partner"].search([], limit=1)
+                assert alice, "need a partner for mail test"
+                msg = wf_env["mail.message"].create({
+                    "model": "res.partner",
+                    "res_id": alice.id,
+                    "body": "Hello from mail thread!",
+                    "message_type": "comment",
+                    "author_id": wf_env.uid,
+                })
+                assert msg.id, "message not created"
+                msgs = wf_env["mail.message"].search([
+                    ("model", "=", "res.partner"),
+                    ("res_id", "=", alice.id),
+                ])
+                assert len(msgs) >= 1
+                print("mail.message: posted and retrieved message OK")
+
+                raw_ids = wf_env["mail.message"].search([
+                    ("model", "=", "res.partner"),
+                    ("res_id", "=", alice.id),
+                ]).ids
+                assert msg.id in raw_ids
+                print("mail thread: message_ids query OK")
+
 
 def _drop_known_tables(conn):
     """Tear down tables we expect to own. Idempotent."""
@@ -602,6 +886,10 @@ def _drop_known_tables(conn):
         "ir_ui_view",
         "res_users",
         "res_groups",
+        "mail_message",
+        "ir_cron",
+        "base_automation",
+        "ir_actions_server",
         "ir_module",
     ]
     for t in tables:

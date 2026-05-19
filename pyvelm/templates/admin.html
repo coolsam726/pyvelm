@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Admin — pyvelm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased min-h-screen">
+<header class="bg-white border-b border-gray-200 px-8 py-6 flex items-center justify-between">
+    <h1 class="text-2xl font-semibold">Administration</h1>
+    <form method="post" action="/logout">
+        <button class="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white hover:bg-gray-100 transition">
+            Sign out
+        </button>
+    </form>
+</header>
+
+<main class="px-8 py-10">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {% for card in cards %}
+        <a href="{{ card.url }}"
+           class="block bg-white border border-gray-200 rounded-lg shadow-sm px-6 py-8 hover:shadow-md hover:border-blue-300 transition">
+            <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{{ card.subtitle }}</p>
+            <p class="text-lg font-semibold text-gray-800">{{ card.title }}</p>
+            <p class="mt-2 text-sm text-gray-500">{{ card.description }}</p>
+        </a>
+        {% endfor %}
+    </div>
+</main>
+</body>
+</html>

@@ -69,6 +69,7 @@ class User(BaseModel):
     password = Password()
     active = Boolean(default=True)
     group_ids = Many2many("res.groups")
+    session_token = Char()
 
     def check_password(self, plaintext: str) -> bool:
         """Verify a plaintext attempt against the stored hash."""

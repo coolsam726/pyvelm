@@ -666,4 +666,49 @@ def render_list_rows(view, env, *, page: int, page_size: int) -> str:
     )
 
 
+def render_login_page(
+    *,
+    error: str = "",
+    next: str = "",
+    prefill_login: str = "",
+) -> str:
+    template = _env.get_template("login.html")
+    return template.render(
+        error=error,
+        next=next,
+        prefill_login=prefill_login,
+    )
+
+
+def render_admin_page() -> str:
+    cards = [
+        {
+            "title": "Groups",
+            "subtitle": "res.groups",
+            "description": "Manage permission groups and their members.",
+            "url": "/web/views/admin/group.list",
+        },
+        {
+            "title": "Users",
+            "subtitle": "res.users",
+            "description": "Create and manage operator accounts.",
+            "url": "/web/views/admin/user.list",
+        },
+        {
+            "title": "Access Control",
+            "subtitle": "ir.model.access",
+            "description": "Grant CRUD permissions per model and group.",
+            "url": "/web/views/admin/access.list",
+        },
+        {
+            "title": "Record Rules",
+            "subtitle": "ir.rule",
+            "description": "Define row-level security using domain filters.",
+            "url": "/web/views/admin/rule.list",
+        },
+    ]
+    template = _env.get_template("admin.html")
+    return template.render(cards=cards)
+
+
 STATIC_DIR = Path(__file__).parent / "static"
