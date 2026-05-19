@@ -715,6 +715,12 @@ def render_admin_page(
             "description": "Manage companies and multi-tenant configuration.",
             "url": "/web/views/admin/company.list",
         },
+        {
+            "title": "Partners",
+            "subtitle": "res.partner",
+            "description": "Browse and manage partners for the current company.",
+            "url": "/web/views/partners/partner.list",
+        },
     ]
     template = _env.get_template("admin.html")
     return template.render(

@@ -201,8 +201,10 @@ def main():
             arch = resp.json()["arch"]
             print("resolved arch (post-inheritance):", arch)
             fields_by_name = {f["name"]: f for f in arch["fields"]}
+            # Print the fields_by_name before asserting so we can see the actual structure in the test output if it doesn't match.
+            print("Fields by name:", list(fields_by_name))
             assert list(fields_by_name) == [
-                "name", "code", "country_id", "tag_ids", "active",
+                "name", "code","company_id", "country_id", "tag_ids", "active",
             ]
             # `update` merged two attrs into the existing field dict.
             assert fields_by_name["active"]["widget"] == "toggle"

@@ -51,6 +51,16 @@ def main():
         if not pro_tag:
             pro_tag = Tag.create({"name": "Pro"})
 
+        # Ensure the two demo companies exist.
+        Company = env["res.company"]
+        my_co = Company.search([("name", "=", "My Company")], limit=1)
+        if not my_co:
+            my_co = Company.create({"name": "My Company", "active": True})
+        contoso = Company.search([("name", "=", "Contoso Ltd")], limit=1)
+        if not contoso:
+            contoso = Company.create({"name": "Contoso Ltd", "active": True})
+
+        # --- My Company partners ---
         alice = Partner.create({
             "name": "Alice Beaumont",
             "code": "ALI-PRO",
@@ -58,6 +68,7 @@ def main():
             "vip_note": "Top-tier reseller — priority support",
             "country_id": france,
             "tag_ids": [vip_tag, pro_tag],
+            "company_id": my_co,
         })
         Partner.create({
             "name": "Bob Tanaka",
@@ -65,6 +76,7 @@ def main():
             "age": 28,
             "country_id": japan,
             "tag_ids": [pro_tag],
+            "company_id": my_co,
         })
         carol = Partner.create({
             "name": "Carol Dupont",
@@ -73,22 +85,38 @@ def main():
             "vip_note": "Founding customer",
             "country_id": france,
             "tag_ids": [vip_tag],
-        })
-        Partner.create({
-            "name": "Dave Kim",
-            "code": "DAV-PRO",
-            "age": 25,
-        })
-        Partner.create({
-            "name": "Eve Dupont",
-            "code": "EVE-PRO",
-            "age": 22,
-            "country_id": france,
-            "parent_id": carol,
+            "company_id": my_co,
         })
 
-    print("Seeded 5 demo partners (Alice Beaumont, Bob Tanaka, Carol Dupont, Dave Kim, Eve Dupont)")
-    print("Open http://127.0.0.1:8000/web/views/partners/partner.list to browse them.")
+        # --- Contoso Ltd partners ---
+        Partner.create({
+            "name": "Dave Kim",
+            "code": "DAV-CON",
+            "age": 25,
+            "company_id": contoso,
+        })
+        Partner.create({
+            "name": "Eve Laurent",
+            "code": "EVE-CON",
+            "age": 31,
+            "vip_note": "Key account at Contoso",
+            "country_id": france,
+            "tag_ids": [vip_tag],
+            "company_id": contoso,
+        })
+        Partner.create({
+            "name": "Frank Müller",
+            "code": "FRK-CON",
+            "age": 45,
+            "country_id": japan,
+            "tag_ids": [pro_tag],
+            "company_id": contoso,
+        })
+
+    print("Seeded 6 demo partners — 3 for My Company, 3 for Contoso Ltd.")
+    print("Companies: My Company | Contoso Ltd")
+    print("Switch company on the dashboard: http://127.0.0.1:8000/web/admin")
+    print("Browse partners: http://127.0.0.1:8000/web/views/partners/partner.list")
 
 
 if __name__ == "__main__":

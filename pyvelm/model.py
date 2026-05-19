@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 from .domain import domain_to_sql
-from .fields import Field
+from .fields import Field, Many2one
 from .registry import active_registry
 
 
@@ -26,6 +26,13 @@ class MetaModel(type):
             if isinstance(attr_value, Field):
                 attr_value.bind(namespace.get("_name") or "", attr_name)
                 fields[attr_name] = attr_value
+
+        # Auto-inject company_id for company-scoped models.
+        if namespace.get("_company_scoped") and "company_id" not in fields:
+            co_field = Many2one("res.company")
+            co_field.bind(namespace.get("_name") or "", "company_id")
+            fields["company_id"] = co_field
+
         cls._fields = fields
 
         # Defer table name and registry binding to subclasses with _name.
@@ -137,6 +144,7 @@ class BaseModel(metaclass=MetaModel):
     _name: str | None = None
     _table: str | None = None
     _fields: dict[str, Field] = {}
+    _company_scoped: bool = False  # set True to auto-inject company_id
 
     def __init__(self, env, ids: Iterable[int] = ()) -> None:
         self.env = env
@@ -352,6 +360,14 @@ class BaseModel(metaclass=MetaModel):
     def create(self, vals: dict[str, Any]) -> "BaseModel":
         self.env.check_access(self._name, "create")
         column_vals, m2m_vals = self._split_vals(vals)
+        # Auto-inject company_id from env for company-scoped models when
+        # the caller hasn't provided one explicitly.
+        if (
+            self.__class__._company_scoped
+            and "company_id" not in column_vals
+            and self.env.company_id is not None
+        ):
+            column_vals["company_id"] = self.env.company_id
         # Apply Field.default for any stored field the caller didn't set.
         # Computed fields skip this — they fill themselves via the topo
         # walk below. Non-stored relational defaults aren't applicable.

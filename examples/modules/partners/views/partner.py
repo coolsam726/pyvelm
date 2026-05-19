@@ -18,7 +18,7 @@ VIEWS: list[View] = [
         "model": "res.partner",
         "view_type": "list",
         "arch": {
-            "fields": ["name", "code", "age", "country_id", "active"],
+            "fields": ["name", "code", "company_id", "age", "country_id", "active"],
         },
     },
     {
@@ -35,7 +35,7 @@ VIEWS: list[View] = [
                 {
                     "name": "profile",
                     "title": "Profile",
-                    "fields": ["age", "country_id", "parent_id", "active"],
+                    "fields": ["age", "country_id", "company_id", "parent_id", "active"],
                 },
                 {
                     "name": "relations",

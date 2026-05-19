@@ -12,6 +12,7 @@ from pyvelm import (
 
 class Partner(BaseModel):
     _name = "res.partner"
+    _company_scoped = True
 
     name = Char(required=True, string="Name")
     age = Integer()
@@ -24,7 +25,7 @@ class Partner(BaseModel):
     parent_id = Many2one("res.partner", ondelete="SET NULL")
     child_ids = One2many("res.partner", inverse_name="parent_id")
     tag_ids = Many2many("res.tag")
-    company_id = Many2one("res.company")
+    company_id = Many2one("res.company", ondelete="SET NULL")
 
     display_name = Char(compute="_compute_display_name")
     age_bucket = Char(compute="_compute_age_bucket", store=True)
