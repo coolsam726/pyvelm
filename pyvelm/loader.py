@@ -24,10 +24,11 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import json
 import sys
 from dataclasses import dataclass, field as dc_field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from .env import Environment
 from .registry import Registry
@@ -47,6 +48,10 @@ class ModuleSpec:
     migrations_package: str | None
     install_hook: Callable | None = None
     package_path: Path | None = None
+    data: list[str] = dc_field(default_factory=list)
+    # Filled during install from the data files.
+    views: list[dict[str, Any]] = dc_field(default_factory=list)
+    view_inherits: list[dict[str, Any]] = dc_field(default_factory=list)
     # Filled by the loader during the import pass.
     loaded: bool = False
 
@@ -90,6 +95,7 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
     migrations_pkg = getattr(mod, "MIGRATIONS_PACKAGE", f"{package}.migrations")
     install_dotted = getattr(mod, "INSTALL_HOOK", None)
     install_hook = _import_attr(install_dotted) if install_dotted else None
+    data = list(getattr(mod, "DATA", []))
 
     return ModuleSpec(
         name=name,
@@ -100,6 +106,7 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
         migrations_package=migrations_pkg,
         install_hook=install_hook,
         package_path=pkg_path,
+        data=data,
     )
 
 
@@ -274,6 +281,152 @@ def _run_migrations(spec: ModuleSpec, env: Environment,
             m.migrate(env)
 
 
+def _load_data_files(spec: ModuleSpec) -> None:
+    """Execute each path in `spec.data` and accumulate any VIEWS /
+    VIEW_INHERITS lists they expose. Today only `.py` files are
+    supported; future extensions (`.json`, `.yaml`) can dispatch on
+    suffix.
+
+    Populates `spec.views` and `spec.view_inherits` so the subsequent
+    `_sync_*` calls have a single source of truth regardless of where
+    the declarations live on disk.
+    """
+    if not spec.data or spec.package_path is None:
+        return
+    views: list[dict[str, Any]] = []
+    inherits: list[dict[str, Any]] = []
+    for rel_path in spec.data:
+        path = spec.package_path / rel_path
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"Module {spec.name!r}: data file {rel_path!r} not found "
+                f"under {spec.package_path}"
+            )
+        suffix = path.suffix.lower()
+        if suffix == ".py":
+            mod_name = (
+                f"_pyvelm_data_{spec.name}_"
+                + rel_path.replace("/", "_").replace(".py", "")
+            )
+            spec_obj = importlib.util.spec_from_file_location(mod_name, path)
+            if spec_obj is None or spec_obj.loader is None:
+                raise ImportError(f"Could not import data file {path}")
+            mod = importlib.util.module_from_spec(spec_obj)
+            spec_obj.loader.exec_module(mod)
+            views.extend(getattr(mod, "VIEWS", []))
+            inherits.extend(getattr(mod, "VIEW_INHERITS", []))
+        else:
+            raise ValueError(
+                f"Module {spec.name!r}: data file {rel_path!r} has unsupported "
+                f"extension {suffix!r}. Only .py is supported today."
+            )
+    spec.views = views
+    spec.view_inherits = inherits
+
+
+def _sync_views(spec: ModuleSpec, env: Environment) -> None:
+    """Upsert this module's declared base views as `ir.ui.view` records.
+
+    View identity is `(module, name)`. Arch goes through `normalize_arch`
+    so the stored form has dict-shaped list entries — the addressing
+    convention for inheritance operations.
+    """
+    if not spec.views:
+        return
+    if "ir.ui.view" not in env.registry:
+        return
+    from .views import normalize_arch
+
+    View = env["ir.ui.view"]
+    for v in spec.views:
+        required = {"name", "model", "view_type", "arch"}
+        missing = required - v.keys()
+        if missing:
+            raise ValueError(
+                f"Module {spec.name!r}: view {v.get('name')!r} missing "
+                f"keys {sorted(missing)}"
+            )
+        arch = v["arch"]
+        if isinstance(arch, str):
+            arch_obj = json.loads(arch)
+        else:
+            arch_obj = arch
+        arch_normalized = normalize_arch(arch_obj, v["view_type"])
+        existing = View.search([
+            ("module", "=", spec.name),
+            ("name", "=", v["name"]),
+        ])
+        vals = {
+            "module": spec.name,
+            "name": v["name"],
+            "model": v["model"],
+            "view_type": v["view_type"],
+            "arch": json.dumps(arch_normalized),
+            "priority": v.get("priority", 16),
+        }
+        if existing:
+            existing.write(vals)
+        else:
+            View.create(vals)
+
+
+def _sync_view_inherits(spec: ModuleSpec, env: Environment) -> None:
+    """Upsert this module's view extension records.
+
+    A VIEW_INHERITS entry references its parent by `<module>.<name>`;
+    we look up the parent and persist a new ir.ui.view with `inherit_id`
+    set. model/view_type are auto-filled from the parent so authoring
+    extensions stays terse.
+    """
+    if not spec.view_inherits:
+        return
+    if "ir.ui.view" not in env.registry:
+        return
+    View = env["ir.ui.view"]
+    for v in spec.view_inherits:
+        required = {"name", "inherit", "operations"}
+        missing = required - v.keys()
+        if missing:
+            raise ValueError(
+                f"Module {spec.name!r}: view inherit {v.get('name')!r} "
+                f"missing keys {sorted(missing)}"
+            )
+        parent_ref = v["inherit"]
+        if "." not in parent_ref:
+            raise ValueError(
+                f"Inherit reference {parent_ref!r} must be 'module.name'"
+            )
+        parent_module, parent_name = parent_ref.split(".", 1)
+        parent = View.search([
+            ("module", "=", parent_module),
+            ("name", "=", parent_name),
+        ])
+        if not parent:
+            raise ValueError(
+                f"Module {spec.name!r}: view inherit references "
+                f"{parent_ref!r} which is not (yet) installed."
+            )
+        parent.ensure_one()
+        existing = View.search([
+            ("module", "=", spec.name),
+            ("name", "=", v["name"]),
+        ])
+        vals = {
+            "module": spec.name,
+            "name": v["name"],
+            "model": parent.model,           # auto-fill from parent
+            "view_type": parent.view_type,
+            "arch": None,
+            "priority": v.get("priority", 16),
+            "inherit_id": parent.id,
+            "operations": json.dumps(v["operations"]),
+        }
+        if existing:
+            existing.write(vals)
+        else:
+            View.create(vals)
+
+
 def install(specs: list[ModuleSpec], env: Environment) -> None:
     """Install or upgrade each module, in `specs` order, atomically per
     module. Models must already be loaded into `env.registry`."""
@@ -298,7 +451,13 @@ def install(specs: list[ModuleSpec], env: Environment) -> None:
                     f'"installed_at" = now() WHERE "name" = %s',
                     [spec.version_str, spec.name],
                 )
-            # else: same version, no-op.
+            # Load data files (views, future seed records) and sync
+            # them. Runs every install pass so re-declaring overwrites
+            # the previous state. Base views first so extensions in
+            # dependent modules can resolve their parents.
+            _load_data_files(spec)
+            _sync_views(spec, env)
+            _sync_view_inherits(spec, env)
 
     # Build the compute graph once everything's loaded — depends paths
     # may cross module boundaries.

@@ -1,12 +1,13 @@
 # Project context
 
-Building an Odoo-style ERP framework in Python. **Stage 3 first slice
-is complete**: module loader (`__pyvelm__.py` manifests, dep
-resolution, per-module install), `ir_module` version tracking,
-hand-written migrations, transactional install/upgrade. Built on top of
-the Stage 2 ORM (recordsets, four relational field types, computed
-fields with dotted-path `@depends`, M2o LEFT-JOIN and O2m/M2m EXISTS
-domain traversal) — all on PostgreSQL via psycopg 3.
+Building an Odoo-style ERP framework in Python. **Stage 4 first slice
+is complete**: views are data (`ir.ui.view` records, upserted from
+module manifests' `VIEWS` key), and a FastAPI app exposes generic
+read-only endpoints over them with JSON serialization of recordsets.
+Built on top of Stage 3 (module loader, transactional install/upgrade,
+hand-written migrations) and Stage 2 (ORM with all four field types,
+dotted-path `@depends`, M2o LEFT-JOIN + O2m/M2m EXISTS domain
+traversal) — all on PostgreSQL via psycopg 3.
 
 For the design rationale and the deferred-items rationale, see
 [docs/architecture.md](docs/architecture.md).
@@ -42,10 +43,25 @@ For the design rationale and the deferred-items rationale, see
 3. ⏭ Module loading + migrations + registry lifecycle.
      ✅ Slice A: manifests, dep resolution, per-module install,
         `ir_module` tracking, hand-written migrations, transactions.
-     ⏭ Slice B (deferred): module data (seed records, view definitions),
+     ⏭ Slice B (deferred): module data (seed records beyond views),
         auto-diff schema migrations (SQLAlchemy Core?), down-migrations
         or formal rollback story.
-4. Views (form/list/kanban) as data + generic UI endpoints.
+4. ⏭ Views (form/list/kanban) as data + generic UI endpoints.
+     ✅ Slice A: `ir.ui.view` records, `VIEWS` manifest key with
+        upsert-by-(module, name), FastAPI app factory with
+        `/api/views/{module}/{name}` + `/api/records`, JSON serializer
+        (Many2one → `[id, display]`, collections → id lists),
+        connection-pool-backed Environment-per-request.
+     ✅ Slice B.1: view inheritance via typed dict-merge ops
+        (`set`/`replace`/`remove`/`before`/`after`), arch
+        normalization, `VIEW_INHERITS` manifest key, `priority`-driven
+        chain resolution, `/api/views` returns resolved arch.
+     ⏭ Slice B.2: HTMX + Jinja renderer that walks the resolved arch.
+        Form / kanban view types and their normalizers come with it.
+     ⏭ Slice B.3: mutation endpoints (POST/PATCH/DELETE) shared by
+        JSON API + HTMX form submits.
+     ⏭ Slice B.4: `pyvelm.types` TypedDicts for IDE assistance on
+        manifest authoring (Manifest, View, Operation).
 5. ACL: groups, model permissions, record rules (domain-based row security).
 6. Workflows: server actions, automated actions, scheduled jobs, mail threads.
 7. Module inheritance: `_inherit` for models, XPath-style view patches.
@@ -75,25 +91,26 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 3 Slice A landed and is now exercised by a real migration:
-`partners` is at `(0, 2, 0)` with a `code` field on Partner and a
-`0_1_to_0_2.py` migration that ALTERs the table and backfills via the
-ORM. Verdict: the design holds up but has a known tax — the new field
-lives in both the model class (for fresh installs) and the migration
-DDL (for upgrades). Tolerable at one-field scale.
+Stage 4 Slice B.1 landed: view inheritance via typed dict-merge
+operations, with a third example module (`partners_pro`) patching
+`partner.list` end-to-end. Resolution walks the chain in priority
+order, normalization at install lets authoring stay terse, the
+`/api/views` endpoint always returns the resolved arch. `Field.default`
+finally applies at `create()` time — was on the deferred list, fixed
+in passing since `priority = Integer(default=16)` needed it.
 
-Things that could go next, roughly by "what'll hurt first":
+Next: **Slice B.2 — the HTMX + Jinja renderer.** The renderer is the
+visible payoff: a default list-view UI ships in the framework, fed
+from the resolved arch, with HTMX wiring up pagination and edit
+interactivity. Form view type comes along with it (the arch normalizer
+gains a `form` entry, the view declarations support sections/groups,
+the Jinja template renders the dispatched widgets).
 
-1. **Cache snapshot on `env.transaction()`** — the cache currently
-   holds optimistic values that survive a rollback. We document the
-   workaround (`env.cache.invalidate(...)` after rollback); ideally the
-   transaction context handles it.
-2. **O2m/M2m caching + old-value snapshotting on M2o writes** — closes
-   the remaining invalidation gaps from Stage 2. Independent of Stage
-   3 plumbing.
-3. **Stage 4: views as data + generic UI endpoints** — the architectural
-   next thing. Builds directly on what we have.
+After B.2: B.3 (mutation endpoints), B.4 (TypedDicts for IDE
+assistance). Stage 5 (ACL / record rules) is the natural pairing with
+mutations — public write endpoints without row-level security would be
+malpractice.
 
-Auto-diff schema migrations get more interesting once the migration
-count grows. One field isn't enough signal yet; revisit when it
-becomes annoying.
+Still deferred: cache snapshot on transaction rollback,
+O2m/M2m caching + old-value snapshotting, auto-diff schema migrations.
+None pressing.

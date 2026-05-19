@@ -13,17 +13,20 @@ manifest:
 ```
 mymodule/
 ├── __init__.py          # can be empty
-├── __pyvelm__.py        # manifest (NAME, VERSION, DEPENDS, ...)
+├── __pyvelm__.py        # manifest (NAME, VERSION, DEPENDS, DATA, ...)
 ├── models/
 │   ├── __init__.py      # imports every model file
 │   ├── partner.py
 │   └── tag.py
+├── views/
+│   ├── __init__.py
+│   └── partner.py       # exports VIEWS = [...] / VIEW_INHERITS = [...]
 └── migrations/          # optional
     ├── __init__.py
     └── 0_1_to_0_2.py
 ```
 
-The manifest is plain Python. Minimum:
+The manifest is plain Python and intentionally small. Minimum:
 
 ```python
 NAME = "partners"
@@ -31,7 +34,13 @@ VERSION = (0, 1, 0)
 DEPENDS = ["base"]
 ```
 
-Optional manifest keys:
+Common additions:
+
+```python
+DATA = ["views/partner.py", "views/tag.py"]   # see "Data files" below
+```
+
+Other optional keys:
 
 - `MODELS_PACKAGE` — dotted import path for the models package
   (default: `<package>.models`).
@@ -39,6 +48,25 @@ Optional manifest keys:
   (default: `<package>.migrations`).
 - `INSTALL_HOOK` — dotted reference (`pkg.mod:fn`) called once when the
   module is installed for the first time. Receives the `Environment`.
+
+## Data files
+
+Anything declarative — views, view extensions, and (later) seed records
+and security rules — lives in Python files referenced by `DATA`.
+Manifests stay slim; data lives where it can be organized, split, and
+properly commented.
+
+Each path in `DATA` is relative to the module package. Today only
+`.py` is supported; the file is executed and any of the following
+module-level lists are collected by the loader:
+
+- `VIEWS` — base view declarations (`name`, `model`, `view_type`,
+  `arch`, optional `priority`).
+- `VIEW_INHERITS` — extension views patching another module's view.
+- Future: `RECORDS`, `SECURITY`, etc. Same pattern, same `DATA` key.
+
+Suffix-based dispatch (`.json`, `.yaml`) is open as a future
+extension; not implemented yet.
 
 The package must be importable. The loader adds each scan root to
 `sys.path` so siblings under that root are top-level imports.

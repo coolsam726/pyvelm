@@ -13,7 +13,7 @@ from pyvelm import (
 class Partner(BaseModel):
     _name = "res.partner"
 
-    name = Char(required=True)
+    name = Char(required=True, string="Name")
     age = Integer()
     active = Boolean(default=True)
     # Added in 0.2.0. Fresh installs create the column from this

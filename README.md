@@ -4,12 +4,14 @@ An Odoo-style ERP framework in Python, built from first principles. The point
 isn't to reinvent Odoo — it's to keep the core ideas visible so the design
 trade-offs stay legible while the framework grows.
 
-Status: **Stage 3 Slice A complete.** On top of the Stage 2 ORM
-(declarative models, recordsets, all four relational field types,
-computed fields with dotted-path `@depends`), modules are now discovered
-on disk via `__pyvelm__.py` manifests, installed in dependency order,
-and upgraded via hand-written migrations — all transactional, all on
-PostgreSQL via psycopg 3.
+Status: **Stage 4 Slice A complete.** Views are records (`ir.ui.view`)
+declared in manifests' `VIEWS` key; a FastAPI app exposes generic
+read-only endpoints (`/api/views/{module}/{name}`, `/api/records`)
+backed by a psycopg connection pool. On top of Stage 3 (module loader,
+transactional install/upgrade, hand-written migrations) and Stage 2
+(ORM with all four relational field types, computed fields with
+dotted-path `@depends`, M2o LEFT-JOIN + O2m/M2m EXISTS domain
+traversal) — all on PostgreSQL via psycopg 3.
 
 ## Quickstart
 
@@ -31,6 +33,9 @@ invalidation, and the singleton guard.
   multi-pass init sequence.
 - [Module loading & migrations](docs/module-loading.md) — manifest format,
   loader lifecycle, the active-registry contextvar, writing migrations.
+- [Web layer & views as data](docs/web-layer.md) — `ir.ui.view`, the
+  `VIEWS` manifest key, the FastAPI app factory, JSON serialization
+  shape.
 - [Module reference](docs/modules.md) — what lives in each module, the
   public surface, and the invariants worth knowing.
 - [Extending fields](docs/extending-fields.md) — implementing a custom field

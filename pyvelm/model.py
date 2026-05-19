@@ -258,6 +258,17 @@ class BaseModel(metaclass=MetaModel):
 
     def create(self, vals: dict[str, Any]) -> "BaseModel":
         column_vals, m2m_vals = self._split_vals(vals)
+        # Apply Field.default for any stored field the caller didn't set.
+        # Computed fields skip this — they fill themselves via the topo
+        # walk below. Non-stored relational defaults aren't applicable.
+        for fname, field in self._fields.items():
+            if fname in column_vals or fname in m2m_vals:
+                continue
+            if not field.is_stored or field.compute:
+                continue
+            if field.default is None:
+                continue
+            column_vals[fname] = field.default
         cols, params = [], []
         for fname, value in column_vals.items():
             field = self._fields[fname]

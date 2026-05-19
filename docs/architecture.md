@@ -77,6 +77,48 @@ Field instances also carry their `column` (the SQL column name, defaulted to
 `name`). The two can diverge — see the `column=` kwarg on `Field.__init__` —
 but Odoo-style projects keep them equal.
 
+## Stage 4 web layer & views as data
+
+Views are records. `ir.ui.view` stores `(module, name, model,
+view_type, arch)`; a module declares views in its `__pyvelm__.py`
+under a `VIEWS = [...]` list, and the loader upserts them by
+`(module, name)` on every install pass. There is no separate "view
+migration" — re-declaring rewrites the record.
+
+The HTTP surface (`pyvelm/web.py`) is a thin FastAPI app parameterized
+by a loaded `Registry` and a psycopg connection pool. Each request
+checks out a connection, wraps it in a fresh `Environment`, runs the
+handler synchronously, and returns the connection to the pool. The
+async wrapping happens entirely at FastAPI's level; the ORM stays
+sync.
+
+JSON serialization is one shape: Many2one as `[id, display_value]`,
+collections as id lists, scalars pass through. `display_value` reads
+`display_name` then `name` then falls back to `str(id)`. Frontends
+fetch related details with a follow-up `/api/records?model=...`.
+
+**View inheritance** is dict-merge on the arch with addressable paths
+(no XPath, no XML). An extension view declares `inherit_id` and an
+`operations` list; the resolver walks the chain in ascending
+`priority` order and applies each level's ops to a deepcopy of the
+root arch. Six op kinds cover the full Odoo XPath-position vocabulary:
+
+- **`set`** / **`replace`** — write `value` at a target position. On a
+  dict parent, the final segment may be a new key, so single-attribute
+  additions work without a separate op.
+- **`update`** — `dict.update(value)` at the target. The Odoo
+  `position="attributes"` equivalent, terse for multi-attribute merges.
+- **`remove`** — delete the target (a list entry or a dict key).
+- **`before`** / **`after`** — insert into a list at a target index.
+
+Targets are lists of keys: strings address dict keys or by-`name`
+matches in list-of-dicts; ints address positional indices. Authoring
+sugar (`"fields": ["name", "age"]`) is normalized at load time to the
+list-of-dicts form so inheritance always works against stable
+addresses.
+
+See [web-layer.md](web-layer.md) for the full guide.
+
 ## Stage 3 module lifecycle
 
 A pyvelm app is a set of modules, each a Python package with a

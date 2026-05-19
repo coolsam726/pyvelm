@@ -226,8 +226,64 @@ the `ir_module` table.
 See [module-loading.md](module-loading.md) for the manifest contract
 and migration conventions.
 
+## `pyvelm.views` — [pyvelm/views.py](../pyvelm/views.py)
+
+Arch normalization + inheritance resolution. Lives next to (but
+separate from) `pyvelm.web` because it's part of the *model* layer,
+not the HTTP layer — apps that bypass the HTTP surface can still call
+`resolve_arch(view)` to get the final shape.
+
+**Public surface**
+
+- `normalize_arch(arch, view_type)` — returns a new arch with bare
+  strings in known list positions promoted to `{"name": ...}` dicts.
+  Idempotent.
+- `apply_operations(arch, operations)` — mutates `arch` with each op
+  in turn. Six op kinds: `set`, `replace`, `update`, `remove`,
+  `before`, `after`. `set` on a dict parent allows new leaf keys
+  (single-attribute additions); `update` merges a value dict into the
+  target dict (multi-attribute additions).
+- `resolve_arch(view)` — walks up to the root base view, deepcopies
+  its arch, applies every extension's operations in
+  `(priority, id)` order. Recursion-safe across deep chains.
+
+**Invariant.** The stored `ir.ui.view.arch` is always normalized; the
+authoring form is only seen by the loader. `resolve_arch` is the only
+function frontends should call to get the renderable arch.
+
+## `pyvelm.web` — [pyvelm/web.py](../pyvelm/web.py)
+
+Optional FastAPI surface. Imported on demand (not in `pyvelm/__init__`)
+so apps that don't need HTTP don't pull `fastapi` / `pydantic`.
+
+**Public surface**
+
+- `create_app(registry, pool) -> FastAPI` — builds the app bound to a
+  loaded `Registry` and a `psycopg_pool.ConnectionPool`. Each request
+  checks out a connection from the pool, wraps it in a fresh
+  `Environment`, and returns it on exit.
+- `serialize_record(record, fields=None)` /
+  `serialize_records(records, fields=None)` — the JSON shape converter
+  used by the endpoints. Many2one becomes `[id, display_value]`,
+  collections become id lists, scalars pass through.
+
+**Endpoints (Slice A)**
+
+- `GET /api/views/{module}/{name}` — view record with parsed arch.
+- `GET /api/records?model=&domain=&fields=&limit=&offset=&order=` —
+  paginated row data. `domain` is a JSON-encoded list of leaves; path
+  traversal works because the ORM domain compiler is the same code.
+
+**Invariant.** The HTTP layer is strictly *sync inside the request
+handler*. FastAPI's async wrapper is for the I/O boundary; everything
+the ORM does runs on the request thread against a checked-out
+connection.
+
+See [web-layer.md](web-layer.md) for the full guide.
+
 ## `pyvelm.__init__` — [pyvelm/__init__.py](../pyvelm/__init__.py)
 
 Re-exports the public API: `BaseModel`, the field classes, `Environment`,
-`Registry`, the `depends` decorator, and the `loader` module. Nothing
-imported from here is considered private.
+`Registry`, the `depends` decorator, and the `loader` module. The web
+layer (`pyvelm.web`) is *not* imported here so apps that don't need it
+don't pay the FastAPI import cost.
