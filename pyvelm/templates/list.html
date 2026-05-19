@@ -1,68 +1,69 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>{{ view.name }} — {{ view.model }}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
-</head>
-<body class="bg-gray-50 text-gray-900 antialiased min-h-screen">
-<header class="bg-white border-b border-gray-200 px-8 py-6">
-    <h1 class="text-2xl font-semibold">{{ view.name }}</h1>
-    <div class="flex items-center justify-between gap-4">
-        <p class="mt-1 text-sm text-gray-500">
-            {{ view.model }}
-            <span class="text-gray-300">·</span>
-            showing {{ rows | length }} of {{ total }}
-            {% if view.module %}
-            <span class="text-gray-300">·</span>
-            from <code class="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-xs">{{ view.module }}</code>
-            {% endif %}
-        </p>
-        <button
-            class="px-3 py-1.5 text-sm border border-blue-600 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
-            hx-get="/web/records/{{ view.module }}/{{ view.name }}/new"
-            hx-target="#pyvelm-rows"
-            hx-swap="afterbegin">
-            + New
-        </button>
-    </div>
-</header>
+{% extends "layouts/main.html" %}
+{% block title %}{{ view.name }} — pyvelm{% endblock %}
 
-<main class="px-8 py-6">
-    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
-                <tr>
-                    {% for h in headers %}
-                    <th data-field="{{ h.name }}"
-                        class="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                        {{ h.label }}
-                    </th>
-                    {% endfor %}
-                    <th class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">
-                        Actions
-                    </th>
-                </tr>
-            </thead>
-            <tbody id="pyvelm-rows" class="divide-y divide-gray-200">
-                {% include "list_rows.html" %}
-            </tbody>
-        </table>
-    </div>
+{% block page_title %}{{ view.name }}{% endblock %}
 
-    {% if has_more %}
-    <div id="pyvelm-load-more" class="mt-4 flex justify-center">
-        <button
-            class="px-4 py-2 text-sm border border-gray-300 rounded-md bg-white hover:bg-blue-600 hover:text-white hover:border-blue-600 transition"
+{% block page_heading %}
+<div>
+    <h2 class="text-xl font-semibold text-heading tracking-tight">{{ view.name }}</h2>
+    <p class="mt-1 text-xs text-body-subtle">
+        {{ view.model }}
+        <span class="mx-1 text-body-subtle/50">·</span>
+        showing {{ rows | length }} of {{ total }}
+        {% if view.module %}
+        <span class="mx-1 text-body-subtle/50">·</span>
+        from
+        <code class="bg-neutral-tertiary text-body px-1.5 py-0.5 rounded text-2xs font-mono">{{ view.module }}</code>
+        {% endif %}
+    </p>
+</div>
+{% endblock %}
+
+{% block page_actions %}
+<button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+               rounded-md bg-fg-brand hover:opacity-90 transition-opacity"
+        hx-get="/web/records/{{ view.module }}/{{ view.name }}/new"
+        hx-target="#pyvelm-rows"
+        hx-swap="afterbegin">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+    </svg>
+    New
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="bg-neutral-primary border border-default rounded-xl overflow-hidden shadow-sm">
+    <table class="w-full text-sm">
+        <thead class="bg-neutral-tertiary border-b border-default">
+            <tr>
+                {% for h in headers %}
+                <th data-field="{{ h.name }}"
+                    class="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-body-subtle">
+                    {{ h.label }}
+                </th>
+                {% endfor %}
+                <th class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-body-subtle">
+                    Actions
+                </th>
+            </tr>
+        </thead>
+        <tbody id="pyvelm-rows" class="divide-y divide-default">
+            {% include "list_rows.html" %}
+        </tbody>
+    </table>
+</div>
+
+{% if has_more %}
+<div id="pyvelm-load-more" class="mt-4 flex justify-center">
+    <button class="px-4 py-2 text-sm border border-default rounded-md bg-neutral-primary
+                   text-body hover:bg-brand-softer hover:text-fg-brand hover:border-fg-brand transition"
             hx-get="/web/records/{{ view.module }}/{{ view.name }}?page={{ page + 1 }}&page_size={{ page_size }}"
             hx-target="#pyvelm-rows"
             hx-swap="beforeend"
             hx-on::after-request="this.closest('#pyvelm-load-more').remove()">
-            Load {{ page_size }} more
-        </button>
-    </div>
-    {% endif %}
-</main>
-</body>
-</html>
+        Load {{ page_size }} more
+    </button>
+</div>
+{% endif %}
+{% endblock %}

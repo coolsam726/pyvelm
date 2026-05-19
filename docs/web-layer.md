@@ -232,18 +232,49 @@ Default UI shipped with the framework. Developers don't write Jinja:
 the framework owns the templates and dispatches each field through a
 widget registry to produce HTML.
 
-**CSS stack: Tailwind via Play CDN.** This is the major UI-stack
-deviation from Odoo (which ships Bootstrap). The framework's
-templates pull `https://cdn.tailwindcss.com` at runtime and use
-utility classes throughout — no build step expected from app
-developers. The `pyvelm/static/` directory is still mounted at
-`/web/static` as a slot for future per-framework assets (theme
-overrides, fonts, images), but no Tailwind compilation happens there.
+**CSS stack: Tailwind v4 + Flowbite, built locally.** This is the
+major UI-stack deviation from Odoo (which ships Bootstrap). The build
+config lives at the repo root:
 
-If you want a production Tailwind build pipeline, run the Tailwind
-CLI / standalone executable against the rendered HTML, swap the
-Play-CDN `<script>` tag for your compiled CSS link, and override the
-template if needed. The framework supports it but doesn't impose it.
+- `package.json` declares `tailwindcss@^4.1`, `@tailwindcss/cli`, and
+  `flowbite@^3.1`.
+- `pyvelm/static/tailwind.css` is the entry point — `@import
+  "tailwindcss";`, `@plugin "flowbite/plugin";`, `@source` lines that
+  scan templates and `pyvelm/render.py`, and `@theme` blocks declaring
+  the framework's color tokens (brand / success / danger / warning,
+  plus neutral surface tokens with light/dark variants).
+- `pyvelm/static/pyvelm.css` is included from there and carries the
+  semantic-token mapping (`--color-fg-brand`, `--color-neutral-primary`,
+  etc.) plus the `.dark` overrides.
+- `npm run build` (or `npm run dev` for watch) compiles to
+  `pyvelm/static/dist/pyvelm.css`. The same script also copies
+  `flowbite.min.js` into the dist folder so a single static mount
+  serves both.
+- The dist directory is checked into git so the Python smoke test
+  runs out of the box. `node_modules/` is gitignored.
+
+The compiled CSS is served via the existing `/web/static` mount
+(`pyvelm/templates/layouts/main.html` links `/web/static/dist/pyvelm.css`).
+
+**Layout shell.** `pyvelm/templates/layouts/main.html` is the base
+template every page extends. It provides:
+
+- A persistent sidebar with a multi-level navigation tree (driven by
+  `_menu()` in `pyvelm/render.py`; hard-coded for now — `ir.ui.menu`
+  is the natural follow-up).
+- A topbar with the page title, company switcher (Flowbite-style
+  dropdown), theme toggle, and user menu.
+- A `class="dark"`/light theme toggle that persists in `localStorage`
+  and pre-applies before paint to avoid FOUC.
+- An Alpine.js-driven dialog component (`window.pvConfirm`,
+  `window.pvAlert`) for confirm/alert flows; the in-template event
+  bus is `pv-confirm-request` / `pv-alert-request`.
+
+The shell expects a stable bundle of variables (`menu`,
+`current_user_name`, `companies`, `current_company_id`, etc.).
+`render.layout_context(env, current_path)` builds that bundle; every
+page renderer (`render_list_page`, `render_form_page`,
+`render_kanban_page`, `render_admin_page`) calls it.
 
 **Routes**
 

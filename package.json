@@ -1,0 +1,18 @@
+{
+  "name": "pyvelm-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tailwind + Flowbite build for pyvelm's bundled HTMX UI",
+  "scripts": {
+    "vendor": "cp ./node_modules/flowbite/dist/flowbite.min.js ./pyvelm/static/dist/flowbite.min.js",
+    "build": "tailwindcss -i ./pyvelm/static/tailwind.css -o ./pyvelm/static/dist/pyvelm.css --minify && npm run vendor",
+    "dev": "tailwindcss -i ./pyvelm/static/tailwind.css -o ./pyvelm/static/dist/pyvelm.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.14",
+    "tailwindcss": "^4.1.14"
+  },
+  "dependencies": {
+    "flowbite": "^3.1.2"
+  }
+}

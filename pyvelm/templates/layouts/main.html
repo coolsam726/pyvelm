@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}pyvelm{% endblock %}</title>
+
+    {# Apply saved theme before paint to avoid FOUC. #}
+    <script>
+        (function () {
+            var t = localStorage.getItem('pyvelm-theme');
+            if (t === 'dark' ||
+                (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+
+    {# Inter is the body font in pyvelm.css. Loaded from Google Fonts so
+       the build pipeline doesn't have to ship font files. #}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet">
+
+    {# Compiled CSS — Tailwind v4 + Flowbite plugin + the theme tokens
+       defined in pyvelm.css. Built via `npm run build`. #}
+    <link rel="stylesheet" href="/web/static/dist/pyvelm.css">
+
+    {# Behavior. HTMX for in-page swaps; Alpine.js for the sidebar /
+       theme / dropdown / dialog interactions; Flowbite ships a few
+       data-attribute-driven components we'll lean on. All deferred so
+       inline scripts below can attach handlers safely. #}
+    <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+    <script src="/web/static/dist/flowbite.min.js" defer></script>
+
+    <style>
+      /* Hide Alpine-controlled elements until alpine:init fires. */
+      [x-cloak] { display: none !important; }
+
+      /* Sidebar nav items — use the semantic tokens defined in
+         pyvelm.css so light/dark just works. */
+      .nav-item {
+        color: var(--color-body);
+      }
+      @media (hover: hover) {
+        .nav-item:hover {
+          background-color: var(--color-brand-softer);
+          color: var(--color-fg-brand);
+        }
+      }
+      .nav-item.nav-active {
+        background-color: var(--color-brand-soft);
+        color: var(--color-fg-brand-strong);
+        font-weight: 600;
+      }
+      :where(.dark, .dark *) .nav-item:hover {
+        background-color: var(--color-neutral-tertiary);
+        color: var(--color-heading);
+      }
+      :where(.dark, .dark *) .nav-item.nav-active {
+        background-color: var(--color-brand-softer);
+        color: var(--color-fg-brand);
+      }
+
+      /* HTMX request indicators. */
+      .htmx-indicator { display: none; }
+      .htmx-request .htmx-indicator,
+      .htmx-request.htmx-indicator { display: block; }
+
+      /* Slightly tinted backdrop on the global dialog. */
+      #pv-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+    </style>
+
+    {% block head_extra %}{% endblock %}
+</head>
+
+<body x-data="pyvelm()"
+      @click.window="handleActionTriggerClick($event)"
+      class="bg-neutral-secondary text-body min-h-screen flex font-sans antialiased">
+
+{# ───── Mobile backdrop ───── #}
+<div x-show="sidebarOpen" x-cloak x-transition.opacity
+     class="fixed inset-0 bg-black/30 z-20 md:hidden"
+     @click="sidebarOpen = false"></div>
+
+{# ───── Sidebar ───── #}
+<aside class="fixed md:relative inset-y-0 left-0 z-30
+              w-64 min-h-screen bg-neutral-primary flex flex-col flex-shrink-0
+              border-r border-default
+              md:translate-x-0 transition-transform duration-200 ease-in-out"
+       :class="{ '-translate-x-full': !sidebarOpen }">
+
+    {# Brand. #}
+    <div class="px-4 h-[60px] border-b border-default flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-fg-brand flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor"
+                     viewBox="0 0 24 24" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3.75 7.5L12 3l8.25 4.5M3.75 7.5v9L12 21l8.25-4.5v-9M3.75 7.5L12 12m0 0l8.25-4.5M12 12v9"/>
+                </svg>
+            </div>
+            <span class="font-semibold text-heading text-sm tracking-tight">pyvelm</span>
+        </div>
+        <button @click="sidebarOpen = false" aria-label="Close sidebar"
+                class="md:hidden p-1 rounded-md text-body-subtle hover:text-heading hover:bg-neutral-secondary">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+    {# Multi-level navigation. Each top-level entry is either a flat
+       link (no `children`) or a collapsible group. Groups are
+       <details>-driven so they collapse without JavaScript and the
+       state survives navigation via the `open` attribute. #}
+    <nav class="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+        {% for nav in menu %}
+            {% if nav.children %}
+                <details class="group"
+                         {% if nav.active %}open{% endif %}>
+                    <summary class="nav-item group/summary flex items-center gap-2.5 px-3 py-2
+                                    rounded-md text-sm cursor-pointer select-none
+                                    [&::-webkit-details-marker]:hidden marker:hidden">
+                        <span class="shrink-0 w-4 h-4">{{ nav.icon | safe }}</span>
+                        <span class="flex-1 truncate">{{ nav.label }}</span>
+                        <svg class="w-3 h-3 text-body-subtle transition-transform group-open:rotate-180"
+                             fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+                        </svg>
+                    </summary>
+                    <ul class="mt-1 ml-1 pl-3 border-l border-default space-y-0.5">
+                        {% for child in nav.children %}
+                            <li>
+                                <a href="{{ child.href }}" data-nav-link
+                                   class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm
+                                          {% if child.active %}nav-active{% endif %}"
+                                   @click="sidebarOpen = false">
+                                    {% if child.icon %}
+                                    <span class="shrink-0 w-4 h-4">{{ child.icon | safe }}</span>
+                                    {% endif %}
+                                    {{ child.label }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </details>
+            {% else %}
+                <a href="{{ nav.href }}" data-nav-link
+                   class="nav-item flex items-center gap-2.5 px-3 py-2 rounded-md text-sm
+                          {% if nav.active %}nav-active{% endif %}"
+                   @click="sidebarOpen = false">
+                    <span class="shrink-0 w-4 h-4">{{ nav.icon | safe }}</span>
+                    {{ nav.label }}
+                </a>
+            {% endif %}
+        {% endfor %}
+    </nav>
+
+    {% if current_user_name %}
+    <div class="border-t border-default px-4 py-3 text-xs text-body-subtle">
+        <p class="truncate">Signed in as <span class="font-semibold text-heading">{{ current_user_name }}</span></p>
+        {% if current_company_name %}
+        <p class="truncate text-body-subtle/70">{{ current_company_name }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</aside>
+
+{# ───── Main column ───── #}
+<div class="flex-1 flex flex-col min-h-screen overflow-x-hidden">
+
+    {# Topbar. #}
+    <header class="flex items-center gap-3 px-4 md:px-6 h-[60px] border-b border-default
+                   bg-neutral-primary sticky top-0 z-10">
+
+        <button @click="sidebarOpen = true" aria-label="Open menu"
+                class="md:hidden p-1.5 -ml-1.5 rounded-md text-body hover:bg-neutral-secondary">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </button>
+
+        <h1 class="text-base font-semibold text-heading tracking-tight truncate flex-1 min-w-0">
+            {% block page_title %}{% endblock %}
+        </h1>
+
+        <div class="flex items-center gap-2">
+
+            {# Company switcher. #}
+            {% if companies %}
+            <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                <button @click="open = !open"
+                        class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm
+                               text-body hover:text-heading hover:bg-neutral-secondary"
+                        aria-haspopup="true" :aria-expanded="open.toString()">
+                    <svg class="w-4 h-4 text-body-subtle" fill="none" stroke="currentColor"
+                         viewBox="0 0 24 24" stroke-width="1.8">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6h1.5m-1.5 3h1.5m-1.5 3h1.5M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>
+                    </svg>
+                    <span class="hidden sm:inline truncate max-w-[160px]">
+                        {{ current_company_name or 'All companies' }}
+                    </span>
+                    <svg class="w-3 h-3 text-body-subtle hidden sm:block" fill="none"
+                         stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+                    </svg>
+                </button>
+                <div x-show="open" x-cloak x-transition
+                     class="absolute right-0 top-full mt-2 w-56 rounded-lg
+                            bg-neutral-primary border border-default shadow-lg overflow-hidden z-50">
+                    <ul class="py-1 text-sm">
+                        <li>
+                            <form method="post" action="/web/switch-company">
+                                <input type="hidden" name="company_id" value="">
+                                <button type="submit"
+                                        class="w-full text-left px-3 py-1.5 text-body hover:bg-neutral-secondary
+                                               {% if not current_company_id %}text-fg-brand font-medium{% endif %}">
+                                    All companies
+                                </button>
+                            </form>
+                        </li>
+                        {% for c in companies %}
+                        <li>
+                            <form method="post" action="/web/switch-company">
+                                <input type="hidden" name="company_id" value="{{ c.id }}">
+                                <button type="submit"
+                                        class="w-full text-left px-3 py-1.5 text-body hover:bg-neutral-secondary
+                                               {% if c.id == current_company_id %}text-fg-brand font-medium{% endif %}">
+                                    {{ c.name }}
+                                </button>
+                            </form>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Theme toggle. #}
+            <button @click="toggleTheme()" aria-label="Toggle dark mode"
+                    class="p-1.5 rounded-md text-body hover:bg-neutral-secondary hover:text-heading">
+                <svg class="w-4 h-4 dark:hidden" fill="none" stroke="currentColor"
+                     viewBox="0 0 24 24" stroke-width="1.8">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                </svg>
+                <svg class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor"
+                     viewBox="0 0 24 24" stroke-width="1.8">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+                </svg>
+            </button>
+
+            {# User menu. #}
+            {% if current_user_name %}
+            <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                <button @click="open = !open" aria-haspopup="true" :aria-expanded="open.toString()"
+                        class="flex items-center gap-2 pl-1 pr-2 py-1 rounded-md
+                               hover:bg-neutral-secondary">
+                    <span class="w-7 h-7 rounded-full bg-fg-brand text-white text-xs font-semibold
+                                 flex items-center justify-center shrink-0">
+                        {{ current_user_initial }}
+                    </span>
+                    <span class="hidden sm:inline text-sm font-medium text-body max-w-[120px] truncate">
+                        {{ current_user_name }}
+                    </span>
+                    <svg class="w-3 h-3 text-body-subtle hidden sm:block" fill="none"
+                         stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+                    </svg>
+                </button>
+                <div x-show="open" x-cloak x-transition
+                     class="absolute right-0 top-full mt-2 w-56 rounded-lg
+                            bg-neutral-primary border border-default shadow-lg overflow-hidden z-50">
+                    <div class="px-4 py-3 border-b border-default">
+                        <p class="text-sm font-semibold text-heading truncate">{{ current_user_name }}</p>
+                        <p class="text-xs text-body-subtle">{{ current_user_login or '' }}</p>
+                    </div>
+                    <div class="py-1 text-sm">
+                        <a href="/web/admin"
+                           class="block px-4 py-1.5 text-body hover:bg-neutral-secondary hover:text-heading">
+                            Admin
+                        </a>
+                        <form method="post" action="/logout">
+                            <button type="submit"
+                                    class="w-full text-left px-4 py-1.5 text-fg-danger hover:bg-danger-soft">
+                                Sign out
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </header>
+
+    {# Flash slot reserved — used for future toast/notification injection. #}
+    <div id="pv-flash" class="px-4 md:px-6 space-y-2">{% block flash %}{% endblock %}</div>
+
+    {# Page content. #}
+    <main class="flex-1 px-4 md:px-6 py-6 overflow-auto">
+        {% if self.page_heading() or self.page_actions() %}
+            <div class="flex flex-wrap items-baseline justify-between gap-4 mb-6">
+                <div>{% block page_heading %}{% endblock %}</div>
+                <div class="flex flex-wrap items-center gap-2">{% block page_actions %}{% endblock %}</div>
+            </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+{# ───── Global dialog ──── #}
+{# Single Alpine component for confirm + alert. Pages can dispatch
+   `pv-confirm-request` / `pv-alert-request` events with a `resolve`
+   callback; the helpers `pvConfirm(message, opts)` and
+   `pvAlert(message, opts)` are sugar over the same events. Replaces
+   the browser's native confirm prompt for delete buttons etc. #}
+<div x-data="pyvelmDialog()"
+     @pv-confirm-request.window="openConfirm($event.detail)"
+     @pv-alert-request.window="openAlert($event.detail)">
+    <dialog x-ref="dlg" id="pv-dialog"
+            x-effect="open ? $refs.dlg.showModal() : ($refs.dlg.open && $refs.dlg.close())"
+            @close="onNativeClose()"
+            @click="$event.target === $refs.dlg && mode !== 'alert' && dismiss()"
+            class="m-auto w-full max-w-md rounded-xl border border-default
+                   bg-neutral-primary shadow-xl p-0 text-body">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-default">
+            <h3 class="text-sm font-semibold text-heading truncate" x-text="title"></h3>
+            <button type="button" x-show="mode !== 'alert'" @click="dismiss()"
+                    class="p-1 rounded text-body-subtle hover:text-heading transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="px-5 py-4">
+            <p x-text="message" class="text-sm text-body leading-relaxed"></p>
+        </div>
+        <div class="flex items-center justify-end gap-2 px-5 py-3 border-t border-default">
+            <button type="button" x-show="mode !== 'alert'" @click="dismiss()"
+                    x-text="cancelLabel"
+                    class="px-4 py-1.5 text-sm rounded-md text-body hover:bg-neutral-secondary"></button>
+            <button type="button" @click="confirm()"
+                    x-text="confirmLabel"
+                    :class="confirmBtnClass"></button>
+        </div>
+    </dialog>
+</div>
+
+<script>
+    document.addEventListener('alpine:init', () => {
+        // Shared sidebar / theme / nav-active state.
+        Alpine.data('pyvelm', () => ({
+            sidebarOpen: false,
+            init() {
+                // Highlight the nav link matching the current URL.
+                const path = window.location.pathname;
+                document.querySelectorAll('[data-nav-link]').forEach(el => {
+                    const href = el.getAttribute('href');
+                    if (path === href || (href !== '/' && path.startsWith(href + '/'))) {
+                        el.classList.add('nav-active');
+                    }
+                });
+            },
+            toggleTheme() {
+                const html = document.documentElement;
+                if (html.classList.contains('dark')) {
+                    html.classList.remove('dark');
+                    localStorage.setItem('pyvelm-theme', 'light');
+                } else {
+                    html.classList.add('dark');
+                    localStorage.setItem('pyvelm-theme', 'dark');
+                }
+            },
+            // Wire up <button data-pv-confirm="..." data-pv-action-url="...">
+            // for any page that wants the styled confirm dialog instead of
+            // the browser's native one. POSTs to the url on confirm.
+            async handleActionTriggerClick(e) {
+                const btn = e.target.closest('[data-pv-confirm]');
+                if (!btn) return;
+                e.preventDefault();
+                const message = btn.dataset.pvConfirm;
+                const url = btn.dataset.pvActionUrl || btn.formAction;
+                const method = (btn.dataset.pvActionMethod || 'POST').toUpperCase();
+                const ok = await window.pvConfirm(message, {
+                    variant: btn.dataset.pvConfirmVariant || 'danger',
+                });
+                if (!ok) return;
+                const f = document.createElement('form');
+                f.method = method === 'GET' ? 'GET' : 'POST';
+                f.action = url;
+                document.body.appendChild(f);
+                f.submit();
+            },
+        }));
+
+        Alpine.data('pyvelmDialog', () => ({
+            open: false,
+            mode: 'confirm',     // 'confirm' | 'alert'
+            variant: 'danger',   // 'danger' | 'warning' | 'success' | 'info' | 'default'
+            title: 'Confirm',
+            message: '',
+            confirmLabel: 'Confirm',
+            cancelLabel: 'Cancel',
+            _resolver: null,
+            openConfirm(d) {
+                this.mode = 'confirm';
+                this.variant = d.variant || 'danger';
+                this.title = d.title || 'Confirm';
+                this.message = d.message || '';
+                this.confirmLabel = d.confirmLabel || 'Confirm';
+                this.cancelLabel = d.cancelLabel || 'Cancel';
+                this._resolver = d.resolve || null;
+                this.open = true;
+            },
+            openAlert(d) {
+                this.mode = 'alert';
+                this.variant = d.variant || 'info';
+                this.title = d.title || 'Notice';
+                this.message = d.message || '';
+                this.confirmLabel = d.confirmLabel || 'OK';
+                this.cancelLabel = '';
+                this._resolver = d.resolve || null;
+                this.open = true;
+            },
+            confirm() {
+                if (this._resolver) this._resolver(true);
+                this._resolver = null;
+                this.open = false;
+            },
+            dismiss() {
+                if (this._resolver) this._resolver(false);
+                this._resolver = null;
+                this.open = false;
+            },
+            onNativeClose() {
+                if (this._resolver) this._resolver(false);
+                this._resolver = null;
+                this.open = false;
+            },
+            get confirmBtnClass() {
+                const base =
+                    'px-4 py-1.5 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity';
+                if (this.variant === 'danger') return base + ' bg-fg-danger';
+                if (this.variant === 'success') return base + ' bg-success';
+                if (this.variant === 'warning') return base + ' bg-warning';
+                return base + ' bg-fg-brand';
+            },
+        }));
+
+        // Imperative API used by inline scripts and the action-trigger
+        // wiring in `pyvelm()`.
+        window.pvConfirm = (message, opts = {}) =>
+            new Promise(resolve =>
+                window.dispatchEvent(new CustomEvent('pv-confirm-request', {
+                    detail: { message, resolve, ...opts },
+                })));
+        window.pvAlert = (message, opts = {}) =>
+            new Promise(resolve =>
+                window.dispatchEvent(new CustomEvent('pv-alert-request', {
+                    detail: { message, resolve, ...opts },
+                })));
+    });
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

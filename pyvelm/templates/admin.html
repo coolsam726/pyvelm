@@ -1,46 +1,30 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>Admin — pyvelm</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-50 text-gray-900 antialiased min-h-screen">
-<header class="bg-white border-b border-gray-200 px-8 py-6 flex items-center justify-between">
-    <h1 class="text-2xl font-semibold">Administration</h1>
-    <div class="flex items-center gap-4">
-        {% if companies %}
-        <form method="post" action="/web/switch-company" class="flex items-center gap-2">
-            <label for="company-switcher" class="text-sm text-gray-600">Company:</label>
-            <select id="company-switcher" name="company_id"
-                    onchange="this.form.submit()"
-                    class="text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
-                <option value="">— All —</option>
-                {% for c in companies %}
-                <option value="{{ c.id }}" {% if c.id == current_company_id %}selected{% endif %}>{{ c.name }}</option>
-                {% endfor %}
-            </select>
-        </form>
-        {% endif %}
-        <form method="post" action="/logout">
-            <button class="px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white hover:bg-gray-100 transition">
-                Sign out
-            </button>
-        </form>
-    </div>
-</header>
+{% extends "layouts/main.html" %}
+{% block title %}Administration — pyvelm{% endblock %}
+{% block page_title %}Administration{% endblock %}
 
-<main class="px-8 py-10">
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {% for card in cards %}
-        <a href="{{ card.url }}"
-           class="block bg-white border border-gray-200 rounded-lg shadow-sm px-6 py-8 hover:shadow-md hover:border-blue-300 transition">
-            <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{{ card.subtitle }}</p>
-            <p class="text-lg font-semibold text-gray-800">{{ card.title }}</p>
-            <p class="mt-2 text-sm text-gray-500">{{ card.description }}</p>
-        </a>
-        {% endfor %}
-    </div>
-</main>
-</body>
-</html>
+{% block page_heading %}
+<div>
+    <h2 class="text-xl font-semibold text-heading tracking-tight">Administration</h2>
+    <p class="mt-1 text-xs text-body-subtle">
+        Manage the framework's security and workflow models.
+    </p>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for card in cards %}
+    <a href="{{ card.url }}"
+       class="group block bg-neutral-primary border border-default rounded-xl shadow-sm px-6 py-6
+              hover:shadow-md hover:border-fg-brand/40 transition">
+        <p class="text-2xs font-mono uppercase tracking-wider text-body-subtle mb-2">
+            {{ card.subtitle }}
+        </p>
+        <p class="text-base font-semibold text-heading group-hover:text-fg-brand transition-colors">
+            {{ card.title }}
+        </p>
+        <p class="mt-2 text-sm text-body leading-relaxed">{{ card.description }}</p>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}

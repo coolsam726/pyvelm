@@ -227,15 +227,17 @@ def main():
             html = resp.text
             # Structural assertions — markup specifics aren't exhaustively
             # checked, just the load-bearing pieces.
-            assert "cdn.tailwindcss.com" in html      # Tailwind via Play CDN
-            assert "htmx.org" in html                  # HTMX script tag
+            assert "/web/static/dist/pyvelm.css" in html  # locally built CSS
+            assert "htmx.org" in html                       # HTMX script tag
+            assert "alpinejs" in html                       # Alpine for sidebar/dropdowns
+            assert "flowbite" in html                       # Flowbite component JS
             assert 'id="pyvelm-rows"' in html
-            assert "ALI-1" in html                     # Alice's code first page
+            assert "ALI-1" in html                          # Alice's code first page
             # Toggle widget for `active` — green track when value is True.
             assert "bg-green-500" in html
             # Pagination button present because total > page_size.
             assert "Load 2 more" in html
-            print("HTML list view renders with Tailwind widgets + pagination")
+            print("HTML list view renders with Tailwind+Flowbite + pagination")
 
             # 7. HTMX fragment endpoint returns just <tr>s + OOB load-more.
             resp = client.get(
@@ -387,7 +389,7 @@ def main():
             resp = client.get(f"/web/views/partners/partner.form/record/{alice['id']}")
             assert resp.status_code == 200, resp.text
             page = resp.text
-            assert "cdn.tailwindcss.com" in page
+            assert "/web/static/dist/pyvelm.css" in page
             assert "<fieldset" in page
             assert "Identity" in page
             # `Profile` was renamed to `Demographics` by partners_pro's

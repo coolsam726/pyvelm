@@ -2,13 +2,13 @@
 
 @plugin "flowbite/plugin";
 
-/* Scan nuru templates and the example app for utility class names */
+/* Scan templates + widget Python (which emits utility-class strings via
+   markupsafe.Markup) + Flowbite's own JS so the components keep their
+   classes. Paths are relative to this file's location
+   (`pyvelm/static/`). */
 @source "../templates/**/*.html";
-@source "../../example_app/**/*.py";
-@source "../integrations/**/*.html";
-@source "../node_modules/flowbite";
-@source "../../node_modules/flowbite-datepicker";
-
+@source "../render.py";
+@source "../../node_modules/flowbite/dist/**/*.js";
 
 /* Class-based dark mode — toggled via <html class="dark"> */
 @variant dark (&:where(.dark, .dark *));

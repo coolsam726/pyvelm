@@ -24,4 +24,9 @@ include = ["pyvelm*"]
 exclude = ["examples*", "tests*"]
 
 [tool.setuptools.package-data]
-pyvelm = ["templates/*.html", "static/*.css"]
+pyvelm = [
+    "templates/*.html",
+    "templates/**/*.html",
+    "static/*.css",
+    "static/dist/*",
+]

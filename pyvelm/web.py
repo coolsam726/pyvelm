@@ -246,6 +246,7 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
     def web_view_page(
         module: str,
         name: str,
+        request: Request,
         page: int = Query(default=0, ge=0),
         page_size: int = Query(default=20, ge=1, le=200),
         env: Environment = Depends(get_env),
@@ -253,12 +254,14 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         from .render import render_kanban_page, render_list_page
 
         rec = _load_view(env, module, name)
+        path = str(request.url.path)
         if rec.view_type == "list":
             return HTMLResponse(
-                render_list_page(rec, env, page=page, page_size=page_size)
+                render_list_page(rec, env, page=page, page_size=page_size,
+                                 current_path=path)
             )
         if rec.view_type == "kanban":
-            return HTMLResponse(render_kanban_page(rec, env))
+            return HTMLResponse(render_kanban_page(rec, env, current_path=path))
         # Form views land on /record/{id}; bare URL is meaningless.
         raise HTTPException(
             status_code=501,
@@ -482,12 +485,16 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
 
     @app.get("/web/views/{module}/{name}/new", response_class=HTMLResponse)
     def web_form_new(
-        module: str, name: str, env: Environment = Depends(get_env),
+        module: str, name: str, request: Request,
+        env: Environment = Depends(get_env),
     ):
         from .render import render_form_page
 
         view = _require_form_view(_load_view(env, module, name))
-        return HTMLResponse(render_form_page(view, None, env, mode="new"))
+        return HTMLResponse(
+            render_form_page(view, None, env, mode="new",
+                             current_path=str(request.url.path))
+        )
 
     @app.get("/web/views/{module}/{name}/record/{record_id}",
              response_class=HTMLResponse)
@@ -504,7 +511,9 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         # in-place swap; otherwise full page for direct navigation.
         body_only = request.headers.get("HX-Request") == "true"
         return HTMLResponse(
-            render_form_page(view, rec, env, mode="display", body_only=body_only)
+            render_form_page(view, rec, env, mode="display",
+                             body_only=body_only,
+                             current_path=str(request.url.path))
         )
 
     @app.get("/web/views/{module}/{name}/record/{record_id}/edit",
@@ -520,7 +529,9 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         rec = _load_record(env, view, record_id)
         body_only = request.headers.get("HX-Request") == "true"
         return HTMLResponse(
-            render_form_page(view, rec, env, mode="edit", body_only=body_only)
+            render_form_page(view, rec, env, mode="edit",
+                             body_only=body_only,
+                             current_path=str(request.url.path))
         )
 
     @app.post("/web/views/{module}/{name}/record/{record_id}",
@@ -542,7 +553,9 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         env.cache.invalidate(model_name=view.model, ids=[record_id])
         body_only = request.headers.get("HX-Request") == "true"
         return HTMLResponse(
-            render_form_page(view, rec, env, mode="display", body_only=body_only)
+            render_form_page(view, rec, env, mode="display",
+                             body_only=body_only,
+                             current_path=str(request.url.path))
         )
 
     @app.post("/web/views/{module}/{name}", response_class=HTMLResponse)
@@ -560,35 +573,21 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
             rec = env[view.model].create(vals)
         body_only = request.headers.get("HX-Request") == "true"
         return HTMLResponse(
-            render_form_page(view, rec, env, mode="display", body_only=body_only)
+            render_form_page(view, rec, env, mode="display",
+                             body_only=body_only,
+                             current_path=str(request.url.path))
         )
 
     # ---- admin dashboard ----
 
     @app.get("/web/admin", response_class=HTMLResponse)
-    def web_admin(env: Environment = Depends(get_env)):
+    def web_admin(request: Request, env: Environment = Depends(get_env)):
         from .render import render_admin_page
 
         if env.uid is None:
             return RedirectResponse("/login?next=/web/admin", status_code=302)
-
-        # Fetch company list for the switcher (superuser bypass — the
-        # admin page itself needs the full list regardless of env scope).
-        companies: list[dict] = []
-        if "res.company" in registry:
-            bypass_env = env.with_company(None)
-            bypass_env._acl_bypass = True
-            try:
-                for c in bypass_env["res.company"].search([]):
-                    companies.append({"id": c.id, "name": c.name})
-            finally:
-                bypass_env._acl_bypass = False
-
         return HTMLResponse(
-            render_admin_page(
-                companies=companies,
-                current_company_id=env.company_id,
-            )
+            render_admin_page(env=env, current_path=str(request.url.path))
         )
 
     @app.post("/web/switch-company")

@@ -31,6 +31,22 @@ cp .env.example .env       # then edit PYVELM_DSN
 .venv/bin/python examples/basic.py
 ```
 
+The example smoke test exercises every feature including the HTMX UI.
+The compiled CSS bundle lives at `pyvelm/static/dist/pyvelm.css` and
+is checked in, so a fresh clone runs without Node. If you want to
+hack on styling or component markup:
+
+```bash
+npm install            # installs Tailwind v4 + Flowbite into node_modules/
+npm run dev            # watch mode: rebuilds dist/pyvelm.css on save
+npm run build          # one-shot minified build + Flowbite JS copy
+```
+
+The build scans `pyvelm/templates/**/*.html` and `pyvelm/render.py`
+for utility classes (Tailwind v4 `@source` directives in
+`pyvelm/static/tailwind.css`). Add new utility classes in those files
+and the next build picks them up.
+
 The example exercises every feature: CRUD, recordset semantics, all four
 relational field types, M2o traversal, computed fields, dependency-graph
 invalidation, and the singleton guard.

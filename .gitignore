@@ -3,6 +3,11 @@ __pycache__/
 *.pyc
 *.egg-info/
 .env
+
+# Node UI build pipeline. node_modules is heavy and reproducible from
+# package.json + lockfile; the compiled dist/ is checked in so the
+# demo runs out of the box without requiring `npm install` first.
+node_modules/
 **/__pycache__/
 **/*.pyc
 **/*.egg-info/

@@ -211,12 +211,37 @@ rule is gone (migration `0_6_to_0_7.py` prunes it from older installs).
 `company_id` but stay cross-company-visible so the admin UI can
 manage them all.
 
-Next focus: **UI polish using Tailwind CSS + Flowbite components**
-(Flowbite is the chosen component library on top of the existing
-Tailwind Play-CDN stack). Switch from hand-rolled utility-class
-markup to Flowbite-pattern components where it makes sense (cards,
-modals, dropdowns, navbar, tables). Keep the JSON arch contract;
-this is markup-only.
+UI polish landed: pyvelm now ships an Odoo-Enterprise-style shell
+(persistent sidebar with multi-level menu, sticky topbar, theme
+toggle, company switcher, user menu) backed by a local
+Tailwind v4 + Flowbite build pipeline:
+
+- `package.json` + `npm install` pulls Tailwind 4.1 and Flowbite 3.1.
+- `npm run build` compiles `pyvelm/static/tailwind.css` → minified
+  `pyvelm/static/dist/pyvelm.css`, then copies `flowbite.min.js` next
+  to it. `npm run dev` watches.
+- The dist directory is checked in so the Python smoke test still
+  runs out of the box; `node_modules/` is gitignored.
+- Master template `pyvelm/templates/layouts/main.html` provides the
+  shell. Every page renderer (list, form, kanban, admin) now passes
+  `layout_context(env, current_path)` so the shell knows the active
+  user, company, menu state, and current path.
+- Theme toggle and sidebar-collapse persist via `localStorage`. The
+  layout also ships a small Alpine-driven dialog component
+  (`pvConfirm` / `pvAlert`) for future replacement of `hx-confirm`
+  browser prompts.
+- Login page stays standalone (no shell) and uses the same compiled
+  stylesheet for consistency.
+
+Next focus options:
+  - **ir.ui.menu**: replace the hard-coded sidebar menu with an
+    Odoo-style data model so apps extend the navigation the same way
+    they extend views.
+  - **Stage 7 Slice C**: XPath/structural view arch patches.
+  - **Stage 6 hardening**: Cron as a real background task, SMTP mail
+    dispatch, message subtypes, followers/subscriptions.
+  - **Stage 5 hardening**: CSRF tokens, rate limit /login, password-
+    change UI.
 
 Pending follow-ups, in order of "what'll hurt first":
   - **Stage 7 Slice C.** XPath/structural view arch patches beyond
