@@ -18,6 +18,8 @@ import json
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from .env import Environment
 from .fields import Many2many, Many2one, One2many
@@ -106,28 +108,38 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
 
     app = FastAPI(title="pyvelm")
 
+    # Static assets shipped inside the package (CSS, eventually images).
+    from .render import STATIC_DIR
+    app.mount(
+        "/web/static",
+        StaticFiles(directory=str(STATIC_DIR)),
+        name="pyvelm-static",
+    )
+
     def get_env():
         with pool.connection() as conn:
             env = Environment(conn, registry=registry)
             yield env
 
-    @app.get("/api/views/{module}/{name}")
-    def get_view(module: str, name: str, env: Environment = Depends(get_env)):
-        from .views import resolve_arch
-
+    def _load_view(env, module: str, name: str):
         if "ir.ui.view" not in registry:
             raise HTTPException(
-                status_code=503,
-                detail="No ir.ui.view model loaded",
+                status_code=503, detail="No ir.ui.view model loaded"
             )
         View = env["ir.ui.view"]
         rec = View.search([("module", "=", module), ("name", "=", name)])
         if not rec:
             raise HTTPException(
-                status_code=404,
-                detail=f"View {module}/{name} not found",
+                status_code=404, detail=f"View {module}/{name} not found"
             )
         rec.ensure_one()
+        return rec
+
+    @app.get("/api/views/{module}/{name}")
+    def get_view(module: str, name: str, env: Environment = Depends(get_env)):
+        from .views import resolve_arch
+
+        rec = _load_view(env, module, name)
         return {
             "id": rec.id,
             "module": rec.module,
@@ -139,6 +151,47 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
             # or an extension that points at it.
             "arch": resolve_arch(rec),
         }
+
+    @app.get("/web/views/{module}/{name}", response_class=HTMLResponse)
+    def web_view_page(
+        module: str,
+        name: str,
+        page: int = Query(default=0, ge=0),
+        page_size: int = Query(default=20, ge=1, le=200),
+        env: Environment = Depends(get_env),
+    ):
+        from .render import render_list_page
+
+        rec = _load_view(env, module, name)
+        if rec.view_type != "list":
+            raise HTTPException(
+                status_code=501,
+                detail=f"Renderer for view_type {rec.view_type!r} not yet shipped",
+            )
+        return HTMLResponse(
+            render_list_page(rec, env, page=page, page_size=page_size)
+        )
+
+    @app.get("/web/records/{module}/{name}", response_class=HTMLResponse)
+    def web_view_rows(
+        module: str,
+        name: str,
+        page: int = Query(default=0, ge=0),
+        page_size: int = Query(default=20, ge=1, le=200),
+        env: Environment = Depends(get_env),
+    ):
+        """HTML fragment endpoint used by HTMX `load more` swaps."""
+        from .render import render_list_rows
+
+        rec = _load_view(env, module, name)
+        if rec.view_type != "list":
+            raise HTTPException(
+                status_code=501,
+                detail=f"Renderer for view_type {rec.view_type!r} not yet shipped",
+            )
+        return HTMLResponse(
+            render_list_rows(rec, env, page=page, page_size=page_size)
+        )
 
     @app.get("/api/records")
     def list_records(

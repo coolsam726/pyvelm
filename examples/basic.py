@@ -211,6 +211,43 @@ def main():
             assert resp2.json()["arch"] == arch
             print("inheritance verified from both ends")
 
+            # 6. HTML renderer: full page + HTMX rows fragment.
+            resp = client.get(
+                "/web/views/partners/partner.list",
+                params={"page": 0, "page_size": 2},
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.headers["content-type"].startswith("text/html")
+            html = resp.text
+            # Structural assertions — no need to compare full HTML.
+            assert "<table class=\"pyvelm-list\">" in html
+            assert 'id="pyvelm-rows"' in html
+            assert "/web/static/pyvelm.css" in html
+            assert "htmx.org" in html  # script tag present
+            assert "ALI-1" in html  # Alice's code in the first page
+            # The `toggle` widget rendered for `active` (from inheritance)
+            assert "toggle-on" in html or "toggle-off" in html
+            # Pagination button present because total > page_size
+            assert "Load 2 more" in html
+            print("HTML list view renders with widgets + pagination")
+
+            # 7. HTMX fragment endpoint returns just <tr>s + OOB load-more.
+            resp = client.get(
+                "/web/records/partners/partner.list",
+                params={"page": 1, "page_size": 2},
+            )
+            assert resp.status_code == 200, resp.text
+            frag = resp.text
+            # No <html>/<body> in a fragment response.
+            assert "<html" not in frag
+            assert "<tr" in frag
+            assert "BOB-2" in frag or "CAR-3" in frag
+
+            # Static file served from the package data dir.
+            resp = client.get("/web/static/pyvelm.css")
+            assert resp.status_code == 200, resp.text
+            assert ".pyvelm-list" in resp.text
+
 
 def _drop_known_tables(conn):
     """Tear down tables we expect to own. Idempotent."""

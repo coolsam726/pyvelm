@@ -210,18 +210,77 @@ For tests, a `min_size=1, max_size=2` pool is fine. Real deployments
 should size against expected concurrency; that's a deployment concern,
 not a framework one.
 
+## HTMX + Jinja renderer
+
+Default UI shipped with the framework. Developers don't write Jinja:
+the framework owns the templates and dispatches each field through a
+widget registry to produce HTML.
+
+**Routes**
+
+- `GET /web/views/{module}/{name}?page=&page_size=` — full HTML page.
+  Includes a header, the table shell, the first page of rows, and a
+  "Load more" button when there are more rows.
+- `GET /web/records/{module}/{name}?page=&page_size=` — `<tr>` fragment
+  for HTMX `hx-swap="beforeend"`. Also returns an out-of-band swap of
+  the load-more button when there are still more rows beyond this page.
+- `GET /web/static/pyvelm.css` — bundled stylesheet, mounted from the
+  package's `static/` directory.
+
+**Widget registry** (`pyvelm.render`)
+
+The dispatch key is `(field_class, hint)`. The hint comes from the
+`widget` attribute on a field-spec dict in the arch — set or modified
+by inheritance ops, never hand-edited in Jinja.
+
+| Field type | No hint | Hint |
+|---|---|---|
+| `Char` / `Text` | escape-and-print | (extensible) |
+| `Integer` / `Float` | escape-and-print | |
+| `Boolean` | check / cross | `"toggle"` → styled toggle |
+| `Many2one` | display value (`display_name` → `name` → id) | |
+| `One2many` / `Many2many` | up to 3 chips + "+N" overflow | |
+
+A renderer is `(value, field_spec, field) -> Markup`. Returning a bare
+string lets Jinja auto-escape; returning `markupsafe.Markup(...)` opts
+out for raw HTML — used by toggle, chips, etc. That's the safety
+contract.
+
+Adding a widget is a decorator one-liner:
+
+```python
+from pyvelm.render import widget
+from pyvelm.fields import Boolean
+from markupsafe import Markup
+
+@widget(Boolean, hint="led")
+def render_led(value, spec, field):
+    color = "green" if value else "red"
+    return Markup(f'<span class="led led-{color}"></span>')
+```
+
+Then any field that gets a `widget: "led"` hint (via inheritance or
+directly in arch) renders through it. Apps that need custom widgets
+register them at startup before `create_app`.
+
+**View arch in JSON, HTML in the renderer.** Apps that want a SPA
+ignore `/web/*` and consume `/api/*`. Apps that want the default UI
+ignore `/api/*`. They share the same `ir.ui.view.arch` and the same
+inheritance resolution.
+
 ## What's deliberately not here
 
 - **Mutation endpoints** (POST/PATCH/DELETE) — Slice B.3.
-- **HTMX renderer / `/web/...` HTML routes** — Slice B.2.
+- **Click-to-edit / inline editing in the list view** — depends on
+  mutations.
 - **Authentication / authorization** — there's no row-level security
   yet (Stage 5). Don't expose this to the public internet.
-- **`form` / `kanban` view types** — Slice B.2 brings them in
-  alongside the renderer. `view_type = "list"` is the only one we
-  normalize today.
+- **`form` / `kanban` view types** — `view_type = "list"` is the only
+  one with a normalizer + renderer today. The 501 from `/web/views/...`
+  for other types is intentional, not an oversight.
 - **Caching of view responses** — every request hits Postgres for the
   resolved arch. Memoizing per `(module, name)` is cheap and obvious;
   revisit when load matters.
-- **Streaming / pagination metadata** — `count` is `len(recs)` from
-  the current page, not the total. Add a `search_count` call if you
-  need true totals.
+- **Streaming / pagination metadata** — `count` is `total` from
+  `search_count`; rows are paginated by `limit/offset`. No cursor
+  abstraction yet.

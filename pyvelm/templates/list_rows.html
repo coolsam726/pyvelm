@@ -1,0 +1,21 @@
+{% for row in rows %}
+<tr data-record-id="{{ row.id }}">
+    {% for cell in row.cells %}
+    <td data-field="{{ cell.name }}">{{ cell.html }}</td>
+    {% endfor %}
+</tr>
+{% endfor %}
+{# When HTMX appends a "Load more" response, we replace the existing
+   load-more button with the next one (if any) via OOB swap. #}
+{% if has_more %}
+<div id="pyvelm-load-more" hx-swap-oob="true">
+    <button
+        class="pyvelm-btn"
+        hx-get="/web/records/{{ view.module }}/{{ view.name }}?page={{ page + 1 }}&page_size={{ page_size }}"
+        hx-target="#pyvelm-rows"
+        hx-swap="beforeend"
+        hx-on::after-request="this.closest('#pyvelm-load-more').remove()">
+        Load {{ page_size }} more
+    </button>
+</div>
+{% endif %}

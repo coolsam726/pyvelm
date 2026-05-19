@@ -53,14 +53,20 @@ For the design rationale and the deferred-items rationale, see
         (Many2one → `[id, display]`, collections → id lists),
         connection-pool-backed Environment-per-request.
      ✅ Slice B.1: view inheritance via typed dict-merge ops
-        (`set`/`replace`/`remove`/`before`/`after`), arch
-        normalization, `VIEW_INHERITS` manifest key, `priority`-driven
-        chain resolution, `/api/views` returns resolved arch.
-     ⏭ Slice B.2: HTMX + Jinja renderer that walks the resolved arch.
-        Form / kanban view types and their normalizers come with it.
+        (`set`/`replace`/`update`/`remove`/`before`/`after`), arch
+        normalization, `VIEW_INHERITS` in manifest data files,
+        `priority`-driven chain resolution, granular attribute ops
+        (Odoo `position="attributes"` parity), `/api/views` returns
+        resolved arch.
+     ✅ Slice B.2: HTMX + Jinja list renderer with widget registry
+        (Char/Integer/Float/Boolean[+toggle]/Many2one/collections),
+        `/web/views/{m}/{n}` full pages, `/web/records/{m}/{n}`
+        fragment endpoint with OOB load-more swap, bundled CSS skin.
      ⏭ Slice B.3: mutation endpoints (POST/PATCH/DELETE) shared by
-        JSON API + HTMX form submits.
-     ⏭ Slice B.4: `pyvelm.types` TypedDicts for IDE assistance on
+        JSON API + HTMX form submits; click-to-edit in list view.
+     ⏭ Slice B.4: form + kanban view types (normalizer + template +
+        widget conventions per type).
+     ⏭ Slice B.5: `pyvelm.types` TypedDicts for IDE assistance on
         manifest authoring (Manifest, View, Operation).
 5. ACL: groups, model permissions, record rules (domain-based row security).
 6. Workflows: server actions, automated actions, scheduled jobs, mail threads.
@@ -91,22 +97,20 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 4 Slice B.1 landed: view inheritance via typed dict-merge
-operations, with a third example module (`partners_pro`) patching
-`partner.list` end-to-end. Resolution walks the chain in priority
-order, normalization at install lets authoring stay terse, the
-`/api/views` endpoint always returns the resolved arch. `Field.default`
-finally applies at `create()` time — was on the deferred list, fixed
-in passing since `priority = Integer(default=16)` needed it.
+Stage 4 Slice B.2 landed: the framework now ships a default UI. List
+views render to HTML via a Jinja template that dispatches each field
+through a widget registry; HTMX handles pagination via OOB swaps; a
+minimal CSS skin makes the demo look acceptable. No developer-written
+templates — the arch + widget hints drive everything.
 
-Next: **Slice B.2 — the HTMX + Jinja renderer.** The renderer is the
-visible payoff: a default list-view UI ships in the framework, fed
-from the resolved arch, with HTMX wiring up pagination and edit
-interactivity. Form view type comes along with it (the arch normalizer
-gains a `form` entry, the view declarations support sections/groups,
-the Jinja template renders the dispatched widgets).
+Next: **Slice B.3 — mutation endpoints + click-to-edit.** POST/PATCH/
+DELETE on `/api/records`; HTMX-driven inline edit in the list view
+that reuses the same handlers under the hood. This is the largest
+single slice left in Stage 4 because it touches request-body
+validation, write paths, error mapping, and cache-rollback semantics
+that we've been documenting around.
 
-After B.2: B.3 (mutation endpoints), B.4 (TypedDicts for IDE
+After B.3: B.4 (form + kanban view types), B.5 (TypedDicts for IDE
 assistance). Stage 5 (ACL / record rules) is the natural pairing with
 mutations — public write endpoints without row-level security would be
 malpractice.

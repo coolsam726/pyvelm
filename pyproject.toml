@@ -9,6 +9,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "fastapi>=0.115",
     "httpx>=0.27",
+    "jinja2>=3.1",
 ]
 
 [build-system]
@@ -18,3 +19,6 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["pyvelm*"]
 exclude = ["examples*", "tests*"]
+
+[tool.setuptools.package-data]
+pyvelm = ["templates/*.html", "static/*.css"]

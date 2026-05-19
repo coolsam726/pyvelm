@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{ view.name }} — {{ view.model }}</title>
+    <link rel="stylesheet" href="/web/static/pyvelm.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+</head>
+<body>
+<header class="pyvelm-header">
+    <h1>{{ view.name }}</h1>
+    <p class="muted">
+        {{ view.model }} ·
+        showing {{ rows | length }} of {{ total }}
+        {% if view.module %}· from <code>{{ view.module }}</code>{% endif %}
+    </p>
+</header>
+
+<main class="pyvelm-main">
+    <table class="pyvelm-list">
+        <thead>
+            <tr>
+                {% for h in headers %}
+                <th data-field="{{ h.name }}">{{ h.label }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody id="pyvelm-rows">
+            {% include "list_rows.html" %}
+        </tbody>
+    </table>
+
+    {% if has_more %}
+    <div id="pyvelm-load-more">
+        <button
+            class="pyvelm-btn"
+            hx-get="/web/records/{{ view.module }}/{{ view.name }}?page={{ page + 1 }}&page_size={{ page_size }}"
+            hx-target="#pyvelm-rows"
+            hx-swap="beforeend"
+            hx-on::after-request="this.closest('#pyvelm-load-more').remove()">
+            Load {{ page_size }} more
+        </button>
+    </div>
+    {% endif %}
+</main>
+</body>
+</html>

@@ -251,6 +251,29 @@ not the HTTP layer — apps that bypass the HTTP surface can still call
 authoring form is only seen by the loader. `resolve_arch` is the only
 function frontends should call to get the renderable arch.
 
+## `pyvelm.render` — [pyvelm/render.py](../pyvelm/render.py)
+
+HTMX + Jinja renderer. Owns the widget registry, the Jinja
+environment (loading templates from `pyvelm/templates/`), and the two
+list-view entry points the HTTP routes call.
+
+**Public surface**
+
+- `widget(field_class, hint=None)` — decorator. Registers a renderer
+  for a `(field_class, hint)` pair.
+- `find_renderer(field, hint)` — MRO + hint-fallback lookup; returns
+  the default renderer if nothing matches.
+- `render_list_page(view, env, *, page, page_size)` — full HTML page
+  with header, table shell, first page of rows, and load-more button.
+- `render_list_rows(view, env, *, page, page_size)` — `<tr>` fragment
+  (plus an OOB swap for the next load-more button) for HTMX
+  `hx-swap="beforeend"`.
+- `STATIC_DIR` — `Path` to the bundled CSS / future static assets.
+
+**Invariant.** Widgets return `markupsafe.Markup` for HTML, bare
+strings for text content. Jinja's auto-escape covers the latter
+automatically. Templates never see raw user content un-escaped.
+
 ## `pyvelm.web` — [pyvelm/web.py](../pyvelm/web.py)
 
 Optional FastAPI surface. Imported on demand (not in `pyvelm/__init__`)
