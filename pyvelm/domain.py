@@ -246,6 +246,31 @@ def domain_to_sql(
             raise ValueError(f"Invalid domain leaf: {leaf!r}")
         attr, op, value = leaf
 
+        # Special __or__ operator: value is a list of (attr, op, val) triples
+        # that should be OR-ed together. Useful for multi-field text search.
+        if attr == "__or__":
+            sub_clauses: list[str] = []
+            for s_attr, s_op, s_val in (value or []):
+                s_col, s_field = _leaf_ref(s_attr)
+                if s_op == "ilike":
+                    sub_clauses.append(f"{s_col} ILIKE %s")
+                    params.append(s_val)
+                elif s_op == "like":
+                    sub_clauses.append(f"{s_col} LIKE %s")
+                    params.append(s_val)
+                elif s_op in _SIMPLE_OPS:
+                    v = _coerce(s_field, s_val)
+                    if v is None and s_op == "=":
+                        sub_clauses.append(f"{s_col} IS NULL")
+                    elif v is None and s_op == "!=":
+                        sub_clauses.append(f"{s_col} IS NOT NULL")
+                    else:
+                        sub_clauses.append(f"{s_col} {s_op} %s")
+                        params.append(v)
+            if sub_clauses:
+                clauses.append("(" + " OR ".join(sub_clauses) + ")")
+            continue
+
         # Paths containing any O2m/M2m hop go through an EXISTS subquery.
         # Pure-M2o paths stay in the LEFT JOIN path so multiple leaves
         # on the same chain share a single join.
@@ -258,6 +283,7 @@ def domain_to_sql(
                 continue
 
         col_sql, field = _leaf_ref(attr)
+
 
         if op in _SIMPLE_OPS:
             v = _coerce(field, value)

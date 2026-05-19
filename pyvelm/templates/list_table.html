@@ -1,0 +1,59 @@
+{# ── Full table body (thead + tbody + empty state + pagination)
+   Rendered by both list.html (initial page load) and list_rows.html
+   (HTMX fragment swap on search / sort / page).
+   The outer div "#pv-table-container" lives in list.html and is the
+   htmx.ajax() swap target (swap: 'innerHTML'). #}
+
+<div class="bg-neutral-primary border border-default rounded-xl overflow-hidden shadow-sm">
+    <table class="w-full text-sm">
+        <thead class="bg-neutral-tertiary border-b border-default">
+            <tr>
+                {% for h in headers %}
+                <th class="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider
+                            text-body-subtle select-none whitespace-nowrap">
+                    <button class="inline-flex items-center gap-1 group hover:text-heading transition-colors"
+                            @click="toggleSort('{{ h.name }}')"
+                            type="button">
+                        {{ h.label }}
+                        <span class="transition-opacity"
+                              :class="order.startsWith('{{ h.name }}')
+                                      ? 'opacity-100 text-fg-brand'
+                                      : 'opacity-0 group-hover:opacity-50'">
+                            <svg class="w-3 h-3 transition-transform" fill="none" stroke="currentColor"
+                                 viewBox="0 0 24 24" stroke-width="2.5"
+                                 :class="{ 'rotate-180': order === '{{ h.name }} DESC' }">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/>
+                            </svg>
+                        </span>
+                    </button>
+                </th>
+                {% endfor %}
+                <th class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-body-subtle">
+                    Actions
+                </th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-default">
+            {% for row in rows %}
+            {% include "list_row.html" %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {# Empty state #}
+    {% if not rows %}
+    <div class="py-16 text-center">
+        <svg class="mx-auto w-10 h-10 text-body-subtle/40 mb-3" fill="none" stroke="currentColor"
+             viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h1.5C5.496 19.5 6 18.996 6 18.375m-3.75.125v-.875A1.125 1.125 0 013.375 16.5h17.25A1.125 1.125 0 0121.75 17.625V18.5M6 18.375V5.625m0 0A1.125 1.125 0 017.125 4.5h9.75A1.125 1.125 0 0118 5.625m-12 0h12"/>
+        </svg>
+        <p class="text-sm text-body-subtle">No records found</p>
+    </div>
+    {% endif %}
+</div>
+
+{# Pagination #}
+<div id="pv-pagination" class="flex items-center justify-between text-xs text-body-subtle pt-1">
+    {% include "list_pagination.html" %}
+</div>

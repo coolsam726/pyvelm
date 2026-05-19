@@ -1,69 +1,217 @@
 {% extends "layouts/main.html" %}
 {% block title %}{{ view.name }} — pyvelm{% endblock %}
 
+{# ── Breadcrumb ── #}
+{% block page_breadcrumb %}
+{% for crumb in breadcrumbs %}
+{% if not loop.last %}
+    <a href="{{ crumb.href }}"
+       class="hover:text-fg-brand hover:underline transition-colors truncate max-w-[120px]">
+        {{ crumb.label }}
+    </a>
+    <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor"
+         viewBox="0 0 24 24" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+    </svg>
+{% else %}
+    <span class="text-body truncate max-w-[160px]" aria-current="page">{{ crumb.label }}</span>
+{% endif %}
+{% endfor %}
+{% endblock %}
+
+{# ── Heading ── #}
 {% block page_title %}{{ view.name }}{% endblock %}
 
 {% block page_heading %}
 <div>
     <h2 class="text-xl font-semibold text-heading tracking-tight">{{ view.name }}</h2>
-    <p class="mt-1 text-xs text-body-subtle">
-        {{ view.model }}
-        <span class="mx-1 text-body-subtle/50">·</span>
-        showing {{ rows | length }} of {{ total }}
-        {% if view.module %}
-        <span class="mx-1 text-body-subtle/50">·</span>
-        from
-        <code class="bg-neutral-tertiary text-body px-1.5 py-0.5 rounded text-2xs font-mono">{{ view.module }}</code>
-        {% endif %}
+    <p class="mt-0.5 text-xs text-body-subtle flex items-center gap-1.5 flex-wrap">
+        <code class="font-mono bg-neutral-tertiary px-1.5 py-0.5 rounded text-2xs">{{ view.model }}</code>
+        <span class="text-body-subtle/40">·</span>
+        <span id="pv-count-label">{{ total }} record{{ 's' if total != 1 else '' }}</span>
     </p>
 </div>
 {% endblock %}
 
 {% block page_actions %}
-<button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
-               rounded-md bg-fg-brand hover:opacity-90 transition-opacity"
-        hx-get="/web/records/{{ view.module }}/{{ view.name }}/new"
-        hx-target="#pyvelm-rows"
-        hx-swap="afterbegin">
+{% if form_view_name %}
+<a href="/web/views/{{ view.module }}/{{ form_view_name }}/new"
+   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+          rounded-md bg-fg-brand hover:opacity-90 transition-opacity">
+{% else %}
+<a href="#"
+   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+          rounded-md bg-fg-brand hover:opacity-90 transition-opacity">
+{% endif %}
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
     </svg>
     New
-</button>
+</a>
 {% endblock %}
 
+{# ── Main content ── #}
 {% block content %}
-<div class="bg-neutral-primary border border-default rounded-xl overflow-hidden shadow-sm">
-    <table class="w-full text-sm">
-        <thead class="bg-neutral-tertiary border-b border-default">
-            <tr>
-                {% for h in headers %}
-                <th data-field="{{ h.name }}"
-                    class="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-body-subtle">
-                    {{ h.label }}
-                </th>
-                {% endfor %}
-                <th class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-body-subtle">
-                    Actions
-                </th>
-            </tr>
-        </thead>
-        <tbody id="pyvelm-rows" class="divide-y divide-default">
-            {% include "list_rows.html" %}
-        </tbody>
-    </table>
+<script>
+    window._pvListCfg = {
+        module: {{ view.module | tojson }},
+        name: {{ view.name | tojson }},
+        search: {{ search | tojson }},
+        order: {{ order | tojson }},
+        page: {{ page }},
+        pageSize: {{ page_size }}
+    };
+</script>
+<div x-data="pvList(window._pvListCfg)"
+     class="space-y-3">
+
+    {# ── Toolbar: search + filter #}
+    <div class="flex flex-wrap items-center gap-2">
+        {# Search box #}
+        <div class="relative flex-1 min-w-[200px] max-w-sm">
+            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-body-subtle pointer-events-none"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
+            </svg>
+            <input type="search"
+                   x-model="searchInput"
+                   @input.debounce.400ms="onSearchChange()"
+                   @keydown.escape="clearSearch()"
+                   placeholder="Search…"
+                   class="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border border-default
+                          bg-neutral-primary text-body placeholder:text-body-subtle
+                          focus:outline-none focus:ring-2 focus:ring-fg-brand/40 focus:border-fg-brand">
+        </div>
+
+        {# Active search badge #}
+        <template x-if="search">
+            <span class="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full
+                         bg-brand-soft text-fg-brand text-xs font-medium">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
+                </svg>
+                <span x-text="search" class="max-w-[120px] truncate"></span>
+                <button @click="clearSearch()" type="button"
+                        class="ml-0.5 p-0.5 rounded-full hover:bg-fg-brand/20 transition-colors">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </span>
+        </template>
+
+        {# Loading indicator #}
+        <svg x-show="loading" x-cloak
+             class="w-4 h-4 animate-spin text-fg-brand"
+             fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+
+        {# Spacer #}
+        <div class="flex-1"></div>
+
+        {# Page size selector #}
+        <div class="flex items-center gap-1.5 text-xs text-body-subtle">
+            <span>Rows</span>
+            <select x-model.number="pageSize"
+                    @change="page = 0; load()"
+                    class="text-xs rounded-md border border-default bg-neutral-primary text-body
+                           py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand/40
+                           focus:border-fg-brand">
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+        </div>
+    </div>
+
+    {# ── Table + Pagination — HTMX swap target #}
+    <div id="pv-table-container">
+        {% include "list_table.html" %}
+    </div>
+
 </div>
 
-{% if has_more %}
-<div id="pyvelm-load-more" class="mt-4 flex justify-center">
-    <button class="px-4 py-2 text-sm border border-default rounded-md bg-neutral-primary
-                   text-body hover:bg-brand-softer hover:text-fg-brand hover:border-fg-brand transition"
-            hx-get="/web/records/{{ view.module }}/{{ view.name }}?page={{ page + 1 }}&page_size={{ page_size }}"
-            hx-target="#pyvelm-rows"
-            hx-swap="beforeend"
-            hx-on::after-request="this.closest('#pyvelm-load-more').remove()">
-        Load {{ page_size }} more
-    </button>
-</div>
-{% endif %}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('pvList', (cfg) => ({
+        module: cfg.module,
+        name: cfg.name,
+        search: cfg.search || '',
+        searchInput: cfg.search || '',
+        order: cfg.order || '',
+        page: cfg.page || 0,
+        pageSize: cfg.pageSize || 20,
+        loading: false,
+
+        get _rowsUrl() {
+            const p = new URLSearchParams({
+                search: this.search,
+                order: this.order,
+                page: this.page,
+                page_size: this.pageSize,
+            });
+            return `/web/records/${this.module}/${this.name}?${p}`;
+        },
+
+        load() {
+            this.loading = true;
+            // Push the URL so the page is bookmarkable / back-navigable
+            const p = new URLSearchParams({
+                search: this.search,
+                order: this.order,
+                page: this.page,
+                page_size: this.pageSize,
+            });
+            const newUrl = `/web/views/${this.module}/${this.name}?${p}`;
+            window.history.pushState({}, '', newUrl);
+
+            htmx.ajax('GET', this._rowsUrl, {
+                target: '#pv-table-container',
+                swap: 'innerHTML',
+            }).then(() => {
+                this.loading = false;
+            }).catch(() => {
+                this.loading = false;
+            });
+        },
+
+        onSearchChange() {
+            this.search = this.searchInput;
+            this.page = 0;
+            this.load();
+        },
+
+        clearSearch() {
+            this.search = '';
+            this.searchInput = '';
+            this.page = 0;
+            this.load();
+        },
+
+        toggleSort(field) {
+            if (this.order === field + ' ASC') {
+                this.order = field + ' DESC';
+            } else if (this.order === field + ' DESC') {
+                this.order = '';
+            } else {
+                this.order = field + ' ASC';
+            }
+            this.page = 0;
+            this.load();
+        },
+
+        goPage(p) {
+            this.page = p;
+            this.load();
+        },
+    }));
+});
+</script>
 {% endblock %}
+

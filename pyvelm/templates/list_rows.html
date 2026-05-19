@@ -1,17 +1,8 @@
-{% for row in rows %}
-{% include "list_row.html" %}
-{% endfor %}
-{# When HTMX appends a "Load more" response, replace the existing load-more
-   button with the next one (or remove it if this was the last page). #}
-{% if has_more %}
-<div id="pyvelm-load-more" hx-swap-oob="true" class="mt-4 flex justify-center">
-    <button class="px-4 py-2 text-sm border border-default rounded-md bg-neutral-primary
-                   text-body hover:bg-brand-softer hover:text-fg-brand hover:border-fg-brand transition"
-            hx-get="/web/records/{{ view.module }}/{{ view.name }}?page={{ page + 1 }}&page_size={{ page_size }}"
-            hx-target="#pyvelm-rows"
-            hx-swap="beforeend"
-            hx-on::after-request="this.closest('#pyvelm-load-more').remove()">
-        Load {{ page_size }} more
-    </button>
-</div>
-{% endif %}
+{# HTMX fragment: replaces #pv-table-container innerHTML.
+   Returns full table + pagination + OOB count label update. #}
+{% include "list_table.html" %}
+
+{# OOB swap: update the record count in the page heading #}
+<span id="pv-count-label" hx-swap-oob="true">
+    {{ total }} record{{ 's' if total != 1 else '' }}
+</span>

@@ -1,19 +1,30 @@
-<tr data-record-id="{{ row.id }}" class="hover:bg-neutral-secondary transition-colors">
+<tr data-record-id="{{ row.id }}"
+    class="hover:bg-neutral-secondary transition-colors cursor-pointer"
+    {% if form_view_name %}
+    onclick="window.location.href='/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}'"
+    {% endif %}>
     {% for cell in row.cells %}
     <td data-field="{{ cell.name }}" class="px-4 py-2.5 align-top text-body">{{ cell.html }}</td>
     {% endfor %}
-    <td class="px-4 py-2.5 text-right whitespace-nowrap text-xs">
+    <td class="px-4 py-2.5 text-right whitespace-nowrap text-xs"
+        onclick="event.stopPropagation()">
+        {% if form_view_name %}
+        <a href="/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}/edit"
+           class="text-fg-brand hover:underline font-medium mr-3"
+           title="Edit">Edit</a>
+        {% else %}
         <button class="text-fg-brand hover:underline font-medium mr-3"
                 hx-get="/web/records/{{ view.module }}/{{ view.name }}/row/{{ row.id }}/edit"
                 hx-target="closest tr"
                 hx-swap="outerHTML">
             Edit
         </button>
+        {% endif %}
         <button class="text-fg-danger hover:underline font-medium"
                 hx-delete="/web/records/{{ view.module }}/{{ view.name }}/row/{{ row.id }}"
                 hx-target="closest tr"
                 hx-swap="outerHTML"
-                hx-confirm="Delete this record?">
+                hx-confirm="Delete this record? This cannot be undone.">
             Delete
         </button>
     </td>

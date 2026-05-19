@@ -22,6 +22,7 @@ import base64
 import binascii
 
 from fastapi import Body, Depends, FastAPI, Form, HTTPException, Query, Request
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -113,6 +114,20 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
     is on the runtime type."""
 
     app = FastAPI(title="pyvelm")
+
+    # Prevent browsers from caching authenticated pages.  Without this
+    # header the back-button serves a stale cached copy after logout.
+    class NoCacheMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            response = await call_next(request)
+            path = request.url.path
+            # Apply to all /web/ HTML routes except static assets.
+            if path.startswith("/web/") and not path.startswith("/web/static"):
+                response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+                response.headers["Pragma"] = "no-cache"
+            return response
+
+    app.add_middleware(NoCacheMiddleware)
 
     @app.exception_handler(PermissionError)
     def _permission_error(request, exc):
@@ -225,6 +240,13 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         rec.ensure_one()
         return rec
 
+    def _login_redirect(request: Request) -> RedirectResponse:
+        """Redirect to /login preserving the originally-requested URL."""
+        next_url = str(request.url.path)
+        if request.url.query:
+            next_url += "?" + request.url.query
+        return RedirectResponse(f"/login?next={next_url}", status_code=302)
+
     @app.get("/api/views/{module}/{name}")
     def get_view(module: str, name: str, env: Environment = Depends(get_env)):
         from .views import resolve_arch
@@ -249,16 +271,24 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         request: Request,
         page: int = Query(default=0, ge=0),
         page_size: int = Query(default=20, ge=1, le=200),
+        search: str = Query(default=""),
+        order: str = Query(default=""),
+        filters: str = Query(default=""),
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _login_redirect(request)
         from .render import render_kanban_page, render_list_page
 
         rec = _load_view(env, module, name)
         path = str(request.url.path)
         if rec.view_type == "list":
             return HTMLResponse(
-                render_list_page(rec, env, page=page, page_size=page_size,
-                                 current_path=path)
+                render_list_page(
+                    rec, env, page=page, page_size=page_size,
+                    search=search, order=order, filters=filters,
+                    current_path=path
+                )
             )
         if rec.view_type == "kanban":
             return HTMLResponse(render_kanban_page(rec, env, current_path=path))
@@ -277,9 +307,14 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         name: str,
         page: int = Query(default=0, ge=0),
         page_size: int = Query(default=20, ge=1, le=200),
+        search: str = Query(default=""),
+        order: str = Query(default=""),
+        filters: str = Query(default=""),
         env: Environment = Depends(get_env),
     ):
         """HTML fragment endpoint used by HTMX `load more` swaps."""
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         from .render import render_list_rows
 
         rec = _load_view(env, module, name)
@@ -289,7 +324,10 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
                 detail=f"Renderer for view_type {rec.view_type!r} not yet shipped",
             )
         return HTMLResponse(
-            render_list_rows(rec, env, page=page, page_size=page_size)
+            render_list_rows(
+                rec, env, page=page, page_size=page_size,
+                search=search, order=order, filters=filters
+            )
         )
 
     def _coerce_json_vals(model_name: str, vals: dict) -> dict:
@@ -394,7 +432,9 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         return Model.browse(record_id)
 
     @app.get("/web/records/{module}/{name}/new", response_class=HTMLResponse)
-    def web_row_new(module: str, name: str, env: Environment = Depends(get_env)):
+    def web_row_new(module: str, name: str, request: Request, env: Environment = Depends(get_env)):
+        if env.uid is None:
+            return _login_redirect(request)
         from .render import render_new_row
 
         view = _load_view(env, module, name)
@@ -488,6 +528,8 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         module: str, name: str, request: Request,
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _login_redirect(request)
         from .render import render_form_page
 
         view = _require_form_view(_load_view(env, module, name))
@@ -503,6 +545,8 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         request: Request,
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _login_redirect(request)
         from .render import render_form_page
 
         view = _require_form_view(_load_view(env, module, name))
@@ -523,6 +567,8 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         request: Request,
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _login_redirect(request)
         from .render import render_form_page
 
         view = _require_form_view(_load_view(env, module, name))

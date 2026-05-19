@@ -231,15 +231,16 @@ def main():
             assert "htmx.org" in html                       # HTMX script tag
             assert "alpinejs" in html                       # Alpine for sidebar/dropdowns
             assert "flowbite" in html                       # Flowbite component JS
-            assert 'id="pyvelm-rows"' in html
+            assert 'id="pv-table-container"' in html
             assert "ALI-1" in html                          # Alice's code first page
             # Toggle widget for `active` — green track when value is True.
             assert "bg-green-500" in html
-            # Pagination button present because total > page_size.
-            assert "Load 2 more" in html
+            # Pagination controls present because total > page_size.
+            assert 'id="pv-pagination"' in html
+            assert "pvList" in html                          # Alpine DataTable component
             print("HTML list view renders with Tailwind+Flowbite + pagination")
 
-            # 7. HTMX fragment endpoint returns just <tr>s + OOB load-more.
+            # 7. HTMX fragment endpoint returns just <tr>s + OOB pagination.
             resp = client.get(
                 "/web/records/partners/partner.list",
                 params={"page": 1, "page_size": 2},
@@ -249,6 +250,8 @@ def main():
             # No <html>/<body> in a fragment response.
             assert "<html" not in frag
             assert "<tr" in frag
+            # OOB pagination swap is present in the fragment.
+            assert 'hx-swap-oob' in frag
             assert "BOB-2" in frag or "CAR-3" in frag
 
             # Static directory still mounted (used for future per-app
@@ -1040,6 +1043,7 @@ def _drop_known_tables(conn):
         "base_automation",
         "ir_actions_server",
         "res_company",
+        "crm_lead",
         "ir_module",
     ]
     for t in tables:

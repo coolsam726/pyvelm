@@ -301,8 +301,17 @@
     {# Flash slot reserved — used for future toast/notification injection. #}
     <div id="pv-flash" class="px-4 md:px-6 space-y-2">{% block flash %}{% endblock %}</div>
 
+    {# Breadcrumb — only rendered when a page defines the block. #}
+    {% if self.page_breadcrumb() %}
+    <div class="px-4 md:px-6 pt-4 pb-0">
+        <nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-xs text-body-subtle">
+            {% block page_breadcrumb %}{% endblock %}
+        </nav>
+    </div>
+    {% endif %}
+
     {# Page content. #}
-    <main class="flex-1 px-4 md:px-6 py-6 overflow-auto">
+    <main class="flex-1 px-4 md:px-6 py-4 overflow-auto">
         {% if self.page_heading() or self.page_actions() %}
             <div class="flex flex-wrap items-baseline justify-between gap-4 mb-6">
                 <div>{% block page_heading %}{% endblock %}</div>

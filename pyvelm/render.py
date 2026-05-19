@@ -619,24 +619,104 @@ def render_kanban_page(view, env, *, current_path: str | None = None) -> str:
     )
 
 
+def _find_form_view(view, env):
+    """Return the name of the first form view for the same model+module,
+    or None if no such view is registered."""
+    if "ir.ui.view" not in env.registry:
+        return None
+    View = env["ir.ui.view"]
+    matches = View.search(
+        [("model", "=", view.model), ("view_type", "=", "form")],
+        limit=1,
+        order='"id" ASC',
+    )
+    if matches:
+        for m in matches:
+            return m.name
+    return None
+
+
+_SEARCHABLE_FIELD_TYPES = ("Char", "Text")
+
+
+def _build_search_domain(model_cls, fields_spec: list, search: str) -> list:
+    """Return a domain list that OR-searches `search` across all Char/Text
+    fields present in `fields_spec`.  Falls back to searching on any Char/Text
+    field on the model if none of the visible fields are searchable."""
+    from .fields import Char, Text
+
+    term = f"%{search}%"
+    candidates: list[tuple] = []
+    visible_names = {s["name"] for s in fields_spec}
+
+    for fname, field in model_cls._fields.items():
+        if isinstance(field, (Char, Text)) and field.is_stored:
+            if fname in visible_names:
+                candidates.append((fname, "ilike", term))
+
+    if not candidates:
+        # Fallback: any stored Char/Text on the model
+        for fname, field in model_cls._fields.items():
+            if isinstance(field, (Char, Text)) and field.is_stored:
+                candidates.append((fname, "ilike", term))
+
+    if not candidates:
+        return []  # Model has no text fields; search returns everything
+    return [("__or__", "ilike", candidates)]
+
+
+_SAFE_ORDER_RE = None
+
+
+def _safe_order(fields_spec: list, order: str) -> str:
+    """Validate and return the SQL ORDER BY clause, or the default 'id ASC'.
+
+    Accepts: 'field ASC', 'field DESC' where field is one of the listed
+    fields or 'id'.
+    """
+    import re
+    if not order:
+        return '"id" ASC'
+    m = re.fullmatch(r'(\w+)\s+(ASC|DESC)', order.strip(), re.IGNORECASE)
+    if not m:
+        return '"id" ASC'
+    field_name, direction = m.group(1), m.group(2).upper()
+    allowed = {s["name"] for s in fields_spec} | {"id"}
+    if field_name not in allowed:
+        return '"id" ASC'
+    return f'"{field_name}" {direction}'
+
+
 def render_list_page(view, env, *, page: int, page_size: int,
+                     search: str = "", order: str = "", filters: str = "",
                      current_path: str | None = None) -> str:
-    """Full HTML page for a list view: head, table shell, first page
-    of rows, and an HTMX 'load more' button if there's more."""
+    """Full HTML page for a list view: heading, toolbar, sortable DataTable
+    with server-side search / ordering / pagination."""
     from .views import resolve_arch
 
     arch = resolve_arch(view)
     fields_spec = arch.get("fields", [])
+    form_view_name = arch.get("form_view") or _find_form_view(view, env)
 
+    model_cls = env.registry[view.model]
     Model = env[view.model]
-    total = Model.search_count([])
+
+    domain = _build_search_domain(model_cls, fields_spec, search) if search else []
+    safe_ord = _safe_order(fields_spec, order)
+
+    total = Model.search_count(domain)
     offset = page * page_size
-    recs = Model.search(
-        [], limit=page_size, offset=offset, order='"id" ASC',
-    )
+    recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
     rows = _build_rows(view, recs, fields_spec)
-    headers = _field_headers(env.registry[view.model], fields_spec)
-    has_more = offset + len(recs) < total
+    headers = _field_headers(model_cls, fields_spec)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+
+    breadcrumbs = [
+        {"label": "Home", "href": "/web/dashboard"},
+        {"label": view.module or "app", "href": None},
+        {"label": view.name, "href": None},
+    ]
+
     template = _env.get_template("list.html")
     return template.render(
         view=view,
@@ -645,34 +725,50 @@ def render_list_page(view, env, *, page: int, page_size: int,
         page=page,
         page_size=page_size,
         total=total,
-        has_more=has_more,
+        total_pages=total_pages,
+        search=search,
+        order=order,
+        filters=filters,
+        form_view_name=form_view_name,
+        breadcrumbs=breadcrumbs,
         **layout_context(env, current_path),
     )
 
 
-def render_list_rows(view, env, *, page: int, page_size: int) -> str:
-    """Just the <tr> fragments — used by HTMX swap-append on
-    'load more' clicks."""
+def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", order: str = "", filters: str = "") -> str:
+    """Table body fragment + oob pagination — used by HTMX control swaps."""
     from .views import resolve_arch
 
     arch = resolve_arch(view)
     fields_spec = arch.get("fields", [])
+    form_view_name = arch.get("form_view") or _find_form_view(view, env)
+
+    model_cls = env.registry[view.model]
     Model = env[view.model]
-    total = Model.search_count([])
+
+    domain = _build_search_domain(model_cls, fields_spec, search) if search else []
+    safe_ord = _safe_order(fields_spec, order)
+
+    total = Model.search_count(domain)
     offset = page * page_size
-    recs = Model.search(
-        [], limit=page_size, offset=offset, order='"id" ASC',
-    )
+    recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
     rows = _build_rows(view, recs, fields_spec)
-    has_more = offset + len(recs) < total
+    headers = _field_headers(model_cls, fields_spec)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+
     template = _env.get_template("list_rows.html")
     return template.render(
         view=view,
+        headers=headers,
         rows=rows,
         page=page,
         page_size=page_size,
         total=total,
-        has_more=has_more,
+        total_pages=total_pages,
+        search=search,
+        order=order,
+        filters=filters,
+        form_view_name=form_view_name,
     )
 
 
@@ -843,6 +939,14 @@ def _menu(env, current_path: str | None) -> list[dict]:
             "label": "Dashboard",
             "href": "/web/admin",
             "icon": _ICONS["home"],
+        },
+        {
+            "label": "CRM",
+            "icon": _ICONS["workflow"],
+            "children": [
+                {"label": "Pipeline", "href": "/web/views/crm/lead.kanban"},
+                {"label": "All Leads", "href": "/web/views/crm/lead.list"},
+            ],
         },
         {
             "label": "Apps",
