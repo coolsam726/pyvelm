@@ -24,6 +24,7 @@ class Partner(BaseModel):
     parent_id = Many2one("res.partner", ondelete="SET NULL")
     child_ids = One2many("res.partner", inverse_name="parent_id")
     tag_ids = Many2many("res.tag")
+    company_id = Many2one("res.company")
 
     display_name = Char(compute="_compute_display_name")
     age_bucket = Char(compute="_compute_age_bucket", store=True)

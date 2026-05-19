@@ -136,6 +136,7 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
     )
 
     _SESSION_COOKIE = "pyvelm_session"
+    _COMPANY_COOKIE = "pyvelm_company"
 
     def _resolve_user_from_session(env: Environment, token: str | None) -> int | None:
         """Return uid for a valid session token, or None."""
@@ -201,6 +202,13 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
                 # Drop caches keyed on the previous (None) uid.
                 env._user_groups_cache = None  # type: ignore[attr-defined]
                 env._access_cache.clear()
+            # Thread company scope from dedicated cookie.
+            raw_company = request.cookies.get(_COMPANY_COOKIE)
+            if raw_company:
+                try:
+                    env = env.with_company(int(raw_company))
+                except (ValueError, TypeError):
+                    pass  # malformed cookie — ignore; effectively no scope
             yield env
 
     def _load_view(env, module: str, name: str):
@@ -563,7 +571,74 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
 
         if env.uid is None:
             return RedirectResponse("/login?next=/web/admin", status_code=302)
-        return HTMLResponse(render_admin_page())
+
+        # Fetch company list for the switcher (superuser bypass — the
+        # admin page itself needs the full list regardless of env scope).
+        companies: list[dict] = []
+        if "res.company" in registry:
+            bypass_env = env.with_company(None)
+            bypass_env._acl_bypass = True
+            try:
+                for c in bypass_env["res.company"].search([]):
+                    companies.append({"id": c.id, "name": c.name})
+            finally:
+                bypass_env._acl_bypass = False
+
+        return HTMLResponse(
+            render_admin_page(
+                companies=companies,
+                current_company_id=env.company_id,
+            )
+        )
+
+    @app.post("/web/switch-company")
+    async def web_switch_company(
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        """Store the chosen company_id in a cookie and redirect back."""
+        if env.uid is None:
+            return RedirectResponse("/login", status_code=302)
+        form = await request.form()
+        raw = (form.get("company_id") or "").strip()
+        redirect_to = request.headers.get("referer") or "/web/admin"
+        response = RedirectResponse(redirect_to, status_code=303)
+        if raw:
+            try:
+                cid = int(raw)
+            except ValueError:
+                cid = None
+            if cid is not None:
+                response.set_cookie(
+                    _COMPANY_COOKIE,
+                    str(cid),
+                    httponly=True,
+                    samesite="lax",
+                    path="/",
+                )
+            else:
+                response.delete_cookie(_COMPANY_COOKIE, path="/")
+        else:
+            response.delete_cookie(_COMPANY_COOKIE, path="/")
+        return response
+
+    @app.get("/web/companies")
+    def web_list_companies(env: Environment = Depends(get_env)):
+        """JSON list of available companies. Requires authentication."""
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if "res.company" not in registry:
+            return {"companies": []}
+        bypass_env = env.with_company(None)
+        bypass_env._acl_bypass = True
+        try:
+            recs = bypass_env["res.company"].search([])
+        finally:
+            bypass_env._acl_bypass = False
+        return {
+            "current_company_id": env.company_id,
+            "companies": [{"id": r.id, "name": r.name} for r in recs],
+        }
 
     # ---- login / logout ----
 
@@ -643,6 +718,7 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
                     env._acl_bypass = False
         response = RedirectResponse("/login", status_code=303)
         response.delete_cookie(_SESSION_COOKIE, path="/")
+        response.delete_cookie(_COMPANY_COOKIE, path="/")
         return response
 
     return app

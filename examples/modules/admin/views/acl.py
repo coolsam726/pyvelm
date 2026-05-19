@@ -162,4 +162,34 @@ VIEWS: list[View] = [
             ],
         },
     },
+
+    # ---- res.company ----
+    {
+        "name": "company.list",
+        "model": "res.company",
+        "view_type": "list",
+        "arch": {
+            "fields": [
+                "name",
+                {"name": "active", "widget": "toggle"},
+            ],
+        },
+    },
+    {
+        "name": "company.form",
+        "model": "res.company",
+        "view_type": "form",
+        "arch": {
+            "sections": [
+                {
+                    "name": "main",
+                    "title": "Company",
+                    "fields": [
+                        "name",
+                        {"name": "active", "widget": "toggle"},
+                    ],
+                },
+            ],
+        },
+    },
 ]

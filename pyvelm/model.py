@@ -512,6 +512,17 @@ class BaseModel(metaclass=MetaModel):
         rule_leaves = self.env.collect_record_rules(self._name, "read")
         if rule_leaves:
             full_domain.extend(rule_leaves)
+        # Auto-inject company scope when env.company_id is set and the
+        # model has a company_id field. Superuser bypasses the implicit
+        # filter but still sees the records — use with_company(None)
+        # to explicitly lift the scope.
+        if (
+            not self.env.is_superuser()
+            and not self.env._acl_bypass
+            and self.env.company_id is not None
+            and "company_id" in self._fields
+        ):
+            full_domain.append(("company_id", "=", self.env.company_id))
         where, params, joins = domain_to_sql(
             full_domain, self.__class__, self.env.registry
         )
@@ -532,6 +543,13 @@ class BaseModel(metaclass=MetaModel):
         rule_leaves = self.env.collect_record_rules(self._name, "read")
         if rule_leaves:
             full_domain.extend(rule_leaves)
+        if (
+            not self.env.is_superuser()
+            and not self.env._acl_bypass
+            and self.env.company_id is not None
+            and "company_id" in self._fields
+        ):
+            full_domain.append(("company_id", "=", self.env.company_id))
         where, params, joins = domain_to_sql(
             full_domain, self.__class__, self.env.registry
         )

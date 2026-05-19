@@ -98,6 +98,27 @@ class Environment:
         new.cache = self.cache
         return new
 
+    # ------ Company ------
+
+    @property
+    def company_id(self) -> int | None:
+        """Active company scope, or None for no scoping.
+
+        Set via `with_company(id)` or by passing ``company_id`` to
+        `with_context`. Superuser and ACL-bypass paths can also check
+        this to know the intended tenant without having the restriction
+        applied.
+        """
+        return self.context.get("company_id")
+
+    def with_company(self, company_id: int | None) -> "Environment":
+        """Return a copy of this environment scoped to *company_id*.
+
+        Passing ``None`` removes any existing company scope (useful for
+        cross-company superuser operations).
+        """
+        return self.with_context(company_id=company_id)
+
     # ------ ACL ------
 
     SUPERUSER_ID = 1
@@ -243,7 +264,13 @@ class Environment:
             out: list = []
             for r in rules:
                 raw = json.loads(r.domain)
-                out.extend(self._resolve_rule_leaves(raw))
+                resolved = self._resolve_rule_leaves(raw)
+                # Skip rules that contain unresolvable/null company_id
+                # placeholders — when no company scope is active, company
+                # rules must be a no-op rather than blocking all records.
+                if self._rule_needs_company_skip(resolved):
+                    continue
+                out.extend(resolved)
         finally:
             self._acl_bypass = prev
 
@@ -257,14 +284,54 @@ class Environment:
                 resolved.append(leaf)
                 continue
             attr, op, value = leaf
+            # Single placeholder dict.
             if isinstance(value, dict) and "placeholder" in value:
-                ph = value["placeholder"]
-                if ph in ("uid", "user_id"):
-                    value = self.uid
-                else:
-                    raise ValueError(f"Unknown ir.rule placeholder {ph!r}")
+                value = self._resolve_placeholder(value["placeholder"])
+            # List value that may contain placeholder dicts (e.g. "in" operator).
+            elif isinstance(value, list):
+                value = [
+                    self._resolve_placeholder(item["placeholder"])
+                    if isinstance(item, dict) and "placeholder" in item
+                    else item
+                    for item in value
+                ]
             resolved.append((attr, op, value))
         return resolved
+
+    def _resolve_placeholder(self, ph: str):
+        """Return the env-side value for a placeholder name."""
+        if ph in ("uid", "user_id"):
+            return self.uid
+        if ph == "company_id":
+            return self.company_id
+        raise ValueError(f"Unknown ir.rule placeholder {ph!r}")
+
+    def _rule_needs_company_skip(self, resolved_leaves: list) -> bool:
+        """Return True when a resolved rule domain references a company_id
+        value of None — meaning no company scope is active and the rule
+        would incorrectly block all records. Such rules are treated as a
+        no-op until a company scope is set on the environment."""
+        for leaf in resolved_leaves:
+            if not isinstance(leaf, (list, tuple)):
+                continue
+            attr, op, value = leaf
+            if attr != "company_id":
+                continue
+            # Single-value operators.
+            if op in ("=", "!=") and value is None:
+                return True
+            # List operators: skip if the primary (first) company value is None.
+            if op in ("in", "not in") and isinstance(value, list):
+                # If the first non-False/non-None element is None it means
+                # the placeholder resolved to None.
+                placeholders_in_list = [
+                    v for v in value if v is None or v is False
+                ]
+                non_null = [v for v in value if v is not None and v is not False]
+                # All entries are null/false → no meaningful company filter.
+                if not non_null:
+                    return True
+        return False
 
     # ------ Transactions ------
 

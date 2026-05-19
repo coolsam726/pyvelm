@@ -680,7 +680,10 @@ def render_login_page(
     )
 
 
-def render_admin_page() -> str:
+def render_admin_page(
+    companies: list | None = None,
+    current_company_id: int | None = None,
+) -> str:
     cards = [
         {
             "title": "Groups",
@@ -706,9 +709,19 @@ def render_admin_page() -> str:
             "description": "Define row-level security using domain filters.",
             "url": "/web/views/admin/rule.list",
         },
+        {
+            "title": "Companies",
+            "subtitle": "res.company",
+            "description": "Manage companies and multi-tenant configuration.",
+            "url": "/web/views/admin/company.list",
+        },
     ]
     template = _env.get_template("admin.html")
-    return template.render(cards=cards)
+    return template.render(
+        cards=cards,
+        companies=companies or [],
+        current_company_id=current_company_id,
+    )
 
 
 STATIC_DIR = Path(__file__).parent / "static"
