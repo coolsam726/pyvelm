@@ -1,3 +1,3 @@
-NAME = "base"
-VERSION = (0, 2, 0)
+NAME: str = "base"
+VERSION: tuple[int, ...] = (0, 2, 0)
 DEPENDS: list[str] = []

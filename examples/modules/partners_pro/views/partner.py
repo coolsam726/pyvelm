@@ -9,7 +9,9 @@ Demonstrates each operation kind:
   - set            : add a single new attribute (granular)
 """
 
-VIEW_INHERITS = [
+from pyvelm.types import ViewInherit
+
+VIEW_INHERITS: list[ViewInherit] = [
     {
         "name": "partner.list.pro",
         "inherit": "partners.partner.list",

@@ -22,7 +22,7 @@ class Partner(BaseModel):
     code = Char()
     country_id = Many2one("res.country", ondelete="SET NULL")
     parent_id = Many2one("res.partner", ondelete="SET NULL")
-    child_ids = One2many("res.partner", "parent_id")
+    child_ids = One2many("res.partner", inverse_name="parent_id")
     tag_ids = Many2many("res.tag")
 
     display_name = Char(compute="_compute_display_name")

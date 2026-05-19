@@ -4,12 +4,13 @@ An Odoo-style ERP framework in Python, built from first principles. The point
 isn't to reinvent Odoo — it's to keep the core ideas visible so the design
 trade-offs stay legible while the framework grows.
 
-Status: **Stage 4 Slice B.5 complete.** Views are records, declared
-in module data files; a FastAPI app exposes both a JSON API
-(`/api/views/...`, `/api/records` with full CRUD) and a bundled
-HTMX + Tailwind UI with three view types (`list`, `form`, `kanban`),
-inline edit / save / cancel / delete / new on lists, full
-single-record form pages, and grouped kanban boards. View inheritance is dict-merge with
+Status: **Stage 4 complete.** Views are records, declared in module
+data files; a FastAPI app exposes both a JSON API (`/api/views/...`,
+`/api/records` with full CRUD) and a bundled HTMX + Tailwind UI with
+three view types (`list`, `form`, `kanban`), inline edit / save /
+cancel / delete / new on lists, full single-record form pages, and
+grouped kanban boards. TypedDicts in `pyvelm.types` give IDE
+assistance on manifest and view authoring. View inheritance is dict-merge with
 Odoo XPath-position parity, addressing into list `fields` *and*
 form `sections[*].fields`. A two-mode widget registry dispatches
 rendering by `(field_type, hint, mode)`. Built on Stage 3 (module

@@ -251,6 +251,53 @@ not the HTTP layer — apps that bypass the HTTP surface can still call
 authoring form is only seen by the loader. `resolve_arch` is the only
 function frontends should call to get the renderable arch.
 
+## `pyvelm.types` — [pyvelm/types.py](../pyvelm/types.py)
+
+Static-typing helpers (TypedDicts + Literals) for manifest and view
+authoring. Pure type-checking aid; no runtime behavior. Apps that
+skip IDE typing can ignore this module entirely.
+
+**Public surface**
+
+- `Manifest` — TypedDict for `__pyvelm__.py` globals (NAME, VERSION,
+  DEPENDS, DATA, optional MODELS_PACKAGE / MIGRATIONS_PACKAGE /
+  INSTALL_HOOK).
+- `View` — TypedDict for a base view declaration. Required keys:
+  name, model, view_type, arch. Optional: priority.
+- `ViewInherit` — TypedDict for an extension view (name, inherit,
+  priority, operations).
+- `Operation` — TypedDict per inheritance op. `op` is a
+  `Literal["set", "replace", "update", "remove", "before", "after"]`.
+- `Arch`, `ArchList`, `ArchForm`, `ArchSection`, `ArchKanban`,
+  `ArchKanbanCard` — per-view-type arch shapes.
+- `FieldRef` / `FieldRefLike` — a single field-spec dict
+  (`{"name", "widget", "label", "readonly"}`) or its authoring-sugar
+  string form.
+- `ViewType` / `OpKind` — `Literal` aliases for the closed sets
+  of valid view types and op kinds. Useful in third-party tooling.
+
+**Usage**
+
+In a data file, annotate the list:
+
+```python
+from pyvelm.types import View
+
+VIEWS: list[View] = [
+    {"name": "partner.list", "model": "res.partner",
+     "view_type": "list", "arch": {"fields": ["name", "code"]}},
+]
+```
+
+Pyright/Pylance will flag a misspelled key (`vie_type` instead of
+`view_type`), an invalid `view_type` literal (`"lyst"`), and missing
+required fields. Trade-off: TypedDicts are open at runtime (no
+enforcement), so the loader still does duck-typed reads.
+
+**Invariant.** The TypedDicts here mirror the loader's expected shapes.
+When the loader adds a new manifest key or arch shape, this module
+must be updated in the same commit.
+
 ## `pyvelm.render` — [pyvelm/render.py](../pyvelm/render.py)
 
 HTMX + Jinja renderer. Owns the widget registry, the Jinja

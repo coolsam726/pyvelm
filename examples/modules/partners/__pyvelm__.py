@@ -1,7 +1,6 @@
-NAME = "partners"
-VERSION = (0, 2, 0)
-DEPENDS = ["base"]
-
-DATA = [
+NAME: str = "partners"
+VERSION: tuple[int, ...] = (0, 2, 0)
+DEPENDS: list[str] = ["base"]
+DATA: list[str] = [
     "views/partner.py",
 ]

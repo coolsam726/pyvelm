@@ -29,16 +29,21 @@ mymodule/
 The manifest is plain Python and intentionally small. Minimum:
 
 ```python
-NAME = "partners"
-VERSION = (0, 1, 0)
-DEPENDS = ["base"]
+NAME: str = "partners"
+VERSION: tuple[int, ...] = (0, 1, 0)
+DEPENDS: list[str] = ["base"]
 ```
 
 Common additions:
 
 ```python
-DATA = ["views/partner.py", "views/tag.py"]   # see "Data files" below
+DATA: list[str] = ["views/partner.py", "views/tag.py"]   # see "Data files" below
 ```
+
+Type annotations are optional but recommended — `pyvelm.types.Manifest`
+documents the full shape and IDEs catch typos in `NAME`/`VERSION`/
+`DEPENDS`/`DATA` keys. The loader ignores the annotations and reads
+the raw values.
 
 Other optional keys:
 

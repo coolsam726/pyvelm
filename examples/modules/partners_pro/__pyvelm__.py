@@ -8,10 +8,9 @@ No models — Stage 7's `_inherit` is what'll let modules extend each
 other's model classes. Until then, extension modules are limited to
 view-only patches and brand-new models of their own.
 """
-NAME = "partners_pro"
-VERSION = (0, 1, 0)
-DEPENDS = ["partners"]
-
-DATA = [
+NAME: str = "partners_pro"
+VERSION: tuple[int, ...] = (0, 1, 0)
+DEPENDS: list[str] = ["partners"]
+DATA: list[str] = [
     "views/partner.py",
 ]

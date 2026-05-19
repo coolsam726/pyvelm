@@ -3,9 +3,16 @@
 Each module-level list (`VIEWS`, `VIEW_INHERITS`, future `RECORDS`)
 is picked up by the loader when this file is named in the manifest's
 DATA list.
+
+`List[View]` annotations are runtime no-ops but give Pyright/Pylance
+the shape to validate against — typos in keys (`vie_type`), wrong
+`view_type` literals (`"lyst"`), and missing required fields all get
+flagged in the IDE without any extra plumbing.
 """
 
-VIEWS = [
+from pyvelm.types import View
+
+VIEWS: list[View] = [
     {
         "name": "partner.list",
         "model": "res.partner",

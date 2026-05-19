@@ -12,6 +12,7 @@ from .fields import (
     Text,
 )
 from . import loader
+from . import types
 from .model import BaseModel
 from .registry import Registry
 
@@ -30,4 +31,5 @@ __all__ = [
     "Text",
     "depends",
     "loader",
+    "types",
 ]

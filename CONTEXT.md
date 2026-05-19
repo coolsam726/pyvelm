@@ -86,8 +86,12 @@ For the design rationale and the deferred-items rationale, see
         title/subtitle/fields/badges and optionally links to a form
         view. Reuses display-mode widget registry; no edit mode in
         kanban (click → form view for editing).
-     ⏭ Slice B.6: `pyvelm.types` TypedDicts for IDE assistance on
-        manifest authoring (Manifest, View, Operation).
+     ✅ Slice B.6: `pyvelm.types` TypedDicts for IDE assistance.
+        Manifest, View, ViewInherit, Operation, and per-view-type
+        arch shapes exported from `pyvelm.types`. Examples annotated
+        (`VIEWS: list[View]`, `VIEW_INHERITS: list[ViewInherit]`,
+        manifest globals with explicit types) so Pyright/Pylance
+        catch typos at edit time.
 5. ACL: groups, model permissions, record rules (domain-based row security).
 6. Workflows: server actions, automated actions, scheduled jobs, mail threads.
 7. Module inheritance: `_inherit` for models, XPath-style view patches.
@@ -117,22 +121,25 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 4 Slice B.5 landed: kanban view type. Cards grouped into
-columns by a configurable field; each card carries title, subtitle,
-labeled fields, and badges; cards optionally link to a form view for
-the same model. Render-only; click-through is the editing surface.
-List + form + kanban together cover the "default UI" surface area
-expected of an ERP framework.
+Stage 4 is complete. Slices A through B.6 ship the JSON + HTMX
+surfaces, three view types (list/form/kanban) with the full Odoo-
+position-parity inheritance vocabulary, mutations on both surfaces,
+and TypedDicts so IDEs assist on manifest authoring.
 
-Next: **Slice B.6 — TypedDicts for IDE assistance.** Manifest, View,
-ViewInherit, Operation, and the per-view-type arch shapes get
-TypedDict definitions exported from `pyvelm.types`. Lets developers
-annotate `VIEWS: list[View] = [...]` in data files and get
-autocomplete + typo detection in their IDE.
-
-After B.6: Stage 5 (ACL / record rules) is the natural pairing with
-mutations — public write endpoints without row-level security are
-malpractice.
+Next: **Stage 5 — ACL / record rules.** The natural pairing with
+mutations. Without row-level security every write endpoint we shipped
+in B.3 is malpractice to expose. Likely shape:
+  - `res.groups` and `res.users` models.
+  - `ir.model.access` granting per-(model, group) CRUD bits.
+  - `ir.rule` for domain-based row filters: each rule adds an
+    AND-clause to searches when the active user is in the matching
+    group.
+  - `Environment.uid` already threads through; we add a "current
+    user's groups" lookup and inject record-rule filters in
+    `model.search` / `model.read`.
+  - Auth at the HTTP boundary: simplest defensible default is HTTP
+    basic against `res.users.password_hash` (bcrypt) with a session
+    cookie. OAuth/SSO is post-Stage-5.
 
 Still deferred: cache snapshot on transaction rollback, O2m/M2m
 caching + old-value snapshotting, auto-diff schema migrations,
