@@ -26,6 +26,11 @@ For the design rationale and the deferred-items rationale, see
 - PostgreSQL from the start (psycopg 3, sync). Raw SQL by string concat
   for now; SQLAlchemy Core (not ORM) still on the table when migration
   auto-diff becomes interesting.
+- **UI stack: Tailwind CSS (Play CDN) + HTMX.** Major deviation from
+  Odoo's Bootstrap. Templates emit utility classes directly; the
+  framework ships no component-class CSS. JSON arch is the contract
+  for both the bundled HTMX renderer and any SPA built against the
+  JSON API.
 - **No module-global registry.** `Registry` is a first-class object;
   models register into whichever registry is active (a contextvar). The
   loader sets it around each module's models import. Defining a model
@@ -61,7 +66,9 @@ For the design rationale and the deferred-items rationale, see
      ✅ Slice B.2: HTMX + Jinja list renderer with widget registry
         (Char/Integer/Float/Boolean[+toggle]/Many2one/collections),
         `/web/views/{m}/{n}` full pages, `/web/records/{m}/{n}`
-        fragment endpoint with OOB load-more swap, bundled CSS skin.
+        fragment endpoint with OOB load-more swap. UI stack uses
+        Tailwind CSS via Play CDN (major deviation from Odoo's
+        Bootstrap); widgets emit utility classes directly.
      ⏭ Slice B.3: mutation endpoints (POST/PATCH/DELETE) shared by
         JSON API + HTMX form submits; click-to-edit in list view.
      ⏭ Slice B.4: form + kanban view types (normalizer + template +

@@ -216,6 +216,19 @@ Default UI shipped with the framework. Developers don't write Jinja:
 the framework owns the templates and dispatches each field through a
 widget registry to produce HTML.
 
+**CSS stack: Tailwind via Play CDN.** This is the major UI-stack
+deviation from Odoo (which ships Bootstrap). The framework's
+templates pull `https://cdn.tailwindcss.com` at runtime and use
+utility classes throughout — no build step expected from app
+developers. The `pyvelm/static/` directory is still mounted at
+`/web/static` as a slot for future per-framework assets (theme
+overrides, fonts, images), but no Tailwind compilation happens there.
+
+If you want a production Tailwind build pipeline, run the Tailwind
+CLI / standalone executable against the rendered HTML, swap the
+Play-CDN `<script>` tag for your compiled CSS link, and override the
+template if needed. The framework supports it but doesn't impose it.
+
 **Routes**
 
 - `GET /web/views/{module}/{name}?page=&page_size=` — full HTML page.
@@ -224,8 +237,9 @@ widget registry to produce HTML.
 - `GET /web/records/{module}/{name}?page=&page_size=` — `<tr>` fragment
   for HTMX `hx-swap="beforeend"`. Also returns an out-of-band swap of
   the load-more button when there are still more rows beyond this page.
-- `GET /web/static/pyvelm.css` — bundled stylesheet, mounted from the
-  package's `static/` directory.
+- `GET /web/static/...` — bundled static directory, presently
+  containing only a placeholder. App developers can ship their own
+  assets by overriding the static mount when they call `create_app`.
 
 **Widget registry** (`pyvelm.render`)
 
@@ -246,6 +260,11 @@ string lets Jinja auto-escape; returning `markupsafe.Markup(...)` opts
 out for raw HTML — used by toggle, chips, etc. That's the safety
 contract.
 
+**Widgets emit Tailwind utility classes.** No hand-rolled component
+classes by default; just utilities directly on the elements. This
+keeps the framework's CSS surface essentially zero — anyone consuming
+the rendered HTML can audit styling by reading the markup.
+
 Adding a widget is a decorator one-liner:
 
 ```python
@@ -255,8 +274,10 @@ from markupsafe import Markup
 
 @widget(Boolean, hint="led")
 def render_led(value, spec, field):
-    color = "green" if value else "red"
-    return Markup(f'<span class="led led-{color}"></span>')
+    color = "bg-green-500" if value else "bg-red-500"
+    return Markup(
+        f'<span class="inline-block w-3 h-3 rounded-full {color}"></span>'
+    )
 ```
 
 Then any field that gets a `widget: "led"` hint (via inheritance or

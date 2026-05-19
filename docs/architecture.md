@@ -97,6 +97,13 @@ collections as id lists, scalars pass through. `display_value` reads
 `display_name` then `name` then falls back to `str(id)`. Frontends
 fetch related details with a follow-up `/api/records?model=...`.
 
+**UI stack: Tailwind via Play CDN.** The bundled HTMX renderer
+ships templates that pull `cdn.tailwindcss.com` at runtime and use
+utility classes throughout. This is the major UI-stack deviation
+from Odoo (Bootstrap). No build pipeline is required from app
+developers; production builds can replace the CDN script with a
+compiled Tailwind bundle.
+
 **View inheritance** is dict-merge on the arch with addressable paths
 (no XPath, no XML). An extension view declares `inherit_id` and an
 `operations` list; the resolver walks the chain in ascending

@@ -3,37 +3,46 @@
 <head>
     <meta charset="utf-8">
     <title>{{ view.name }} — {{ view.model }}</title>
-    <link rel="stylesheet" href="/web/static/pyvelm.css">
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
 </head>
-<body>
-<header class="pyvelm-header">
-    <h1>{{ view.name }}</h1>
-    <p class="muted">
-        {{ view.model }} ·
+<body class="bg-gray-50 text-gray-900 antialiased min-h-screen">
+<header class="bg-white border-b border-gray-200 px-8 py-6">
+    <h1 class="text-2xl font-semibold">{{ view.name }}</h1>
+    <p class="mt-1 text-sm text-gray-500">
+        {{ view.model }}
+        <span class="text-gray-300">·</span>
         showing {{ rows | length }} of {{ total }}
-        {% if view.module %}· from <code>{{ view.module }}</code>{% endif %}
+        {% if view.module %}
+        <span class="text-gray-300">·</span>
+        from <code class="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-xs">{{ view.module }}</code>
+        {% endif %}
     </p>
 </header>
 
-<main class="pyvelm-main">
-    <table class="pyvelm-list">
-        <thead>
-            <tr>
-                {% for h in headers %}
-                <th data-field="{{ h.name }}">{{ h.label }}</th>
-                {% endfor %}
-            </tr>
-        </thead>
-        <tbody id="pyvelm-rows">
-            {% include "list_rows.html" %}
-        </tbody>
-    </table>
+<main class="px-8 py-6">
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                    {% for h in headers %}
+                    <th data-field="{{ h.name }}"
+                        class="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        {{ h.label }}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody id="pyvelm-rows" class="divide-y divide-gray-200">
+                {% include "list_rows.html" %}
+            </tbody>
+        </table>
+    </div>
 
     {% if has_more %}
-    <div id="pyvelm-load-more">
+    <div id="pyvelm-load-more" class="mt-4 flex justify-center">
         <button
-            class="pyvelm-btn"
+            class="px-4 py-2 text-sm border border-gray-300 rounded-md bg-white hover:bg-blue-600 hover:text-white hover:border-blue-600 transition"
             hx-get="/web/records/{{ view.module }}/{{ view.name }}?page={{ page + 1 }}&page_size={{ page_size }}"
             hx-target="#pyvelm-rows"
             hx-swap="beforeend"

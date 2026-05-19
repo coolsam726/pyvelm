@@ -79,23 +79,37 @@ def _render_number(value, spec, field):
 def _render_bool(value, spec, field):
     if value is None:
         return Markup("")
-    return Markup('<span class="check">&#10003;</span>' if value else '<span class="check off">&#10007;</span>')
+    if value:
+        return Markup(
+            '<span class="text-green-600 font-bold" aria-label="true">&#10003;</span>'
+        )
+    return Markup(
+        '<span class="text-gray-400 font-bold" aria-label="false">&#10007;</span>'
+    )
 
 
 @widget(Boolean, hint="toggle")
 def _render_toggle(value, spec, field):
-    state = "on" if value else "off"
+    if value:
+        track = "bg-green-500"
+        knob_pos = "left-4"
+        label = "on"
+    else:
+        track = "bg-gray-300"
+        knob_pos = "left-0.5"
+        label = "off"
     return Markup(
-        f'<span class="toggle toggle-{state}" '
-        f'role="img" aria-label="{state}">'
-        f'<span class="toggle-knob"></span></span>'
+        f'<span class="relative inline-block align-middle w-8 h-4 rounded-full {track}" '
+        f'role="img" aria-label="{label}">'
+        f'<span class="absolute top-0.5 {knob_pos} w-3 h-3 bg-white rounded-full transition-all"></span>'
+        f'</span>'
     )
 
 
 @widget(Many2one)
 def _render_m2o(value, spec, field):
     if not value:
-        return Markup("")
+        return Markup('<span class="text-gray-300">&mdash;</span>')
     # Use the same display-value rule as the JSON serializer.
     from .web import _display_value
     return escape(_display_value(value))
@@ -105,16 +119,27 @@ def _render_m2o(value, spec, field):
 @widget(One2many)
 def _render_collection(value, spec, field):
     if not value:
-        return Markup('<span class="chips empty">—</span>')
-    parts: list[str] = []
-    # Show up to 3 short labels; "N total" suffix.
+        return Markup('<span class="text-gray-300">&mdash;</span>')
     from .web import _display_value
+    parts: list[str] = []
+    chip_cls = (
+        "inline-flex items-center bg-gray-100 text-gray-700 "
+        "px-2 py-0.5 rounded-full text-xs"
+    )
+    more_cls = (
+        "inline-flex items-center bg-white border border-dashed "
+        "border-gray-300 text-gray-500 px-2 py-0.5 rounded-full text-xs"
+    )
     for rec in list(value)[:3]:
-        parts.append(f'<span class="chip">{escape(_display_value(rec))}</span>')
+        parts.append(
+            f'<span class="{chip_cls}">{escape(_display_value(rec))}</span>'
+        )
     total = len(value)
     if total > 3:
-        parts.append(f'<span class="chip more">+{total - 3}</span>')
-    return Markup(f'<span class="chips">{"".join(parts)}</span>')
+        parts.append(f'<span class="{more_cls}">+{total - 3}</span>')
+    return Markup(
+        f'<span class="inline-flex gap-1 flex-wrap">{"".join(parts)}</span>'
+    )
 
 
 # ----- Jinja environment -----

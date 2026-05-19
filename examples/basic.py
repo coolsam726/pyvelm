@@ -219,17 +219,17 @@ def main():
             assert resp.status_code == 200, resp.text
             assert resp.headers["content-type"].startswith("text/html")
             html = resp.text
-            # Structural assertions — no need to compare full HTML.
-            assert "<table class=\"pyvelm-list\">" in html
+            # Structural assertions — markup specifics aren't exhaustively
+            # checked, just the load-bearing pieces.
+            assert "cdn.tailwindcss.com" in html      # Tailwind via Play CDN
+            assert "htmx.org" in html                  # HTMX script tag
             assert 'id="pyvelm-rows"' in html
-            assert "/web/static/pyvelm.css" in html
-            assert "htmx.org" in html  # script tag present
-            assert "ALI-1" in html  # Alice's code in the first page
-            # The `toggle` widget rendered for `active` (from inheritance)
-            assert "toggle-on" in html or "toggle-off" in html
-            # Pagination button present because total > page_size
+            assert "ALI-1" in html                     # Alice's code first page
+            # Toggle widget for `active` — green track when value is True.
+            assert "bg-green-500" in html
+            # Pagination button present because total > page_size.
             assert "Load 2 more" in html
-            print("HTML list view renders with widgets + pagination")
+            print("HTML list view renders with Tailwind widgets + pagination")
 
             # 7. HTMX fragment endpoint returns just <tr>s + OOB load-more.
             resp = client.get(
@@ -243,10 +243,10 @@ def main():
             assert "<tr" in frag
             assert "BOB-2" in frag or "CAR-3" in frag
 
-            # Static file served from the package data dir.
+            # Static directory still mounted (used for future per-app
+            # assets); the placeholder pyvelm.css is served as-is.
             resp = client.get("/web/static/pyvelm.css")
             assert resp.status_code == 200, resp.text
-            assert ".pyvelm-list" in resp.text
 
 
 def _drop_known_tables(conn):
