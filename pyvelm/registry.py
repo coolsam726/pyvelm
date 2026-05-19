@@ -32,6 +32,9 @@ class Registry:
         # Which module each model came from, populated by the loader.
         # Modules use this to scope schema creation / migrations.
         self._model_module: dict[str, str] = {}
+        # Which models were *extended* (via _inherit) by each module.
+        # Maps  extension_module_name -> [model_name, ...]
+        self._model_extensions: dict[str, list[str]] = {}
         # Built by init_db:
         #   _edge_index[(listen_model, listen_attr)] ->
         #       [(dep_model, dep_field, HopEdge), ...]

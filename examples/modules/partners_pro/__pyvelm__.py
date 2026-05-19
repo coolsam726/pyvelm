@@ -1,12 +1,9 @@
-"""partners_pro: a pure view-extension module.
+"""partners_pro: model extension + view-patch module.
 
-Demonstrates view inheritance by patching the `partners.partner.list`
-view: drops `age` (hypothetical privacy concern), adds the partner's
-tags after `country_id`, and decorates `active` with a widget hint.
-
-No models — Stage 7's `_inherit` is what'll let modules extend each
-other's model classes. Until then, extension modules are limited to
-view-only patches and brand-new models of their own.
+Demonstrates Stage 7 _inherit: adds `vip_note` to res.partner and
+overrides `_compute_display_name` to prefix VIP partners with ★.
+Also patches the `partners.partner.list` view (view inheritance
+from Stage 4 is unchanged).
 """
 NAME: str = "partners_pro"
 VERSION: tuple[int, ...] = (0, 1, 0)

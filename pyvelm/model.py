@@ -9,6 +9,13 @@ from .registry import active_registry
 
 class MetaModel(type):
     def __new__(mcs, name, bases, namespace):
+        _inherit = namespace.get("_inherit")
+        _name_val = namespace.get("_name")
+
+        # --- _inherit: extend an existing model class ---
+        if _inherit and not _name_val:
+            return mcs._build_extension(name, bases, namespace, _inherit)
+
         cls = super().__new__(mcs, name, bases, namespace)
 
         # Collect fields from this class and its bases.
@@ -22,8 +29,8 @@ class MetaModel(type):
         cls._fields = fields
 
         # Defer table name and registry binding to subclasses with _name.
-        if namespace.get("_name"):
-            cls._table = namespace.get("_table") or namespace["_name"].replace(".", "_")
+        if _name_val:
+            cls._table = namespace.get("_table") or _name_val.replace(".", "_")
             for f in fields.values():
                 f.model_name = cls._name
             # Bind compute methods to their fields: copy @depends paths.
@@ -44,6 +51,78 @@ class MetaModel(type):
                     )
                 field.depends_on = tuple(deps)
             active_registry().register(cls)
+        return cls
+
+    @classmethod
+    def _build_extension(mcs, ext_name: str, bases, namespace: dict, inherit_name: str):
+        """Handle `_inherit = "some.model"` without a new `_name`.
+
+        Creates a new Python class that subclasses the existing registered
+        model class, merges in additional fields, and replaces the registry
+        entry so env["some.model"] returns the extended class going forward.
+        Python MRO gives `super()` access to the original methods.
+        """
+        reg = active_registry()
+        if inherit_name not in reg:
+            raise ValueError(
+                f"_inherit = {inherit_name!r}: model not found in registry. "
+                f"Ensure its module is loaded before this extension."
+            )
+        existing = reg[inherit_name]
+
+        # Build bases: replace BaseModel (or any MetaModel base without _name)
+        # with the existing model class so Python MRO chains correctly.
+        new_bases: tuple = tuple(
+            existing if (b is existing or (
+                isinstance(b, MetaModel) and not getattr(b, "_name", None)
+            )) else b
+            for b in bases
+        )
+        if existing not in new_bases:
+            new_bases = (existing,)
+
+        # Strip _inherit so the normal metaclass path treats this like a
+        # regular subclass once the class object is built.
+        clean_ns = {k: v for k, v in namespace.items() if k != "_inherit"}
+        clean_ns["_name"] = existing._name
+        clean_ns["_table"] = existing._table
+
+        cls = super().__new__(mcs, ext_name, new_bases, clean_ns)
+
+        # Merge fields: existing + any new ones declared in this extension.
+        merged: dict[str, Field] = dict(existing._fields)
+        for attr_name, attr_value in list(namespace.items()):
+            if isinstance(attr_value, Field):
+                attr_value.bind(existing._name, attr_name)
+                merged[attr_name] = attr_value
+        cls._fields = merged
+
+        # Update model_name on all fields (some may have been rebound from
+        # the parent with the wrong model_name if the parent was itself an
+        # extension).
+        for f in merged.values():
+            f.model_name = existing._name
+
+        # Bind compute methods declared in this extension.
+        for fname, field in merged.items():
+            if not field.compute:
+                continue
+            method = namespace.get(field.compute) or getattr(cls, field.compute, None)
+            if method is None:
+                raise ValueError(
+                    f"{existing._name}.{fname}: compute method "
+                    f"{field.compute!r} not found in extension {ext_name!r}"
+                )
+            deps = getattr(method, "_pyvelm_depends", None)
+            if deps is None:
+                raise ValueError(
+                    f"{existing._name}.{fname}: compute method "
+                    f"{field.compute!r} must be decorated with @depends(...)"
+                )
+            field.depends_on = tuple(deps)
+
+        # Replace registry entry with the extended class.
+        reg.register(cls, module_name=reg._model_module.get(existing._name))
         return cls
 
 
@@ -124,13 +203,27 @@ class BaseModel(metaclass=MetaModel):
 
     @classmethod
     def _setup_table(cls, conn) -> None:
+        # Phase 1: create the table if it doesn't exist (includes all
+        # currently-known columns with their constraints).
         cols = ['"id" SERIAL PRIMARY KEY']
         for f in cls._fields.values():
             if not f.is_stored:
                 continue
             cols.append(f.column_ddl())
-        ddl = f'CREATE TABLE IF NOT EXISTS "{cls._table}" ({", ".join(cols)})'
-        conn.execute(ddl)
+        conn.execute(
+            f'CREATE TABLE IF NOT EXISTS "{cls._table}" ({", ".join(cols)})'
+        )
+        # Phase 2: add any columns that are missing (idempotent).
+        # Used when a module extends an existing model via _inherit at
+        # install time.  Existing columns are a no-op; new ones are added
+        # as nullable so pre-existing rows aren't rejected.
+        for f in cls._fields.values():
+            if not f.is_stored:
+                continue
+            conn.execute(
+                f'ALTER TABLE "{cls._table}" '
+                f'ADD COLUMN IF NOT EXISTS "{f.column}" {f.sql_type}'
+            )
 
     @classmethod
     def _drop_table(cls, conn) -> None:

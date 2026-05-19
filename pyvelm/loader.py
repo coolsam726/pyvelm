@@ -165,12 +165,26 @@ def resolve_order(specs: dict[str, ModuleSpec]) -> list[ModuleSpec]:
 
 def _load_models(spec: ModuleSpec, registry: Registry) -> None:
     """Import a module's models package under the active registry, tagging
-    every newly-registered model with the module name."""
+    every newly-registered model with the module name.
+
+    New models (not in registry before the import) are tagged with this
+    module as their owner.  Existing models whose registry class changed
+    (replaced by a `_inherit` extension) are recorded in
+    `registry._model_extensions` so `_setup_module_schema` can add their
+    new columns.
+    """
     with registry.activate():
-        before = set(registry._models)
+        before_models: dict[str, type] = dict(registry._models)
         importlib.import_module(spec.models_package)
-        for new_name in set(registry._models) - before:
-            registry._model_module[new_name] = spec.name
+        for model_name, cls in registry._models.items():
+            if model_name not in before_models:
+                # Brand-new model defined by this module.
+                registry._model_module[model_name] = spec.name
+            elif cls is not before_models[model_name]:
+                # Existing model extended via _inherit by this module.
+                registry._model_extensions.setdefault(spec.name, []).append(
+                    model_name
+                )
     spec.loaded = True
 
 
@@ -194,17 +208,27 @@ def _installed_version(env: Environment, name: str) -> tuple[int, ...] | None:
 
 
 def _setup_module_schema(spec: ModuleSpec, env: Environment) -> None:
-    """Create just this module's tables, FKs, and junction tables."""
-    from .fields import Many2many
+    """Create just this module's tables, FKs, and junction tables.
 
+    For brand-new models this is a full CREATE TABLE.  For models extended
+    via `_inherit` the table already exists; `_setup_table` idempotently
+    adds any new columns with ALTER TABLE ADD COLUMN IF NOT EXISTS.
+    """
     registry = env.registry
     models = registry.models_of(spec.name)
-    for cls in models:
+    # Models extended (not owned) by this module — need column additions.
+    extended = [
+        registry[n]
+        for n in registry._model_extensions.get(spec.name, [])
+        if n in registry
+    ]
+    all_cls = models + extended
+    for cls in all_cls:
         cls._setup_table(env.conn)
-    for cls in models:
+    for cls in all_cls:
         cls._setup_foreign_keys(env.conn, registry)
     created: set[str] = set()
-    for cls in models:
+    for cls in all_cls:
         cls._setup_relation_tables(env.conn, registry, created)
 
 

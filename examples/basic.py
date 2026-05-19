@@ -871,6 +871,54 @@ def main():
                 assert msg.id in raw_ids
                 print("mail thread: message_ids query OK")
 
+            # ===== Stage 7: _inherit model extension =====
+            # partners_pro defines PartnerPro(_inherit="res.partner")
+            # which adds `vip_note` and overrides `_compute_display_name`.
+            with pool.connection() as s7_conn:
+                from pyvelm import Environment as _Env7
+                s7_env = _Env7(s7_conn, registry=reg, uid=1)
+
+                # The extended class IS the registry entry.
+                extended_cls = reg["res.partner"]
+                assert "vip_note" in extended_cls._fields, (
+                    "_inherit must have added vip_note to res.partner"
+                )
+                print("_inherit: vip_note field present on res.partner OK")
+
+                # Write vip_note and read it back.
+                partner_rec = s7_env["res.partner"].search([], limit=1)
+                assert partner_rec, "need at least one partner"
+                with s7_env.transaction():
+                    partner_rec.write({"vip_note": "Top tier"})
+                s7_env.cache.invalidate(model_name="res.partner", ids=[partner_rec.id])
+                assert partner_rec.vip_note == "Top tier", partner_rec.vip_note
+                print("_inherit: vip_note write/read OK")
+
+                # display_name should carry the ★ prefix for VIP partners.
+                s7_env.cache.invalidate(model_name="res.partner", ids=[partner_rec.id])
+                dn = partner_rec.display_name
+                assert dn.startswith("★ "), (
+                    f"expected VIP prefix in display_name, got {dn!r}"
+                )
+                print("_inherit: overridden _compute_display_name applies ★ prefix OK")
+
+                # Partners without a vip_note get the original display_name.
+                no_vip = s7_env["res.partner"].search(
+                    [("vip_note", "=", None)], limit=1
+                )
+                if no_vip:
+                    dn_plain = no_vip.display_name
+                    assert not dn_plain.startswith("★"), (
+                        f"non-VIP partner must not have ★ prefix: {dn_plain!r}"
+                    )
+                    print("_inherit: non-VIP partner keeps plain display_name OK")
+
+                # super() chain: verify the name portion is still correct.
+                assert partner_rec.name in dn, (
+                    f"partner name {partner_rec.name!r} missing from {dn!r}"
+                )
+                print("_inherit: super() chained correctly in display_name OK")
+
 
 def _drop_known_tables(conn):
     """Tear down tables we expect to own. Idempotent."""

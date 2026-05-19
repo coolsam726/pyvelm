@@ -140,7 +140,29 @@ For the design rationale and the deferred-items rationale, see
         Model added to base module and granted to Admin.
      Base module bumped to 0.5.0; migration 0_4_to_0_5 creates four
      tables: ir_actions_server, base_automation, ir_cron, mail_message.
-7. ⏭ Module inheritance: `_inherit` for models, XPath-style view patches.
+7. ✅ Module inheritance: `_inherit` for models.
+     ✅ Slice A+B: `_inherit` in `MetaModel.__new__`. When a class sets
+        `_inherit = "some.model"` without a new `_name`, the metaclass
+        looks up the existing class, creates a proper Python subclass of
+        it (so `super()` chains via MRO), merges in new fields, binds
+        compute methods, and replaces the registry entry. The original
+        model's methods/fields are accessible through normal MRO.
+     ✅ `_setup_table` made idempotent: Phase 1 is the existing
+        `CREATE TABLE IF NOT EXISTS (all cols)`, Phase 2 issues
+        `ALTER TABLE ADD COLUMN IF NOT EXISTS` for each stored field so
+        extending modules can add columns to already-installed tables.
+     ✅ `Registry._model_extensions` tracks which models each module
+        extended via `_inherit`. `_load_models` detects class replacements
+        and records them. `_setup_module_schema` includes extended models
+        so new columns are added during the extending module's install.
+     ✅ `partners_pro` upgraded from view-only to full model extension:
+        `PartnerPro(_inherit="res.partner")` adds `vip_note Char` and
+        overrides `_compute_display_name` to prefix VIP partners with ★.
+        `super()` correctly chains to the base `Partner` implementation.
+     ✅ 5 smoke tests verifying: field presence, write/read of new field,
+        overridden compute, super() chain, non-VIP baseline.
+     ⏭ Slice C (deferred): XPath-style view arch patches (structural
+        view patches beyond the existing dict-op VIEW_INHERITS mechanism).
 
 ## Deliberately deferred (will bite us, fix when they do)
 
@@ -167,19 +189,19 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 6 is complete. All four slices (server actions, automated actions,
-scheduled jobs, mail threads) are implemented and tested.
+Stage 7 Slices A+B complete: `_inherit` model extension. Partners_pro
+now extends `res.partner` with `vip_note` and an overridden compute.
 
 Next options:
-  - **Stage 7 — module `_inherit`**: model extension via `_inherit`
-    (add fields or override methods on existing models from another
-    module) and XPath/dict-patch view inheritance for overlapping view
-    changes.
-  - **Stage 6 hardening**: cron runner as a real background task (asyncio
-    scheduled or APScheduler), mail dispatch via SMTP, message subtypes
-    (note/comment/email), followers/subscriptions on MailThread.
-  - **Stage 5 hardening**: CSRF tokens on mutation forms, rate limiting
-    on /login, password-change UI in the admin module.
+  - **Stage 8 — multi-company / multi-tenancy.** `res.company`, a
+    `company_id` on partner and other models, domain rules that scope
+    all searches to the current company.
+  - **Stage 7 Slice C.** XPath/structural view patches beyond the
+    existing dict-op VIEW_INHERITS mechanism.
+  - **Stage 6 hardening.** Cron runner as a real background task,
+    mail dispatch via SMTP, message subtypes, followers/subscriptions.
+  - **Stage 5 hardening.** CSRF tokens, rate limiting on /login,
+    password-change UI.
 
 Still deferred: cache snapshot on transaction rollback, O2m/M2m
 caching + old-value snapshotting, auto-diff schema migrations,
