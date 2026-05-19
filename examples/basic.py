@@ -365,6 +365,99 @@ def main():
             assert count_after == count_before - 1, (count_before, count_after)
             print("inline delete removed the row")
 
+            # ----- B.4: form view -----
+            # Resolved form arch comes back with normalized fields.
+            resp = client.get("/api/views/partners/partner.form")
+            assert resp.status_code == 200, resp.text
+            form_arch = resp.json()["arch"]
+            assert resp.json()["view_type"] == "form"
+            section_names = [s["name"] for s in form_arch["sections"]]
+            assert section_names == ["identity", "profile", "relations"]
+            # Strings in each section's fields were promoted to dicts.
+            id_fields = [f["name"] for f in form_arch["sections"][0]["fields"]]
+            assert id_fields == ["name", "code"]
+
+            # Form display: full HTML page when no HX-Request header.
+            resp = client.get(f"/web/views/partners/partner.form/record/{alice['id']}")
+            assert resp.status_code == 200, resp.text
+            page = resp.text
+            assert "cdn.tailwindcss.com" in page
+            assert "<fieldset" in page
+            assert "Identity" in page
+            # `Profile` was renamed to `Demographics` by partners_pro's
+            # form-view inheritance (verified explicitly below).
+            assert "Demographics" in page
+            # Display mode shows values, not <input>s for stored fields.
+            assert "Alicia Doe" in page
+            # Edit button targets the edit URL.
+            assert f"record/{alice['id']}/edit" in page
+
+            # Form edit: HX-Request header returns body fragment only.
+            resp = client.get(
+                f"/web/views/partners/partner.form/record/{alice['id']}/edit",
+                headers={"HX-Request": "true"},
+            )
+            assert resp.status_code == 200, resp.text
+            frag = resp.text
+            assert "<html" not in frag         # body fragment only
+            assert 'name="name"' in frag        # input present
+            assert 'value="Alicia Doe"' in frag
+            assert "<select" in frag            # Many2one
+            print("form display + edit fragments render")
+
+            # Save: POST form-encoded to the record URL.
+            resp = client.post(
+                f"/web/views/partners/partner.form/record/{alice['id']}",
+                data={
+                    "name": "Alice X",
+                    "code": "ALI-1",
+                    "age": "31",
+                    "country_id": str(france.id),
+                    "parent_id": "",
+                    "active": ["", "on"],
+                },
+                headers={"HX-Request": "true"},
+            )
+            assert resp.status_code == 200, resp.text
+            saved = resp.text
+            assert "Alice X" in saved
+            assert "<input" not in saved       # back to display mode
+            # Verify the write actually landed via /api/records too.
+            resp = client.get(
+                f"/api/records",
+                params={"model": "res.partner",
+                        "domain": f'[["id","=",{alice["id"]}]]',
+                        "fields": "name,age"},
+            )
+            rec = resp.json()["records"][0]
+            assert rec["name"] == "Alice X" and rec["age"] == 31
+            print("form save persisted through to JSON read")
+
+            # Form new: empty edit shell.
+            resp = client.get(
+                "/web/views/partners/partner.form/new",
+                headers={"HX-Request": "true"},
+            )
+            assert resp.status_code == 200, resp.text
+            # Body-only fragment because HX-Request: true.
+            assert 'name="name"' in resp.text
+            # Title shows "New res.partner"
+            assert "New res.partner" in resp.text
+            print("form new renders empty edit shell")
+
+            # Section-level inheritance: partners_pro patched the form
+            # too (renamed Profile -> Demographics; dropped parent_id;
+            # widget-hinted active).
+            arch = client.get("/api/views/partners/partner.form").json()["arch"]
+            section_titles = [s["title"] for s in arch["sections"]]
+            assert "Demographics" in section_titles, section_titles
+            profile = next(s for s in arch["sections"] if s["title"] == "Demographics")
+            profile_fields = [f["name"] for f in profile["fields"]]
+            assert "parent_id" not in profile_fields, profile_fields
+            active = next(f for f in profile["fields"] if f["name"] == "active")
+            assert active.get("widget") == "toggle"
+            print("section-level inheritance applied to form view")
+
 
 def _drop_known_tables(conn):
     """Tear down tables we expect to own. Idempotent."""

@@ -416,6 +416,92 @@ def parse_form_vals(model_cls, form_data) -> dict:
     return vals
 
 
+# ---- form view rendering ----
+
+def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str) -> list[dict]:
+    """Build the per-field HTML for one section.
+
+    Returns a list of cell dicts (`{name, label, html}`), one per field.
+    """
+    fields_spec = list(section_spec.get("fields", []))
+    if mode == "edit":
+        fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
+    cells: list[dict] = []
+    for spec in fields_spec:
+        fname = spec["name"]
+        if fname not in model_cls._fields:
+            cells.append({"name": fname, "label": fname, "html": Markup("")})
+            continue
+        field = model_cls._fields[fname]
+        # Display label: spec override > field.string > raw attr name.
+        label = spec.get("label") or field.string or fname
+        hint = spec.get("widget")
+        renderer = find_renderer(field, hint, mode=mode)
+        if record_or_none is None:
+            value = (
+                env[field.comodel_name] if isinstance(field, Many2one)
+                else field.default
+            )
+        else:
+            value = getattr(record_or_none, fname)
+        cells.append({
+            "name": fname,
+            "label": label,
+            "html": renderer(value, spec, field),
+        })
+    return cells
+
+
+def _form_sections(view, record_or_none, env, mode: str) -> list[dict]:
+    from .views import resolve_arch
+
+    arch = resolve_arch(view)
+    model_cls = env.registry[view.model]
+    sections_spec = arch.get("sections", [])
+    out: list[dict] = []
+    for spec in sections_spec:
+        out.append({
+            "name": spec.get("name"),
+            "title": spec.get("title") or spec.get("name", ""),
+            "cells": _form_section_html(spec, record_or_none, env, model_cls, mode),
+        })
+    return out
+
+
+def _record_title(record_or_none, view_model: str, mode: str) -> str:
+    """Best-effort short title for the form header."""
+    if mode == "new" or record_or_none is None:
+        return f"New {view_model}"
+    cls = type(record_or_none)
+    if "name" in cls._fields:
+        nm = getattr(record_or_none, "name", None)
+        if nm:
+            return str(nm)
+    return f"{view_model} #{record_or_none.id}"
+
+
+def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = False) -> str:
+    """Render the form HTML.
+
+    `mode` is "display", "edit", or "new". For "new" the record is None
+    and field values come from defaults. `body_only` returns just the
+    swappable inner-HTML fragment (used by HTMX swap targets); the
+    default returns a complete page.
+    """
+    sections = _form_sections(view, record_or_none, env, mode)
+    title = _record_title(record_or_none, view.model, mode)
+    template_name = "form_body.html" if body_only else "form.html"
+    template = _env.get_template(template_name)
+    return template.render(
+        view=view,
+        record=record_or_none,
+        record_id=(record_or_none.id if record_or_none else None),
+        title=title,
+        mode=mode,
+        sections=sections,
+    )
+
+
 def render_list_page(view, env, *, page: int, page_size: int) -> str:
     """Full HTML page for a list view: head, table shell, first page
     of rows, and an HTMX 'load more' button if there's more."""

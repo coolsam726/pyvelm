@@ -74,9 +74,17 @@ For the design rationale and the deferred-items rationale, see
         `parse_form_vals` for type coercion, row-level edit/save/
         cancel/delete/new/create endpoints. Boolean hidden+checkbox
         pair handles unchecked-as-false correctly.
-     ⏭ Slice B.4: form + kanban view types (normalizer + template +
-        widget conventions per type).
-     ⏭ Slice B.5: `pyvelm.types` TypedDicts for IDE assistance on
+     ✅ Slice B.4: form view type. Normalizer entry for
+        `sections[*].fields`; render at `/web/views/.../record/{id}`
+        (display / edit) and `/new` (create); HX-Request header
+        switches between full-page and body-fragment responses for
+        the same handler. Section-level inheritance verified in the
+        example (partners_pro renames a section title and patches
+        field attrs across the section path).
+     ⏭ Slice B.5: kanban view type — cards, optional group-by column
+        layout. Largely a template-design slice; widget registry and
+        arch shape mostly carry over.
+     ⏭ Slice B.6: `pyvelm.types` TypedDicts for IDE assistance on
         manifest authoring (Manifest, View, Operation).
 5. ACL: groups, model permissions, record rules (domain-based row security).
 6. Workflows: server actions, automated actions, scheduled jobs, mail threads.
@@ -107,22 +115,19 @@ For the design rationale and the deferred-items rationale, see
 
 ## Next concrete task
 
-Stage 4 Slice B.3 landed: mutations exist on both surfaces. JSON
-API gets POST/PATCH/DELETE on `/api/records`; HTMX gets inline-edit
-row endpoints (Edit/Save/Cancel/Delete/+New) with form parsing
-through `parse_form_vals`. Edit-mode widgets are a separate registry
-(`mode="edit"`) keyed the same way as display widgets. Both write
-paths funnel through `env.transaction()`.
+Stage 4 Slice B.4 landed: form views ship. Sectioned arch with
+the same string-or-dict authoring sugar; section-level inheritance
+addresses `["sections", <name>, "fields", <name>]` paths and reuses
+the six-op vocabulary. The form template renders Tailwind-styled
+fieldset cards with a 2-column field grid, swappable display/edit
+modes, and full-page vs body-fragment dispatch on the `HX-Request`
+header.
 
-Next: **Slice B.4 — form + kanban view types.** Form views need a
-sectioned arch (groups of fields with labels), a normalizer entry,
-and a template that places inputs in a 2-column grid (or
-configurable). Kanban needs per-card layout and grouping. The
-widget registry already supports the edit-mode pattern needed for
-form views; what's missing is the structural template work and
-the arch normalizer additions.
+Next: **Slice B.5 — kanban view type.** Cards with a `group_by`
+field for column layout. Largely a template-design slice; the arch
+normalizer adds a `card` entry, the widget registry is unchanged.
 
-After B.4: B.5 (TypedDicts for IDE assistance). Stage 5 (ACL /
+After B.5: B.6 (TypedDicts for IDE assistance). Stage 5 (ACL /
 record rules) becomes urgent once mutations are exposed beyond a
 demo — public write endpoints without row-level security are
 malpractice.

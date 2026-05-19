@@ -255,6 +255,20 @@ Page + pagination:
   for HTMX `hx-swap="beforeend"`. Also returns an out-of-band swap of
   the load-more button when there are still more rows beyond this page.
 
+Form view (single record):
+- `GET    /web/views/{m}/{n}/record/{id}` — display form (full page;
+  if `HX-Request: true` header is set, body fragment only for in-place
+  HTMX swap).
+- `GET    /web/views/{m}/{n}/record/{id}/edit` — edit form (same
+  HX-Request fragment convention).
+- `POST   /web/views/{m}/{n}/record/{id}` — form-encoded body; save
+  and return display form.
+- `GET    /web/views/{m}/{n}/new` — empty edit form for a new record.
+- `POST   /web/views/{m}/{n}` — create from form-encoded body; returns
+  the display form for the newly-created record.
+- Delete is routed through the JSON API (`DELETE /api/records/{id}`)
+  from the form's Delete button.
+
 Inline edit (per-row):
 - `GET    /web/records/{m}/{n}/row/{id}/edit` — `<tr>` with input
   controls. Save / Cancel buttons in the Actions column.
@@ -347,17 +361,83 @@ ignore `/web/*` and consume `/api/*`. Apps that want the default UI
 ignore `/api/*`. They share the same `ir.ui.view.arch` and the same
 inheritance resolution.
 
+## Form views
+
+A `form` view declares `sections`, each with a stable `name`, a
+display `title`, and a `fields` list. The same string-or-dict
+authoring sugar applies (`"fields": ["name", "code"]` is fine for
+the common case; expand to `{"name": ..., "widget": ...}` when
+you need per-field attributes).
+
+Inheritance reaches into sections via deeper paths:
+`["sections", "profile", "fields", "active"]` addresses the
+`active` field inside the section named `profile`. All six op kinds
+(`set`/`replace`/`update`/`remove`/`before`/`after`) work the same
+way they do for list views.
+
+```python
+# partners/views/partner.py
+VIEWS = [
+    {
+        "name": "partner.form",
+        "model": "res.partner",
+        "view_type": "form",
+        "arch": {
+            "sections": [
+                {"name": "identity",  "title": "Identity",
+                 "fields": ["name", "code"]},
+                {"name": "profile",   "title": "Profile",
+                 "fields": ["age", "country_id", "parent_id", "active"]},
+                {"name": "relations", "title": "Relations",
+                 "fields": ["tag_ids", "child_ids"]},
+            ],
+        },
+    },
+]
+```
+
+```python
+# partners_pro/views/partner.py — section-level inheritance
+VIEW_INHERITS = [
+    {
+        "name": "partner.form.pro",
+        "inherit": "partners.partner.form",
+        "priority": 20,
+        "operations": [
+            {"op": "set",
+             "target": ["sections", "profile", "title"],
+             "value": "Demographics"},
+            {"op": "update",
+             "target": ["sections", "profile", "fields", "active"],
+             "value": {"widget": "toggle"}},
+            {"op": "remove",
+             "target": ["sections", "profile", "fields", "parent_id"]},
+        ],
+    },
+]
+```
+
+The form template renders each section as a Tailwind-styled card
+with a `<legend>` and a responsive 2-column grid of label / value
+pairs. Display mode shows each value through the display-mode widget
+registry; edit mode swaps in the edit-mode widgets (text inputs,
+selects, etc.). HTMX swaps target `#pyvelm-form-shell` so the action
+buttons (Edit / Save / Cancel / Delete) repaint correctly when modes
+change.
+
+For direct navigation, the routes return a full HTML page. For
+in-place HTMX swaps, the same routes detect the `HX-Request: true`
+header and return only the body fragment.
+
 ## What's deliberately not here
 
 - **Authentication / authorization** — there's no row-level security
   yet (Stage 5). Don't expose mutation endpoints to the public internet.
-- **`form` / `kanban` view types** — `view_type = "list"` is the only
-  one with a normalizer + renderer today. The 501 from `/web/views/...`
-  for other types is intentional, not an oversight.
+- **`kanban` view type** — `list` and `form` ship today. Kanban is a
+  natural next slice; cards + per-column grouping.
 - **Many2many / One2many editing widgets** — the edit-mode renderer
   for these falls through to the display rendering. A real multi-
-  select needs design (chip removal, search-add, etc.) — natural slice
-  once form views land.
+  select needs design (chip removal, search-add, etc.).
 - **Field-level validation feedback in the inline-edit form** — today
   invalid input raises and HTMX won't swap. The intended UX is to
   return the edit fragment with inline error messages on 422; that

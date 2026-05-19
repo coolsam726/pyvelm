@@ -1,0 +1,92 @@
+{# Form body, swappable as a unit. Rendered both as the whole document
+   (via form.html) and as the HTMX swap target on Save/Cancel/Edit. #}
+{% set base = "/web/views/" ~ view.module ~ "/" ~ view.name %}
+{% set rec_url = base ~ "/record/" ~ (record_id if record_id else 'new') %}
+
+<header class="bg-white border-b border-gray-200 px-8 py-6">
+    <div class="max-w-4xl mx-auto flex items-start justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-semibold">{{ title }}</h1>
+            <p class="mt-1 text-sm text-gray-500">
+                {{ view.model }}
+                <span class="text-gray-300">·</span>
+                <code class="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-xs">
+                    {{ view.module }}.{{ view.name }}
+                </code>
+                <span class="text-gray-300">·</span>
+                <span class="uppercase tracking-wider text-xs">{{ mode }}</span>
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if mode == "display" and record_id %}
+            <button
+                class="px-3 py-1.5 text-sm border border-blue-600 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+                hx-get="{{ rec_url }}/edit"
+                hx-target="#pyvelm-form-shell"
+                hx-swap="innerHTML">
+                Edit
+            </button>
+            <button
+                class="px-3 py-1.5 text-sm border border-red-300 text-red-700 rounded-md hover:bg-red-50 transition"
+                hx-delete="/api/records/{{ record_id }}?model={{ view.model }}"
+                hx-confirm="Delete this record?"
+                hx-on::after-request="if(event.detail.successful) window.history.back()">
+                Delete
+            </button>
+            {% elif mode == "edit" %}
+            <button
+                class="px-3 py-1.5 text-sm border border-green-600 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
+                hx-post="{{ rec_url }}"
+                hx-include="#pyvelm-form"
+                hx-target="#pyvelm-form-shell"
+                hx-swap="innerHTML">
+                Save
+            </button>
+            <button
+                class="px-3 py-1.5 text-sm border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-100 transition"
+                hx-get="{{ rec_url }}"
+                hx-target="#pyvelm-form-shell"
+                hx-swap="innerHTML">
+                Cancel
+            </button>
+            {% elif mode == "new" %}
+            <button
+                class="px-3 py-1.5 text-sm border border-green-600 bg-green-600 text-white rounded-md hover:bg-green-700 transition"
+                hx-post="{{ base }}"
+                hx-include="#pyvelm-form"
+                hx-target="#pyvelm-form-shell"
+                hx-swap="innerHTML">
+                Create
+            </button>
+            <button
+                type="button"
+                class="px-3 py-1.5 text-sm border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-100 transition"
+                onclick="window.history.back()">
+                Cancel
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</header>
+
+<main class="max-w-4xl mx-auto px-8 py-6 space-y-6">
+    <form id="pyvelm-form" class="space-y-6" onsubmit="return false">
+        {% for section in sections %}
+        <fieldset class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+            {% if section.title %}
+            <legend class="px-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                {{ section.title }}
+            </legend>
+            {% endif %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                {% for cell in section.cells %}
+                <div data-field="{{ cell.name }}" class="flex flex-col gap-1">
+                    <label class="text-xs text-gray-600">{{ cell.label }}</label>
+                    <div class="text-sm">{{ cell.html }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </fieldset>
+        {% endfor %}
+    </form>
+</main>

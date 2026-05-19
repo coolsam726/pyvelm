@@ -40,4 +40,31 @@ VIEW_INHERITS = [
             },
         ],
     },
+    {
+        # Section-level inheritance: target a field inside a specific
+        # section of the form arch. Same op vocabulary as list views,
+        # just deeper paths.
+        "name": "partner.form.pro",
+        "inherit": "partners.partner.form",
+        "priority": 20,
+        "operations": [
+            # Re-label the profile section.
+            {
+                "op": "set",
+                "target": ["sections", "profile", "title"],
+                "value": "Demographics",
+            },
+            # Push the `active` field with a toggle widget hint.
+            {
+                "op": "update",
+                "target": ["sections", "profile", "fields", "active"],
+                "value": {"widget": "toggle"},
+            },
+            # Drop `parent_id` from the profile section.
+            {
+                "op": "remove",
+                "target": ["sections", "profile", "fields", "parent_id"],
+            },
+        ],
+    },
 ]

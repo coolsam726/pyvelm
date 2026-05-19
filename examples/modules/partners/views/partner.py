@@ -14,4 +14,28 @@ VIEWS = [
             "fields": ["name", "code", "age", "country_id", "active"],
         },
     },
+    {
+        "name": "partner.form",
+        "model": "res.partner",
+        "view_type": "form",
+        "arch": {
+            "sections": [
+                {
+                    "name": "identity",
+                    "title": "Identity",
+                    "fields": ["name", "code"],
+                },
+                {
+                    "name": "profile",
+                    "title": "Profile",
+                    "fields": ["age", "country_id", "parent_id", "active"],
+                },
+                {
+                    "name": "relations",
+                    "title": "Relations",
+                    "fields": ["tag_ids", "child_ids"],
+                },
+            ],
+        },
+    },
 ]

@@ -28,7 +28,10 @@ from typing import Any
 # more entries as new view_types land.
 _LIST_PROMOTION_PATHS: dict[str, list[tuple[str, ...]]] = {
     "list": [("fields",)],
-    # form: [("sections",), ("sections", "*", "fields")],  # later
+    # Form view: `sections` is a list of section dicts, each with its
+    # own `fields` list. `*` means "every entry in this list" — so the
+    # promotion applies to fields inside every section.
+    "form": [("sections", "*", "fields")],
 }
 
 

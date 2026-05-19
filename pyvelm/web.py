@@ -164,9 +164,15 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
 
         rec = _load_view(env, module, name)
         if rec.view_type != "list":
+            # Form views are addressed via /record/{id}; kanban is not
+            # yet implemented. List is the only valid landing for the
+            # bare view URL today.
             raise HTTPException(
                 status_code=501,
-                detail=f"Renderer for view_type {rec.view_type!r} not yet shipped",
+                detail=(
+                    f"view_type {rec.view_type!r} has no top-level page; "
+                    f"use /record/{{id}} for form views"
+                ),
             )
         return HTMLResponse(
             render_list_page(rec, env, page=page, page_size=page_size)
@@ -370,5 +376,101 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         with env.transaction():
             rec = env[view.model].create(vals)
         return HTMLResponse(render_list_row(view, rec, env, mode="display"))
+
+    # ---- form-view routes ----
+    # Single-record screen. Display / edit / new are three modes of the
+    # same shell template; HTMX swaps the inner #pyvelm-form-shell on
+    # mode transitions so action buttons get repainted along with the
+    # form body.
+
+    def _require_form_view(rec):
+        if rec.view_type != "form":
+            raise HTTPException(
+                400, f"View {rec.module}.{rec.name} is not a form view"
+            )
+        return rec
+
+    @app.get("/web/views/{module}/{name}/new", response_class=HTMLResponse)
+    def web_form_new(
+        module: str, name: str, env: Environment = Depends(get_env),
+    ):
+        from .render import render_form_page
+
+        view = _require_form_view(_load_view(env, module, name))
+        return HTMLResponse(render_form_page(view, None, env, mode="new"))
+
+    @app.get("/web/views/{module}/{name}/record/{record_id}",
+             response_class=HTMLResponse)
+    def web_form_display(
+        module: str, name: str, record_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import render_form_page
+
+        view = _require_form_view(_load_view(env, module, name))
+        rec = _load_record(env, view, record_id)
+        # HX-Request header set by HTMX -> return body fragment for
+        # in-place swap; otherwise full page for direct navigation.
+        body_only = request.headers.get("HX-Request") == "true"
+        return HTMLResponse(
+            render_form_page(view, rec, env, mode="display", body_only=body_only)
+        )
+
+    @app.get("/web/views/{module}/{name}/record/{record_id}/edit",
+             response_class=HTMLResponse)
+    def web_form_edit(
+        module: str, name: str, record_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import render_form_page
+
+        view = _require_form_view(_load_view(env, module, name))
+        rec = _load_record(env, view, record_id)
+        body_only = request.headers.get("HX-Request") == "true"
+        return HTMLResponse(
+            render_form_page(view, rec, env, mode="edit", body_only=body_only)
+        )
+
+    @app.post("/web/views/{module}/{name}/record/{record_id}",
+              response_class=HTMLResponse)
+    async def web_form_save(
+        module: str, name: str, record_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import parse_form_vals, render_form_page
+
+        view = _require_form_view(_load_view(env, module, name))
+        rec = _load_record(env, view, record_id)
+        form = await request.form()
+        cls = env.registry[view.model]
+        vals = parse_form_vals(cls, form)
+        with env.transaction():
+            rec.write(vals)
+        env.cache.invalidate(model_name=view.model, ids=[record_id])
+        body_only = request.headers.get("HX-Request") == "true"
+        return HTMLResponse(
+            render_form_page(view, rec, env, mode="display", body_only=body_only)
+        )
+
+    @app.post("/web/views/{module}/{name}", response_class=HTMLResponse)
+    async def web_form_create(
+        module: str, name: str, request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import parse_form_vals, render_form_page
+
+        view = _require_form_view(_load_view(env, module, name))
+        form = await request.form()
+        cls = env.registry[view.model]
+        vals = parse_form_vals(cls, form)
+        with env.transaction():
+            rec = env[view.model].create(vals)
+        body_only = request.headers.get("HX-Request") == "true"
+        return HTMLResponse(
+            render_form_page(view, rec, env, mode="display", body_only=body_only)
+        )
 
     return app
