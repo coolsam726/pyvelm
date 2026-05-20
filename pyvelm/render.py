@@ -942,6 +942,56 @@ def _safe_order(fields_spec: list, order: str) -> str:
     return f'"{field_name}" {direction}'
 
 
+def _group_rows(records, view, fields_spec, group_by: str, env, model_cls) -> list[dict]:
+    """Bucket `records` by their `group_by` field value.
+
+    Returns a list of `{key, label, count, rows}` dicts, ordered by
+    first appearance of each key in the source list (which is itself
+    ordered by the active sort). Empty groups are omitted.
+
+    For Many2one, the key is the related record's id and the label is
+    its display value (falls back to "(none)" for NULL). For Boolean,
+    the key is True/False and the label is "Yes"/"No". For everything
+    else, the key is the raw value and the label is `str(value)`.
+    """
+    from .fields import Boolean, Many2one
+    from .web import _display_value
+
+    field = model_cls._fields.get(group_by)
+    is_m2o = isinstance(field, Many2one)
+    is_bool = isinstance(field, Boolean)
+
+    buckets: dict = {}
+    order: list = []
+    for rec in records:
+        raw = getattr(rec, group_by, None)
+        if is_m2o:
+            key = raw.id if raw else None
+            label = _display_value(raw) if raw else "(none)"
+        elif is_bool:
+            key = bool(raw)
+            label = "Yes" if key else "No"
+        else:
+            key = raw
+            label = "(none)" if raw is None else str(raw)
+        if key not in buckets:
+            buckets[key] = {"key": key, "label": label, "count": 0, "records": []}
+            order.append(key)
+        buckets[key]["count"] += 1
+        buckets[key]["records"].append(rec)
+
+    groups = []
+    for k in order:
+        bucket = buckets[k]
+        groups.append({
+            "key": bucket["key"],
+            "label": bucket["label"],
+            "count": bucket["count"],
+            "rows": _build_rows(view, bucket["records"], fields_spec),
+        })
+    return groups
+
+
 def render_list_page(view, env, *, page: int, page_size: int,
                      search: str = "", order: str = "", filters: str = "",
                      group_by: str = "",
@@ -961,16 +1011,8 @@ def render_list_page(view, env, *, page: int, page_size: int,
     domain.extend(_parse_filters(model_cls, fields_spec, filters))
     safe_ord = _safe_order(fields_spec, order)
 
-    total = Model.search_count(domain)
-    offset = page * page_size
-    recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
-    # Enrich specs so the display-mode Many2one widget can render an
-    # "open record" affordance pointing at the comodel's form view.
     fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
-    rows = _build_rows(view, recs, fields_spec)
     headers = _field_headers(model_cls, fields_spec)
-    total_pages = max(1, (total + page_size - 1) // page_size)
-
     # Validate group_by against the headers' group_kind metadata. An
     # unknown column or one whose type doesn't group cleanly is silently
     # dropped — the value is user-controlled URL input.
@@ -978,12 +1020,30 @@ def render_list_page(view, env, *, page: int, page_size: int,
         h["name"] == group_by and h["group_kind"] != "none" for h in headers
     ) else ""
 
+    total = Model.search_count(domain)
+    if safe_group_by:
+        # When grouping is active, fetch all matching records (capped)
+        # and skip pagination — Odoo's behavior. The cap keeps memory
+        # bounded if someone groups a huge table without filtering.
+        _GROUP_CAP = 500
+        recs = Model.search(domain, limit=_GROUP_CAP, order=safe_ord)
+        groups = _group_rows(recs, view, fields_spec, safe_group_by, env, model_cls)
+        rows = []
+        total_pages = 1
+    else:
+        offset = page * page_size
+        recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
+        groups = None
+        rows = _build_rows(view, recs, fields_spec)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+
     page_title = _view_title(view, arch)
     template = _env.get_template("list.html")
     return template.render(
         view=view,
         headers=headers,
         rows=rows,
+        groups=groups,
         page=page,
         page_size=page_size,
         total=total,
@@ -1014,19 +1074,32 @@ def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", 
     domain.extend(_parse_filters(model_cls, fields_spec, filters))
     safe_ord = _safe_order(fields_spec, order)
 
-    total = Model.search_count(domain)
-    offset = page * page_size
-    recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
     fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
-    rows = _build_rows(view, recs, fields_spec)
     headers = _field_headers(model_cls, fields_spec)
-    total_pages = max(1, (total + page_size - 1) // page_size)
+    safe_group_by = group_by if any(
+        h["name"] == group_by and h["group_kind"] != "none" for h in headers
+    ) else ""
+
+    total = Model.search_count(domain)
+    if safe_group_by:
+        _GROUP_CAP = 500
+        recs = Model.search(domain, limit=_GROUP_CAP, order=safe_ord)
+        groups = _group_rows(recs, view, fields_spec, safe_group_by, env, model_cls)
+        rows = []
+        total_pages = 1
+    else:
+        offset = page * page_size
+        recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
+        groups = None
+        rows = _build_rows(view, recs, fields_spec)
+        total_pages = max(1, (total + page_size - 1) // page_size)
 
     template = _env.get_template("list_rows.html")
     return template.render(
         view=view,
         headers=headers,
         rows=rows,
+        groups=groups,
         page=page,
         page_size=page_size,
         total=total,
@@ -1034,6 +1107,7 @@ def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", 
         search=search,
         order=order,
         filters=filters,
+        group_by=safe_group_by,
         form_view_name=form_view_name,
     )
 

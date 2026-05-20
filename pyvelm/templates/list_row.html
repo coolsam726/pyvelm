@@ -1,5 +1,6 @@
 <tr data-record-id="{{ row.id }}"
     class="hover:bg-neutral-secondary transition-colors cursor-pointer"
+    {{ row_extra | default('') | safe }}
     {% if form_view_name %}
     onclick="window.location.href='/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}'"
     {% endif %}>

@@ -46,15 +46,56 @@
                 </th>
             </tr>
         </thead>
+
+        {# Grouped path — pair of <tbody>s per group:
+             1. A header tbody with the clickable group title + count.
+             2. A body tbody holding the actual rows, toggled by `open`.
+           Splitting them lets us use a single Alpine scope for both
+           while keeping the header always visible.
+           Flat path falls through below when `groups` is None. #}
+        {% if groups is not none %}
+            {% for grp in groups %}
+            {# One <tbody> per group. The Alpine `open` scope wraps the
+               header + body rows so they all see the same toggle. #}
+            <tbody class="divide-y divide-default" x-data="{ open: true }">
+                <tr class="bg-neutral-tertiary/60 cursor-pointer select-none hover:bg-neutral-tertiary"
+                    @click="open = !open">
+                    <td class="px-4 py-1.5 text-xs font-semibold text-heading"
+                        colspan="{{ headers|length + 1 }}">
+                        <span class="inline-flex items-center gap-2">
+                            <svg class="w-3 h-3 text-body-subtle transition-transform"
+                                 :class="{ 'rotate-90': open }"
+                                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+                            </svg>
+                            <span>{{ grp.label }}</span>
+                            <span class="text-2xs font-medium text-body-subtle">({{ grp.count }})</span>
+                        </span>
+                    </td>
+                </tr>
+                {% for row in grp.rows %}
+                {% with row_extra='x-show="open"' %}
+                {% include "list_row.html" %}
+                {% endwith %}
+                {% endfor %}
+            </tbody>
+            {% endfor %}
+        {% else %}
         <tbody class="divide-y divide-default">
             {% for row in rows %}
             {% include "list_row.html" %}
             {% endfor %}
         </tbody>
+        {% endif %}
     </table>
 
     {# Empty state #}
-    {% if not rows %}
+    {% if groups is not none %}
+        {% set _is_empty = not groups %}
+    {% else %}
+        {% set _is_empty = not rows %}
+    {% endif %}
+    {% if _is_empty %}
     <div class="py-16 text-center">
         <svg class="mx-auto w-10 h-10 text-body-subtle/40 mb-3" fill="none" stroke="currentColor"
              viewBox="0 0 24 24" stroke-width="1.5">

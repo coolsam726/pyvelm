@@ -291,6 +291,24 @@ def main():
             assert resp_bad.status_code == 200
             assert 'groupBy: ""' in resp_bad.text
             print("filter dropdown rendered; group_by param validated")
+
+            # Slice 3: grouping renders collapsible group headers and
+            # disables pagination. Alice/Bob have a country_id set,
+            # Carol doesn't — so we expect "France", "Japan", "(none)"
+            # buckets in the markup.
+            resp = client.get(
+                "/web/views/partners/partner.list",
+                params={"group_by": "country_id", "order": "id ASC"},
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.text
+            # Group header carries the value + count.
+            assert "France" in body and "Japan" in body and "(none)" in body
+            # Each group header opens an Alpine scope.
+            assert 'x-data="{ open: true }"' in body
+            # Pagination row is suppressed when total_pages == 1.
+            assert "pv-pagination" in body  # container still present
+            print("group_by renders bucketed list with collapsible headers")
             # Sidebar entries come from ir.ui.menu — base ships Dashboard,
             # admin ships Settings/Security/Workflows, partners ships Apps,
             # crm ships CRM. If any of these are missing, the sync broke.
