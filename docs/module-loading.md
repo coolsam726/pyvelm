@@ -54,6 +54,22 @@ Other optional keys:
 - `INSTALL_HOOK` — dotted reference (`pkg.mod:fn`) called once when the
   module is installed for the first time. Receives the `Environment`.
 
+### Catalog metadata
+
+These keys are purely informational — the loader reads them so the
+[Apps catalog page](web-layer.md#apps-catalog) can render rich cards,
+but they do not affect install behaviour. Every one of them is
+optional; modules without them appear in the catalog under
+"Uncategorised" with empty author / summary.
+
+```python
+SUMMARY: str = "Sales pipeline, leads, and opportunity tracking."
+DESCRIPTION: str = "Longer prose. Markdown-ish."
+CATEGORY: str = "Business"       # groups cards on /web/apps
+AUTHOR: str = "Your Team"
+ICON: str = "<svg ...>...</svg>"  # raw inline SVG; rendered as-is
+```
+
 ## Data files
 
 Anything declarative — views, view extensions, and (later) seed records

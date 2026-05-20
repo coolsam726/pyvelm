@@ -44,7 +44,10 @@ def _build_app():
         print("Loaded modules:", [s.name for s in specs])
 
     pool = ConnectionPool(dsn, min_size=1, max_size=4, open=True)
-    return create_app(reg, pool)
+    # `module_roots` powers the /web/apps catalog — it needs to know
+    # where to look for manifests when listing available / installable
+    # modules, not just what's already in `ir_module`.
+    return create_app(reg, pool, module_roots=[MODULES_ROOT])
 
 
 # Module-level `app` so uvicorn --reload can import it.

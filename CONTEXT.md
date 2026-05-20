@@ -268,14 +268,28 @@ UI polish wave (post-0.7.0):
     clicks to POST first and navigate on success. `beforeunload` falls
     back to the native prompt because async work can't complete on
     hard navigations.
+  - **pvConfirm interceptor** — one `htmx:confirm` listener routes
+    every `hx-confirm` through the styled dialog. Templates unchanged.
+  - **Flowbite form-control polish** — semantic-token inputs, Text
+    fields render as `<textarea>`, required `*` indicator surfaces.
+  - **Human-readable page headings** — `_view_title(view, arch)` reads
+    `arch["title"]` then falls back to `_humanize_model(view.model)`.
+  - **Per-view auto-rendered table heading** — `arch["title"]` plus
+    `_humanize_model` fallback (e.g. `crm.lead` → `Leads`).
+  - **Odoo-style list search** — single search bar with chip filters
+    replacing the per-column filter row. Filter By + Group By dropdown
+    auto-generates entries from `filter_kind` / `group_kind` per
+    header. Group By renders the table as collapsible buckets.
+  - **Apps catalog** — `/web/apps` lists every module the loader can
+    find under `module_roots`, joining disk manifests with `ir_module`
+    rows. Cards show state (Installed / To upgrade / Not installed),
+    version, deps. Superuser-gated install / upgrade / uninstall
+    endpoints; uninstall has a dry-run preview that blocks unsafe
+    operations (system module, reverse-deps, `_inherit` extensions).
+    Optional manifest fields (`SUMMARY`, `DESCRIPTION`, `CATEGORY`,
+    `AUTHOR`, `ICON`) drive the card content.
 
 Next focus options:
-  - **Adopt the `pvConfirm` dialog** — replace remaining `hx-confirm`
-    browser prompts in `list_row.html` / `form_body.html` with the
-    styled dialog component (`data-pv-confirm` triggers).
-  - **Flowbite form-control polish** — improve edit-mode widget styling
-    using Flowbite form-control patterns (labels, helper text, error
-    states).
   - **Stage 7 Slice C**: XPath/structural view arch patches.
   - **Stage 6 hardening**: Cron as a real background task, SMTP mail
     dispatch, message subtypes, followers/subscriptions.

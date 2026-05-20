@@ -158,19 +158,32 @@ entries are "named addressable things" should be promotable.
 
 ## The HTTP app
 
-`pyvelm.web.create_app(registry, pool)` builds a FastAPI app bound to a
-loaded `Registry` and a psycopg connection pool. Each request checks
-out a connection from the pool, wraps it in a fresh `Environment`, and
-returns it to the pool on exit.
+`pyvelm.web.create_app(registry, pool, module_roots=None)` builds a
+FastAPI app bound to a loaded `Registry` and a psycopg connection pool.
+Each request checks out a connection from the pool, wraps it in a fresh
+`Environment`, and returns it to the pool on exit.
 
 ```python
+from pathlib import Path
 from psycopg_pool import ConnectionPool
 from pyvelm.web import create_app
 
+MODULES_ROOT = Path(__file__).parent / "modules"
+
 pool = ConnectionPool(dsn, min_size=1, max_size=10, open=True)
-app = create_app(registry, pool)
+app = create_app(
+    registry,
+    pool,
+    module_roots=[MODULES_ROOT],     # see "Apps catalog" below
+)
 # Hand `app` to uvicorn / gunicorn / your favorite ASGI server.
 ```
+
+`module_roots` is the same list you pass to `loader.load_and_install`.
+The running app re-walks it on demand so the [Apps catalog](#apps-catalog)
+can list modules that exist on disk but haven't been installed yet. It
+defaults to an empty list — if you skip it, `/web/apps` reports
+"No modules discovered" instead of crashing.
 
 Read endpoints:
 
@@ -621,6 +634,89 @@ block so any page that renders the partial picks it up. Per-record
 form-view URLs are stashed on the field-spec by
 `_enrich_specs_for_edit` so the widget never has to look them up at
 request time — the spec is enriched once per render.
+
+## Apps catalog
+
+`/web/apps` is the visual addon-management page — Odoo's "Apps" with
+fewer bells. The Apps menu entry in the sidebar (shipped by the `base`
+module) links to it.
+
+### Wiring `module_roots`
+
+The catalog page re-runs `loader.discover(module_roots)` on every load
+so newly-dropped manifests appear without restarting the server. Pass
+the same list you handed to `loader.load_and_install`:
+
+```python
+MODULES_ROOT = Path(__file__).parent / "modules"
+
+# Install pass on startup.
+loader.load_and_install([MODULES_ROOT], env)
+
+# HTTP app — same roots so /web/apps can re-discover them.
+app = create_app(registry, pool, module_roots=[MODULES_ROOT])
+```
+
+Multiple roots work — useful when you split addons by deployment tier
+(`["./core/modules", "./custom/modules", "/opt/site-addons"]`). Each
+directory is scanned for subdirectories containing a `__pyvelm__.py`.
+
+### What the page shows
+
+Every module the loader can find is rendered as a card, grouped by
+`CATEGORY` (or "Uncategorised" if the manifest omits one). Each card
+carries:
+
+- `NAME`, `SUMMARY`, `AUTHOR` (left side, optional `ICON` next to the
+  title)
+- State badge — **Installed** / **Upgrade →** / **Not installed**,
+  colour-coded
+- Version line — installed version, or `installed → available` when
+  there's a pending upgrade
+- Dependency list — names go red when a declared dep isn't installed
+  yet (the install button stays disabled in that case)
+
+See [module-loading.md → Catalog metadata](module-loading.md#catalog-metadata)
+for the optional manifest keys that drive each card.
+
+### Actions
+
+All three action endpoints require **uid=1 (superuser)** — they execute
+install hooks (arbitrary Python) and run DDL, which is a step past
+normal ACL. Non-superuser clients get a 403.
+
+| Endpoint | What it does |
+|---|---|
+| `POST /web/apps/{name}/install` | Topologically installs `name` and any uninstalled prerequisites. Models are imported into the live registry; `loader.install([…], env)` runs schema setup, install hooks, view/menu sync per module. |
+| `POST /web/apps/{name}/upgrade` | Re-runs `loader.install([spec], env)` so version-gap migrations execute and data files (views, menus) re-sync. **Note:** new field declarations only take effect after a process restart — the DB schema is migrated but the in-memory model class isn't reloaded. The confirm prompt calls this out. |
+| `GET /web/apps/{name}/uninstall-preview` | Dry-run: returns a JSON `{blockers, tables, views, menus, reverse_deps}` summary the UI shows before any destructive action. |
+| `POST /web/apps/{name}/uninstall` | Drops tables owned by the module, deletes its `ir.ui.view` / `ir.ui.menu` rows, and removes the `ir_module` entry — all inside one transaction. Forgotten models drop out of the live registry so the catalog re-renders the card as Not installed. |
+
+All POST endpoints respond with `HX-Redirect: /web/apps` for HTMX
+callers so the sidebar re-renders (newly-installed modules may have
+added menu entries). Plain-browser POSTs get a 303 to the same URL.
+
+### Uninstall safety gates
+
+`uninstall_preview` short-circuits with one or more `blockers` strings
+when the operation isn't safe. The UI surfaces these via `pvAlert`
+instead of routing into the confirm dialog — there's no destructive
+path to confirm:
+
+- **`base` is the system module.** Always blocked.
+- **Reverse dependencies.** Any installed module whose manifest still
+  lists this one in `DEPENDS` blocks the uninstall. Remove the dependent
+  first.
+- **`_inherit` extensions.** Modules that extend models owned by other
+  modules can't be uninstalled cleanly — their added columns sit on
+  someone else's table and the framework doesn't track per-module
+  column ownership.
+
+`ir.model.access` and `ir.rule` entries seeded by install hooks aren't
+tagged with the owning module so they linger after uninstall. Same
+trade-off Odoo lives with for older data files; clean them up manually
+if you care.
+
 - **Field-level validation feedback in the inline-edit form** — today
   invalid input raises and HTMX won't swap. The intended UX is to
   return the edit fragment with inline error messages on 422; that
