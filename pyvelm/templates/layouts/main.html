@@ -301,23 +301,67 @@
     {# Flash slot reserved — used for future toast/notification injection. #}
     <div id="pv-flash" class="px-4 md:px-6 space-y-2">{% block flash %}{% endblock %}</div>
 
-    {# Breadcrumb — only rendered when a page defines the block. #}
-    {% if self.page_breadcrumb() %}
-    <div class="px-4 md:px-6 pt-4 pb-0">
-        <nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-xs text-body-subtle">
-            {% block page_breadcrumb %}{% endblock %}
+    {# Unified page-heading region.
+
+       The layout draws a single header strip per page: breadcrumb on
+       top, title (h1) + subtitle below, page actions on the right.
+       Pages override the title / subtitle by setting variables (or
+       overriding the matching block); the actions go in
+       `{% block page_actions %}`. Pages that need a fully custom
+       heading override `{% block page_heading %}` entirely.
+
+       The breadcrumb auto-derives from `breadcrumbs` (built by
+       `render.layout_context`). Pages can replace `breadcrumbs` to
+       suppress it, or override `{% block page_breadcrumb %}` for a
+       custom layout. #}
+    {% block page_heading_region %}
+    {% if breadcrumbs or self.page_title() or subtitle is defined or self.page_actions() %}
+    <div class="px-4 md:px-6 pt-5 pb-4 border-b border-default bg-neutral-primary/60">
+        {% block page_breadcrumb %}
+        {% if breadcrumbs %}
+        <nav aria-label="Breadcrumb"
+             class="mb-2 flex items-center gap-1.5 text-xs text-body-subtle">
+            {% for crumb in breadcrumbs %}
+            {% if not loop.last %}
+                {% if crumb.href %}
+                <a href="{{ crumb.href }}"
+                   class="hover:text-fg-brand hover:underline transition-colors truncate max-w-[140px]">
+                    {{ crumb.label }}
+                </a>
+                {% else %}
+                <span class="truncate max-w-[140px]">{{ crumb.label }}</span>
+                {% endif %}
+                <svg class="w-3 h-3 flex-shrink-0 text-body-subtle/50"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+                </svg>
+            {% else %}
+                <span class="text-body truncate max-w-[200px]" aria-current="page">{{ crumb.label }}</span>
+            {% endif %}
+            {% endfor %}
         </nav>
+        {% endif %}
+        {% endblock %}
+
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="min-w-0">
+                {% block page_heading %}
+                <h2 class="text-xl font-semibold text-heading tracking-tight truncate">
+                    {{ self.page_title() }}
+                </h2>
+                {% if subtitle is defined and subtitle %}
+                <p class="mt-1 text-xs text-body-subtle">{{ subtitle }}</p>
+                {% endif %}
+                {% endblock %}
+            </div>
+            <div class="flex flex-wrap items-center gap-2">{% block page_actions %}{% endblock %}</div>
+        </div>
     </div>
     {% endif %}
+    {% endblock %}
 
     {# Page content. #}
-    <main class="flex-1 px-4 md:px-6 py-4 overflow-auto">
-        {% if self.page_heading() or self.page_actions() %}
-            <div class="flex flex-wrap items-baseline justify-between gap-4 mb-6">
-                <div>{% block page_heading %}{% endblock %}</div>
-                <div class="flex flex-wrap items-center gap-2">{% block page_actions %}{% endblock %}</div>
-            </div>
-        {% endif %}
+    <main class="flex-1 px-4 md:px-6 py-5 overflow-auto">
         {% block content %}{% endblock %}
     </main>
 </div>

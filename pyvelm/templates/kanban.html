@@ -2,22 +2,6 @@
 {% block title %}{{ view.name }} — pyvelm{% endblock %}
 {% block page_title %}{{ view.name }}{% endblock %}
 
-{% block page_heading %}
-<div>
-    <h2 class="text-xl font-semibold text-heading tracking-tight">{{ view.name }}</h2>
-    <p class="mt-1 text-xs text-body-subtle">
-        {{ view.model }}
-        <span class="mx-1 text-body-subtle/50">·</span>
-        {{ total }} record{% if total != 1 %}s{% endif %}
-        <span class="mx-1 text-body-subtle/50">·</span>
-        {{ columns | length }} column{% if (columns | length) != 1 %}s{% endif %}
-        <span class="mx-1 text-body-subtle/50">·</span>
-        from
-        <code class="bg-neutral-tertiary text-body px-1.5 py-0.5 rounded text-2xs font-mono">{{ view.module }}</code>
-    </p>
-</div>
-{% endblock %}
-
 {% block content %}
 <div class="flex gap-4 overflow-x-auto pb-4">
     {% for col in columns %}

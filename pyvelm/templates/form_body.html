@@ -1,22 +1,22 @@
 {# Form body, swappable as a unit. Rendered both as the whole document
-   (via form.html) and as the HTMX swap target on Save/Cancel/Edit. #}
+   (via form.html) and as the HTMX swap target on Save/Cancel/Edit.
+
+   The layout's heading region owns the title / breadcrumb / subtitle;
+   this body only carries the action buttons (which must move with the
+   swap because they change between display/edit modes). #}
 {% set base = "/web/views/" ~ view.module ~ "/" ~ view.name %}
 {% set rec_url = base ~ "/record/" ~ (record_id if record_id else 'new') %}
 
 <div class="max-w-4xl mx-auto space-y-6">
-    <div class="flex items-start justify-between gap-4">
-        <div>
-            <h2 class="text-xl font-semibold text-heading tracking-tight">{{ title }}</h2>
-            <p class="mt-1 text-xs text-body-subtle">
-                {{ view.model }}
-                <span class="mx-1 text-body-subtle/50">·</span>
-                <code class="bg-neutral-tertiary text-body px-1.5 py-0.5 rounded text-2xs font-mono">
-                    {{ view.module }}.{{ view.name }}
-                </code>
-                <span class="mx-1 text-body-subtle/50">·</span>
-                <span class="uppercase tracking-wider">{{ mode }}</span>
-            </p>
-        </div>
+    {# Action toolbar — small, right-aligned, mode-aware. #}
+    <div class="flex items-center justify-between gap-3">
+        <span class="inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider
+                     px-2 py-0.5 rounded-full
+                     {% if mode == 'edit' %}bg-warning-soft text-warning-strong
+                     {% elif mode == 'new' %}bg-success-soft text-success-strong
+                     {% else %}bg-neutral-tertiary text-body-subtle{% endif %}">
+            {{ mode }}
+        </span>
         <div class="flex items-center gap-2">
             {% if mode == "display" and record_id %}
             <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white

@@ -1,37 +1,10 @@
 {% extends "layouts/main.html" %}
 {% block title %}{{ view.name }} — pyvelm{% endblock %}
 
-{# ── Breadcrumb ── #}
-{% block page_breadcrumb %}
-{% for crumb in breadcrumbs %}
-{% if not loop.last %}
-    <a href="{{ crumb.href }}"
-       class="hover:text-fg-brand hover:underline transition-colors truncate max-w-[120px]">
-        {{ crumb.label }}
-    </a>
-    <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor"
-         viewBox="0 0 24 24" stroke-width="2.5">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
-    </svg>
-{% else %}
-    <span class="text-body truncate max-w-[160px]" aria-current="page">{{ crumb.label }}</span>
-{% endif %}
-{% endfor %}
-{% endblock %}
-
-{# ── Heading ── #}
+{# Page title is consumed by the layout's heading region AND the
+   compact topbar h1. The default page_heading block in the layout
+   renders both the title and the `subtitle` variable. #}
 {% block page_title %}{{ view.name }}{% endblock %}
-
-{% block page_heading %}
-<div>
-    <h2 class="text-xl font-semibold text-heading tracking-tight">{{ view.name }}</h2>
-    <p class="mt-0.5 text-xs text-body-subtle flex items-center gap-1.5 flex-wrap">
-        <code class="font-mono bg-neutral-tertiary px-1.5 py-0.5 rounded text-2xs">{{ view.model }}</code>
-        <span class="text-body-subtle/40">·</span>
-        <span id="pv-count-label">{{ total }} record{{ 's' if total != 1 else '' }}</span>
-    </p>
-</div>
-{% endblock %}
 
 {% block page_actions %}
 {% if form_view_name %}
@@ -58,8 +31,10 @@
         name: {{ view.name | tojson }},
         search: {{ search | tojson }},
         order: {{ order | tojson }},
+        filters: {{ filters | tojson }},
         page: {{ page }},
-        pageSize: {{ page_size }}
+        pageSize: {{ page_size }},
+        fieldNames: {{ headers | map(attribute='name') | list | tojson }}
     };
 </script>
 <div x-data="pvList(window._pvListCfg)"
@@ -145,40 +120,48 @@ document.addEventListener('alpine:init', () => {
         search: cfg.search || '',
         searchInput: cfg.search || '',
         order: cfg.order || '',
+        // filters is a {field_name: search_text} dict. JSON-encoded for
+        // the server query param. Initial value comes from the URL.
+        filters: (() => {
+            try { return JSON.parse(cfg.filters || '{}'); }
+            catch (e) { return {}; }
+        })(),
         page: cfg.page || 0,
         pageSize: cfg.pageSize || 20,
+        fieldNames: cfg.fieldNames || [],
         loading: false,
+        // Column reorder state. Persisted to localStorage keyed by
+        // (module, view_name). When set, applies on every table render.
+        get _orderKey() { return `pv-list-order-${this.module}-${this.name}`; },
 
-        get _rowsUrl() {
-            const p = new URLSearchParams({
+        get _params() {
+            const fk = Object.keys(this.filters).filter(k => this.filters[k]);
+            const filterPayload = fk.length
+                ? JSON.stringify(Object.fromEntries(fk.map(k => [k, this.filters[k]])))
+                : '';
+            return new URLSearchParams({
                 search: this.search,
                 order: this.order,
+                filters: filterPayload,
                 page: this.page,
                 page_size: this.pageSize,
             });
-            return `/web/records/${this.module}/${this.name}?${p}`;
+        },
+        get _rowsUrl() {
+            return `/web/records/${this.module}/${this.name}?${this._params}`;
         },
 
         load() {
             this.loading = true;
-            // Push the URL so the page is bookmarkable / back-navigable
-            const p = new URLSearchParams({
-                search: this.search,
-                order: this.order,
-                page: this.page,
-                page_size: this.pageSize,
-            });
-            const newUrl = `/web/views/${this.module}/${this.name}?${p}`;
+            const newUrl = `/web/views/${this.module}/${this.name}?${this._params}`;
             window.history.pushState({}, '', newUrl);
-
             htmx.ajax('GET', this._rowsUrl, {
                 target: '#pv-table-container',
                 swap: 'innerHTML',
             }).then(() => {
                 this.loading = false;
-            }).catch(() => {
-                this.loading = false;
-            });
+                this.applyColumnOrder();
+            }).catch(() => { this.loading = false; });
         },
 
         onSearchChange() {
@@ -186,10 +169,22 @@ document.addEventListener('alpine:init', () => {
             this.page = 0;
             this.load();
         },
-
         clearSearch() {
             this.search = '';
             this.searchInput = '';
+            this.page = 0;
+            this.load();
+        },
+
+        onFilterChange() {
+            this.page = 0;
+            this.load();
+        },
+        hasFilters() {
+            return Object.values(this.filters).some(v => v && v.length);
+        },
+        clearFilters() {
+            this.filters = {};
             this.page = 0;
             this.load();
         },
@@ -209,6 +204,124 @@ document.addEventListener('alpine:init', () => {
         goPage(p) {
             this.page = p;
             this.load();
+        },
+
+        // ── Column reorder via native HTML5 drag-and-drop. ──
+        // We store a list of field names in localStorage; on every
+        // render we permute the column DOM nodes (thead cells + each
+        // tbody row's cells + the filter row) accordingly. The Actions
+        // column stays at the end (it isn't draggable).
+
+        savedOrder() {
+            try {
+                const raw = localStorage.getItem(this._orderKey);
+                if (!raw) return null;
+                const arr = JSON.parse(raw);
+                return Array.isArray(arr) ? arr : null;
+            } catch (e) { return null; }
+        },
+        persistOrder(arr) {
+            try { localStorage.setItem(this._orderKey, JSON.stringify(arr)); }
+            catch (e) {}
+        },
+        applyColumnOrder() {
+            const order = this.savedOrder();
+            if (!order || !order.length) return;
+            const table = this.$root.querySelector('[data-pv-list-table]');
+            if (!table) return;
+            // Build the per-row reorder function once.
+            const reorder = (row) => {
+                if (!row) return;
+                const cells = Array.from(row.children);
+                const byField = new Map();
+                let trailing = null;  // Actions cell — no data-field; always last.
+                cells.forEach(c => {
+                    const f = c.getAttribute('data-field');
+                    if (f) byField.set(f, c);
+                    else trailing = c;
+                });
+                // Append in saved-order; any field not in the saved list
+                // gets appended after, preserving its current order.
+                const seen = new Set();
+                order.forEach(f => {
+                    const c = byField.get(f);
+                    if (c) { row.appendChild(c); seen.add(f); }
+                });
+                cells.forEach(c => {
+                    const f = c.getAttribute('data-field');
+                    if (f && !seen.has(f)) row.appendChild(c);
+                });
+                if (trailing) row.appendChild(trailing);
+            };
+            // Reorder all known rows.
+            reorder(table.querySelector('[data-pv-header-row]'));
+            reorder(table.querySelector('[data-pv-filter-row]'));
+            table.querySelectorAll('tbody > tr').forEach(reorder);
+        },
+        captureCurrentOrder() {
+            const table = this.$root.querySelector('[data-pv-list-table]');
+            if (!table) return [];
+            const hdr = table.querySelector('[data-pv-header-row]');
+            if (!hdr) return [];
+            return Array.from(hdr.children)
+                .map(c => c.getAttribute('data-field'))
+                .filter(Boolean);
+        },
+
+        // Drag-and-drop handlers. Bound on a delegated dragstart at
+        // the table level; the dragged element is identified by the
+        // `data-field` attribute on its <th>.
+        initDragReorder() {
+            const tbl = this.$root.querySelector('[data-pv-list-table]');
+            if (!tbl) return;
+            let draggedField = null;
+
+            tbl.addEventListener('dragstart', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (!th) return;
+                draggedField = th.getAttribute('data-field');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', draggedField);
+            });
+            tbl.addEventListener('dragover', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (!th || !draggedField) return;
+                e.preventDefault();
+                th.setAttribute('data-pv-drag-over', 'true');
+            });
+            tbl.addEventListener('dragleave', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (th) th.removeAttribute('data-pv-drag-over');
+            });
+            tbl.addEventListener('drop', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (!th || !draggedField) return;
+                e.preventDefault();
+                th.removeAttribute('data-pv-drag-over');
+                const targetField = th.getAttribute('data-field');
+                if (targetField === draggedField) { draggedField = null; return; }
+                const order = this.captureCurrentOrder();
+                const from = order.indexOf(draggedField);
+                const to = order.indexOf(targetField);
+                if (from < 0 || to < 0) { draggedField = null; return; }
+                order.splice(to, 0, order.splice(from, 1)[0]);
+                this.persistOrder(order);
+                this.applyColumnOrder();
+                draggedField = null;
+            });
+        },
+
+        init() {
+            // Defer one tick so the initial server-rendered HTML is in
+            // the DOM before we permute it.
+            this.$nextTick(() => {
+                this.applyColumnOrder();
+                this.initDragReorder();
+            });
+            // Re-apply column order after every HTMX swap inside our root.
+            this.$el.addEventListener('htmx:afterSwap', () => {
+                this.applyColumnOrder();
+            });
         },
     }));
 });

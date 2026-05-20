@@ -493,7 +493,15 @@ def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = 
     title = _record_title(record_or_none, view.model, mode)
     template_name = "form_body.html" if body_only else "form.html"
     template = _env.get_template(template_name)
-    ctx = {} if body_only else layout_context(env, current_path)
+    # The form view doesn't have a menu entry — make the breadcrumb
+    # come from the model's list view's group instead, with the
+    # record's title as the leaf.
+    ctx = (
+        {} if body_only
+        else layout_context(env, current_path, leaf_label=title)
+    )
+    if not body_only:
+        ctx["subtitle"] = f"{view.model} · {mode}"
     return template.render(
         view=view,
         record=record_or_none,
@@ -615,6 +623,10 @@ def render_kanban_page(view, env, *, current_path: str | None = None) -> str:
         view=view,
         columns=columns,
         total=len(recs),
+        subtitle=(
+            f"{view.model} · {len(recs)} record{'s' if len(recs) != 1 else ''}"
+            f" · {len(columns)} column{'s' if len(columns) != 1 else ''}"
+        ),
         **layout_context(env, current_path),
     )
 
@@ -637,6 +649,64 @@ def _find_form_view(view, env):
 
 
 _SEARCHABLE_FIELD_TYPES = ("Char", "Text")
+
+
+def _parse_filters(model_cls, fields_spec: list, filters: str) -> list:
+    """Parse a JSON dict of `{field_name: search_text}` into ilike
+    domain leaves AND-ed into the search.
+
+    Each entry must reference a field in `fields_spec` (or `id`) so
+    users can't smuggle filters against unrelated columns. Unknown
+    keys are silently dropped. Empty values are dropped (so an empty
+    filter input doesn't constrain anything).
+    """
+    import json
+    from .fields import Char, Many2one, Text
+
+    if not filters:
+        return []
+    try:
+        data = json.loads(filters)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(data, dict):
+        return []
+
+    allowed = {s["name"] for s in fields_spec} | {"id"}
+    leaves: list[tuple] = []
+    for fname, term in data.items():
+        if fname not in allowed or not term:
+            continue
+        if fname == "id":
+            try:
+                leaves.append(("id", "=", int(term)))
+            except (TypeError, ValueError):
+                continue
+            continue
+        field = model_cls._fields.get(fname)
+        if field is None:
+            continue
+        # Per-field type-aware filter:
+        #   text fields -> ilike '%term%'
+        #   Many2one    -> ilike against the comodel's display text via
+        #                  dotted-path on `name` (most comodels have it)
+        #   anything else with a stored column -> = with a coerced value
+        if isinstance(field, (Char, Text)):
+            leaves.append((fname, "ilike", f"%{term}%"))
+        elif isinstance(field, Many2one):
+            # Match the comodel's `name` field via dotted-path ilike if
+            # the term is non-numeric; fall back to an id match when it
+            # parses as an int (so "1" matches the record with id=1).
+            try:
+                leaves.append((fname, "=", int(term)))
+            except (TypeError, ValueError):
+                leaves.append((f"{fname}.name", "ilike", f"%{term}%"))
+        else:
+            try:
+                leaves.append((fname, "=", field.to_sql_param(term)))
+            except Exception:  # noqa: BLE001
+                continue
+    return leaves
 
 
 def _build_search_domain(model_cls, fields_spec: list, search: str) -> list:
@@ -702,6 +772,7 @@ def render_list_page(view, env, *, page: int, page_size: int,
     Model = env[view.model]
 
     domain = _build_search_domain(model_cls, fields_spec, search) if search else []
+    domain.extend(_parse_filters(model_cls, fields_spec, filters))
     safe_ord = _safe_order(fields_spec, order)
 
     total = Model.search_count(domain)
@@ -710,12 +781,6 @@ def render_list_page(view, env, *, page: int, page_size: int,
     rows = _build_rows(view, recs, fields_spec)
     headers = _field_headers(model_cls, fields_spec)
     total_pages = max(1, (total + page_size - 1) // page_size)
-
-    breadcrumbs = [
-        {"label": "Home", "href": "/web/dashboard"},
-        {"label": view.module or "app", "href": None},
-        {"label": view.name, "href": None},
-    ]
 
     template = _env.get_template("list.html")
     return template.render(
@@ -730,7 +795,10 @@ def render_list_page(view, env, *, page: int, page_size: int,
         order=order,
         filters=filters,
         form_view_name=form_view_name,
-        breadcrumbs=breadcrumbs,
+        # Subtitle line shown below the title in the heading region.
+        subtitle=f"{view.model} · {total} record{'s' if total != 1 else ''}",
+        # `breadcrumbs` comes from layout_context; the menu-derived
+        # default is correct for list views (they have a menu entry).
         **layout_context(env, current_path),
     )
 
@@ -747,6 +815,7 @@ def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", 
     Model = env[view.model]
 
     domain = _build_search_domain(model_cls, fields_spec, search) if search else []
+    domain.extend(_parse_filters(model_cls, fields_spec, filters))
     safe_ord = _safe_order(fields_spec, order)
 
     total = Model.search_count(domain)
@@ -827,6 +896,8 @@ def render_admin_page(env=None, current_path: str | None = None) -> str:
     ]
     template = _env.get_template("admin.html")
     ctx = layout_context(env, current_path) if env is not None else {}
+    if env is not None:
+        ctx["subtitle"] = "Framework configuration and security."
     return template.render(cards=cards, **ctx)
 
 
@@ -988,7 +1059,47 @@ def _menu(env, current_path: str | None) -> list[dict]:
     return [_mark(item) for item in items]
 
 
-def layout_context(env, current_path: str | None = None) -> dict:
+def build_breadcrumbs(menu_tree: list, current_path: str | None,
+                      leaf_label: str | None = None) -> list[dict]:
+    """Derive crumbs from the menu structure.
+
+    Walks the menu looking for a child whose `href` matches `current_path`.
+    Returns `[{"label", "href"}, ...]` with "Home" + parent-group label +
+    leaf label. The leaf is overridable (e.g. `Alice` instead of
+    `partner.form` on a form page).
+
+    Always starts with a "Home" entry pointing at /web/admin so the user
+    has a way back regardless of menu depth.
+    """
+    crumbs: list[dict] = [{"label": "Home", "href": "/web/admin"}]
+    parent: dict | None = None
+    leaf: dict | None = None
+    if current_path:
+        for group in menu_tree:
+            # A flat link.
+            if group.get("href") == current_path:
+                leaf = group
+                break
+            # A children group — look one level down.
+            for child in group.get("children", []) or []:
+                if child.get("href") == current_path:
+                    parent = group
+                    leaf = child
+                    break
+            if leaf is not None:
+                break
+    if parent is not None:
+        crumbs.append({"label": parent["label"], "href": None})
+    if leaf is not None:
+        crumbs.append({"label": leaf_label or leaf["label"], "href": None})
+    elif leaf_label:
+        # Path isn't in the menu but the caller knows the label.
+        crumbs.append({"label": leaf_label, "href": None})
+    return crumbs
+
+
+def layout_context(env, current_path: str | None = None,
+                   leaf_label: str | None = None) -> dict:
     """Return the shell context every page renderer passes to the
     `layouts/main.html` base template."""
     name = ""
@@ -1019,12 +1130,18 @@ def layout_context(env, current_path: str | None = None) -> dict:
         finally:
             bypass_env._acl_bypass = False
 
+    menu_tree = _menu(env, current_path)
     return {
-        "menu": _menu(env, current_path),
+        "menu": menu_tree,
         "current_user_name": name,
         "current_user_login": login,
         "current_user_initial": initial,
         "companies": companies,
         "current_company_id": env.company_id,
         "current_company_name": current_company_name,
+        # Default crumbs derived from the menu. Pages that want a
+        # different leaf label (e.g. the record name on a form view)
+        # pass `leaf_label`; renderers can override `breadcrumbs`
+        # directly when the page lives outside the menu altogether.
+        "breadcrumbs": build_breadcrumbs(menu_tree, current_path, leaf_label),
     }

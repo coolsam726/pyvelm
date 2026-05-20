@@ -256,6 +256,23 @@ config lives at the repo root:
 The compiled CSS is served via the existing `/web/static` mount
 (`pyvelm/templates/layouts/main.html` links `/web/static/dist/pyvelm.css`).
 
+**Page-heading region.** The layout draws a single header strip per
+page: optional breadcrumb on top, an `h2` title + optional subtitle
+below, page actions on the right. Pages just set:
+
+- `{% block page_title %}` — the title text (also used by the
+  compact h1 in the topbar).
+- `subtitle` — a string passed from the renderer (e.g. "res.partner
+  · 3 records").
+- `{% block page_actions %}` — buttons on the right.
+
+For custom heading layouts, override `{% block page_heading %}`
+directly (replaces the title+subtitle markup, keeps the breadcrumb /
+actions row). The breadcrumb derives from the menu tree via
+`render.build_breadcrumbs(menu, current_path, leaf_label)`; renderers
+can pass a `leaf_label` to override the trailing crumb (form views
+use the record's display name).
+
 **Layout shell.** `pyvelm/templates/layouts/main.html` is the base
 template every page extends. It provides:
 
@@ -520,6 +537,39 @@ do — `["card", "fields", "country_id"]` reaches the dict with
 - **Many2many / One2many editing widgets** — the edit-mode renderer
   for these falls through to the display rendering. A real multi-
   select needs design (chip removal, search-add, etc.).
+
+## Data tables
+
+List views render a server-side DataTable with:
+
+- **Pagination** — page-numbered (`list_pagination.html`); page
+  size selector with 10/20/50/100. URL-bookmarkable via
+  `?search=&order=&filters=&page=&page_size=`.
+- **Search** — single text box, ILIKE-OR across every text field in
+  the resolved arch. Debounced 400ms.
+- **Per-column filters** — a small input under each header.
+  Type-aware: text fields go through ILIKE, Many2one tries an id
+  match first then falls back to `<m2o>.name ILIKE`. Filters AND
+  together. Persisted in the URL alongside search.
+- **Per-column sort** — click a header to toggle
+  ASC → DESC → unsorted.
+- **Column reorder** — drag-and-drop column headers. The chosen
+  order is persisted to `localStorage` keyed by
+  `(module, view_name)` and re-applied after every HTMX swap by the
+  `pvList` Alpine component. The Actions column always stays last.
+
+Row-level reorder via a drag handle (the Odoo "handle" widget for
+ordered records via a `sequence` field) is **not** shipped yet —
+it'd need a model-level `sequence` integer and a different DnD
+target. Deferred.
+
+All four features live in `pvList` (Alpine component in `list.html`)
+plus `_parse_filters` and `_build_search_domain` in
+`pyvelm/render.py`. The server endpoint
+`GET /web/records/{module}/{name}` accepts `search`, `order`,
+`filters` (JSON dict), `page`, `page_size` and returns the
+re-rendered table fragment; HTMX swaps it into
+`#pv-table-container`.
 - **Field-level validation feedback in the inline-edit form** — today
   invalid input raises and HTMX won't swap. The intended UX is to
   return the edit fragment with inline error messages on 422; that
