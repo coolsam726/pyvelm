@@ -52,7 +52,7 @@
        commits on debounce. A trailing "Filters" button toggles the
        per-column dropdown (Filter By + Group By). #}
     <div data-pv-search-bar
-         class="relative bg-neutral-primary border border-default rounded-lg shadow-sm"
+         class="relative bg-neutral-primary border border-default rounded-lg"
          @click.outside="panelOpen = false"
          @keydown.escape="panelOpen = false">
 
@@ -132,7 +132,7 @@
            clears the grouping. #}
         <div x-show="panelOpen" x-cloak x-transition.opacity.duration.100ms
              class="absolute left-0 right-0 top-full mt-1 z-30
-                    bg-neutral-primary border border-default rounded-lg shadow-lg
+                    bg-neutral-primary border border-default rounded-lg shadow-sm
                     grid grid-cols-1 md:grid-cols-2 divide-x divide-default"
              data-pv-filter-panel>
 
@@ -250,7 +250,7 @@
                 class="text-xs rounded-md border border-default bg-neutral-primary text-body
                        py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand/40
                        focus:border-fg-brand">
-            <option value="10">10</option>
+            <option value="10" selected>10</option>
             <option value="20">20</option>
             <option value="50">50</option>
             <option value="100">100</option>
@@ -294,7 +294,7 @@ document.addEventListener('alpine:init', () => {
             return out;
         })(),
         page: cfg.page || 0,
-        pageSize: cfg.pageSize || 20,
+        pageSize: cfg.pageSize || 10,
         fieldNames: cfg.fieldNames || [],
         headers: cfg.headers || [],
         sequenceField: cfg.sequenceField || null,

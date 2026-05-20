@@ -1,8 +1,10 @@
 <tr data-record-id="{{ row.id or 'new' }}" class="bg-brand-softer/60">
+    {# Empty checkbox gutter — matches the display-row layout. #}
+    <td class="w-9 px-3 py-4"></td>
     {% for cell in row.cells %}
-    <td data-field="{{ cell.name }}" class="px-4 py-2.5 align-top">{{ cell.html }}</td>
+    <td data-field="{{ cell.name }}" class="px-4 py-4 align-middle">{{ cell.html }}</td>
     {% endfor %}
-    <td class="px-4 py-2.5 text-right whitespace-nowrap text-xs">
+    <td class="px-4 py-4 text-right whitespace-nowrap text-xs">
         {% if row.id %}
         <button class="text-fg-success-strong hover:underline font-medium mr-3"
                 hx-post="/web/records/{{ view.module }}/{{ view.name }}/row/{{ row.id }}"

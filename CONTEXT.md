@@ -375,6 +375,24 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     scale-out gotchas (per-worker rate limit, X-Forwarded-For trust,
     pool sizing, where to put a CDN).
 
+  ✅ **Nuru-style shell** (github.com/coolsam726/nuru) implemented:
+  - **Sidebar**: flattened to flat nav with small uppercase
+    section-label separators; no `<details>`/chevron. Active item
+    retains soft primary-tint background + primary text.
+  - **Topbar**: app name ("pyvelm") fixed on the left; page title
+    stays in the page-heading region below. `{% block page_title %}`
+    kept in a `sr-only` span so `self.page_title()` still works.
+  - **Table**: leftmost checkbox column added (future bulk selection);
+    `py-2.5` → `py-1.5` on thead/tbody for slimmer rows; drag-grab
+    icon removed from column headers (drag handle kept on
+    sequence-reorder rows only); Boolean display widget changed from
+    checkmark/X to colored Yes/No badge pill
+    (`bg-success-soft text-fg-success-strong` / `bg-neutral-tertiary
+    text-body-subtle`). CSS rebuilt.
+  Files touched: `layouts/main.html`, `list_table.html`,
+  `list_row.html`, `list_row_edit.html`, `render.py`,
+  `static/dist/pyvelm.css`.
+
 Next focus options:
   - **Documents & attachments**: `ir.attachment` model + on-disk
     storage backend + upload endpoint + form widget. Touches MIME

@@ -98,10 +98,12 @@ def _render_bool(value, spec, field):
         return Markup("")
     if value:
         return Markup(
-            '<span class="text-green-600 font-bold" aria-label="true">&#10003;</span>'
+            '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold'
+            ' bg-success-soft text-fg-success-strong" aria-label="true">Yes</span>'
         )
     return Markup(
-        '<span class="text-gray-400 font-bold" aria-label="false">&#10007;</span>'
+        '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold'
+        ' bg-neutral-tertiary text-body-subtle" aria-label="false">No</span>'
     )
 
 

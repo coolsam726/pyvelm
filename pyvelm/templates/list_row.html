@@ -4,11 +4,14 @@
     {% if form_view_name %}
     onclick="window.location.href='/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}'"
     {% endif %}>
+    {# Leftmost checkbox — placeholder for future bulk selection. #}
+    <td class="w-9 px-3 py-4 align-middle" onclick="event.stopPropagation()">
+        <input type="checkbox" class="rounded border-default w-3.5 h-3.5 cursor-not-allowed opacity-40"
+               disabled aria-label="Select row">
+    </td>
     {% if sequence_field %}
-    {# Drag handle cell. `draggable` lives on the inner span so the
-       row's click-to-form behavior still works on the rest of the
-       row, and stopPropagation keeps the drag from triggering it. #}
-    <td class="w-6 px-2 py-2.5 align-middle text-body-subtle"
+    {# Drag handle cell — only on sequence-reorder rows. #}
+    <td class="w-6 px-2 py-4 align-middle text-body-subtle"
         onclick="event.stopPropagation()">
         <span data-pv-row-handle draggable="true"
               class="inline-flex items-center justify-center w-5 h-5 rounded
@@ -23,9 +26,9 @@
     </td>
     {% endif %}
     {% for cell in row.cells %}
-    <td data-field="{{ cell.name }}" class="px-4 py-2.5 align-top text-body">{{ cell.html }}</td>
+    <td data-field="{{ cell.name }}" class="px-4 py-4 align-middle text-body">{{ cell.html }}</td>
     {% endfor %}
-    <td class="px-4 py-2.5 text-right whitespace-nowrap text-xs"
+    <td class="px-4 py-4 text-right whitespace-nowrap text-xs"
         onclick="event.stopPropagation()">
         {% if form_view_name %}
         <a href="/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}/edit"

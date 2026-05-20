@@ -87,13 +87,12 @@
 
 {# ───── Sidebar ───── #}
 <aside class="fixed md:relative inset-y-0 left-0 z-30
-              w-64 min-h-screen bg-neutral-primary flex flex-col flex-shrink-0
-              border-r border-default
+              w-64 min-h-screen bg-neutral-secondary flex flex-col flex-shrink-0
               md:translate-x-0 transition-transform duration-200 ease-in-out"
        :class="{ '-translate-x-full': !sidebarOpen }">
 
     {# Brand. #}
-    <div class="px-4 h-[60px] border-b border-default flex items-center justify-between">
+    <div class="px-4 h-[60px] flex items-center justify-between">
         <div class="flex items-center gap-2.5">
             <div class="w-7 h-7 rounded-lg bg-fg-brand flex items-center justify-center shrink-0">
                 <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor"
@@ -160,7 +159,7 @@
     </nav>
 
     {% if current_user_name %}
-    <div class="border-t border-default px-4 py-3 text-xs text-body-subtle">
+    <div class="px-4 py-3 text-xs text-body-subtle">
         <p class="truncate">Signed in as <span class="font-semibold text-heading">{{ current_user_name }}</span></p>
         {% if current_company_name %}
         <p class="truncate text-body-subtle/70">{{ current_company_name }}</p>
@@ -173,8 +172,8 @@
 <div class="flex-1 flex flex-col min-h-screen overflow-x-hidden">
 
     {# Topbar. #}
-    <header class="flex items-center gap-3 px-4 md:px-6 h-[60px] border-b border-default
-                   bg-neutral-primary sticky top-0 z-10">
+    <header class="flex items-center gap-3 px-4 md:px-6 h-[60px]
+                   bg-neutral-secondary sticky top-0 z-10">
 
         <button @click="sidebarOpen = true" aria-label="Open menu"
                 class="md:hidden p-1.5 -ml-1.5 rounded-md text-body hover:bg-neutral-secondary">
@@ -183,9 +182,13 @@
             </svg>
         </button>
 
-        <h1 class="text-base font-semibold text-heading tracking-tight truncate flex-1 min-w-0">
-            {% block page_title %}{% endblock %}
-        </h1>
+        {# page_title block — kept invisible here so the page-heading
+           region below can still call self.page_title(). The topbar
+           shows the fixed app name per the Nuru design spec. #}
+        <span class="sr-only">{% block page_title %}{% endblock %}</span>
+        <span class="text-base font-semibold text-heading tracking-tight truncate flex-1 min-w-0">
+            pyvelm
+        </span>
 
         <div class="flex items-center gap-2">
 
@@ -320,7 +323,7 @@
        custom layout. #}
     {% block page_heading_region %}
     {% if breadcrumbs or self.page_title() or subtitle is defined or self.page_actions() %}
-    <div class="px-4 md:px-6 pt-5 pb-4 border-b border-default bg-neutral-primary/60">
+    <div class="px-4 md:px-6 pt-5 pb-4">
         {% block page_breadcrumb %}
         {% if breadcrumbs %}
         <nav aria-label="Breadcrumb"
