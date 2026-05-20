@@ -533,10 +533,40 @@ def _form_sections(view, record_or_none, env, mode: str) -> list[dict]:
     return out
 
 
+def _humanize_model(model_name: str, plural: bool = True) -> str:
+    """Convert a dotted model name to a human label.
+
+    `res.partner`     → `Partners`   (last segment, title-cased, pluralised)
+    `ir.model.access` → `Access`     (already ends in a vowel-ish, no s)
+    `res.company`     → `Companies`  (y → ies)
+    `res.users`       → `Users`      (already plural)
+    """
+    part = model_name.rsplit(".", 1)[-1].replace("_", " ")
+    label = part.title()
+    if plural:
+        if label.endswith("s"):
+            pass                         # already plural
+        elif label.endswith("y") and len(label) > 1:
+            label = label[:-1] + "ies"
+        else:
+            label += "s"
+    return label
+
+
+def _view_title(view, arch: dict) -> str:
+    """Return the human-readable page heading for a list or kanban view.
+
+    Priority order:
+      1. `title` key in the arch  (explicitly set by the view author)
+      2. Humanised model name     (automatic fallback)
+    """
+    return arch.get("title") or _humanize_model(view.model)
+
+
 def _record_title(record_or_none, view_model: str, mode: str) -> str:
     """Best-effort short title for the form header."""
     if mode == "new" or record_or_none is None:
-        return f"New {view_model}"
+        return f"New {_humanize_model(view_model, plural=False)}"
     cls = type(record_or_none)
     if "name" in cls._fields:
         nm = getattr(record_or_none, "name", None)
@@ -683,13 +713,15 @@ def render_kanban_page(view, env, *, current_path: str | None = None) -> str:
             "cards": cards,
         })
 
+    page_title = _view_title(view, arch)
     template = _env.get_template("kanban.html")
     return template.render(
         view=view,
         columns=columns,
         total=len(recs),
+        page_title=page_title,
         subtitle=(
-            f"{view.model} · {len(recs)} record{'s' if len(recs) != 1 else ''}"
+            f"{len(recs)} record{'s' if len(recs) != 1 else ''}"
             f" · {len(columns)} column{'s' if len(columns) != 1 else ''}"
         ),
         **layout_context(env, current_path),
@@ -873,6 +905,7 @@ def render_list_page(view, env, *, page: int, page_size: int,
     headers = _field_headers(model_cls, fields_spec)
     total_pages = max(1, (total + page_size - 1) // page_size)
 
+    page_title = _view_title(view, arch)
     template = _env.get_template("list.html")
     return template.render(
         view=view,
@@ -886,10 +919,8 @@ def render_list_page(view, env, *, page: int, page_size: int,
         order=order,
         filters=filters,
         form_view_name=form_view_name,
-        # Subtitle line shown below the title in the heading region.
-        subtitle=f"{view.model} · {total} record{'s' if total != 1 else ''}",
-        # `breadcrumbs` comes from layout_context; the menu-derived
-        # default is correct for list views (they have a menu entry).
+        page_title=page_title,
+        subtitle=f"{total} record{'s' if total != 1 else ''}",
         **layout_context(env, current_path),
     )
 

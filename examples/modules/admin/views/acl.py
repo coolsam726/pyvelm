@@ -85,6 +85,7 @@ VIEWS: list[View] = [
         "model": "ir.model.access",
         "view_type": "list",
         "arch": {
+            "title": "Model Access",
             "fields": [
                 "name",
                 "model",

@@ -1,10 +1,6 @@
 {% extends "layouts/main.html" %}
-{% block title %}{{ view.name }} — pyvelm{% endblock %}
-
-{# Page title is consumed by the layout's heading region AND the
-   compact topbar h1. The default page_heading block in the layout
-   renders both the title and the `subtitle` variable. #}
-{% block page_title %}{{ view.name }}{% endblock %}
+{% block title %}{{ page_title }} — pyvelm{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
 
 {% block page_actions %}
 {% if form_view_name %}

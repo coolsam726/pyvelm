@@ -6,6 +6,7 @@ VIEWS: list[View] = [
         "model": "crm.lead",
         "view_type": "list",
         "arch": {
+            "title": "All Leads",
             "form_view": "lead.form",
             "fields": [
                 "name",
@@ -49,6 +50,7 @@ VIEWS: list[View] = [
         "model": "crm.lead",
         "view_type": "kanban",
         "arch": {
+            "title": "Pipeline",
             "group_by": "stage",
             "form_view": "lead.form",
             "card": {

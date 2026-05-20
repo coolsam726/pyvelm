@@ -469,8 +469,8 @@ def main():
             assert resp.status_code == 200, resp.text
             # Body-only fragment because HX-Request: true.
             assert 'name="name"' in resp.text
-            # Title shows "New res.partner"
-            assert "New res.partner" in resp.text
+            # Title shows "New Partner" (humanised from res.partner)
+            assert "New Partner" in resp.text
             print("form new renders empty edit shell")
 
             # ----- B.5 / Stage 5: ACL behavior -----

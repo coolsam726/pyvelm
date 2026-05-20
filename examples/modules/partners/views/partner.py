@@ -50,6 +50,7 @@ VIEWS: list[View] = [
         "model": "res.partner",
         "view_type": "kanban",
         "arch": {
+            "title": "Partner Board",
             # `title` / `subtitle` are field references rendered with
             # the field's default display widget. `fields` shows
             # label/value pairs; `badges` renders small chip-like
