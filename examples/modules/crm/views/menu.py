@@ -1,5 +1,8 @@
 """Sidebar entries owned by the crm module."""
 
+from pyvelm.builders import menu_group, menu_item
+from pyvelm.types import Menu
+
 _ICON_CRM = (
     '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8">'
     '<path stroke-linecap="round" stroke-linejoin="round" '
@@ -12,10 +15,10 @@ _ICON_CRM = (
 )
 
 
-MENUS: list[dict] = [
-    {"name": "crm", "label": "CRM", "icon": _ICON_CRM, "sequence": 30},
-    {"name": "crm.pipeline", "parent": "crm.crm", "label": "Pipeline",
-     "href": "/web/views/crm/lead.kanban", "sequence": 10},
-    {"name": "crm.leads", "parent": "crm.crm", "label": "All Leads",
-     "href": "/web/views/crm/lead.list", "sequence": 20},
+MENUS: list[Menu] = [
+    menu_group("crm", "CRM", icon=_ICON_CRM, sequence=30),
+    menu_item("crm.pipeline", "Pipeline",  parent="crm.crm",
+              href="/web/views/crm/lead.kanban", sequence=10),
+    menu_item("crm.leads",    "All Leads", parent="crm.crm",
+              href="/web/views/crm/lead.list",   sequence=20),
 ]

@@ -1,123 +1,88 @@
-"""Inherit and patch the base `partners.partner.list` view.
+"""Inherit and patch the base ``partners`` views.
 
 Demonstrates each operation kind:
-  - remove         : drop a field from the list
-  - after          : positional insertion
-  - update         : merge multiple attributes into a target dict (the
-                     Odoo `position="attributes"` ergonomic — terse when
-                     you have several attrs to set on the same field)
-  - set            : add a single new attribute (granular)
+  - op_remove  : drop a field from the list
+  - op_after   : positional insertion
+  - op_update  : merge multiple attributes into a target dict (kwargs)
+  - op_set     : write a single attribute at a target path
 
-The last inherit on this list (`partner.form.pro.xpath`) demos
-Stage 7 Slice C extensions:
+The last inherit (``partner.form.pro.xpath``) demos Stage 7 Slice C:
   - dict-segment **predicates** to match list entries by any attribute
-  - `"**"` **wildcard** to find a node anywhere in the arch
+  - ``"**"`` **wildcard** to find a node anywhere in the arch
 """
 
+from pyvelm.builders import (
+    inherit_view,
+    op_after,
+    op_remove,
+    op_set,
+    op_update,
+)
 from pyvelm.types import ViewInherit
 
 VIEW_INHERITS: list[ViewInherit] = [
-    {
-        "name": "partner.list.pro",
-        "inherit": "partners.partner.list",
-        "priority": 20,
-        "operations": [
+    inherit_view(
+        "partner.list.pro",
+        "partners.partner.list",
+        priority=20,
+        ops=[
             # Remove the age column.
-            {"op": "remove", "target": ["fields", "age"]},
+            op_remove(["fields", "age"]),
 
-            # Insert tag_ids after country_id (positional).
-            {
-                "op": "after",
-                "target": ["fields", "country_id"],
-                "value": {"name": "tag_ids"},
-            },
+            # Insert tag_ids after country_id.
+            op_after(["fields", "country_id"], {"name": "tag_ids"}),
 
             # Decorate `active` with multiple attributes at once.
-            {
-                "op": "update",
-                "target": ["fields", "active"],
-                "value": {"widget": "toggle", "readonly": True},
-            },
+            op_update(["fields", "active"], widget="toggle", readonly=True),
 
-            # Granular single-attribute set: add a `label` to `code`.
-            {
-                "op": "set",
-                "target": ["fields", "code", "label"],
-                "value": "Partner code",
-            },
+            # Add a label to `code`.
+            op_set(["fields", "code", "label"], "Partner code"),
         ],
-    },
-    {
-        # Section-level inheritance: target a field inside a specific
-        # section of the form arch. Same op vocabulary as list views,
-        # just deeper paths.
-        "name": "partner.form.pro",
-        "inherit": "partners.partner.form",
-        "priority": 20,
-        "operations": [
+    ),
+
+    inherit_view(
+        "partner.form.pro",
+        "partners.partner.form",
+        priority=20,
+        ops=[
             # Re-label the profile section.
-            {
-                "op": "set",
-                "target": ["sections", "profile", "title"],
-                "value": "Demographics",
-            },
+            op_set(["sections", "profile", "title"], "Demographics"),
+
             # Push the `active` field with a toggle widget hint.
-            {
-                "op": "update",
-                "target": ["sections", "profile", "fields", "active"],
-                "value": {"widget": "toggle"},
-            },
+            op_update(["sections", "profile", "fields", "active"], widget="toggle"),
+
             # Drop `parent_id` from the profile section.
-            {
-                "op": "remove",
-                "target": ["sections", "profile", "fields", "parent_id"],
-            },
+            op_remove(["sections", "profile", "fields", "parent_id"]),
+
             # Add a new VIP section with the vip_note field (Stage 7).
-            {
-                "op": "after",
-                "target": ["sections", "relations"],
-                "value": {
-                    "name": "vip",
-                    "title": "VIP Status",
-                    "fields": ["vip_note"],
-                },
-            },
+            op_after(["sections", "relations"], {
+                "name": "vip",
+                "title": "VIP Status",
+                "fields": ["vip_note"],
+            }),
         ],
-    },
+    ),
 
     # ── Stage 7 Slice C: predicate + wildcard target segments ──
     #
-    # Both ops below would be impossible / awkward in pure dict-op
-    # form: the first needs to match by an attribute other than
-    # `name`; the second doesn't care which section `tag_ids` lives
-    # in. Practical effect on the partner form: every field-spec
-    # tagged `widget="toggle"` becomes readonly, and `tag_ids`
-    # picks up a label without us hard-coding the section path.
-    {
-        "name": "partner.form.pro.xpath",
-        "inherit": "partners.partner.form",
-        "priority": 30,
-        "operations": [
-            # Predicate segment: match any field-spec inside the
-            # profile section's fields list whose `widget == "toggle"`.
-            # Today only `active` has that hint applied (set by the
-            # earlier inherit), so the update lands there.
-            {
-                "op": "update",
-                "target": [
-                    "sections", "profile", "fields",
-                    {"widget": "toggle"},
-                ],
-                "value": {"readonly": True},
-            },
-            # `**` wildcard: find `tag_ids` anywhere in the arch and
-            # add a custom label. We don't need to know which section
-            # it lives in.
-            {
-                "op": "set",
-                "target": ["**", {"name": "tag_ids"}, "label"],
-                "value": "Tags (any section)",
-            },
+    # Predicate segments match list entries by any attribute (not just
+    # `name`). The ``"**"`` wildcard descends to any node where the next
+    # segment would succeed, so you don't need to hard-code the full path.
+    inherit_view(
+        "partner.form.pro.xpath",
+        "partners.partner.form",
+        priority=30,
+        ops=[
+            # Match any field-spec with widget=="toggle" inside the
+            # profile section and mark it readonly.
+            op_update(
+                ["sections", "profile", "fields", {"widget": "toggle"}],
+                readonly=True,
+            ),
+
+            # Find `tag_ids` anywhere in the arch and add a label
+            # without knowing which section it lives in.
+            op_set(["**", {"name": "tag_ids"}, "label"], "Tags (any section)"),
         ],
-    },
+    ),
 ]

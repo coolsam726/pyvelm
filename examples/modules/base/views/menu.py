@@ -1,11 +1,14 @@
 """Sidebar menu entries owned by the base module.
 
-Only the Dashboard root lives here — other navigation groups
-(Settings, Security, Workflows) belong to the `admin` module, since
+Only the Dashboard and Apps roots live here — other navigation groups
+(Settings, Security, Workflows) belong to the ``admin`` module, since
 they front admin-owned models. Apps that ship their own pages
 contribute their own MENUS through their data files (see crm,
 partners, etc.).
 """
+
+from pyvelm.builders import menu_item
+from pyvelm.types import Menu
 
 _ICON_HOME = (
     '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8">'
@@ -22,19 +25,8 @@ _ICON_APPS = (
 )
 
 
-MENUS: list[dict] = [
-    {
-        "name": "dashboard",
-        "label": "Dashboard",
-        "icon": _ICON_HOME,
-        "href": "/web/admin",
-        "sequence": 10,
-    },
-    {
-        "name": "apps",
-        "label": "Apps",
-        "icon": _ICON_APPS,
-        "href": "/web/apps",
-        "sequence": 20,
-    },
+# Root-level standalone items (no parent group, icon shown in sidebar).
+MENUS: list[Menu] = [
+    menu_item("dashboard", "Dashboard", href="/web/admin", icon=_ICON_HOME, sequence=10),
+    menu_item("apps",      "Apps",      href="/web/apps",  icon=_ICON_APPS, sequence=20),
 ]

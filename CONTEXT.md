@@ -93,6 +93,20 @@ For the design rationale and the deferred-items rationale, see
         (`VIEWS: list[View]`, `VIEW_INHERITS: list[ViewInherit]`,
         manifest globals with explicit types) so Pyright/Pylance
         catch typos at edit time.
+     ✅ Slice B.7: `pyvelm.builders` factory helpers. Named
+        constructor functions replace raw dicts in data files:
+        `list_view`, `form_view`, `kanban_view` (with `section`,
+        `field`, `card` sub-helpers), `inherit_view` + six `op_*`
+        helpers (`op_remove`, `op_set`, `op_update` with **kwargs,
+        `op_after`, `op_before`, `op_replace`), `menu_group` and
+        `menu_item`. Every function returns the matching TypedDict
+        so the loader needs no changes. `pyvelm.types` updated to
+        discriminated union views (`ListView`/`FormView`/`KanbanView`
+        with Literal `view_type` discriminants) so Pyright narrows
+        `arch` to the correct shape; `ArchList`/`ArchForm` expanded
+        with optional `title`/`form_view`/`sequence` keys. `Menu`
+        TypedDict added. All example data files (partners, crm,
+        admin, base) rewritten to use builders.
 5. ⏭ ACL: groups, model permissions, record rules (domain-based row security).
      ✅ Slice A: res.groups, res.users (bcrypt), ir.model.access,
         ir.rule. HTTP Basic auth in `pyvelm.web`. Superuser bypass at

@@ -8,15 +8,26 @@ this module entirely.
 
 Recommended usage in a data file:
 
-    from pyvelm.types import View, ViewInherit
+    from pyvelm.types import ListView, FormView
 
     VIEWS: list[View] = [
-        {
-            "name": "partner.list",
-            "model": "res.partner",
-            "view_type": "list",
-            "arch": {"fields": ["name", "code"]},
-        },
+        ListView(
+            name="partner.list",
+            model="res.partner",
+            view_type="list",
+            arch={"fields": ["name", "code"]},
+        ),
+    ]
+
+Or, for maximum ergonomics, use the builder helpers in ``pyvelm.builders``:
+
+    from pyvelm.builders import list_view, form_view, section
+
+    VIEWS = [
+        list_view("partner.list", "res.partner", fields=["name", "code"]),
+        form_view("partner.form", "res.partner", sections=[
+            section("identity", "Identity", ["name", "code"]),
+        ]),
     ]
 
 In a manifest, annotate each global individually:
@@ -37,14 +48,6 @@ from __future__ import annotations
 
 from typing import Any, Literal, TypedDict, Union
 
-# `NotRequired` is in typing as of 3.11+ but in typing_extensions
-# earlier. We support 3.10+ via pyproject's requires-python, so use the
-# typing_extensions shim for the import to stay portable.
-try:
-    from typing import NotRequired  # type: ignore[attr-defined]
-except ImportError:  # pragma: no cover
-    from typing_extensions import NotRequired  # type: ignore
-
 
 # ---- field references inside arch ----
 
@@ -52,8 +55,8 @@ class FieldRef(TypedDict, total=False):
     """One field entry inside an arch list (list.fields,
     form.sections[*].fields, kanban.card.fields, kanban.card.badges).
 
-    Authoring sugar: a bare string `"name"` is equivalent to
-    `{"name": "name"}`. The normalizer rewrites strings to dicts on
+    Authoring sugar: a bare string ``"name"`` is equivalent to
+    ``{"name": "name"}``. The normalizer rewrites strings to dicts on
     storage so inheritance has stable addresses.
     """
 
@@ -71,8 +74,24 @@ FieldRefLike = Union[str, FieldRef]
 
 # ---- per-view-type arch shapes ----
 
-class ArchList(TypedDict):
+class _ArchListRequired(TypedDict):
     fields: list[FieldRefLike]
+
+
+class ArchList(_ArchListRequired, total=False):
+    """Arch for ``view_type="list"`` views.
+
+    Only ``fields`` is required. Optional keys:
+
+    - ``title``     — human-readable heading shown above the table.
+    - ``form_view`` — ``"<name>"`` of a form view to link each row to.
+    - ``sequence``  — name of an integer field; when set the renderer
+                      adds a drag handle and forces sort by that field.
+    """
+
+    title: str
+    form_view: str
+    sequence: str
 
 
 class ArchSection(TypedDict):
@@ -81,8 +100,19 @@ class ArchSection(TypedDict):
     fields: list[FieldRefLike]
 
 
-class ArchForm(TypedDict):
+class _ArchFormRequired(TypedDict):
     sections: list[ArchSection]
+
+
+class ArchForm(_ArchFormRequired, total=False):
+    """Arch for ``view_type="form"`` views.
+
+    Only ``sections`` is required. Optional key:
+
+    - ``title`` — overrides the auto-generated page heading.
+    """
+
+    title: str
 
 
 class ArchKanbanCard(TypedDict, total=False):
@@ -93,6 +123,9 @@ class ArchKanbanCard(TypedDict, total=False):
 
 
 class ArchKanban(TypedDict, total=False):
+    """Arch for ``view_type="kanban"`` views. All keys are optional."""
+
+    title: str
     card: ArchKanbanCard
     group_by: str
     form_view: str
@@ -102,20 +135,57 @@ class ArchKanban(TypedDict, total=False):
 Arch = Union[ArchList, ArchForm, ArchKanban]
 
 
-# ---- top-level view declarations ----
+# ---- discriminated-union view types ----
+#
+# Each concrete type locks ``view_type`` to a Literal and ``arch`` to
+# the matching arch shape. Pyright/Pylance uses the ``view_type``
+# discriminant to narrow ``arch`` automatically: once you type
+# ``"view_type": "list"`` the IDE knows ``arch`` must satisfy
+# ``ArchList`` and flags extra or missing keys accordingly.
 
-ViewType = Literal["list", "form", "kanban"]
-
-
-class View(TypedDict, total=False):
-    """A base view declaration. Required keys: name, model, view_type,
-    arch. `priority` defaults to 16 if omitted."""
-
+class _ListViewRequired(TypedDict):
     name: str
     model: str
-    view_type: ViewType
-    arch: Arch
+    view_type: Literal["list"]
+    arch: ArchList
+
+
+class ListView(_ListViewRequired, total=False):
+    """A ``view_type="list"`` view declaration."""
+
     priority: int
+
+
+class _FormViewRequired(TypedDict):
+    name: str
+    model: str
+    view_type: Literal["form"]
+    arch: ArchForm
+
+
+class FormView(_FormViewRequired, total=False):
+    """A ``view_type="form"`` view declaration."""
+
+    priority: int
+
+
+class _KanbanViewRequired(TypedDict):
+    name: str
+    model: str
+    view_type: Literal["kanban"]
+    arch: ArchKanban
+
+
+class KanbanView(_KanbanViewRequired, total=False):
+    """A ``view_type="kanban"`` view declaration."""
+
+    priority: int
+
+
+# Union alias kept for backwards compatibility and for lists that mix
+# view types (the common case).
+ViewType = Literal["list", "form", "kanban"]
+View = Union[ListView, FormView, KanbanView]
 
 
 # ---- inheritance ops ----
@@ -126,18 +196,18 @@ OpKind = Literal["set", "replace", "update", "remove", "before", "after"]
 class Operation(TypedDict, total=False):
     """One inheritance operation against a parent view's arch.
 
-    `target` is a list of segments. Slice C of Stage 7 widens the
+    ``target`` is a list of segments. Slice C of Stage 7 widens the
     accepted segment types:
-      - `str`  – dict-key or list-by-`name` lookup (shorthand for
-                 `{"name": "<str>"}` on list-of-dicts parents)
-      - `int`  – positional index on a list parent
-      - `dict` – predicate; first list entry where every key/value
-                 in the dict matches the entry's attributes
-      - `"**"` – wildcard prefix, only valid as the first segment;
-                 finds any descendant where the next segment would
-                 succeed and anchors the rest of the lookup there
+      - ``str``  – dict-key or list-by-``name`` lookup (shorthand for
+                   ``{"name": "<str>"}`` on list-of-dicts parents)
+      - ``int``  – positional index on a list parent
+      - ``dict`` – predicate; first list entry where every key/value
+                   in the dict matches the entry's attributes
+      - ``"**"`` – wildcard prefix, only valid as the first segment;
+                   finds any descendant where the next segment would
+                   succeed and anchors the rest of the lookup there
 
-    `value` is required for every op except `remove`.
+    ``value`` is required for every op except ``remove``.
     """
 
     op: OpKind
@@ -146,7 +216,7 @@ class Operation(TypedDict, total=False):
 
 
 class ViewInherit(TypedDict, total=False):
-    """An extension view that patches another via `operations`."""
+    """An extension view that patches another via ``operations``."""
 
     name: str
     inherit: str               # `<module>.<view_name>`
@@ -154,10 +224,31 @@ class ViewInherit(TypedDict, total=False):
     operations: list[Operation]
 
 
+# ---- sidebar menu entries ----
+
+class _MenuRequired(TypedDict):
+    name: str
+    label: str
+
+
+class Menu(_MenuRequired, total=False):
+    """One entry in a module's ``MENUS`` list.
+
+    Top-level groups have an ``icon`` (SVG string) and no ``parent`` or
+    ``href``. Leaf items have a ``parent`` (``"<module>.<name>"``) and
+    an ``href``, and no ``icon``.
+    """
+
+    icon: str
+    href: str
+    parent: str
+    sequence: int
+
+
 # ---- manifest globals ----
 
 class Manifest(TypedDict, total=False):
-    """Shape of a `__pyvelm__.py` manifest's module-level globals.
+    """Shape of a ``__pyvelm__.py`` manifest's module-level globals.
 
     The loader reads these as individual attributes, so a manifest
     declares them at module scope rather than building a dict named
@@ -183,7 +274,11 @@ __all__ = [
     "ArchSection",
     "FieldRef",
     "FieldRefLike",
+    "FormView",
+    "KanbanView",
+    "ListView",
     "Manifest",
+    "Menu",
     "OpKind",
     "Operation",
     "View",

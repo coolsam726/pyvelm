@@ -11,6 +11,7 @@ from .fields import (
     One2many,
     Text,
 )
+from . import builders
 from . import loader
 from . import types
 from .model import BaseModel
@@ -37,6 +38,7 @@ __all__ = [
     "One2many",
     "Registry",
     "Text",
+    "builders",
     "depends",
     "loader",
     "types",

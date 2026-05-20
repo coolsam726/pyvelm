@@ -1,68 +1,49 @@
+"""View declarations for the ``crm`` module."""
+
+from pyvelm.builders import card, field, form_view, kanban_view, list_view, section
 from pyvelm.types import View
 
 VIEWS: list[View] = [
-    {
-        "name": "lead.list",
-        "model": "crm.lead",
-        "view_type": "list",
-        "arch": {
-            "title": "All Leads",
-            "form_view": "lead.form",
-            "fields": [
-                "name",
-                "partner_id",
-                "stage",
-                {"name": "priority", "label": "Prio"},
-                {"name": "expected_revenue", "label": "Revenue (k€)"},
-                {"name": "probability", "label": "Prob %"},
-                "salesperson",
-                "label",
-                "active",
+    list_view(
+        "lead.list", "crm.lead",
+        title="All Leads",
+        form_view="lead.form",
+        fields=[
+            "name",
+            "partner_id",
+            "stage",
+            field("priority", label="Prio"),
+            field("expected_revenue", label="Revenue (k€)"),
+            field("probability", label="Prob %"),
+            "salesperson",
+            "label",
+            "active",
+        ],
+    ),
+
+    form_view(
+        "lead.form", "crm.lead",
+        sections=[
+            section("main",       "Opportunity", ["name", "partner_id", "stage", "priority"]),
+            section("financials", "Financials",  ["expected_revenue", "probability", "salesperson"]),
+            section("meta",       "Meta",        ["company_id", "active"]),
+        ],
+    ),
+
+    kanban_view(
+        "lead.kanban", "crm.lead",
+        title="Pipeline",
+        group_by="stage",
+        form_view="lead.form",
+        card=card(
+            "name",
+            subtitle="salesperson",
+            fields=[
+                field("partner_id", label="Contact"),
+                field("expected_revenue", label="Revenue (k€)"),
+                field("probability", label="Prob %"),
             ],
-        },
-    },
-    {
-        "name": "lead.form",
-        "model": "crm.lead",
-        "view_type": "form",
-        "arch": {
-            "sections": [
-                {
-                    "name": "main",
-                    "title": "Opportunity",
-                    "fields": ["name", "partner_id", "stage", "priority"],
-                },
-                {
-                    "name": "financials",
-                    "title": "Financials",
-                    "fields": ["expected_revenue", "probability", "salesperson"],
-                },
-                {
-                    "name": "meta",
-                    "title": "Meta",
-                    "fields": ["company_id", "active"],
-                },
-            ],
-        },
-    },
-    {
-        "name": "lead.kanban",
-        "model": "crm.lead",
-        "view_type": "kanban",
-        "arch": {
-            "title": "Pipeline",
-            "group_by": "stage",
-            "form_view": "lead.form",
-            "card": {
-                "title": "name",
-                "subtitle": "salesperson",
-                "fields": [
-                    {"name": "partner_id", "label": "Contact"},
-                    {"name": "expected_revenue", "label": "Revenue (k€)"},
-                    {"name": "probability", "label": "Prob %"},
-                ],
-                "badges": ["active"],
-            },
-        },
-    },
+            badges=["active"],
+        ),
+    ),
 ]
