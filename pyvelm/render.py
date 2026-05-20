@@ -1227,6 +1227,87 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
     return catalog
 
 
+def install_module_action(env, module_roots: list, target_name: str) -> dict:
+    """Install `target_name` (and any uninstalled prerequisites) into
+    the live environment + registry.
+
+    Returns a dict describing the action: `{ok, message, installed:
+    [names]}`. Raises ValueError on any unrecoverable problem (unknown
+    module, dependency cycle, install hook error — the env transaction
+    rolls back so partial state is impossible).
+    """
+    from . import loader as _loader
+
+    specs = _loader.discover(module_roots)
+    if target_name not in specs:
+        raise ValueError(f"Unknown module {target_name!r}")
+
+    # Figure out the topo-ordered list of things to install: the
+    # target plus any of its (transitive) deps that aren't installed
+    # yet. resolve_order topo-sorts the whole graph; we trim to the
+    # frontier.
+    ordered = _loader.resolve_order(specs)
+    installed = set(
+        r[0] for r in env.conn.execute(
+            f'SELECT "name" FROM "{_loader.IR_MODULE_TABLE}"'
+        ).fetchall()
+    )
+
+    def needed(name: str, acc: set):
+        if name in installed or name in acc:
+            return
+        spec = specs[name]
+        for d in spec.depends:
+            needed(d, acc)
+        acc.add(name)
+
+    needed_set: set = set()
+    needed(target_name, needed_set)
+    to_install = [s for s in ordered if s.name in needed_set]
+
+    # Import each module's Python so its models register into the
+    # live registry, then run install (schema, hooks, views, menus).
+    for spec in to_install:
+        if not spec.loaded:
+            _loader._load_models(spec, env.registry)
+    _loader.install(to_install, env)
+
+    return {
+        "ok": True,
+        "installed": [s.name for s in to_install],
+        "message": (
+            f"Installed {target_name}"
+            + (f" + {len(to_install) - 1} dependencies"
+               if len(to_install) > 1 else "")
+        ),
+    }
+
+
+def upgrade_module_action(env, module_roots: list, target_name: str) -> dict:
+    """Run the loader's install pass for an already-installed module.
+    If the on-disk version exceeds the installed version, migrations
+    run; either way views / menus / data files re-sync.
+
+    Note: in-process model definitions are NOT reloaded — a new field
+    declared in the upgraded version only takes effect after a
+    process restart. The DB schema migration runs regardless via
+    the version-gap migration files. Callers should advise users to
+    restart for fresh model definitions to take effect.
+    """
+    from . import loader as _loader
+
+    specs = _loader.discover(module_roots)
+    if target_name not in specs:
+        raise ValueError(f"Unknown module {target_name!r}")
+    spec = specs[target_name]
+    _loader.install([spec], env)
+    return {
+        "ok": True,
+        "upgraded": [target_name],
+        "message": f"Upgraded {target_name} to {spec.version_str}",
+    }
+
+
 def render_apps_page(env, module_roots: list,
                      current_path: str | None = None) -> str:
     """Read-only Apps catalog at `/web/apps`. Slice 2 adds the install /

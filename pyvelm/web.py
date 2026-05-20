@@ -790,6 +790,61 @@ def create_app(registry: Registry, pool: Any,
             )
         )
 
+    def _require_admin(env: Environment) -> None:
+        """Only the superuser (uid=1) may install or upgrade modules.
+
+        Installing runs hooks, executes user-supplied install_hook code,
+        and writes new tables — way past what normal ACL covers.
+        """
+        if env.uid != 1:
+            raise HTTPException(
+                status_code=403,
+                detail="Module install / upgrade requires superuser (uid=1)",
+            )
+
+    def _apps_action_response(request: Request, env: Environment,
+                              result: dict) -> Response:
+        """Convert an install/upgrade result into an HTMX response.
+
+        HTMX clients get an empty body with `HX-Redirect: /web/apps`
+        so the full page (including the sidebar) reloads — newly-
+        installed modules may have added menu entries the cached
+        chrome doesn't know about. Plain browser POSTs land on the
+        same redirect via 303.
+        """
+        if request.headers.get("HX-Request") == "true":
+            return Response(
+                status_code=204,
+                headers={"HX-Redirect": "/web/apps"},
+            )
+        return RedirectResponse("/web/apps", status_code=303)
+
+    @app.post("/web/apps/{name}/install")
+    def web_app_install(name: str, request: Request,
+                        env: Environment = Depends(get_env)):
+        if env.uid is None:
+            return _auth_required_response(request)
+        _require_admin(env)
+        from .render import install_module_action
+        try:
+            result = install_module_action(env, app.state.module_roots, name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return _apps_action_response(request, env, result)
+
+    @app.post("/web/apps/{name}/upgrade")
+    def web_app_upgrade(name: str, request: Request,
+                        env: Environment = Depends(get_env)):
+        if env.uid is None:
+            return _auth_required_response(request)
+        _require_admin(env)
+        from .render import upgrade_module_action
+        try:
+            result = upgrade_module_action(env, app.state.module_roots, name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return _apps_action_response(request, env, result)
+
     @app.post("/web/switch-company")
     async def web_switch_company(
         request: Request,

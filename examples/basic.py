@@ -327,6 +327,34 @@ def main():
             # Installed badge appears (all modules pre-installed in test).
             assert "Installed" in body
             print("Apps catalog renders all modules with category + summary")
+
+            # Slice 2: upgrade action wires loader.install end-to-end
+            # through the HTTP layer. Simulate a stale install of `base`
+            # at 0.7.0 — the on-disk manifest is 0.8.0 — then POST the
+            # upgrade endpoint and assert the version row caught up.
+            with pool.connection() as side_conn:
+                side_conn.execute(
+                    "UPDATE ir_module SET version = '0.7.0' WHERE name = 'base'"
+                )
+            r_no_follow = TestClient(app, follow_redirects=False)
+            r_no_follow.auth = ("admin", "admin")
+            r = r_no_follow.post("/web/apps/base/upgrade",
+                                 headers={"HX-Request": "true"})
+            assert r.status_code == 204, (r.status_code, r.text)
+            assert r.headers.get("HX-Redirect") == "/web/apps"
+            with pool.connection() as side_conn:
+                row = side_conn.execute(
+                    "SELECT version FROM ir_module WHERE name = 'base'"
+                ).fetchone()
+            assert row == ("0.8.0",), row
+
+            # Non-superuser is rejected — install / upgrade is admin-only
+            # since it executes install_hook code and DDL.
+            anon = TestClient(app)
+            anon.auth = ("manager", "manager")
+            r_denied = anon.post("/web/apps/base/upgrade")
+            assert r_denied.status_code == 403, (r_denied.status_code, r_denied.text)
+            print("apps upgrade: superuser-gated, version row rolls forward")
             # Sidebar entries come from ir.ui.menu — base ships Dashboard,
             # admin ships Settings/Security/Workflows, partners ships Apps,
             # crm ships CRM. If any of these are missing, the sync broke.
