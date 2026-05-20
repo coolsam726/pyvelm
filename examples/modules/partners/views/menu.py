@@ -13,9 +13,9 @@ _ICON_GRID = (
 
 
 MENUS: list[dict] = [
-    {"name": "apps", "label": "Apps", "icon": _ICON_GRID, "sequence": 50},
-    {"name": "apps.partners", "parent": "partners.apps", "label": "Partners",
+    {"name": "business", "label": "Business", "icon": _ICON_GRID, "sequence": 50},
+    {"name": "business.partners", "parent": "partners.business", "label": "Partners",
      "href": "/web/views/partners/partner.list", "sequence": 10},
-    {"name": "apps.partner_board", "parent": "partners.apps", "label": "Partner board",
+    {"name": "business.partner_board", "parent": "partners.business", "label": "Partner board",
      "href": "/web/views/partners/partner.kanban", "sequence": 20},
 ]

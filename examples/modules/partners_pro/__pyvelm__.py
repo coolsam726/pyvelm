@@ -7,6 +7,9 @@ from Stage 4 is unchanged).
 """
 NAME: str = "partners_pro"
 VERSION: tuple[int, ...] = (0, 1, 0)
+SUMMARY: str = "VIP markers and richer display logic for partners."
+CATEGORY: str = "Business"
+AUTHOR: str = "pyvelm"
 DEPENDS: list[str] = ["partners"]
 DATA: list[str] = [
     "views/partner.py",

@@ -102,11 +102,17 @@ def _parse_domain(domain_json: str) -> list:
     return [tuple(leaf) for leaf in domain]
 
 
-def create_app(registry: Registry, pool: Any) -> FastAPI:
+def create_app(registry: Registry, pool: Any,
+               module_roots: list | None = None) -> FastAPI:
     """Build the FastAPI app bound to a loaded registry and a Postgres
     connection pool. Each request checks out a connection, makes an
     Environment, and returns it on exit. The pool's own retry/backoff
     handles transient failures.
+
+    `module_roots` is the same list passed to `loader.load_and_install`
+    so the Apps catalog page can re-discover the disk-side manifests.
+    Optional — if omitted, the catalog page reports "no roots configured"
+    instead of crashing.
 
     `pool` is typed `Any` because `psycopg_pool.ConnectionPool` is generic
     over the connection class and propagating that here adds friction
@@ -114,6 +120,7 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
     is on the runtime type."""
 
     app = FastAPI(title="pyvelm")
+    app.state.module_roots = list(module_roots or [])
 
     # Prevent browsers from caching authenticated pages.  Without this
     # header the back-button serves a stale cached copy after logout.
@@ -765,6 +772,22 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
             return RedirectResponse("/login?next=/web/admin", status_code=302)
         return HTMLResponse(
             render_admin_page(env=env, current_path=str(request.url.path))
+        )
+
+    # ---- Apps catalog (read-only in Slice 1; install/upgrade in Slice 2) ----
+
+    @app.get("/web/apps", response_class=HTMLResponse)
+    def web_apps(request: Request, env: Environment = Depends(get_env)):
+        from .render import render_apps_page
+
+        if env.uid is None:
+            return _login_redirect(request)
+        return HTMLResponse(
+            render_apps_page(
+                env=env,
+                module_roots=app.state.module_roots,
+                current_path=str(request.url.path),
+            )
         )
 
     @app.post("/web/switch-company")

@@ -141,7 +141,7 @@ def main():
     # app against the loaded registry, and exercise the read endpoints
     # via ASGI in-process (no port binding).
     with ConnectionPool(dsn, min_size=1, max_size=2, open=True) as pool:
-        app = create_app(reg, pool)
+        app = create_app(reg, pool, module_roots=[MODULES_ROOT])
         with TestClient(app) as client:
             # Default identity for the bulk of the smoke test is the
             # superuser. ACL-specific assertions further down construct
@@ -309,6 +309,24 @@ def main():
             # Pagination row is suppressed when total_pages == 1.
             assert "pv-pagination" in body  # container still present
             print("group_by renders bucketed list with collapsible headers")
+
+            # Slice 1 of the Apps catalog: every module discovered on
+            # disk is shown with state + version metadata. All five
+            # example modules are installed by the seeding step at the
+            # top of basic.py, so every card lands in "Installed" state.
+            resp = client.get("/web/apps")
+            assert resp.status_code == 200, resp.text
+            body = resp.text
+            for mod in ("base", "admin", "partners", "crm", "partners_pro"):
+                assert f'data-pv-app="{mod}"' in body, f"{mod} missing"
+            # Categories defined in the manifests render as section
+            # headers grouping the cards.
+            assert "System" in body and "Business" in body
+            # Manifest SUMMARY surfaces in the card body.
+            assert "Sales pipeline" in body
+            # Installed badge appears (all modules pre-installed in test).
+            assert "Installed" in body
+            print("Apps catalog renders all modules with category + summary")
             # Sidebar entries come from ir.ui.menu — base ships Dashboard,
             # admin ships Settings/Security/Workflows, partners ships Apps,
             # crm ships CRM. If any of these are missing, the sync broke.

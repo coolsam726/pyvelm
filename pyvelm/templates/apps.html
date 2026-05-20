@@ -1,0 +1,103 @@
+{% extends "layouts/main.html" %}
+{% block title %}{{ page_title }} — pyvelm{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{# Module catalog (Slice 1 — read-only). Cards are grouped by
+   category. Each card carries name, summary, dependency list, and
+   a state badge (Installed / To upgrade / Not installed). Action
+   buttons land in Slice 2; for now everything is informational. #}
+{% block content %}
+<div class="space-y-6">
+    {% set grouped = {} %}
+    {% for app in catalog %}
+        {% set _ = grouped.setdefault(app.category, []).append(app) %}
+    {% endfor %}
+
+    {% for category, apps in grouped.items() %}
+    <section class="space-y-3">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-body-subtle px-1">
+            {{ category }}
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for app in apps %}
+            <article data-pv-app="{{ app.name }}"
+                     class="bg-neutral-primary border border-default rounded-xl p-4
+                            shadow-sm flex flex-col gap-2">
+                <header class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2.5">
+                        <div class="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center
+                                    bg-brand-softer text-fg-brand">
+                            {% if app.icon %}
+                                {{ app.icon | safe }}
+                            {% else %}
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
+                                     viewBox="0 0 24 24" stroke-width="1.8">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                          d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/>
+                                </svg>
+                            {% endif %}
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="text-sm font-semibold text-heading truncate">{{ app.name }}</h4>
+                            {% if app.author %}
+                            <p class="text-2xs text-body-subtle truncate">by {{ app.author }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {# State badge — colour-coded by lifecycle stage. #}
+                    {% if app.state == "installed" %}
+                    <span class="text-2xs font-medium px-2 py-0.5 rounded-full bg-success-soft text-success-strong shrink-0">
+                        Installed
+                    </span>
+                    {% elif app.state == "to_upgrade" %}
+                    <span class="text-2xs font-medium px-2 py-0.5 rounded-full bg-warning-soft text-warning-strong shrink-0">
+                        Upgrade →
+                    </span>
+                    {% else %}
+                    <span class="text-2xs font-medium px-2 py-0.5 rounded-full bg-neutral-tertiary text-body-subtle shrink-0">
+                        Not installed
+                    </span>
+                    {% endif %}
+                </header>
+
+                {% if app.summary %}
+                <p class="text-sm text-body">{{ app.summary }}</p>
+                {% endif %}
+
+                <div class="text-2xs text-body-subtle space-y-0.5 mt-auto">
+                    <p>
+                        <span class="font-medium">Version:</span>
+                        {% if app.installed_version and app.state == "to_upgrade" %}
+                        <span class="text-warning-strong">{{ app.installed_version }} → {{ app.available_version }}</span>
+                        {% elif app.installed_version %}
+                        <span>{{ app.installed_version }}</span>
+                        {% else %}
+                        <span>{{ app.available_version }}</span>
+                        {% endif %}
+                    </p>
+                    {% if app.depends %}
+                    <p>
+                        <span class="font-medium">Depends:</span>
+                        {% for d in app.depends %}<span
+                            class="{% if d in app.deps_missing %}text-fg-danger{% endif %}"
+                            >{{ d }}</span>{% if not loop.last %}, {% endif %}{% endfor %}
+                    </p>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+
+    {% if not catalog %}
+    <div class="bg-neutral-primary border border-default rounded-xl p-8 text-center">
+        <p class="text-sm text-body-subtle">
+            No modules discovered. Configure <code>module_roots</code> on
+            <code>create_app()</code> to point at a directory of modules.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

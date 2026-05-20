@@ -49,6 +49,13 @@ class ModuleSpec:
     install_hook: Callable | None = None
     package_path: Path | None = None
     data: list[str] = dc_field(default_factory=list)
+    # Optional human-facing manifest fields. Drive the Apps catalog UI;
+    # none of them affect install behavior.
+    summary: str = ""                  # one-line tagline
+    description: str = ""              # longer prose (Markdown-ish)
+    category: str = ""                 # grouping label, e.g. "CRM" or "Admin"
+    author: str = ""                   # free-form
+    icon: str = ""                     # raw inline SVG markup or empty
     # Filled during install from the data files.
     views: list[dict[str, Any]] = dc_field(default_factory=list)
     view_inherits: list[dict[str, Any]] = dc_field(default_factory=list)
@@ -108,6 +115,11 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
         install_hook=install_hook,
         package_path=pkg_path,
         data=data,
+        summary=getattr(mod, "SUMMARY", ""),
+        description=getattr(mod, "DESCRIPTION", ""),
+        category=getattr(mod, "CATEGORY", ""),
+        author=getattr(mod, "AUTHOR", ""),
+        icon=getattr(mod, "ICON", ""),
     )
 
 

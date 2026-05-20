@@ -1172,6 +1172,87 @@ def render_admin_page(env=None, current_path: str | None = None) -> str:
     return template.render(cards=cards, **ctx)
 
 
+def _apps_catalog(env, module_roots: list) -> list[dict]:
+    """Discover every module under `module_roots`, join with installed-
+    version rows from `ir_module`, and return one dict per module.
+
+    Each entry shape:
+        {
+          "name": str,
+          "summary": str, "description": str, "category": str,
+          "author": str, "icon": str,
+          "available_version": str,
+          "installed_version": str | None,
+          "state": "installed" | "to_upgrade" | "uninstalled",
+          "depends": list[str],
+          "deps_missing": list[str],  # names of deps not yet installed
+        }
+    """
+    from . import loader as _loader
+    specs = _loader.discover(module_roots) if module_roots else {}
+
+    installed: dict[str, str] = {}
+    try:
+        rows = env.conn.execute(
+            f'SELECT "name", "version" FROM "{_loader.IR_MODULE_TABLE}"'
+        ).fetchall()
+        installed = {n: v for n, v in rows}
+    except Exception:  # noqa: BLE001
+        # Fresh DB before any install — table doesn't exist yet.
+        installed = {}
+
+    catalog: list[dict] = []
+    for name, spec in specs.items():
+        inst = installed.get(name)
+        if inst is None:
+            state = "uninstalled"
+        else:
+            installed_v = tuple(int(p) for p in inst.split("."))
+            state = "to_upgrade" if spec.version > installed_v else "installed"
+        deps_missing = [d for d in spec.depends if d not in installed]
+        catalog.append({
+            "name": spec.name,
+            "summary": spec.summary,
+            "description": spec.description,
+            "category": spec.category or "Uncategorised",
+            "author": spec.author,
+            "icon": spec.icon,
+            "available_version": spec.version_str,
+            "installed_version": inst,
+            "state": state,
+            "depends": spec.depends,
+            "deps_missing": deps_missing,
+        })
+    catalog.sort(key=lambda c: (c["category"], c["name"]))
+    return catalog
+
+
+def render_apps_page(env, module_roots: list,
+                     current_path: str | None = None) -> str:
+    """Read-only Apps catalog at `/web/apps`. Slice 2 adds the install /
+    upgrade actions on top of the same template."""
+    catalog = _apps_catalog(env, module_roots)
+    summary = {
+        "total": len(catalog),
+        "installed": sum(1 for c in catalog if c["state"] == "installed"),
+        "to_upgrade": sum(1 for c in catalog if c["state"] == "to_upgrade"),
+        "uninstalled": sum(1 for c in catalog if c["state"] == "uninstalled"),
+    }
+    template = _env.get_template("apps.html")
+    return template.render(
+        catalog=catalog,
+        summary=summary,
+        page_title="Apps",
+        subtitle=(
+            f"{summary['total']} modules · "
+            f"{summary['installed']} installed · "
+            f"{summary['to_upgrade']} to upgrade · "
+            f"{summary['uninstalled']} uninstalled"
+        ),
+        **layout_context(env, current_path),
+    )
+
+
 STATIC_DIR = Path(__file__).parent / "static"
 
 
