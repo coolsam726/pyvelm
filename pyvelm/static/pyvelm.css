@@ -226,3 +226,17 @@
      --color-dark-subtle: var(--color-gray-700);
      --color-dark-backdrop: var(--color-gray-950);
 }
+/* Form-cell error styling.
+ *
+ * The form body stamps `[data-pv-field-error]` on each cell whose
+ * input failed parse-side validation. Push a red border into every
+ * concrete input descendant so the affected field stands out — works
+ * whether the widget is a plain <input>, a <textarea>, or the m2o
+ * combobox's text field.
+ */
+[data-pv-field-error] input,
+[data-pv-field-error] textarea,
+[data-pv-field-error] .pv-m2o input[type="text"] {
+    border-color: var(--color-fg-danger) !important;
+    box-shadow: 0 0 0 1px var(--color-fg-danger);
+}

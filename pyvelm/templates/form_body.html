@@ -76,6 +76,17 @@
         </div>
     </div>
 
+    {# Whole-form error banner — e.g. an ORM-level rejection during
+       write/create (unique constraint, downstream DB error). Per-field
+       errors get rendered next to the offending input below. #}
+    {% if form_error %}
+    <div data-pv-form-error
+         class="px-4 py-3 rounded-lg bg-danger-soft border border-fg-danger/30 text-fg-danger text-sm">
+        <p class="font-semibold">Could not save:</p>
+        <p>{{ form_error }}</p>
+    </div>
+    {% endif %}
+
     {# `data-pv-autosave` opts this form into the layout-level
        autosave/navigation interceptor: editing inputs marks the form
        dirty, and any subsequent link click triggers a POST to the
@@ -95,7 +106,10 @@
             {% endif %}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 {% for cell in section.cells %}
-                <div data-field="{{ cell.name }}" class="flex flex-col gap-1.5">
+                <div data-field="{{ cell.name }}"
+                     {% if cell.error %}data-pv-field-error{% endif %}
+                     class="flex flex-col gap-1.5
+                            {% if cell.error %}pv-cell-error{% endif %}">
                     <label class="block text-sm font-medium text-heading">
                         {{ cell.label }}
                         {% if mode in ("edit", "new") and cell.required %}
@@ -103,6 +117,16 @@
                         {% endif %}
                     </label>
                     <div class="text-sm text-body">{{ cell.html }}</div>
+                    {% if cell.error %}
+                    <p class="text-xs text-fg-danger flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                        </svg>
+                        {{ cell.error }}
+                    </p>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>

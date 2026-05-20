@@ -476,8 +476,15 @@ def render_new_row(view, env) -> str:
     return template.render(view=view, row={"id": None, "cells": cells})
 
 
-def parse_form_vals(model_cls, form_data) -> dict:
-    """Convert a form-data MultiDict back into ORM vals.
+def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
+    """Convert a form-data MultiDict back into `(vals, errors)`.
+
+    `vals` is the ORM-ready dict suitable for `create()` / `write()`.
+    `errors` maps `field_name -> human-readable message` for any
+    field that couldn't be coerced or that was left blank when
+    declared `required=True`. Empty `errors` means it's safe to
+    persist; non-empty means the caller should re-render the edit
+    form with messages stamped on the offending cells.
 
     Boolean checkboxes use a hidden-input-then-checkbox pair so that
     "unchecked" produces an empty string and "checked" produces "on"
@@ -489,6 +496,7 @@ def parse_form_vals(model_cls, form_data) -> dict:
     than empty strings.
     """
     vals: dict = {}
+    errors: dict[str, str] = {}
     for fname, field in model_cls._fields.items():
         if not field.is_stored:
             continue
@@ -497,31 +505,57 @@ def parse_form_vals(model_cls, form_data) -> dict:
         if fname not in form_data:
             continue
         if isinstance(field, Boolean):
-            # Take the last submitted value: hidden = "" then optionally
-            # checkbox = "on" (or whatever value=).
             seq = form_data.getlist(fname) if hasattr(form_data, "getlist") else [form_data[fname]]
             last = seq[-1] if seq else ""
             vals[fname] = bool(last)
             continue
         raw = form_data[fname]
-        if isinstance(field, Integer):
-            vals[fname] = int(raw) if raw not in ("", None) else None
-        elif isinstance(field, Float):
-            vals[fname] = float(raw) if raw not in ("", None) else None
-        elif isinstance(field, Many2one):
-            vals[fname] = int(raw) if raw not in ("", None) else None
-        else:
-            vals[fname] = raw if raw != "" else None
-    return vals
+        empty = raw in ("", None)
+
+        if empty:
+            if getattr(field, "required", False):
+                errors[fname] = "This field is required."
+            else:
+                vals[fname] = None
+            continue
+
+        try:
+            if isinstance(field, Integer):
+                vals[fname] = int(raw)
+            elif isinstance(field, Float):
+                vals[fname] = float(raw)
+            elif isinstance(field, Many2one):
+                vals[fname] = int(raw)
+            else:
+                vals[fname] = raw
+        except (TypeError, ValueError):
+            if isinstance(field, Integer):
+                errors[fname] = "Must be a whole number."
+            elif isinstance(field, Float):
+                errors[fname] = "Must be a number."
+            elif isinstance(field, Many2one):
+                errors[fname] = "Invalid record reference."
+            else:
+                errors[fname] = "Invalid value."
+    return vals, errors
 
 
 # ---- form view rendering ----
 
-def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str) -> list[dict]:
+def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
+                       errors: dict | None = None,
+                       submitted: dict | None = None) -> list[dict]:
     """Build the per-field HTML for one section.
 
-    Returns a list of cell dicts (`{name, label, html}`), one per field.
+    Returns a list of cell dicts (`{name, label, required, error, html}`).
+
+    `errors` is the `{field_name: message}` map from a previous failed
+    save; `submitted` is the `vals` from that same attempt so the user
+    doesn't lose what they typed in unrelated fields. Both default to
+    empty.
     """
+    errors = errors or {}
+    submitted = submitted or {}
     fields_spec = list(section_spec.get("fields", []))
     if mode == "edit":
         fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
@@ -532,27 +566,41 @@ def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str) 
             cells.append({"name": fname, "label": fname, "html": Markup("")})
             continue
         field = model_cls._fields[fname]
-        # Display label: spec override > field.string > raw attr name.
         label = spec.get("label") or field.string or fname
         hint = spec.get("widget")
         renderer = find_renderer(field, hint, mode=mode)
-        if record_or_none is None:
+
+        if fname in submitted:
+            # Resurrect the value the user just submitted so they don't
+            # lose typing when one field errored. Many2one's `submitted`
+            # form is an id; reconstitute it as a recordset so the
+            # widget can render the label.
+            raw = submitted[fname]
+            if isinstance(field, Many2one):
+                value = env[field.comodel_name].browse(raw) if raw else env[field.comodel_name]
+            else:
+                value = raw
+        elif record_or_none is None:
             value = (
                 env[field.comodel_name] if isinstance(field, Many2one)
                 else field.default
             )
         else:
             value = getattr(record_or_none, fname)
+
         cells.append({
             "name": fname,
             "label": label,
             "required": getattr(field, "required", False),
+            "error": errors.get(fname),
             "html": renderer(value, spec, field),
         })
     return cells
 
 
-def _form_sections(view, record_or_none, env, mode: str) -> list[dict]:
+def _form_sections(view, record_or_none, env, mode: str,
+                   errors: dict | None = None,
+                   submitted: dict | None = None) -> list[dict]:
     from .views import resolve_arch
 
     arch = resolve_arch(view)
@@ -563,7 +611,10 @@ def _form_sections(view, record_or_none, env, mode: str) -> list[dict]:
         out.append({
             "name": spec.get("name"),
             "title": spec.get("title") or spec.get("name", ""),
-            "cells": _form_section_html(spec, record_or_none, env, model_cls, mode),
+            "cells": _form_section_html(
+                spec, record_or_none, env, model_cls, mode,
+                errors=errors, submitted=submitted,
+            ),
         })
     return out
 
@@ -611,15 +662,27 @@ def _record_title(record_or_none, view_model: str, mode: str) -> str:
 
 
 def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = False,
-                     current_path: str | None = None) -> str:
+                     current_path: str | None = None,
+                     errors: dict | None = None,
+                     submitted: dict | None = None,
+                     form_error: str | None = None) -> str:
     """Render the form HTML.
 
     `mode` is "display", "edit", or "new". For "new" the record is None
     and field values come from defaults. `body_only` returns just the
     swappable inner-HTML fragment (used by HTMX swap targets); the
     default returns a complete page.
+
+    `errors` / `submitted` carry forward state from a failed save:
+    `errors` stamps per-field messages, `submitted` resurrects the
+    typed values so the user doesn't lose work. `form_error` is a
+    top-level message for whole-form failures (e.g. ORM raised on
+    write — unique constraint, database error).
     """
-    sections = _form_sections(view, record_or_none, env, mode)
+    sections = _form_sections(
+        view, record_or_none, env, mode,
+        errors=errors, submitted=submitted,
+    )
     title = _record_title(record_or_none, view.model, mode)
     template_name = "form_body.html" if body_only else "form.html"
     template = _env.get_template(template_name)
@@ -639,6 +702,7 @@ def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = 
         title=title,
         mode=mode,
         sections=sections,
+        form_error=form_error,
         **ctx,
     )
 

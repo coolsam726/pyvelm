@@ -552,6 +552,26 @@ def create_app(registry: Registry, pool: Any,
             raise HTTPException(404, f"{view.model}({record_id}) not found")
         return Model.browse(record_id)
 
+    def _row_validation_error(view, rec, env, errors: dict) -> Response:
+        """Build the 422 response for an inline-row save with parse-side
+        errors. Re-renders the row in edit mode so the user keeps typing
+        and emits an `HX-Trigger` event the layout routes to pvAlert."""
+        import json as _json
+        from .render import render_list_row, render_new_row
+
+        if rec is None:
+            body = render_new_row(view, env)
+        else:
+            body = render_list_row(view, rec, env, mode="edit")
+        message = "; ".join(f"{k}: {v}" for k, v in errors.items())
+        return HTMLResponse(
+            body,
+            status_code=422,
+            headers={
+                "HX-Trigger": _json.dumps({"pv-validation-error": message}),
+            },
+        )
+
     @app.get("/web/records/{module}/{name}/new", response_class=HTMLResponse)
     def web_row_new(module: str, name: str, request: Request, env: Environment = Depends(get_env)):
         if env.uid is None:
@@ -605,7 +625,13 @@ def create_app(registry: Registry, pool: Any,
         rec = _load_record(env, view, record_id)
         form = await request.form()
         cls = env.registry[view.model]
-        vals = parse_form_vals(cls, form)
+        vals, errors = parse_form_vals(cls, form)
+        if errors:
+            # Inline rows don't have room for per-cell error messages;
+            # surface the first problem via a 422 + HX-Trigger event so
+            # the layout's pvAlert handler shows a toast and the edit
+            # row stays open.
+            return _row_validation_error(view, rec, env, errors)
         with env.transaction():
             rec.write(vals)
         # Reread for any computed-field follow-on values.
@@ -639,7 +665,9 @@ def create_app(registry: Registry, pool: Any,
         view = _load_view(env, module, name)
         cls = env.registry[view.model]
         form = await request.form()
-        vals = parse_form_vals(cls, form)
+        vals, errors = parse_form_vals(cls, form)
+        if errors:
+            return _row_validation_error(view, None, env, errors)
         with env.transaction():
             rec = env[view.model].create(vals)
         return HTMLResponse(render_list_row(view, rec, env, mode="display"))
@@ -729,11 +757,35 @@ def create_app(registry: Registry, pool: Any,
         rec = _load_record(env, view, record_id)
         form = await request.form()
         cls = env.registry[view.model]
-        vals = parse_form_vals(cls, form)
-        with env.transaction():
-            rec.write(vals)
-        env.cache.invalidate(model_name=view.model, ids=[record_id])
+        vals, errors = parse_form_vals(cls, form)
         body_only = request.headers.get("HX-Request") == "true"
+        if errors:
+            # Parse-side validation failed. Re-render the edit form with
+            # per-field messages stamped + the user's typed values
+            # resurrected so they don't have to retype.
+            return HTMLResponse(
+                render_form_page(view, rec, env, mode="edit",
+                                 body_only=body_only,
+                                 errors=errors, submitted=vals,
+                                 current_path=str(request.url.path)),
+                status_code=422,
+            )
+        try:
+            with env.transaction():
+                rec.write(vals)
+        except Exception as exc:  # noqa: BLE001
+            # ORM-level failure (constraint, downstream DB error).
+            # Show a top-level banner so the user sees why the save
+            # didn't stick instead of getting a silent 500.
+            return HTMLResponse(
+                render_form_page(view, rec, env, mode="edit",
+                                 body_only=body_only,
+                                 submitted=vals,
+                                 form_error=str(exc),
+                                 current_path=str(request.url.path)),
+                status_code=422,
+            )
+        env.cache.invalidate(model_name=view.model, ids=[record_id])
         return HTMLResponse(
             render_form_page(view, rec, env, mode="display",
                              body_only=body_only,
@@ -752,10 +804,28 @@ def create_app(registry: Registry, pool: Any,
         view = _require_form_view(_load_view(env, module, name))
         form = await request.form()
         cls = env.registry[view.model]
-        vals = parse_form_vals(cls, form)
-        with env.transaction():
-            rec = env[view.model].create(vals)
+        vals, errors = parse_form_vals(cls, form)
         body_only = request.headers.get("HX-Request") == "true"
+        if errors:
+            return HTMLResponse(
+                render_form_page(view, None, env, mode="new",
+                                 body_only=body_only,
+                                 errors=errors, submitted=vals,
+                                 current_path=str(request.url.path)),
+                status_code=422,
+            )
+        try:
+            with env.transaction():
+                rec = env[view.model].create(vals)
+        except Exception as exc:  # noqa: BLE001
+            return HTMLResponse(
+                render_form_page(view, None, env, mode="new",
+                                 body_only=body_only,
+                                 submitted=vals,
+                                 form_error=str(exc),
+                                 current_path=str(request.url.path)),
+                status_code=422,
+            )
         return HTMLResponse(
             render_form_page(view, rec, env, mode="display",
                              body_only=body_only,

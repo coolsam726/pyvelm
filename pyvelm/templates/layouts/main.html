@@ -530,6 +530,27 @@
                 .then(ok => { if (ok) e.detail.issueRequest(true); });
         });
 
+        // ── Allow 422 swaps for form-validation re-renders ──
+        // By default HTMX treats 4xx as errors and won't swap. Our
+        // form-save routes return 422 + the edit-mode fragment when
+        // parse-side validation fails, so we explicitly opt those
+        // responses into the normal swap path.
+        document.body.addEventListener('htmx:beforeSwap', e => {
+            if (e.detail.xhr && e.detail.xhr.status === 422) {
+                e.detail.shouldSwap = true;
+                e.detail.isError = false;
+            }
+        });
+
+        // ── Inline-row routes can't surface per-cell errors (no room
+        // in a <tr>), so they emit `HX-Trigger: pv-validation-error`
+        // with the joined message. Route that to pvAlert.
+        document.body.addEventListener('pv-validation-error', e => {
+            const msg = (e.detail && (e.detail.value || e.detail)) || 'Validation failed.';
+            window.pvAlert(typeof msg === 'string' ? msg : JSON.stringify(msg),
+                           { variant: 'danger', title: 'Cannot save' });
+        });
+
         // ── Many2one combobox ──
         // Searchable select with create-on-the-fly and "open record"
         // link. The widget partial at `widgets/m2o_input.html` mounts

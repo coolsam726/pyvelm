@@ -618,6 +618,37 @@ def main():
             assert rec["name"] == "Alice X" and rec["age"] == 31
             print("form save persisted through to JSON read")
 
+            # Slice 1 of form-UX completeness: a parse-side validation
+            # failure returns 422 + the edit form re-rendered with
+            # per-field errors stamped. The save does NOT persist.
+            resp_bad = client.post(
+                f"/web/views/partners/partner.form/record/{alice['id']}",
+                data={
+                    "name": "",          # required → triggers "This field is required."
+                    "code": "ALI-1",
+                    "age": "not a number",  # bad Integer → triggers "Must be a whole number."
+                    "country_id": str(france.id),
+                    "parent_id": "",
+                    "active": ["", "on"],
+                },
+                headers={"HX-Request": "true"},
+            )
+            assert resp_bad.status_code == 422, (resp_bad.status_code, resp_bad.text)
+            err_body = resp_bad.text
+            assert "This field is required" in err_body
+            assert "Must be a whole number" in err_body
+            assert "data-pv-field-error" in err_body
+            # The bad save didn't land — name + age are still the saved
+            # values from the previous successful write.
+            check = client.get(
+                "/api/records",
+                params={"model": "res.partner",
+                        "domain": f'[["id","=",{alice["id"]}]]',
+                        "fields": "name,age"},
+            ).json()["records"][0]
+            assert check["name"] == "Alice X" and check["age"] == 31
+            print("form validation: 422 + per-field errors, no partial write")
+
             # Form new: empty edit shell.
             resp = client.get(
                 "/web/views/partners/partner.form/new",
