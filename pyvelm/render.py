@@ -1265,6 +1265,20 @@ def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", 
     )
 
 
+def render_password_page(env, *, current_path: str | None = None,
+                         error: str = "", success: bool = False) -> str:
+    """Self-service password-change form. The form lives outside the
+    res.users edit flow because the bcrypt verification of the
+    current password belongs to the user themselves; admins can still
+    set passwords on other accounts via the regular res.users form."""
+    template = _env.get_template("password.html")
+    return template.render(
+        error=error,
+        success=success,
+        **layout_context(env, current_path),
+    )
+
+
 def render_login_page(
     *,
     error: str = "",

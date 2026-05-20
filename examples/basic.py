@@ -980,6 +980,91 @@ def main():
             app.state.login_attempts.clear()
             print("POST /login rate limit: 429 + Retry-After after 5/window")
 
+            # ----- Self-service password change -----
+            # Log in fresh as a new user we control, swap the password,
+            # verify the old one no longer works + the new one does.
+            with pool.connection() as side_conn:
+                side_conn.execute(
+                    "INSERT INTO res_groups (name) VALUES ('Bench') ON CONFLICT DO NOTHING"
+                )
+                g_row = side_conn.execute(
+                    "SELECT id FROM res_groups WHERE name = 'Bench'"
+                ).fetchone()
+                assert g_row is not None
+                # bcrypt hash of "starter" — uses the Password field's
+                # write path indirectly by storing a pre-hashed value.
+                import bcrypt as _bcrypt
+                hashed = _bcrypt.hashpw(b"starter", _bcrypt.gensalt()).decode("ascii")
+                side_conn.execute(
+                    "INSERT INTO res_users (login, name, password, active) "
+                    "VALUES ('rotator', 'Rotator', %s, true)", [hashed]
+                )
+
+            rotator = TestClient(app, follow_redirects=False)
+            rotator.get("/login")  # set CSRF cookie
+            tok = rotator.cookies.get("pyvelm_csrf")
+            r = rotator.post(
+                "/login",
+                data={"login": "rotator", "password": "starter",
+                      "next": "/web/account/password", "_csrf": tok},
+            )
+            assert r.status_code == 303, (r.status_code, r.text)
+
+            # GET the page renders fields.
+            r = rotator.get("/web/account/password")
+            assert r.status_code == 200, r.text
+            assert 'name="current_password"' in r.text
+            assert 'name="new_password"' in r.text
+
+            # CSRF token rides through the same cookie set by the
+            # earlier /login GET; the layout's JS auto-injector handles
+            # this in the browser, but the test client posts plain.
+            csrf_p = rotator.cookies.get("pyvelm_csrf") or ""
+
+            # Wrong current → 422 + per-field error.
+            r = rotator.post(
+                "/web/account/password",
+                data={"current_password": "wrong", "new_password": "newpass",
+                      "confirm_password": "newpass", "_csrf": csrf_p},
+            )
+            assert r.status_code == 422, r.status_code
+            assert "incorrect" in r.text
+
+            # Mismatched new/confirm → 422.
+            r = rotator.post(
+                "/web/account/password",
+                data={"current_password": "starter", "new_password": "newpass",
+                      "confirm_password": "oops", "_csrf": csrf_p},
+            )
+            assert r.status_code == 422 and "do not match" in r.text
+
+            # Correct submission → success banner.
+            r = rotator.post(
+                "/web/account/password",
+                data={"current_password": "starter", "new_password": "newpass1",
+                      "confirm_password": "newpass1", "_csrf": csrf_p},
+            )
+            assert r.status_code == 200, (r.status_code, r.text)
+            assert "Password updated" in r.text
+
+            # Old password no longer works.
+            app.state.login_attempts.clear()
+            re_auth = TestClient(app, follow_redirects=False)
+            re_auth.get("/login")
+            r = re_auth.post("/login", data={
+                "login": "rotator", "password": "starter",
+                "_csrf": re_auth.cookies.get("pyvelm_csrf") or "",
+            })
+            assert r.status_code == 401, r.status_code
+            # New password works.
+            r = re_auth.post("/login", data={
+                "login": "rotator", "password": "newpass1",
+                "_csrf": re_auth.cookies.get("pyvelm_csrf") or "",
+            })
+            assert r.status_code == 303, (r.status_code, r.text)
+            app.state.login_attempts.clear()
+            print("password change: bcrypt verify + rotate + old password retired")
+
             # POST /login with bad credentials returns 401 + error msg.
             r = anon2.post(
                 "/login",

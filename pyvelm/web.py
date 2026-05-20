@@ -1128,6 +1128,67 @@ def create_app(registry: Registry, pool: Any,
             "companies": [{"id": r.id, "name": r.name} for r in recs],
         }
 
+    # ---- self-service password change ----
+
+    @app.get("/web/account/password", response_class=HTMLResponse)
+    def password_page(request: Request, env: Environment = Depends(get_env)):
+        if env.uid is None:
+            return _login_redirect(request)
+        from .render import render_password_page
+        return HTMLResponse(render_password_page(
+            env, current_path=str(request.url.path),
+        ))
+
+    @app.post("/web/account/password", response_class=HTMLResponse)
+    async def password_submit(request: Request,
+                              env: Environment = Depends(get_env)):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .render import render_password_page
+
+        form = await request.form()
+        current = form.get("current_password") or ""
+        new = form.get("new_password") or ""
+        confirm = form.get("confirm_password") or ""
+
+        # Verify the current password under ACL bypass so even users
+        # without explicit read on res.users (their own row included)
+        # can still self-serve.
+        prev = env._acl_bypass
+        env._acl_bypass = True
+        try:
+            user = env["res.users"].browse(env.uid)
+            current_ok = user.check_password(str(current))
+        finally:
+            env._acl_bypass = prev
+
+        def reject(msg: str) -> HTMLResponse:
+            return HTMLResponse(
+                render_password_page(
+                    env, current_path=str(request.url.path), error=msg,
+                ),
+                status_code=422,
+            )
+
+        if not current_ok:
+            return reject("Current password is incorrect.")
+        if not new or len(new) < 6:
+            return reject("New password must be at least 6 characters.")
+        if new != confirm:
+            return reject("New password and confirmation do not match.")
+        if new == current:
+            return reject("New password must differ from the current one.")
+
+        env._acl_bypass = True
+        try:
+            with env.transaction():
+                env["res.users"].browse(env.uid).write({"password": new})
+        finally:
+            env._acl_bypass = prev
+        return HTMLResponse(render_password_page(
+            env, current_path=str(request.url.path), success=True,
+        ))
+
     # ---- login / logout ----
 
     @app.get("/login", response_class=HTMLResponse)

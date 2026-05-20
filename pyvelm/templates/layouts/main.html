@@ -285,6 +285,10 @@
                            class="block px-4 py-1.5 text-body hover:bg-neutral-secondary hover:text-heading">
                             Admin
                         </a>
+                        <a href="/web/account/password"
+                           class="block px-4 py-1.5 text-body hover:bg-neutral-secondary hover:text-heading">
+                            Change password
+                        </a>
                         <form method="post" action="/logout">
                             <button type="submit"
                                     class="w-full text-left px-4 py-1.5 text-fg-danger hover:bg-danger-soft">
@@ -533,6 +537,28 @@
         document.body.addEventListener('htmx:configRequest', e => {
             const token = pvReadCsrf();
             if (token) e.detail.headers['X-CSRF-Token'] = token;
+        });
+        // Inject a hidden `_csrf` into every plain (non-HTMX) POST form
+        // so the logout button, password-change form, and any future
+        // direct browser submit pass CSRF without per-template plumbing.
+        // Runs on initial load and after every HTMX swap so freshly-
+        // swapped fragments get covered too.
+        function pvInjectCsrfFields(root) {
+            const token = pvReadCsrf();
+            if (!token) return;
+            (root || document).querySelectorAll('form[method="post" i]')
+                .forEach(form => {
+                    if (form.querySelector('input[name="_csrf"]')) return;
+                    const inp = document.createElement('input');
+                    inp.type = 'hidden';
+                    inp.name = '_csrf';
+                    inp.value = token;
+                    form.appendChild(inp);
+                });
+        }
+        document.addEventListener('DOMContentLoaded', () => pvInjectCsrfFields());
+        document.body.addEventListener('htmx:afterSwap', e => {
+            pvInjectCsrfFields(e.target);
         });
 
         // HTMX fires `htmx:confirm` before it would call window.confirm.
