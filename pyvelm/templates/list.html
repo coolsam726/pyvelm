@@ -35,6 +35,9 @@
         // Filter / group-by metadata per column — drives the dropdown
         // UI. Each entry: {name, label, filter_kind, group_kind, comodel}.
         headers: {{ headers | tojson }},
+        // Set when the arch declared `sequence` — turns on the drag
+        // handle column + row-reorder POST. null = feature disabled.
+        sequenceField: {{ sequence_field | tojson }},
     };
 </script>
 <div x-data="pvList(window._pvListCfg)"
@@ -294,6 +297,7 @@ document.addEventListener('alpine:init', () => {
         pageSize: cfg.pageSize || 20,
         fieldNames: cfg.fieldNames || [],
         headers: cfg.headers || [],
+        sequenceField: cfg.sequenceField || null,
         // Single-value: currently grouped column, or null.
         groupBy: cfg.groupBy || null,
         // Dropdown state.
@@ -589,6 +593,76 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
+        // ── Row drag-reorder (sequence-field driven) ──
+        // Native HTML5 drag events on the row's handle cell. We
+        // capture the source row id on dragstart, decide insert-
+        // position on drop, mutate the DOM optimistically, then
+        // POST the new ordering to the server. Server failure rolls
+        // back to the persisted order via a full table refresh.
+        initRowReorder() {
+            if (!this.sequenceField) return;
+            const tbl = this.$root.querySelector('[data-pv-list-table]');
+            if (!tbl) return;
+            let draggedRow = null;
+            tbl.addEventListener('dragstart', e => {
+                const h = e.target.closest('[data-pv-row-handle]');
+                if (!h) return;
+                draggedRow = h.closest('tr[data-record-id]');
+                if (!draggedRow) return;
+                e.dataTransfer.effectAllowed = 'move';
+                draggedRow.classList.add('opacity-40');
+            });
+            tbl.addEventListener('dragend', () => {
+                if (draggedRow) draggedRow.classList.remove('opacity-40');
+                draggedRow = null;
+            });
+            tbl.addEventListener('dragover', e => {
+                if (!draggedRow) return;
+                const target = e.target.closest('tr[data-record-id]');
+                if (!target || target === draggedRow) return;
+                e.preventDefault();
+                const rect = target.getBoundingClientRect();
+                const above = (e.clientY - rect.top) < (rect.height / 2);
+                target.parentNode.insertBefore(
+                    draggedRow,
+                    above ? target : target.nextSibling,
+                );
+            });
+            tbl.addEventListener('drop', e => {
+                if (!draggedRow) return;
+                e.preventDefault();
+                draggedRow.classList.remove('opacity-40');
+                this.commitRowReorder();
+                draggedRow = null;
+            });
+        },
+
+        async commitRowReorder() {
+            const tbl = this.$root.querySelector('[data-pv-list-table]');
+            if (!tbl) return;
+            const ids = Array.from(
+                tbl.querySelectorAll('tbody tr[data-record-id]')
+            ).map(tr => Number(tr.getAttribute('data-record-id')));
+            try {
+                const r = await fetch(
+                    `/web/records/${this.module}/${this.name}/reorder`,
+                    {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids }),
+                    }
+                );
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            } catch (e) {
+                window.pvAlert &&
+                    window.pvAlert(`Could not save new order: ${e.message}`,
+                                   { variant: 'danger', title: 'Reorder failed' });
+                // Reload to drop the optimistic mutation.
+                this.load();
+            }
+        },
+
         init() {
             // Rehydrate the in-progress search input from the active
             // search chip, if any — so a deep-link reload shows the
@@ -599,10 +673,15 @@ document.addEventListener('alpine:init', () => {
             this.$nextTick(() => {
                 this.applyColumnOrder();
                 this.initDragReorder();
+                this.initRowReorder();
             });
-            // Re-apply column order after every HTMX swap inside our root.
+            // Re-apply column order + re-bind drag handlers after
+            // every HTMX swap, since the <table> element itself is
+            // recreated by list_table.html.
             this.$el.addEventListener('htmx:afterSwap', () => {
                 this.applyColumnOrder();
+                this.initDragReorder();
+                this.initRowReorder();
             });
         },
     }));

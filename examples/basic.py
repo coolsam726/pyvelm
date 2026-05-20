@@ -119,7 +119,7 @@ def main():
             'SELECT name, version FROM ir_module ORDER BY name'
         ).fetchall()
         print("ir_module after upgrade:", rows)
-        assert dict(rows)["partners"] == "0.2.0"
+        assert dict(rows)["partners"] == "0.3.0"
 
         codes = conn.execute(
             'SELECT name, code FROM res_partner ORDER BY id'
@@ -729,6 +729,40 @@ def main():
                 ).fetchone()
             assert cleared == (0,), cleared
             print("M2m chip editor: multi-select + clear both write correctly")
+
+            # Slice 3 of form-UX: drag-reorder via a sequence field.
+            # tag.list ships with `arch["sequence"] = "sequence"`, so
+            # the list page renders a drag-handle column and forces
+            # the order to "sequence ASC".
+            resp_tags = client.get("/web/views/admin/tag.list")
+            assert resp_tags.status_code == 200, resp_tags.text
+            tag_body = resp_tags.text
+            assert "data-pv-row-handle" in tag_body
+            assert "sequenceField:" in tag_body  # bootstrap cfg
+            # Capture the current ids in render order.
+            import re as _re
+            ids_in_order = [
+                int(m) for m in
+                _re.findall(r'data-record-id="(\d+)"', tag_body)
+            ]
+            assert vip_id in ids_in_order and wholesale_id in ids_in_order
+            # Issue a reorder that swaps wholesale ahead of vip.
+            new_order = list(reversed(ids_in_order))
+            r_reorder = client.post(
+                "/web/records/admin/tag.list/reorder",
+                json={"ids": new_order},
+            )
+            assert r_reorder.status_code == 204, r_reorder.text
+            with pool.connection() as side_conn:
+                stored = side_conn.execute(
+                    'SELECT id, sequence FROM res_tag ORDER BY sequence ASC'
+                ).fetchall()
+            stored_order = [r[0] for r in stored]
+            assert stored_order == new_order, (stored_order, new_order)
+            # Sequence values are monotonically increasing by 10.
+            seqs = [r[1] for r in stored]
+            assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs)
+            print("row reorder: drag handle present, POST /reorder rewrites sequence")
 
             # Form new: empty edit shell.
             resp = client.get(

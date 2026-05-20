@@ -164,6 +164,35 @@ VIEWS: list[View] = [
         },
     },
 
+    # ---- res.tag ----
+    {
+        "name": "tag.list",
+        "model": "res.tag",
+        "view_type": "list",
+        "arch": {
+            # `sequence` opts the list into drag-to-reorder: the
+            # renderer adds a handle column on the left and ordering
+            # is forced to "sequence ASC" so the visible order matches
+            # what users see after a drop.
+            "sequence": "sequence",
+            "fields": ["name"],
+        },
+    },
+    {
+        "name": "tag.form",
+        "model": "res.tag",
+        "view_type": "form",
+        "arch": {
+            "sections": [
+                {
+                    "name": "main",
+                    "title": "Tag",
+                    "fields": ["name"],
+                },
+            ],
+        },
+    },
+
     # ---- res.company ----
     {
         "name": "company.list",

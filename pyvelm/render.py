@@ -1131,7 +1131,19 @@ def render_list_page(view, env, *, page: int, page_size: int,
 
     domain = _build_search_domain(model_cls, fields_spec, search) if search else []
     domain.extend(_parse_filters(model_cls, fields_spec, filters))
-    safe_ord = _safe_order(fields_spec, order)
+
+    # Drag-reorder: `arch["sequence"]` names the Integer field that
+    # backs the row ordering. When present we force-sort by that
+    # field, ignoring any user-supplied order (drag-reorder semantics
+    # only make sense in the canonical order). Pagination is also
+    # disabled so the user always sees the full list — reordering a
+    # paginated subset would be confusing.
+    sequence_field = arch.get("sequence")
+    if sequence_field and sequence_field in model_cls._fields:
+        safe_ord = f'"{sequence_field}" ASC, "id" ASC'
+    else:
+        sequence_field = None
+        safe_ord = _safe_order(fields_spec, order)
 
     fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
     headers = _field_headers(model_cls, fields_spec)
@@ -1151,6 +1163,12 @@ def render_list_page(view, env, *, page: int, page_size: int,
         recs = Model.search(domain, limit=_GROUP_CAP, order=safe_ord)
         groups = _group_rows(recs, view, fields_spec, safe_group_by, env, model_cls)
         rows = []
+        total_pages = 1
+    elif sequence_field:
+        # No pagination when drag-reorder is active.
+        recs = Model.search(domain, order=safe_ord)
+        groups = None
+        rows = _build_rows(view, recs, fields_spec)
         total_pages = 1
     else:
         offset = page * page_size
@@ -1174,6 +1192,7 @@ def render_list_page(view, env, *, page: int, page_size: int,
         order=order,
         filters=filters,
         group_by=safe_group_by,
+        sequence_field=sequence_field,
         form_view_name=form_view_name,
         page_title=page_title,
         subtitle=f"{total} record{'s' if total != 1 else ''}",
@@ -1194,7 +1213,13 @@ def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", 
 
     domain = _build_search_domain(model_cls, fields_spec, search) if search else []
     domain.extend(_parse_filters(model_cls, fields_spec, filters))
-    safe_ord = _safe_order(fields_spec, order)
+
+    sequence_field = arch.get("sequence")
+    if sequence_field and sequence_field in model_cls._fields:
+        safe_ord = f'"{sequence_field}" ASC, "id" ASC'
+    else:
+        sequence_field = None
+        safe_ord = _safe_order(fields_spec, order)
 
     fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
     headers = _field_headers(model_cls, fields_spec)
@@ -1208,6 +1233,11 @@ def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", 
         recs = Model.search(domain, limit=_GROUP_CAP, order=safe_ord)
         groups = _group_rows(recs, view, fields_spec, safe_group_by, env, model_cls)
         rows = []
+        total_pages = 1
+    elif sequence_field:
+        recs = Model.search(domain, order=safe_ord)
+        groups = None
+        rows = _build_rows(view, recs, fields_spec)
         total_pages = 1
     else:
         offset = page * page_size
@@ -1230,6 +1260,7 @@ def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", 
         order=order,
         filters=filters,
         group_by=safe_group_by,
+        sequence_field=sequence_field,
         form_view_name=form_view_name,
     )
 

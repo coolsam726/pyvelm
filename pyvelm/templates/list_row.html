@@ -4,6 +4,24 @@
     {% if form_view_name %}
     onclick="window.location.href='/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}'"
     {% endif %}>
+    {% if sequence_field %}
+    {# Drag handle cell. `draggable` lives on the inner span so the
+       row's click-to-form behavior still works on the rest of the
+       row, and stopPropagation keeps the drag from triggering it. #}
+    <td class="w-6 px-2 py-2.5 align-middle text-body-subtle"
+        onclick="event.stopPropagation()">
+        <span data-pv-row-handle draggable="true"
+              class="inline-flex items-center justify-center w-5 h-5 rounded
+                     cursor-grab active:cursor-grabbing hover:bg-neutral-tertiary
+                     text-body-subtle/60 hover:text-fg-brand"
+              aria-label="Drag to reorder">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                 viewBox="0 0 24 24" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5"/>
+            </svg>
+        </span>
+    </td>
+    {% endif %}
     {% for cell in row.cells %}
     <td data-field="{{ cell.name }}" class="px-4 py-2.5 align-top text-body">{{ cell.html }}</td>
     {% endfor %}

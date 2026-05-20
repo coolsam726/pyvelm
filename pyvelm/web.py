@@ -653,6 +653,50 @@ def create_app(registry: Registry, pool: Any,
             rec.unlink()
         return HTMLResponse("")
 
+    @app.post("/web/records/{module}/{name}/reorder")
+    async def web_row_reorder(
+        module: str, name: str, request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        """Persist a new row ordering for a list view that declared
+        `arch["sequence"] = "<field>"`. Body: `{ids: [42, 17, 9, ...]}`
+        in the desired top-to-bottom order. We rewrite the named field
+        to monotonically-increasing multiples of 10 so future inserts
+        can slot between existing rows without a global renumber."""
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .views import resolve_arch
+
+        view = _load_view(env, module, name)
+        arch = resolve_arch(view)
+        seq_field = arch.get("sequence")
+        if not seq_field:
+            raise HTTPException(
+                status_code=400,
+                detail=f"View {module}/{name} doesn't declare a sequence field.",
+            )
+        Model = env[view.model]
+        cls = env.registry[view.model]
+        if seq_field not in cls._fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{view.model} has no field {seq_field!r}",
+            )
+        try:
+            payload = await request.json()
+            ids = [int(i) for i in payload.get("ids", [])]
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Malformed payload")
+        if not ids:
+            return Response(status_code=204)
+
+        with env.transaction():
+            for position, rid in enumerate(ids):
+                rec = Model.browse(rid)
+                if Model.search([("id", "=", rid)]):
+                    rec.write({seq_field: (position + 1) * 10})
+        return Response(status_code=204)
+
     @app.post("/web/records/{module}/{name}", response_class=HTMLResponse)
     async def web_row_create(
         module: str, name: str, request: Request,
