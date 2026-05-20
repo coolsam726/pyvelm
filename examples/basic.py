@@ -239,6 +239,33 @@ def main():
             assert 'id="pv-pagination"' in html
             assert "pvList" in html                          # Alpine DataTable component
             assert "htmx:confirm" in html                    # styled confirm interceptor
+            # Slice 1 of the Odoo-style search bar: per-column filter
+            # row is gone; the chips-driven search shell takes its place.
+            assert "data-pv-search-bar" in html
+            assert "data-pv-filter-row" not in html
+
+            # New chip-list filter wire format: each filter is a
+            # `{field, op, value}` entry. Driving the same constraint
+            # the per-column filter used to handle.
+            import json as _json
+            chip_filters = _json.dumps([
+                {"field": "country_id", "op": "ilike", "value": "France"}
+            ])
+            resp = client.get(
+                "/web/views/partners/partner.list",
+                params={"filters": chip_filters},
+            )
+            assert resp.status_code == 200, resp.text
+            assert "Alice" in resp.text and "Bob" not in resp.text
+            # Legacy dict-form `{field: value}` URL still parses for
+            # already-bookmarked deep links.
+            resp_legacy = client.get(
+                "/web/views/partners/partner.list",
+                params={"filters": '{"country_id": "France"}'},
+            )
+            assert resp_legacy.status_code == 200
+            assert "Alice" in resp_legacy.text and "Bob" not in resp_legacy.text
+            print("central search bar: chip filters work, legacy URLs preserved")
             # Sidebar entries come from ir.ui.menu — base ships Dashboard,
             # admin ships Settings/Security/Workflows, partners ships Apps,
             # crm ships CRM. If any of these are missing, the sync broke.

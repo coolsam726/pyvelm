@@ -772,13 +772,24 @@ _SEARCHABLE_FIELD_TYPES = ("Char", "Text")
 
 
 def _parse_filters(model_cls, fields_spec: list, filters: str) -> list:
-    """Parse a JSON dict of `{field_name: search_text}` into ilike
-    domain leaves AND-ed into the search.
+    """Parse a JSON chip list into domain leaves AND-ed into the search.
 
-    Each entry must reference a field in `fields_spec` (or `id`) so
-    users can't smuggle filters against unrelated columns. Unknown
-    keys are silently dropped. Empty values are dropped (so an empty
-    filter input doesn't constrain anything).
+    Wire format (Slice 1 of the central search bar):
+
+        [{"field": "name", "op": "ilike", "value": "alice"},
+         {"field": "country_id", "op": "=", "value": 3},
+         ...]
+
+    Allowed ops: ``ilike``, ``=``, ``!=``, ``>``, ``>=``, ``<``, ``<=``,
+    ``in``. Each chip must reference a field in `fields_spec` (or
+    ``id``) so users can't smuggle filters against unrelated columns;
+    unknown / empty chips are silently dropped. Values are coerced
+    type-aware: Char/Text get wrapped in ``%...%`` for ``ilike``,
+    Many2one accepts an int id or a name substring (auto-routed
+    through the comodel's ``.name`` dotted-path).
+
+    The older ``{field: text}`` dict form is still accepted so URLs
+    bookmarked before the chip migration keep working.
     """
     import json
     from .fields import Char, Many2one, Text
@@ -789,41 +800,60 @@ def _parse_filters(model_cls, fields_spec: list, filters: str) -> list:
         data = json.loads(filters)
     except (json.JSONDecodeError, TypeError):
         return []
-    if not isinstance(data, dict):
+
+    # Normalize: convert legacy dict form into a chip list so the
+    # rest of the function only deals with one shape.
+    if isinstance(data, dict):
+        chips = [{"field": k, "op": "ilike", "value": v}
+                 for k, v in data.items()]
+    elif isinstance(data, list):
+        chips = data
+    else:
         return []
 
-    allowed = {s["name"] for s in fields_spec} | {"id"}
+    _allowed_ops = {"ilike", "=", "!=", ">", ">=", "<", "<=", "in"}
+    allowed_fields = {s["name"] for s in fields_spec} | {"id"}
+
     leaves: list[tuple] = []
-    for fname, term in data.items():
-        if fname not in allowed or not term:
+    for chip in chips:
+        if not isinstance(chip, dict):
+            continue
+        fname = chip.get("field")
+        op = chip.get("op", "ilike")
+        value = chip.get("value")
+        if fname not in allowed_fields or value in (None, ""):
+            continue
+        if op not in _allowed_ops:
             continue
         if fname == "id":
             try:
-                leaves.append(("id", "=", int(term)))
+                leaves.append(("id", "=", int(value)))
             except (TypeError, ValueError):
                 continue
             continue
         field = model_cls._fields.get(fname)
         if field is None:
             continue
-        # Per-field type-aware filter:
-        #   text fields -> ilike '%term%'
-        #   Many2one    -> ilike against the comodel's display text via
-        #                  dotted-path on `name` (most comodels have it)
-        #   anything else with a stored column -> = with a coerced value
+        # Type-aware coercion. Char/Text always go through ilike
+        # regardless of the requested op (so a stray "=" chip on a
+        # text column still does the right thing). Many2one accepts
+        # an explicit id (=) or a name substring (ilike).
         if isinstance(field, (Char, Text)):
-            leaves.append((fname, "ilike", f"%{term}%"))
+            leaves.append((fname, "ilike", f"%{value}%"))
         elif isinstance(field, Many2one):
-            # Match the comodel's `name` field via dotted-path ilike if
-            # the term is non-numeric; fall back to an id match when it
-            # parses as an int (so "1" matches the record with id=1).
-            try:
-                leaves.append((fname, "=", int(term)))
-            except (TypeError, ValueError):
-                leaves.append((f"{fname}.name", "ilike", f"%{term}%"))
+            if op == "=" or isinstance(value, int):
+                try:
+                    leaves.append((fname, "=", int(value)))
+                except (TypeError, ValueError):
+                    leaves.append((f"{fname}.name", "ilike", f"%{value}%"))
+            else:
+                try:
+                    leaves.append((fname, "=", int(value)))
+                except (TypeError, ValueError):
+                    leaves.append((f"{fname}.name", "ilike", f"%{value}%"))
         else:
             try:
-                leaves.append((fname, "=", field.to_sql_param(term)))
+                leaves.append((fname, op, field.to_sql_param(value)))
             except Exception:  # noqa: BLE001
                 continue
     return leaves

@@ -36,69 +36,78 @@
 <div x-data="pvList(window._pvListCfg)"
      class="space-y-3">
 
-    {# ── Toolbar: search + filter #}
-    <div class="flex flex-wrap items-center gap-2">
-        {# Search box #}
-        <div class="relative flex-1 min-w-[200px] max-w-sm">
-            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-body-subtle pointer-events-none"
+    {# ── Toolbar: Odoo-style single search bar.
+
+       The search bar is a single full-width control with active-filter
+       chips sitting below it (in their own row when present). Click
+       the × on a chip to drop that filter. Free-text search is itself
+       a chip — typing into the input updates an in-flight chip that
+       commits on debounce. #}
+    <div data-pv-search-bar
+         class="bg-neutral-primary border border-default rounded-lg shadow-sm">
+
+        {# Top row: chips + input #}
+        <div class="flex items-center flex-wrap gap-1.5 px-2.5 py-1.5 min-h-[40px]">
+            <svg class="w-4 h-4 text-body-subtle shrink-0"
                  fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round"
                       d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
             </svg>
+
+            {# Active filter chips (free-text search + future Filter-By). #}
+            <template x-for="(chip, i) in chips" :key="i">
+                <span class="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded
+                             bg-brand-soft text-fg-brand text-xs font-medium">
+                    <span x-text="chip.label" class="max-w-[200px] truncate"></span>
+                    <button @click="removeChip(i)" type="button"
+                            aria-label="Remove filter"
+                            class="ml-0.5 p-0.5 rounded hover:bg-fg-brand/20 transition-colors">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </span>
+            </template>
+
             <input type="search"
                    x-model="searchInput"
                    @input.debounce.400ms="onSearchChange()"
                    @keydown.escape="clearSearch()"
-                   placeholder="Search…"
-                   class="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border border-default
-                          bg-neutral-primary text-body placeholder:text-body-subtle
-                          focus:outline-none focus:ring-2 focus:ring-fg-brand/40 focus:border-fg-brand">
+                   :placeholder="chips.length ? '' : 'Search…'"
+                   class="flex-1 min-w-[120px] bg-transparent border-0 px-1 py-1 text-sm text-body
+                          placeholder:text-body-subtle focus:outline-none focus:ring-0">
+
+            {# Loading indicator #}
+            <svg x-show="loading" x-cloak
+                 class="w-4 h-4 animate-spin text-fg-brand shrink-0"
+                 fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+
+            {# Clear-all when at least one chip is active. #}
+            <button x-show="chips.length" x-cloak type="button"
+                    @click="clearAll()"
+                    class="text-2xs text-body-subtle hover:text-fg-brand underline shrink-0 px-1">
+                clear all
+            </button>
         </div>
+    </div>
 
-        {# Active search badge #}
-        <template x-if="search">
-            <span class="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full
-                         bg-brand-soft text-fg-brand text-xs font-medium">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                          d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
-                </svg>
-                <span x-text="search" class="max-w-[120px] truncate"></span>
-                <button @click="clearSearch()" type="button"
-                        class="ml-0.5 p-0.5 rounded-full hover:bg-fg-brand/20 transition-colors">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </span>
-        </template>
-
-        {# Loading indicator #}
-        <svg x-show="loading" x-cloak
-             class="w-4 h-4 animate-spin text-fg-brand"
-             fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-            <path class="opacity-75" fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-        </svg>
-
-        {# Spacer #}
-        <div class="flex-1"></div>
-
-        {# Page size selector #}
-        <div class="flex items-center gap-1.5 text-xs text-body-subtle">
-            <span>Rows</span>
-            <select x-model.number="pageSize"
-                    @change="page = 0; load()"
-                    class="text-xs rounded-md border border-default bg-neutral-primary text-body
-                           py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand/40
-                           focus:border-fg-brand">
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-            </select>
-        </div>
+    {# Secondary control strip (page size, sticky right). #}
+    <div class="flex items-center justify-end gap-1.5 text-xs text-body-subtle">
+        <span>Rows</span>
+        <select x-model.number="pageSize"
+                @change="page = 0; load()"
+                class="text-xs rounded-md border border-default bg-neutral-primary text-body
+                       py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand/40
+                       focus:border-fg-brand">
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+        </select>
     </div>
 
     {# ── Table + Pagination — HTMX swap target #}
@@ -113,14 +122,29 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('pvList', (cfg) => ({
         module: cfg.module,
         name: cfg.name,
-        search: cfg.search || '',
+        // Free-text in-progress search (uncommitted typing).
         searchInput: cfg.search || '',
         order: cfg.order || '',
-        // filters is a {field_name: search_text} dict. JSON-encoded for
-        // the server query param. Initial value comes from the URL.
-        filters: (() => {
-            try { return JSON.parse(cfg.filters || '{}'); }
-            catch (e) { return {}; }
+        // chips is a list of `{field, op, value, label}` entries — the
+        // central representation for everything visible in the search
+        // bar (free-text + future Filter-By selections). Each chip
+        // becomes one domain leaf server-side. Free-text search lives
+        // as a chip with field=null so the user can drop it like any
+        // other filter.
+        chips: (() => {
+            const out = [];
+            // Free-text search comes in via the dedicated `search=` URL
+            // param so deep links keep working; synthesize a chip for it
+            // so the new UI shows it consistently with field filters.
+            const s = (cfg.search || '').trim();
+            if (s) out.push({
+                field: null, op: 'ilike', value: s, label: `Search: "${s}"`,
+            });
+            try {
+                const fieldChips = JSON.parse(cfg.filters || '[]');
+                if (Array.isArray(fieldChips)) out.push(...fieldChips);
+            } catch (e) {}
+            return out;
         })(),
         page: cfg.page || 0,
         pageSize: cfg.pageSize || 20,
@@ -130,15 +154,25 @@ document.addEventListener('alpine:init', () => {
         // (module, view_name). When set, applies on every table render.
         get _orderKey() { return `pv-list-order-${this.module}-${this.name}`; },
 
+        // The free-text "search" chip is the one with field===null.
+        // Helpers below add/replace it on input commits.
+        _searchChipIndex() {
+            return this.chips.findIndex(c => c.field === null);
+        },
+        get _searchValue() {
+            const i = this._searchChipIndex();
+            return i >= 0 ? this.chips[i].value : '';
+        },
         get _params() {
-            const fk = Object.keys(this.filters).filter(k => this.filters[k]);
-            const filterPayload = fk.length
-                ? JSON.stringify(Object.fromEntries(fk.map(k => [k, this.filters[k]])))
-                : '';
+            // Split chips: the free-text chip (field===null) rides the
+            // dedicated `search=` param so the server's OR-across-Char
+            // search path stays in one place; the rest go in `filters=`
+            // as a list of `{field, op, value, label}` leaves.
+            const fieldChips = this.chips.filter(c => c.field !== null);
             return new URLSearchParams({
-                search: this.search,
+                search: this._searchValue,
                 order: this.order,
-                filters: filterPayload,
+                filters: fieldChips.length ? JSON.stringify(fieldChips) : '',
                 page: this.page,
                 page_size: this.pageSize,
             });
@@ -160,27 +194,44 @@ document.addEventListener('alpine:init', () => {
             }).catch(() => { this.loading = false; });
         },
 
+        // ── Search input commit ──
+        // The debounced input writes into a `search` chip (creating
+        // or updating in place). Empty input drops the chip.
         onSearchChange() {
-            this.search = this.searchInput;
+            const value = (this.searchInput || '').trim();
+            const i = this._searchChipIndex();
+            if (!value) {
+                if (i >= 0) this.chips.splice(i, 1);
+            } else {
+                const chip = {
+                    field: null,
+                    op: 'ilike',
+                    value,
+                    label: `Search: "${value}"`,
+                };
+                if (i >= 0) this.chips[i] = chip;
+                else this.chips.push(chip);
+            }
             this.page = 0;
             this.load();
         },
         clearSearch() {
-            this.search = '';
             this.searchInput = '';
-            this.page = 0;
-            this.load();
+            this.onSearchChange();
         },
 
-        onFilterChange() {
+        // ── Chip management ──
+        removeChip(i) {
+            const chip = this.chips[i];
+            this.chips.splice(i, 1);
+            // Removing the free-text chip clears the input too.
+            if (chip && chip.field === null) this.searchInput = '';
             this.page = 0;
             this.load();
         },
-        hasFilters() {
-            return Object.values(this.filters).some(v => v && v.length);
-        },
-        clearFilters() {
-            this.filters = {};
+        clearAll() {
+            this.chips = [];
+            this.searchInput = '';
             this.page = 0;
             this.load();
         },
@@ -251,7 +302,6 @@ document.addEventListener('alpine:init', () => {
             };
             // Reorder all known rows.
             reorder(table.querySelector('[data-pv-header-row]'));
-            reorder(table.querySelector('[data-pv-filter-row]'));
             table.querySelectorAll('tbody > tr').forEach(reorder);
         },
         captureCurrentOrder() {
@@ -308,6 +358,10 @@ document.addEventListener('alpine:init', () => {
         },
 
         init() {
+            // Rehydrate the in-progress search input from the active
+            // search chip, if any — so a deep-link reload shows the
+            // user's query inside the bar rather than only as a chip.
+            this.searchInput = this._searchValue;
             // Defer one tick so the initial server-rendered HTML is in
             // the DOM before we permute it.
             this.$nextTick(() => {

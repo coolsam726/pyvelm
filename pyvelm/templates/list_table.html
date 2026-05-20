@@ -45,30 +45,6 @@
                     Actions
                 </th>
             </tr>
-            {# Per-column filter row — tiny text input under each header.
-               The empty trailing cell aligns with the Actions column. #}
-            <tr data-pv-filter-row class="bg-neutral-secondary/60 border-b border-default">
-                {% for h in headers %}
-                <th data-field="{{ h.name }}" class="px-2 py-1.5">
-                    <input type="search"
-                           x-model="filters['{{ h.name }}']"
-                           @input.debounce.400ms="onFilterChange()"
-                           placeholder="Filter…"
-                           aria-label="Filter {{ h.label }}"
-                           class="w-full px-2 py-1 text-xs rounded border border-default
-                                  bg-neutral-primary text-body placeholder:text-body-subtle/70
-                                  focus:outline-none focus:ring-1 focus:ring-fg-brand/40 focus:border-fg-brand">
-                </th>
-                {% endfor %}
-                <th class="px-2 py-1.5 text-right">
-                    <button type="button"
-                            @click="clearFilters()"
-                            x-show="hasFilters()"
-                            class="text-2xs text-body-subtle hover:text-fg-brand underline">
-                        clear
-                    </button>
-                </th>
-            </tr>
         </thead>
         <tbody class="divide-y divide-default">
             {% for row in rows %}
