@@ -680,6 +680,124 @@
             },
         }));
     });
+
+    // ---- Odoo-style autosave on navigation ----------------------------
+    //
+    // Any form opted in via `data-pv-autosave="<url>"` participates: the
+    // moment its inputs deviate from the initial snapshot it's marked
+    // dirty, and any subsequent link click (sidebar entry, breadcrumb,
+    // menu item) is intercepted and posted to that URL before the
+    // navigation completes. Cancel/Save inside the form bypass this on
+    // purpose — they own their own swap semantics.
+    (function () {
+        function getForm() {
+            return document.querySelector('#pyvelm-form[data-pv-autosave]');
+        }
+        function takeSnapshot(f) {
+            try {
+                f.dataset.pvSnapshot = JSON.stringify([...new FormData(f)]);
+            } catch (e) {
+                f.dataset.pvSnapshot = '';
+            }
+            f.removeAttribute('data-pv-dirty');
+        }
+        function isDirty(f) {
+            if (!f) return false;
+            let now = '';
+            try { now = JSON.stringify([...new FormData(f)]); } catch (e) {}
+            return now !== (f.dataset.pvSnapshot || '');
+        }
+
+        document.addEventListener('input', e => {
+            const f = getForm();
+            if (!f || !f.contains(e.target)) return;
+            if (isDirty(f)) f.setAttribute('data-pv-dirty', 'true');
+        });
+        document.addEventListener('change', e => {
+            const f = getForm();
+            if (!f || !f.contains(e.target)) return;
+            if (isDirty(f)) f.setAttribute('data-pv-dirty', 'true');
+        });
+
+        // (Re-)snapshot every time the form shell is swapped or the page
+        // first loads — Edit/Save/Cancel all swap `#pyvelm-form-shell`.
+        document.body.addEventListener('htmx:afterSwap', () => {
+            const f = getForm();
+            if (f) takeSnapshot(f);
+        });
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                const f = getForm();
+                if (f) takeSnapshot(f);
+            });
+        } else {
+            const f = getForm();
+            if (f) takeSnapshot(f);
+        }
+
+        // True while an autosave POST is in flight on behalf of a click —
+        // prevents reentrancy if the user clicks rapidly.
+        let savingForHref = null;
+
+        async function autosaveThenNavigate(href) {
+            const f = getForm();
+            if (!f) { window.location.href = href; return; }
+            const url = f.dataset.pvAutosave;
+            const method = (f.dataset.pvAutosaveMethod || 'POST').toUpperCase();
+            try {
+                const r = await fetch(url, {
+                    method,
+                    body: new FormData(f),
+                    credentials: 'same-origin',
+                    headers: { 'HX-Request': 'true' },
+                });
+                if (!r.ok) {
+                    if (window.pvAlert) {
+                        await window.pvAlert(
+                            'Could not save your changes — please fix any errors and try again.',
+                            { variant: 'danger', title: 'Save failed' });
+                    } else {
+                        alert('Could not save changes.');
+                    }
+                    return;
+                }
+                // Mark clean BEFORE navigating so beforeunload doesn't fire.
+                takeSnapshot(f);
+                window.location.href = href;
+            } catch (err) {
+                console.error('autosave failed', err);
+                window.location.href = href;
+            }
+        }
+
+        document.addEventListener('click', e => {
+            if (savingForHref) return;
+            const a = e.target.closest('a[href]');
+            if (!a) return;
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('javascript:')
+                || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+            if (a.target && a.target !== '_self') return;
+            if (e.defaultPrevented) return;
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            const f = getForm();
+            if (!f || !isDirty(f)) return;
+            e.preventDefault();
+            savingForHref = href;
+            autosaveThenNavigate(href).finally(() => { savingForHref = null; });
+        }, true);
+
+        // Browser-driven nav (Back, Close, hard reload) can't run async
+        // work to completion, so the most we can do is prompt — the
+        // browser shows its native "Leave site?" confirmation.
+        window.addEventListener('beforeunload', e => {
+            const f = getForm();
+            if (f && isDirty(f)) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    })();
 </script>
 {% block scripts %}{% endblock %}
 </body>

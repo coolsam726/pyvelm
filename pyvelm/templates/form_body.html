@@ -76,7 +76,16 @@
         </div>
     </div>
 
-    <form id="pyvelm-form" class="space-y-6" onsubmit="return false">
+    {# `data-pv-autosave` opts this form into the layout-level
+       autosave/navigation interceptor: editing inputs marks the form
+       dirty, and any subsequent link click triggers a POST to the
+       declared URL before letting the browser follow the link. The
+       attribute is absent in display mode so navigation stays cheap. #}
+    <form id="pyvelm-form" class="space-y-6" onsubmit="return false"
+          {% if mode in ("edit", "new") %}
+          data-pv-autosave="{{ rec_url if mode == 'edit' else base }}"
+          data-pv-autosave-method="POST"
+          {% endif %}>
         {% for section in sections %}
         <fieldset class="bg-neutral-primary border border-default rounded-xl p-6 shadow-sm">
             {% if section.title %}

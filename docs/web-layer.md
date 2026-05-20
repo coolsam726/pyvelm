@@ -481,6 +481,21 @@ For direct navigation, the routes return a full HTML page. For
 in-place HTMX swaps, the same routes detect the `HX-Request: true`
 header and return only the body fragment.
 
+**Autosave on navigation.** Edit and New forms render with
+`data-pv-autosave="<save-url>"` on the `<form>`. A layout-level
+script in `layouts/main.html` snapshots the form's `FormData` at
+mount and after every `htmx:afterSwap`, marks the form dirty as the
+user types, and intercepts left-click navigation on `a[href]`
+elements anywhere in the page: if the form is dirty when the user
+clicks a sidebar entry, breadcrumb, or any other link, the
+interceptor POSTs to the autosave URL first and only follows the
+link on success. Save failures surface through `window.pvAlert` and
+keep the user on the form. For browser-initiated navigation (Back,
+Close, hard reload) we fall back to the native `beforeunload`
+prompt — async work can't complete on those transitions. Cancel
+and Save buttons inside the form bypass the interceptor on purpose
+because they own their own swap semantics.
+
 ## Kanban views
 
 A `kanban` view renders records as cards, optionally grouped into

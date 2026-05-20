@@ -426,7 +426,11 @@ def main():
             assert 'value="Alicia Doe"' in frag
             # Many2one renders as the pvM2o combobox now.
             assert "pvM2o(" in frag
-            print("form display + edit fragments render")
+            # Edit mode opts the form into the navigation autosave —
+            # any link click while dirty triggers a POST to this URL.
+            assert "data-pv-autosave=" in frag, frag[:1000]
+            assert f"/record/{alice['id']}" in frag
+            print("form display + edit fragments render (autosave wired)")
 
             # Save: POST form-encoded to the record URL.
             resp = client.post(
