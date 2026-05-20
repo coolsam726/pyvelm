@@ -660,6 +660,16 @@ app = create_app(registry, pool, module_roots=[MODULES_ROOT])
 Multiple roots work — useful when you split addons by deployment tier
 (`["./core/modules", "./custom/modules", "/opt/site-addons"]`). Each
 directory is scanned for subdirectories containing a `__pyvelm__.py`.
+`examples/serve.py` ships this layout for demo purposes:
+
+```python
+MODULES_ROOT = HERE / "modules"        # framework example modules
+DEMO_ROOT    = HERE / "modules_demo"   # optional `demo` module that
+                                       # seeds ~20 partners, 15 leads,
+                                       # tags, extra users, etc.
+loader.load_and_install([MODULES_ROOT, DEMO_ROOT], env)
+app = create_app(reg, pool, module_roots=[MODULES_ROOT, DEMO_ROOT])
+```
 
 ### What the page shows
 
