@@ -247,6 +247,27 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
             next_url += "?" + request.url.query
         return RedirectResponse(f"/login?next={next_url}", status_code=302)
 
+    def _auth_required_response(request: Request) -> Response:
+        """Return the right shape of "you must log in" for the caller.
+
+        HTMX requests get an `HX-Redirect` header so the client-side
+        library does a full-page navigation to /login instead of trying
+        to swap the redirect's HTML into the page. Plain browser
+        navigations get a 302 redirect. JSON callers get a 401.
+        """
+        if request.headers.get("HX-Request") == "true":
+            next_url = str(request.url.path)
+            if request.url.query:
+                next_url += "?" + request.url.query
+            return Response(
+                status_code=204,
+                headers={"HX-Redirect": f"/login?next={next_url}"},
+            )
+        accept = request.headers.get("accept", "")
+        if "application/json" in accept and "text/html" not in accept:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        return _login_redirect(request)
+
     @app.get("/api/views/{module}/{name}")
     def get_view(module: str, name: str, env: Environment = Depends(get_env)):
         from .views import resolve_arch
@@ -534,8 +555,11 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
              response_class=HTMLResponse)
     def web_row_display(
         module: str, name: str, record_id: int,
+        request: Request,
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _auth_required_response(request)
         from .render import render_list_row
 
         view = _load_view(env, module, name)
@@ -546,8 +570,11 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
              response_class=HTMLResponse)
     def web_row_edit(
         module: str, name: str, record_id: int,
+        request: Request,
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _auth_required_response(request)
         from .render import render_list_row
 
         view = _load_view(env, module, name)
@@ -560,6 +587,8 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         module: str, name: str, record_id: int, request: Request,
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _auth_required_response(request)
         from .render import parse_form_vals, render_list_row
 
         view = _load_view(env, module, name)
@@ -577,8 +606,11 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
                 response_class=HTMLResponse)
     def web_row_delete(
         module: str, name: str, record_id: int,
+        request: Request,
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _auth_required_response(request)
         view = _load_view(env, module, name)
         rec = _load_record(env, view, record_id)
         with env.transaction():
@@ -590,6 +622,8 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         module: str, name: str, request: Request,
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _auth_required_response(request)
         from .render import parse_form_vals, render_list_row
 
         view = _load_view(env, module, name)
@@ -677,6 +711,8 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         request: Request,
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _auth_required_response(request)
         from .render import parse_form_vals, render_form_page
 
         view = _require_form_view(_load_view(env, module, name))
@@ -699,6 +735,8 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         module: str, name: str, request: Request,
         env: Environment = Depends(get_env),
     ):
+        if env.uid is None:
+            return _auth_required_response(request)
         from .render import parse_form_vals, render_form_page
 
         view = _require_form_view(_load_view(env, module, name))
@@ -875,6 +913,12 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         response = RedirectResponse("/login", status_code=303)
         response.delete_cookie(_SESSION_COOKIE, path="/")
         response.delete_cookie(_COMPANY_COOKIE, path="/")
+        # Wipe the browser back-forward cache so hitting "Back" after
+        # logout doesn't reveal the previously-rendered authenticated
+        # page. `Clear-Site-Data: "cache"` evicts bfcache entries in
+        # browsers that honor it; `cookies` is belt-and-suspenders to
+        # the explicit delete_cookie calls above.
+        response.headers["Clear-Site-Data"] = '"cache", "cookies"'
         return response
 
     return app

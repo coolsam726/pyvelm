@@ -664,6 +664,37 @@ def main():
             assert r.status_code == 401, (r.status_code, r.text)
             print("stale token rejected after logout")
 
+            # Logout sets Clear-Site-Data so the browser drops bfcache —
+            # otherwise hitting Back would show the previously-rendered
+            # authenticated page even though the server has revoked
+            # the session.
+            no_follow = TestClient(app, follow_redirects=False)
+            r = no_follow.post("/logout")
+            assert r.headers.get("Clear-Site-Data"), "logout missing Clear-Site-Data"
+            print("logout: Clear-Site-Data sent for bfcache invalidation")
+
+            # The HTMX inline-edit / save endpoints reject unauthenticated
+            # callers — even when the browser's back-cache hands the user
+            # a stale list page, clicking Edit/Save now triggers a
+            # client-side redirect to /login.
+            r = stale_client.get(
+                "/web/records/partners/partner.list/row/1/edit",
+                headers={"HX-Request": "true"},
+            )
+            assert r.headers.get("HX-Redirect", "").startswith("/login"), (
+                r.status_code, r.headers, r.text,
+            )
+            print("HTMX edit endpoint redirects via HX-Redirect after logout")
+            r = stale_client.post(
+                "/web/records/partners/partner.list/row/1",
+                headers={"HX-Request": "true"},
+                data={"name": "Hacked"},
+            )
+            assert r.headers.get("HX-Redirect", "").startswith("/login"), (
+                r.status_code, r.headers, r.text,
+            )
+            print("HTMX save endpoint rejects unauthenticated POST after logout")
+
             # ----- Stage 5 Slice C: admin module -----
             # The admin module adds 8 views (list+form for each ACL
             # model) and grants Admin full CRUD on those models.
