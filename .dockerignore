@@ -1,0 +1,33 @@
+# Keep the docker build context small + reproducible.
+
+# VCS + IDE
+.git
+.gitignore
+.idea
+.vscode
+.claude
+
+# Python build artefacts
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Node deps (re-installed in stage 1)
+node_modules
+
+# Local config & secrets — the container reads env vars instead.
+.env
+
+# Docs & developer-only state
+docs
+CONTEXT.md
+*.md
+!README.md
+
+# Memory / scratch
+memory

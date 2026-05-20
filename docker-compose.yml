@@ -1,0 +1,44 @@
+# pyvelm dev / small-production stack: app + postgres.
+#
+# Bring up:
+#     cp .env.example .env       # adjust passwords for non-toy use
+#     docker compose up --build
+# Then visit http://localhost:8000/login (admin / admin).
+#
+# The example modules are installed on first boot; the demo module's
+# install hook seeds ~20 partners + 15 CRM leads so the UI is
+# populated.  Both are idempotent — restart safely.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pyvelm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pyvelm}
+      POSTGRES_DB: ${POSTGRES_DB:-pyvelm}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pyvelm}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PYVELM_DSN: "postgresql://${POSTGRES_USER:-pyvelm}:${POSTGRES_PASSWORD:-pyvelm}@db:5432/${POSTGRES_DB:-pyvelm}"
+      # Per-worker rate-limit is in-memory; set workers > 1 only
+      # when you've also configured a proxy-side rate limiter.
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      GUNICORN_FORWARDED_ALLOW_IPS: ${GUNICORN_FORWARDED_ALLOW_IPS:-127.0.0.1}
+    ports:
+      - "${PYVELM_PORT:-8000}:8000"
+
+volumes:
+  db_data:

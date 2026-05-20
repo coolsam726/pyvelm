@@ -737,3 +737,132 @@ if you care.
 - **Streaming / pagination metadata** — `count` is `total` from
   `search_count`; rows are paginated by `limit/offset`. No cursor
   abstraction yet.
+
+## Auth hardening
+
+Three pieces of the framework defend the cookie-driven browser flow.
+They sit one above the other in the request stack so understanding
+the order makes the rest fall out.
+
+### CSRF: double-submit cookie
+
+`pyvelm.web.CsrfMiddleware` mints a `pyvelm_csrf` cookie on the first
+GET that doesn't carry one (random 32-byte token, `SameSite=Lax`,
+**not** `HttpOnly` because the layout JS reads it). Every unsafe
+method — `POST`, `PUT`, `PATCH`, `DELETE` — must echo that value back
+in either the `X-CSRF-Token` header or the `_csrf` form field. The
+two paths are equivalent; pick whichever fits the call site.
+
+The middleware skips the check in two cases:
+
+1. **Basic-auth requests.** An attacker can't forge `Authorization:
+   Basic ...` from a cross-origin page, so the protection buys nothing
+   for machine clients calling the API with inline credentials.
+2. **Cookie-less requests.** If the request didn't ride any cookies
+   at all, there's nothing to protect — the session-cookie flow isn't
+   in play.
+
+Template / JS plumbing is automatic:
+
+- `htmx:configRequest` listener in `layouts/main.html` injects the
+  header on every HTMX request. All form-save / delete buttons that
+  use `hx-post` / `hx-delete` pick it up transparently.
+- A `DOMContentLoaded` (and post-swap) handler scans every
+  `<form method="post">` and appends a hidden `_csrf` input pulled
+  from the cookie. The logout button + the password-change form
+  ride that path; no per-template `{{ csrf_token }}` is required.
+- The login template embeds `_csrf` explicitly because the cookie
+  is freshly minted by the same response (the layout JS hasn't run
+  yet on the first paint). `render.layout_context` does not need to
+  thread the token.
+
+Non-HTMX `fetch()` calls (apps uninstall, row reorder, m2o quick-
+create, form autosave) call `window.pvCsrf()` to read the cookie
+and add the header explicitly. They're the only places template
+authors need to remember.
+
+### Login rate limit
+
+`/login` enforces a 5-attempt-per-5-minute sliding window keyed by
+the client IP (`request.client.host`). The 6th attempt returns 429
+with a `Retry-After` header pointing at the earliest expiry. Both
+successful and failed attempts count, so a brute-forcer can't probe
+silently. State is an in-process `dict` exposed on
+`app.state.login_attempts` for tests and operations.
+
+The window is per-worker. For a real production deployment, layer
+a shared rate limiter at the reverse proxy (nginx `limit_req`,
+Cloudflare WAF, etc.) and treat the per-worker count as a backstop.
+
+### Self-service password change
+
+`GET /web/account/password` renders a three-input form (current /
+new / confirm). The POST verifies the current password via
+`bcrypt.checkpw` under an ACL bypass — users without explicit read
+on `res.users` (including their own row) still need to self-serve.
+Validation rejects on:
+
+- wrong current password
+- new password under 6 characters
+- mismatched new / confirm
+- new equal to current
+
+The new value is written through the `Password` field, which
+re-hashes on store. Old sessions stay valid until the cookie
+expires; rotating session tokens on password change is a future
+hardening.
+
+Admins can still change anyone else's password via the existing
+`res.users` form, which writes the same `Password` field directly.
+
+## Deployment
+
+A multi-stage `Dockerfile`, `gunicorn_conf.py`, and `docker-compose.yml`
+ship at the repo root. The container is intentionally minimal:
+
+```
+docker compose up --build
+# → http://localhost:8000/login  (admin / admin)
+```
+
+What the Dockerfile does, in order:
+
+1. **Stage 1 (`node:20-alpine`)**: `npm install` + `npm run build`
+   compiles Tailwind + Flowbite into `pyvelm/static/dist/pyvelm.css`
+   and vendors `flowbite.min.js` next to it. The CSS scans the
+   template / static dirs for utility classes, so both have to be
+   in the build context.
+2. **Stage 2 (`python:3.13-slim`)**: installs the Python package +
+   `gunicorn` + `uvicorn[standard]`, copies the source, copies the
+   built CSS from stage 1, runs as a non-root `pyvelm` user.
+
+`gunicorn_conf.py` defaults to `2 × CPU + 1` workers using
+`UvicornWorker`. Override via env vars (`GUNICORN_WORKERS`,
+`GUNICORN_BIND`, `GUNICORN_TIMEOUT`, `GUNICORN_FORWARDED_ALLOW_IPS`).
+
+### Things to mind when scaling out
+
+- **`/login` rate limit is per-worker.** Set
+  `GUNICORN_WORKERS=1` for the bundled compose or put a real proxy-
+  side limiter in front (compose ships with workers=1 for that
+  reason). See [Login rate limit](#login-rate-limit).
+- **`request.client.host`.** Behind a reverse proxy, the framework
+  needs `X-Forwarded-For` to see the real client IP — otherwise the
+  rate limiter buckets every attempt under the proxy's IP and a
+  single legitimate user's retries lock out everyone behind that
+  proxy. Set `GUNICORN_FORWARDED_ALLOW_IPS` to the proxy's IP / CIDR.
+- **Connection pooling.** Each gunicorn worker opens its own
+  `psycopg_pool.ConnectionPool` — Postgres's `max_connections` needs
+  to be at least `workers × pool_max_size` + headroom for psql
+  sessions and migrations.
+- **First-boot install.** `examples/serve.py` calls
+  `loader.load_and_install` inside `_build_app()`, so every worker
+  runs the install pass on startup. That's idempotent today, but
+  for serious deployments the right pattern is to run the install
+  pass once as a separate one-shot command (still TODO), then start
+  the workers with a `--preload`-style flag pointed at an "app
+  already migrated" entry point.
+- **Static assets.** `/web/static/*` is served by Starlette today —
+  fine for small deployments. Production-grade setups should put a
+  CDN or the reverse proxy in front, serving the contents of
+  `pyvelm/static/dist/` directly.
