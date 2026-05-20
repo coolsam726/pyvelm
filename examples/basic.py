@@ -885,6 +885,18 @@ def main():
             assert active.get("widget") == "toggle"
             print("section-level inheritance applied to form view")
 
+            # Stage 7 Slice C — predicate + wildcard target segments
+            # via the `partner.form.pro.xpath` extension:
+            #   - predicate: any field with widget=toggle in the
+            #     profile section gets readonly=True
+            #   - `**` wildcard: tag_ids gets a label without
+            #     hard-coding the section path
+            assert active.get("readonly") is True, active
+            relations = next(s for s in arch["sections"] if s["name"] == "relations")
+            tag_field = next(f for f in relations["fields"] if f["name"] == "tag_ids")
+            assert tag_field.get("label") == "Tags (any section)", tag_field
+            print("Slice C: predicate + `**` wildcard target segments apply")
+
             # ----- B.5: kanban view -----
             # Arch normalization: badges with string entries get
             # promoted to {"name": str} dicts.

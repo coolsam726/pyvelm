@@ -8,14 +8,26 @@ chain and applies operations from every extension view in ascending
 priority order.
 
 Operation shape:
-    {"op": "<set|replace|before|after|remove>",
-     "target": [<key-or-name>, ...],
+    {"op": "<set|replace|update|before|after|remove>",
+     "target": [<segment>, ...],
      "value": <dict, optional except for remove>}
 
-Target resolution rule:
-    - string segment + dict node      -> dict key lookup
-    - string segment + list-of-dicts  -> match the dict whose `name` equals it
-    - int segment    + list           -> positional index
+Target segments (Stage 7 Slice C — `pyvelm/docs/web-layer.md`):
+
+    - `str`  + dict node      → dict key lookup
+    - `str`  + list of dicts  → match the dict whose `name` equals it
+                                (shorthand for `{"name": "<str>"}`)
+    - `int`  + list           → positional index
+    - `dict` + list of dicts  → predicate; first list entry where every
+                                key/value in the dict matches. Matches
+                                Odoo's `xpath="//tag[@a='1'][@b='2']"`
+                                attribute-filter idiom.
+    - `"**"` as the **first** segment  → start the lookup anywhere in
+                                the arch (depth-first). The next
+                                segment selects the entry point;
+                                remaining segments resolve normally
+                                from there. Equivalent to Odoo's
+                                `xpath="//.../foo"` prefix.
 """
 from __future__ import annotations
 
@@ -72,6 +84,13 @@ def _promote_list_at(node: Any, path: list[str]) -> None:
 
 # ----- target traversal -----
 
+def _matches_predicate(item: Any, predicate: dict) -> bool:
+    """True iff `item` is a dict and every kv in `predicate` matches."""
+    if not isinstance(item, dict):
+        return False
+    return all(item.get(k) == v for k, v in predicate.items())
+
+
 def _step_into(node: Any, seg: Any) -> Any:
     if isinstance(node, list):
         if isinstance(seg, int):
@@ -81,6 +100,11 @@ def _step_into(node: Any, seg: Any) -> Any:
                 if isinstance(item, dict) and item.get("name") == seg:
                     return item
             raise KeyError(f"no list entry named {seg!r}")
+        if isinstance(seg, dict):
+            for item in node:
+                if _matches_predicate(item, seg):
+                    return item
+            raise KeyError(f"no list entry matching predicate {seg!r}")
         raise TypeError(f"can't step into list with {type(seg).__name__}")
     if isinstance(node, dict):
         if isinstance(seg, str):
@@ -102,12 +126,48 @@ def _resolve_position(parent: Any, seg: Any) -> Any:
                 if isinstance(item, dict) and item.get("name") == seg:
                     return i
             raise KeyError(f"no list entry named {seg!r}")
+        if isinstance(seg, dict):
+            for i, item in enumerate(parent):
+                if _matches_predicate(item, seg):
+                    return i
+            raise KeyError(f"no list entry matching predicate {seg!r}")
     if isinstance(parent, dict):
         if isinstance(seg, str):
             if seg not in parent:
                 raise KeyError(f"no key {seg!r}")
             return seg
     raise TypeError(f"can't address {type(parent).__name__} with {seg!r}")
+
+
+def _find_descendant(root: Any, seg: Any) -> tuple[Any, Any]:
+    """Depth-first search for the first list/dict whose direct step
+    `seg` would succeed. Returns `(parent_of_match, original_seg)` so
+    the op can apply.  Used to resolve the `**` wildcard prefix.
+
+    For string / dict segments looking inside a list, the *list itself*
+    is the returned `parent_of_match`. For dict-key string segments,
+    the dict that contains the key is returned.
+    """
+    # Try the current node first.
+    try:
+        _step_into(root, seg)
+        return root, seg
+    except (KeyError, TypeError):
+        pass
+
+    if isinstance(root, dict):
+        for child in root.values():
+            try:
+                return _find_descendant(child, seg)
+            except KeyError:
+                continue
+    elif isinstance(root, list):
+        for child in root:
+            try:
+                return _find_descendant(child, seg)
+            except KeyError:
+                continue
+    raise KeyError(f"no descendant matched {seg!r}")
 
 
 def apply_operations(arch: dict, operations: list[dict]) -> dict:
@@ -119,11 +179,37 @@ def apply_operations(arch: dict, operations: list[dict]) -> dict:
         kind = op["op"]
         target = list(op["target"])
 
+        # `**` as the first segment finds any descendant whose next
+        # step matches. Effectively: "ignore the path, just find this
+        # node anywhere." Resolves to a normal target rooted at the
+        # match's parent so the rest of the segment list keeps the
+        # existing semantics.
+        if target and target and target[0] == "**":
+            if len(target) < 2:
+                raise ValueError(
+                    "'**' must be followed by at least one selector "
+                    "(`name` string or predicate dict)"
+                )
+            entry_seg = target[1]
+            try:
+                root, _ = _find_descendant(arch, entry_seg)
+            except KeyError:
+                raise KeyError(
+                    f"`**` lookup found no descendant matching {entry_seg!r}"
+                )
+            # Splice: drop `**`, anchor at the discovered subtree.
+            # The remaining target list (entry_seg + rest) resolves
+            # normally against `root`.
+            target = target[1:]
+            arch_root = root
+        else:
+            arch_root = arch
+
         # `update` walks all the way INTO the target (must end on a dict)
         # and merges in op["value"]. Equivalent to Odoo's
         # `position="attributes"` with multiple <attribute> children.
         if kind == "update":
-            node = arch
+            node = arch_root
             for seg in target:
                 node = _step_into(node, seg)
             if not isinstance(node, dict):
@@ -142,7 +228,7 @@ def apply_operations(arch: dict, operations: list[dict]) -> dict:
         if not target:
             raise ValueError(f"Operation {op!r} has empty target")
         # Walk into the parent container.
-        parent = arch
+        parent = arch_root
         for seg in target[:-1]:
             parent = _step_into(parent, seg)
         last = target[-1]

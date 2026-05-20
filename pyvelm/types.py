@@ -126,13 +126,22 @@ OpKind = Literal["set", "replace", "update", "remove", "before", "after"]
 class Operation(TypedDict, total=False):
     """One inheritance operation against a parent view's arch.
 
-    `target` is a list of keys: strings address dict keys or by-`name`
-    matches inside list-of-dicts; ints address positional indices.
+    `target` is a list of segments. Slice C of Stage 7 widens the
+    accepted segment types:
+      - `str`  – dict-key or list-by-`name` lookup (shorthand for
+                 `{"name": "<str>"}` on list-of-dicts parents)
+      - `int`  – positional index on a list parent
+      - `dict` – predicate; first list entry where every key/value
+                 in the dict matches the entry's attributes
+      - `"**"` – wildcard prefix, only valid as the first segment;
+                 finds any descendant where the next segment would
+                 succeed and anchors the rest of the lookup there
+
     `value` is required for every op except `remove`.
     """
 
     op: OpKind
-    target: list[Union[str, int]]
+    target: list[Union[str, int, dict]]
     value: Any  # required except for remove; type is op-dependent
 
 

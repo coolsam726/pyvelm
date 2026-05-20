@@ -137,13 +137,45 @@ node it walked into:
 
 | segment type | parent type | match rule |
 |--------------|-------------|------------|
-| `str` | dict | key lookup |
-| `str` | list of dicts | match by the entry's `name` field |
-| `int` | list | positional index |
+| `str`  | dict | key lookup |
+| `str`  | list of dicts | match by the entry's `name` field |
+| `int`  | list | positional index |
+| `dict` | list of dicts | predicate: first entry where every `k:v` matches |
+| `"**"` | anything (only valid as first segment) | start the lookup anywhere |
 
 So `["fields", "active"]` reaches the field-dict whose `name` is
 `"active"` inside the `fields` list. Errors at any segment raise during
 install — there's no silent skip.
+
+**Predicate segments** match by any attribute, not just `name` —
+useful when targeting nodes that don't have unique names or when the
+discriminator lives in a different key. Equivalent to Odoo's
+`xpath="//tag[@a='x'][@b='y']"` attribute-filter idiom.
+
+```python
+# "every field with widget=toggle in the profile section becomes readonly"
+{"op": "update",
+ "target": ["sections", "profile", "fields", {"widget": "toggle"}],
+ "value": {"readonly": True}}
+```
+
+**`"**"` wildcard** anchors the rest of the target at the first
+descendant where the next segment would succeed. Use it when you
+don't want to (or can't) hard-code the path to a deeply-nested
+field — e.g. patching `tag_ids` regardless of which section it
+lives in.
+
+```python
+# "find tag_ids anywhere in this arch and give it a label"
+{"op": "set",
+ "target": ["**", {"name": "tag_ids"}, "label"],
+ "value": "Tags"}
+```
+
+`"**"` is only valid as the **first** segment; later segments resolve
+normally against the discovered subtree. If no descendant matches, the
+op raises during install (the same loud-failure policy as bad
+fixed-path targets).
 
 ### Arch normalization
 

@@ -161,8 +161,14 @@ For the design rationale and the deferred-items rationale, see
         `super()` correctly chains to the base `Partner` implementation.
      ✅ 5 smoke tests verifying: field presence, write/read of new field,
         overridden compute, super() chain, non-VIP baseline.
-     ⏭ Slice C (deferred): XPath-style view arch patches (structural
-        view patches beyond the existing dict-op VIEW_INHERITS mechanism).
+     ✅ Slice C: structural view arch patches. Target segments now
+        accept dict-shaped **predicates** (match list entries by any
+        attribute, equivalent to Odoo's `xpath="//tag[@a='x']"`) and
+        a leading `"**"` **wildcard** that anchors the lookup at any
+        descendant where the next segment would succeed. Demoed via
+        `partner.form.pro.xpath` — predicate sets readonly on every
+        toggle-widget field; `**` labels `tag_ids` without hard-coding
+        its section path.
 
 ## Deliberately deferred (will bite us, fix when they do)
 
@@ -362,7 +368,6 @@ Next focus options:
   - **Reporting / dashboards**: new `graph` or `pivot` view type
     backed by SQL aggregation. Builds out a read-side aggregation
     layer (none today) for charts / KPIs / exports.
-  - **Stage 7 Slice C**: XPath/structural view arch patches.
   - **Stage 6 hardening**: Cron as a real background task, SMTP
     mail dispatch, message subtypes, followers/subscriptions.
 
