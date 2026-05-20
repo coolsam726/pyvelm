@@ -1,0 +1,87 @@
+{# Many2many chip editor — multi-select sibling of the m2o combobox.
+
+   Expected variables:
+       name            field attribute name (form input name)
+       comodel         comodel model name (e.g. "res.tag")
+       search_url      "/api/m2o/search?model=res.tag"
+       initial         list of {"id": int, "label": str} for currently linked
+                       records (one per record in the M2m)
+       readonly        bool
+#}
+<div class="pv-m2m"
+     x-data='pvM2m({{ ({
+        "name": name,
+        "comodel": comodel,
+        "searchUrl": search_url,
+        "initial": initial,
+        "readonly": readonly,
+     }) | tojson }})'
+     @click.outside="open = false"
+     @keydown.escape.prevent.stop="open = false">
+
+    {# Empty hidden input ensures the form always submits a value for
+       this field even when nothing is selected — that's how the server
+       distinguishes "user cleared everything" from "field not present
+       in this form". Concrete selections are emitted below. #}
+    <input type="hidden" :name="name" value="">
+
+    <div class="flex flex-wrap items-center gap-1 px-2 py-1.5 rounded-lg
+                bg-neutral-primary border border-default
+                focus-within:border-fg-brand focus-within:ring-2 focus-within:ring-fg-brand/40">
+
+        {# Selected chips. #}
+        <template x-for="item in selected" :key="item.id">
+            <span class="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded
+                         bg-brand-soft text-fg-brand text-xs font-medium">
+                <span x-text="item.label" class="max-w-[200px] truncate"></span>
+                <input type="hidden" :name="name" :value="item.id">
+                <button type="button"
+                        x-show="!readonly"
+                        @click.stop="remove(item.id)"
+                        aria-label="Remove"
+                        class="ml-0.5 p-0.5 rounded hover:bg-fg-brand/20 transition-colors">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor"
+                         viewBox="0 0 24 24" stroke-width="3">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </span>
+        </template>
+
+        {# Inline search input. Click → focus → /api/m2o/search dropdown. #}
+        <input type="text"
+               x-ref="input"
+               x-model="query"
+               :readonly="readonly"
+               @focus="onFocus()"
+               @input.debounce.200ms="searchNow()"
+               :placeholder="selected.length ? '' : 'Add…'"
+               autocomplete="off"
+               class="flex-1 min-w-[80px] bg-transparent border-0 p-0
+                      text-sm text-body placeholder:text-body-subtle
+                      focus:outline-none focus:ring-0">
+    </div>
+
+    {# Dropdown of search hits. Filters out already-selected ids. #}
+    <div x-show="open" x-cloak x-transition.opacity.duration.100ms
+         class="relative">
+        <div class="absolute left-0 right-0 top-1 z-30
+                    bg-neutral-primary border border-default rounded-md shadow-lg
+                    max-h-60 overflow-auto text-sm">
+            <template x-if="loading">
+                <div class="px-3 py-2 text-xs text-body-subtle">Searching…</div>
+            </template>
+            <template x-if="!loading && filteredResults().length === 0">
+                <div class="px-3 py-2 text-xs text-body-subtle">No matches.</div>
+            </template>
+            <template x-for="opt in filteredResults()" :key="opt.id">
+                <button type="button"
+                        @click="add(opt)"
+                        class="w-full text-left px-3 py-1.5 text-body
+                               hover:bg-neutral-secondary truncate">
+                    <span x-text="opt.label"></span>
+                </button>
+            </template>
+        </div>
+    </div>
+</div>

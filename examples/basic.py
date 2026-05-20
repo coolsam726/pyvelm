@@ -649,6 +649,87 @@ def main():
             assert check["name"] == "Alice X" and check["age"] == 31
             print("form validation: 422 + per-field errors, no partial write")
 
+            # Slice 2 of form-UX: M2m chip editor for tag_ids.
+            # Confirm the edit form renders the pvM2m partial wired
+            # against /api/m2o/search?model=res.tag.
+            resp = client.get(
+                f"/web/views/partners/partner.form/record/{alice['id']}/edit",
+                headers={"HX-Request": "true"},
+            )
+            assert resp.status_code == 200
+            frag = resp.text
+            assert "pvM2m(" in frag and "model=res.tag" in frag
+
+            # Seed a second tag to multi-select against. The Tag
+            # recordset bound to the install-time connection is dead
+            # by now; insert via the live pool instead.
+            with pool.connection() as side_conn:
+                side_conn.execute(
+                    "INSERT INTO res_tag (name) VALUES ('Wholesale') "
+                    "RETURNING id"
+                )
+                _row = side_conn.execute(
+                    "SELECT id FROM res_tag WHERE name = 'Wholesale'"
+                ).fetchone()
+                assert _row is not None
+                wholesale_id = _row[0]
+            vip_id = vip.id
+
+            # Save with both tags selected. parse_form_vals collects all
+            # tag_ids form values (one per chip) into a list of ints
+            # and writes them via BaseModel.write's replace semantics.
+            resp_save = client.post(
+                f"/web/views/partners/partner.form/record/{alice['id']}",
+                data={
+                    "name": "Alice X",
+                    "code": "ALI-1",
+                    "age": "31",
+                    "country_id": str(france.id),
+                    "parent_id": "",
+                    "active": "on",
+                    # Empty marker + two selections, mirroring what
+                    # pvM2m emits from the form. httpx supports the
+                    # dict[str, list[str]] form for repeated keys.
+                    "tag_ids": ["", str(vip_id), str(wholesale_id)],
+                },
+                headers={"HX-Request": "true"},
+            )
+            assert resp_save.status_code == 200, resp_save.text
+            with pool.connection() as side_conn:
+                rows = side_conn.execute(
+                    "SELECT res_tag_id FROM res_partner_res_tag_rel "
+                    "WHERE res_partner_id = %s ORDER BY res_tag_id",
+                    [alice["id"]],
+                ).fetchall()
+            tag_ids_after = [r[0] for r in rows]
+            assert vip_id in tag_ids_after and wholesale_id in tag_ids_after
+            assert len(tag_ids_after) == 2
+
+            # Clearing the chip editor (only the empty marker remains
+            # in the form) drops every M2m link.
+            resp_clear = client.post(
+                f"/web/views/partners/partner.form/record/{alice['id']}",
+                data={
+                    "name": "Alice X",
+                    "code": "ALI-1",
+                    "age": "31",
+                    "country_id": str(france.id),
+                    "parent_id": "",
+                    "active": "on",
+                    "tag_ids": "",       # marker only — nothing selected
+                },
+                headers={"HX-Request": "true"},
+            )
+            assert resp_clear.status_code == 200, resp_clear.text
+            with pool.connection() as side_conn:
+                cleared = side_conn.execute(
+                    "SELECT COUNT(*) FROM res_partner_res_tag_rel "
+                    "WHERE res_partner_id = %s",
+                    [alice["id"]],
+                ).fetchone()
+            assert cleared == (0,), cleared
+            print("M2m chip editor: multi-select + clear both write correctly")
+
             # Form new: empty edit shell.
             resp = client.get(
                 "/web/views/partners/partner.form/new",

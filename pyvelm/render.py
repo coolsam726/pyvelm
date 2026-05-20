@@ -291,10 +291,40 @@ def _edit_m2o(value, spec, field):
 
 
 @widget(Many2many, mode="edit")
+def _edit_m2m(value, spec, field):
+    """Chip-editor for Many2many fields.
+
+    Renders the partial at `widgets/m2m_input.html` which mounts the
+    `pvM2m` Alpine component. Pre-populated with one chip per related
+    record (id + display label). On save the form posts one
+    `<input type="hidden" name="<fname>" value="<id>">` per chip plus
+    an empty marker so the server-side parser can tell "cleared" from
+    "not submitted".
+    """
+    from .web import _display_value
+
+    initial = [
+        {"id": rec.id, "label": _display_value(rec)}
+        for rec in value
+    ] if value else []
+    partial = _env.get_template("widgets/m2m_input.html")
+    return Markup(
+        partial.render(
+            name=spec["name"],
+            comodel=spec.get("_comodel") or field.comodel_name,
+            search_url=spec.get("_search_url")
+                       or f"/api/m2o/search?model={field.comodel_name}",
+            initial=initial,
+            readonly=bool(spec.get("readonly")),
+        )
+    )
+
+
 @widget(One2many, mode="edit")
-def _edit_collection_readonly(value, spec, field):
-    """Slice B.3 doesn't ship a multi-select widget; show the display
-    rendering as read-only context inside the edit row."""
+def _edit_o2m_readonly(value, spec, field):
+    """O2m editing requires inline child-record creation/management;
+    deferred. For now show the display rendering so the field at
+    least communicates its current value."""
     return _render_collection(value, spec, field)
 
 
@@ -342,6 +372,13 @@ def _enrich_specs_for_edit(env, model_cls, fields_spec) -> list[dict]:
                 )
             else:
                 spec_copy["_form_view_url"] = None
+        elif isinstance(field, Many2many):
+            # M2m chip editor reuses the m2o search endpoint to find
+            # candidate records (it's just ILIKE-on-name).
+            spec_copy["_comodel"] = field.comodel_name
+            spec_copy["_search_url"] = (
+                f"/api/m2o/search?model={field.comodel_name}"
+            )
         out.append(spec_copy)
     return out
 
@@ -498,10 +535,26 @@ def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
     vals: dict = {}
     errors: dict[str, str] = {}
     for fname, field in model_cls._fields.items():
+        # Many2many: handled before the is_stored gate. M2m has no
+        # column on the owning table (is_stored=False) but the chip
+        # editor still posts ids that BaseModel.write turns into
+        # junction-table rows.
+        if isinstance(field, Many2many):
+            if fname not in form_data:
+                continue
+            seq = (
+                form_data.getlist(fname)
+                if hasattr(form_data, "getlist") else [form_data[fname]]
+            )
+            try:
+                ids = [int(v) for v in seq if v not in ("", None)]
+            except (TypeError, ValueError):
+                errors[fname] = "Invalid record reference."
+                continue
+            vals[fname] = ids
+            continue
         if not field.is_stored:
             continue
-        if isinstance(field, Many2many):
-            continue  # multi-select widget not in B.3
         if fname not in form_data:
             continue
         if isinstance(field, Boolean):
@@ -573,11 +626,16 @@ def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
         if fname in submitted:
             # Resurrect the value the user just submitted so they don't
             # lose typing when one field errored. Many2one's `submitted`
-            # form is an id; reconstitute it as a recordset so the
-            # widget can render the label.
+            # form is an id; Many2many is a list of ids — reconstitute
+            # both as recordsets so the widgets can render labels.
             raw = submitted[fname]
             if isinstance(field, Many2one):
                 value = env[field.comodel_name].browse(raw) if raw else env[field.comodel_name]
+            elif isinstance(field, Many2many):
+                if raw:
+                    value = env[field.comodel_name].browse(tuple(raw))
+                else:
+                    value = env[field.comodel_name]
             else:
                 value = raw
         elif record_or_none is None:
