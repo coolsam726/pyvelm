@@ -95,8 +95,13 @@
             {% endif %}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 {% for cell in section.cells %}
-                <div data-field="{{ cell.name }}" class="flex flex-col gap-1">
-                    <label class="text-xs font-medium text-body-subtle">{{ cell.label }}</label>
+                <div data-field="{{ cell.name }}" class="flex flex-col gap-1.5">
+                    <label class="block text-sm font-medium text-heading">
+                        {{ cell.label }}
+                        {% if mode in ("edit", "new") and cell.required %}
+                        <span class="text-fg-danger ml-0.5" aria-hidden="true">*</span>
+                        {% endif %}
+                    </label>
                     <div class="text-sm text-body">{{ cell.html }}</div>
                 </div>
                 {% endfor %}

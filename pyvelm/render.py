@@ -182,8 +182,11 @@ def _render_collection(value, spec, field):
 # ---- edit-mode widgets ----
 
 _INPUT_CLS = (
-    "border border-gray-300 rounded px-2 py-1 w-full text-sm "
-    "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+    "block w-full px-2.5 py-2 text-sm rounded-lg "
+    "bg-neutral-primary border border-default text-heading "
+    "placeholder:text-body-subtle "
+    "focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand "
+    "disabled:cursor-not-allowed disabled:opacity-60"
 )
 
 
@@ -191,31 +194,54 @@ def _readonly_marker(spec: dict) -> str:
     return " disabled" if spec.get("readonly") else ""
 
 
+def _required_marker(field) -> str:
+    return " required" if getattr(field, "required", False) else ""
+
+
 @widget(Char, mode="edit")
-@widget(Text, mode="edit")
-def _edit_text(value, spec, field):
+def _edit_char(value, spec, field):
     val_attr = escape(str(value)) if value is not None else ""
+    placeholder = escape(field.string or spec["name"])
     return Markup(
         f'<input type="text" name="{escape(spec["name"])}" value="{val_attr}" '
-        f'class="{_INPUT_CLS}"{_readonly_marker(spec)}>'
+        f'placeholder="{placeholder}" '
+        f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
+    )
+
+
+@widget(Text, mode="edit")
+def _edit_textarea(value, spec, field):
+    val = escape(str(value)) if value is not None else ""
+    placeholder = escape(field.string or spec["name"])
+    # Text fields get a resizable textarea instead of a single-line input.
+    return Markup(
+        f'<textarea name="{escape(spec["name"])}" rows="3" '
+        f'placeholder="{placeholder}" '
+        f'class="{_INPUT_CLS} resize-y"'
+        f'{_readonly_marker(spec)}{_required_marker(field)}>'
+        f'{val}</textarea>'
     )
 
 
 @widget(Integer, mode="edit")
 def _edit_integer(value, spec, field):
     val_attr = str(value) if value is not None else ""
+    placeholder = escape(field.string or spec["name"])
     return Markup(
         f'<input type="number" step="1" name="{escape(spec["name"])}" '
-        f'value="{val_attr}" class="{_INPUT_CLS}"{_readonly_marker(spec)}>'
+        f'value="{val_attr}" placeholder="{placeholder}" '
+        f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
     )
 
 
 @widget(Float, mode="edit")
 def _edit_float(value, spec, field):
     val_attr = str(value) if value is not None else ""
+    placeholder = escape(field.string or spec["name"])
     return Markup(
         f'<input type="number" step="any" name="{escape(spec["name"])}" '
-        f'value="{val_attr}" class="{_INPUT_CLS}"{_readonly_marker(spec)}>'
+        f'value="{val_attr}" placeholder="{placeholder}" '
+        f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
     )
 
 
@@ -231,7 +257,8 @@ def _edit_boolean(value, spec, field):
     return Markup(
         f'<input type="hidden" name="{escape(spec["name"])}" value="">'
         f'<input type="checkbox" name="{escape(spec["name"])}" value="on" {checked} '
-        f'class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"'
+        f'class="w-4 h-4 rounded border-default bg-neutral-secondary '
+        f'text-fg-brand checked:bg-fg-brand focus:ring-2 focus:ring-fg-brand cursor-pointer"'
         f'{_readonly_marker(spec)}>'
     )
 
@@ -484,6 +511,7 @@ def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str) 
         cells.append({
             "name": fname,
             "label": label,
+            "required": getattr(field, "required", False),
             "html": renderer(value, spec, field),
         })
     return cells
