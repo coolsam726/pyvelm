@@ -518,6 +518,18 @@
                     detail: { message, resolve, ...opts },
                 })));
 
+        // ── Replace hx-confirm with the styled pvConfirm dialog ──
+        // HTMX fires `htmx:confirm` before it would call window.confirm.
+        // We intercept every request that carries an hx-confirm message,
+        // show our dialog instead, and call issueRequest(true) on "OK"
+        // (the `true` tells htmx to skip its own confirm check).
+        document.body.addEventListener('htmx:confirm', e => {
+            if (!e.detail.question) return;
+            e.preventDefault();
+            window.pvConfirm(e.detail.question, { variant: 'danger' })
+                .then(ok => { if (ok) e.detail.issueRequest(true); });
+        });
+
         // ── Many2one combobox ──
         // Searchable select with create-on-the-fly and "open record"
         // link. The widget partial at `widgets/m2o_input.html` mounts

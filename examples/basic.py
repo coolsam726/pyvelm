@@ -238,6 +238,7 @@ def main():
             # Pagination controls present because total > page_size.
             assert 'id="pv-pagination"' in html
             assert "pvList" in html                          # Alpine DataTable component
+            assert "htmx:confirm" in html                    # styled confirm interceptor
             # Sidebar entries come from ir.ui.menu — base ships Dashboard,
             # admin ships Settings/Security/Workflows, partners ships Apps,
             # crm ships CRM. If any of these are missing, the sync broke.
