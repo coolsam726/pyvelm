@@ -326,6 +326,12 @@ def main():
             assert "Sales pipeline" in body
             # Installed badge appears (all modules pre-installed in test).
             assert "Installed" in body
+            # Filter toolbar: search input + state pills + category dropdown,
+            # and each card carries the data-attributes that drive client-
+            # side filtering.
+            assert "data-pv-apps-state" in body
+            assert "data-pv-app-haystack" in body
+            assert "Search modules…" in body
             print("Apps catalog renders all modules with category + summary")
 
             # Slice 2: upgrade action wires loader.install end-to-end

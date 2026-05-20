@@ -12,15 +12,92 @@
     {% for app in catalog %}
         {% set _ = grouped.setdefault(app.category, []).append(app) %}
     {% endfor %}
+    {% set categories = grouped.keys() | list %}
+
+    {# ── Toolbar: search + state pills + category dropdown. All three
+       filters compose with AND. Filtering is client-side (the catalog
+       fits comfortably on one page) so there's no server round-trip;
+       the @input handlers just toggle Alpine state and CSS classes
+       react. #}
+    <div class="flex flex-wrap items-center gap-2">
+        <div class="relative flex-1 min-w-[200px] max-w-sm">
+            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-body-subtle pointer-events-none"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
+            </svg>
+            <input type="search"
+                   x-model="query"
+                   @input="apply()"
+                   placeholder="Search modules…"
+                   class="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border border-default
+                          bg-neutral-primary text-body placeholder:text-body-subtle
+                          focus:outline-none focus:ring-2 focus:ring-fg-brand/40 focus:border-fg-brand">
+        </div>
+
+        {# State pill group — single-select. The fourth chip ("All")
+           resets the state filter. #}
+        <div data-pv-apps-state class="flex items-center gap-1 text-xs">
+            <template x-for="opt in [
+                {key: '',           label: 'All'},
+                {key: 'installed',  label: 'Installed'},
+                {key: 'to_upgrade', label: 'Upgrade'},
+                {key: 'uninstalled', label: 'Not installed'}
+            ]" :key="opt.key">
+                <button type="button"
+                        @click="stateFilter = opt.key; apply()"
+                        :class="stateFilter === opt.key
+                                ? 'bg-fg-brand text-white border-fg-brand'
+                                : 'bg-neutral-primary text-body border-default hover:bg-neutral-secondary'"
+                        class="px-2.5 py-1 rounded-full border font-medium transition-colors">
+                    <span x-text="opt.label"></span>
+                </button>
+            </template>
+        </div>
+
+        {# Category dropdown — populated from the categories present
+           in the rendered catalog. #}
+        <select x-model="categoryFilter" @change="apply()"
+                class="text-xs rounded-md border border-default bg-neutral-primary text-body
+                       py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand/40
+                       focus:border-fg-brand">
+            <option value="">All categories</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+        </select>
+
+        <div class="flex-1"></div>
+
+        {# Match count — updated by apply(). #}
+        <span class="text-xs text-body-subtle"
+              x-text="`${visibleCount} of ${{ catalog | length }} module${{ 's' if (catalog | length) != 1 else '' }}`">
+        </span>
+    </div>
+
+    {# Empty-results panel that shows when the filters exclude every card. #}
+    <div x-show="visibleCount === 0 && {{ catalog | length }}" x-cloak
+         class="bg-neutral-primary border border-default rounded-xl p-6 text-center">
+        <p class="text-sm text-body-subtle">No modules match the current filters.</p>
+        <button type="button" @click="reset()"
+                class="mt-2 text-xs text-fg-brand hover:underline">
+            Clear filters
+        </button>
+    </div>
 
     {% for category, apps in grouped.items() %}
-    <section class="space-y-3">
+    <section class="space-y-3"
+             data-pv-apps-section
+             data-pv-category="{{ category }}">
         <h3 class="text-xs font-bold uppercase tracking-wider text-body-subtle px-1">
             {{ category }}
         </h3>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {% for app in apps %}
             <article data-pv-app="{{ app.name }}"
+                     data-pv-app-state="{{ app.state }}"
+                     data-pv-app-category="{{ app.category }}"
+                     data-pv-app-haystack="{{ (app.name ~ ' ' ~ app.summary ~ ' ' ~ app.author ~ ' ' ~ app.category) | lower }}"
                      class="bg-neutral-primary border border-default rounded-xl p-4
                             shadow-sm flex flex-col gap-2">
                 <header class="flex items-start justify-between gap-2">
@@ -165,6 +242,49 @@
 <script>
     document.addEventListener('alpine:init', () => {
         Alpine.data('pvApps', () => ({
+            // Filter state. All three compose with AND. Visible count
+            // is recomputed by apply() so the toolbar can show a live
+            // "N of M" indicator and the empty-state panel can flip on.
+            query: '',
+            stateFilter: '',
+            categoryFilter: '',
+            visibleCount: 0,
+            init() {
+                // First pass after the template renders so visibleCount
+                // matches what the user sees.
+                this.$nextTick(() => this.apply());
+            },
+            apply() {
+                const q = (this.query || '').trim().toLowerCase();
+                let visible = 0;
+                document.querySelectorAll('[data-pv-app]').forEach(card => {
+                    const stateOk = !this.stateFilter
+                        || card.getAttribute('data-pv-app-state') === this.stateFilter;
+                    const catOk = !this.categoryFilter
+                        || card.getAttribute('data-pv-app-category') === this.categoryFilter;
+                    const queryOk = !q
+                        || (card.getAttribute('data-pv-app-haystack') || '').includes(q);
+                    const show = stateOk && catOk && queryOk;
+                    card.style.display = show ? '' : 'none';
+                    if (show) visible++;
+                });
+                // Hide an entire category section if all its cards are
+                // filtered out — saves an empty heading floating alone.
+                document.querySelectorAll('[data-pv-apps-section]').forEach(section => {
+                    const anyVisible = section.querySelector(
+                        '[data-pv-app]:not([style*="display: none"])'
+                    );
+                    section.style.display = anyVisible ? '' : 'none';
+                });
+                this.visibleCount = visible;
+            },
+            reset() {
+                this.query = '';
+                this.stateFilter = '';
+                this.categoryFilter = '';
+                this.apply();
+            },
+
             // Click handler for every Uninstall button. Fetches the
             // dry-run preview, builds a human summary, and routes it
             // through pvConfirm / pvAlert depending on whether the
