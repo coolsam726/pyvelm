@@ -397,13 +397,48 @@ def _build_rows(view, recordset, fields_spec) -> list[dict]:
 
 
 def _field_headers(model_cls, fields_spec) -> list[dict]:
+    """Build the table-header list, enriched with the metadata the
+    central search-bar dropdown needs to pick a per-field filter UI.
+
+    Per-header `filter_kind`:
+      - `"text"`     — Char/Text. Covered by free-text search already;
+                       skipped from the Filter By submenu.
+      - `"m2o"`      — Many2one. Submenu offers a searchable picker
+                       backed by `/api/m2o/search?model=<comodel>`.
+      - `"boolean"`  — Boolean. Submenu offers a fixed "Yes / No" pair.
+      - `"none"`     — anything else (Integer, Float, …). Not exposed
+                       in Slice 2.
+
+    `group_kind` mirrors that — currently only Many2one + Boolean group
+    cleanly, so only those expose Group By entries.
+    """
+    from .fields import Boolean, Char, Many2one, Text
     out = []
     for spec in fields_spec:
         fname = spec["name"]
         label = spec.get("label")
-        if not label and fname in model_cls._fields:
-            label = model_cls._fields[fname].string
-        out.append({"name": fname, "label": label or fname})
+        field = model_cls._fields.get(fname)
+        if not label and field is not None:
+            label = field.string
+        filter_kind = "none"
+        group_kind = "none"
+        comodel: str | None = None
+        if isinstance(field, Many2one):
+            filter_kind = "m2o"
+            group_kind = "m2o"
+            comodel = field.comodel_name
+        elif isinstance(field, Boolean):
+            filter_kind = "boolean"
+            group_kind = "boolean"
+        elif isinstance(field, (Char, Text)):
+            filter_kind = "text"
+        out.append({
+            "name": fname,
+            "label": label or fname,
+            "filter_kind": filter_kind,
+            "group_kind": group_kind,
+            "comodel": comodel,
+        })
     return out
 
 
@@ -909,6 +944,7 @@ def _safe_order(fields_spec: list, order: str) -> str:
 
 def render_list_page(view, env, *, page: int, page_size: int,
                      search: str = "", order: str = "", filters: str = "",
+                     group_by: str = "",
                      current_path: str | None = None) -> str:
     """Full HTML page for a list view: heading, toolbar, sortable DataTable
     with server-side search / ordering / pagination."""
@@ -935,6 +971,13 @@ def render_list_page(view, env, *, page: int, page_size: int,
     headers = _field_headers(model_cls, fields_spec)
     total_pages = max(1, (total + page_size - 1) // page_size)
 
+    # Validate group_by against the headers' group_kind metadata. An
+    # unknown column or one whose type doesn't group cleanly is silently
+    # dropped — the value is user-controlled URL input.
+    safe_group_by = group_by if any(
+        h["name"] == group_by and h["group_kind"] != "none" for h in headers
+    ) else ""
+
     page_title = _view_title(view, arch)
     template = _env.get_template("list.html")
     return template.render(
@@ -948,6 +991,7 @@ def render_list_page(view, env, *, page: int, page_size: int,
         search=search,
         order=order,
         filters=filters,
+        group_by=safe_group_by,
         form_view_name=form_view_name,
         page_title=page_title,
         subtitle=f"{total} record{'s' if total != 1 else ''}",
@@ -955,7 +999,7 @@ def render_list_page(view, env, *, page: int, page_size: int,
     )
 
 
-def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", order: str = "", filters: str = "") -> str:
+def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", order: str = "", filters: str = "", group_by: str = "") -> str:
     """Table body fragment + oob pagination — used by HTMX control swaps."""
     from .views import resolve_arch
 

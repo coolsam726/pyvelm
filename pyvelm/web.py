@@ -295,6 +295,7 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         search: str = Query(default=""),
         order: str = Query(default=""),
         filters: str = Query(default=""),
+        group_by: str = Query(default=""),
         env: Environment = Depends(get_env),
     ):
         if env.uid is None:
@@ -308,7 +309,7 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
                 render_list_page(
                     rec, env, page=page, page_size=page_size,
                     search=search, order=order, filters=filters,
-                    current_path=path
+                    group_by=group_by, current_path=path
                 )
             )
         if rec.view_type == "kanban":
@@ -331,6 +332,7 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         search: str = Query(default=""),
         order: str = Query(default=""),
         filters: str = Query(default=""),
+        group_by: str = Query(default=""),
         env: Environment = Depends(get_env),
     ):
         """HTML fragment endpoint used by HTMX `load more` swaps."""
@@ -347,7 +349,8 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
         return HTMLResponse(
             render_list_rows(
                 rec, env, page=page, page_size=page_size,
-                search=search, order=order, filters=filters
+                search=search, order=order, filters=filters,
+                group_by=group_by,
             )
         )
 

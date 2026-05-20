@@ -266,6 +266,31 @@ def main():
             assert resp_legacy.status_code == 200
             assert "Alice" in resp_legacy.text and "Bob" not in resp_legacy.text
             print("central search bar: chip filters work, legacy URLs preserved")
+
+            # Slice 2: Filter By / Group By dropdown is wired up and the
+            # group_by URL param round-trips through the server.
+            assert "data-pv-filter-panel" in html
+            assert "Filter By" in html and "Group By" in html
+            # Headers metadata is bootstrapped into the page so the
+            # Alpine component can render Filter By / Group By items.
+            assert '"filter_kind"' in html
+            assert '"group_kind"' in html
+            resp = client.get(
+                "/web/views/partners/partner.list",
+                params={"group_by": "country_id"},
+            )
+            assert resp.status_code == 200, resp.text
+            # The group-by survives the round-trip into the bootstrap cfg.
+            assert 'groupBy: "country_id"' in resp.text
+            # Unknown / ungroupable columns are silently dropped (validated
+            # against the headers metadata).
+            resp_bad = client.get(
+                "/web/views/partners/partner.list",
+                params={"group_by": "not_a_field"},
+            )
+            assert resp_bad.status_code == 200
+            assert 'groupBy: ""' in resp_bad.text
+            print("filter dropdown rendered; group_by param validated")
             # Sidebar entries come from ir.ui.menu — base ships Dashboard,
             # admin ships Settings/Security/Workflows, partners ships Apps,
             # crm ships CRM. If any of these are missing, the sync broke.
