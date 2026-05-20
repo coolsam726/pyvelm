@@ -845,6 +845,32 @@ def create_app(registry: Registry, pool: Any,
             raise HTTPException(status_code=400, detail=str(e))
         return _apps_action_response(request, env, result)
 
+    @app.get("/web/apps/{name}/uninstall-preview")
+    def web_app_uninstall_preview(name: str, request: Request,
+                                  env: Environment = Depends(get_env)):
+        """Dry-run for the uninstall flow — returns the JSON the confirm
+        modal renders into a "this is what we'll do / why we won't"
+        summary. Auth-gated like the action endpoints since exposing
+        the cleanup map is itself a small information leak."""
+        if env.uid is None:
+            return _auth_required_response(request)
+        _require_admin(env)
+        from .render import uninstall_preview
+        return uninstall_preview(env, app.state.module_roots, name)
+
+    @app.post("/web/apps/{name}/uninstall")
+    def web_app_uninstall(name: str, request: Request,
+                          env: Environment = Depends(get_env)):
+        if env.uid is None:
+            return _auth_required_response(request)
+        _require_admin(env)
+        from .render import uninstall_module_action
+        try:
+            result = uninstall_module_action(env, app.state.module_roots, name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return _apps_action_response(request, env, result)
+
     @app.post("/web/switch-company")
     async def web_switch_company(
         request: Request,

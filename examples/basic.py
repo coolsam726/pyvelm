@@ -355,6 +355,47 @@ def main():
             r_denied = anon.post("/web/apps/base/upgrade")
             assert r_denied.status_code == 403, (r_denied.status_code, r_denied.text)
             print("apps upgrade: superuser-gated, version row rolls forward")
+
+            # Slice 3: uninstall flow has a dry-run preview that
+            # surfaces blockers before any destructive action runs.
+            base_pv = client.get("/web/apps/base/uninstall-preview").json()
+            assert base_pv["blockers"], "base must be uninstall-blocked"
+            pp_pv = client.get("/web/apps/partners_pro/uninstall-preview").json()
+            assert any("_inherit" in b for b in pp_pv["blockers"]), pp_pv
+            partners_pv = client.get("/web/apps/partners/uninstall-preview").json()
+            assert any("crm" in b for b in partners_pv["blockers"]), partners_pv
+            # crm has no reverse-deps and doesn't extend models, so
+            # uninstall should be allowed and list crm_lead for drop.
+            crm_pv = client.get("/web/apps/crm/uninstall-preview").json()
+            assert not crm_pv["blockers"], crm_pv
+            assert "crm_lead" in crm_pv["tables"], crm_pv
+            assert crm_pv["views"] > 0  # crm ships list/form/kanban views
+
+            # Execute the uninstall and verify the side effects landed.
+            r_no_follow.auth = ("admin", "admin")
+            r_uninst = r_no_follow.post(
+                "/web/apps/crm/uninstall",
+                headers={"HX-Request": "true"},
+            )
+            assert r_uninst.status_code == 204, r_uninst.text
+            assert r_uninst.headers.get("HX-Redirect") == "/web/apps"
+            with pool.connection() as side_conn:
+                # ir_module row gone.
+                row = side_conn.execute(
+                    "SELECT name FROM ir_module WHERE name = 'crm'"
+                ).fetchone()
+                assert row is None
+                # crm_lead table dropped.
+                r2 = side_conn.execute(
+                    "SELECT to_regclass('crm_lead')"
+                ).fetchone()
+                assert r2 == (None,), r2
+                # ir.ui.view rows for module='crm' gone.
+                r3 = side_conn.execute(
+                    "SELECT COUNT(*) FROM ir_ui_view WHERE module = 'crm'"
+                ).fetchone()
+                assert r3 == (0,), r3
+            print("apps uninstall: preview blockers + transactional cleanup work")
             # Sidebar entries come from ir.ui.menu — base ships Dashboard,
             # admin ships Settings/Security/Workflows, partners ships Apps,
             # crm ships CRM. If any of these are missing, the sync broke.

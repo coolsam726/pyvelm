@@ -7,7 +7,7 @@
    a state badge (Installed / To upgrade / Not installed). Action
    buttons land in Slice 2; for now everything is informational. #}
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data="pvApps()">
     {% set grouped = {} %}
     {% for app in catalog %}
         {% set _ = grouped.setdefault(app.category, []).append(app) %}
@@ -86,15 +86,15 @@
                     {% endif %}
                 </div>
 
-                {# Action footer — install / upgrade button per state.
+                {# Action footer — install / upgrade / uninstall.
                    Buttons POST via HTMX so the response can swap the
                    page chrome via HX-Redirect; the styled pvConfirm
                    dialog wraps each one with a "are you sure" prompt. #}
-                <footer class="mt-auto pt-2 border-t border-default">
+                <footer class="mt-auto pt-2 border-t border-default flex gap-2">
                     {% if app.state == "uninstalled" %}
                         {% if app.deps_missing %}
                         <button type="button" disabled
-                                class="w-full px-3 py-1.5 text-xs font-medium rounded-md
+                                class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md
                                        bg-neutral-tertiary text-body-subtle cursor-not-allowed"
                                 title="Missing deps: {{ app.deps_missing | join(', ') }}">
                             Missing deps
@@ -104,7 +104,7 @@
                                 hx-post="/web/apps/{{ app.name }}/install"
                                 hx-swap="none"
                                 hx-confirm="Install {{ app.name }}? Its dependencies will be installed too."
-                                class="w-full px-3 py-1.5 text-xs font-semibold rounded-md
+                                class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-md
                                        bg-fg-brand text-white hover:opacity-90 transition-opacity">
                             Install
                         </button>
@@ -114,15 +114,35 @@
                             hx-post="/web/apps/{{ app.name }}/upgrade"
                             hx-swap="none"
                             hx-confirm="Upgrade {{ app.name }} from {{ app.installed_version }} to {{ app.available_version }}? Migrations run inside one transaction; restart the server afterwards so any new field declarations take effect."
-                            class="w-full px-3 py-1.5 text-xs font-semibold rounded-md
+                            class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-md
                                    bg-warning text-white hover:opacity-90 transition-opacity">
                         Upgrade to {{ app.available_version }}
                     </button>
                     {% else %}
                     <button type="button" disabled
-                            class="w-full px-3 py-1.5 text-xs font-medium rounded-md
+                            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md
                                    bg-neutral-tertiary text-body-subtle cursor-not-allowed">
                         Up to date
+                    </button>
+                    {% endif %}
+
+                    {# Uninstall — only on installed/to_upgrade modules,
+                       and never on `base`. The button fetches the
+                       dry-run preview first and feeds the result into
+                       a pvConfirm prompt so the user sees exactly what
+                       will be dropped before committing. #}
+                    {% if app.state != "uninstalled" and app.name != "base" %}
+                    <button type="button"
+                            @click="confirmUninstall('{{ app.name }}')"
+                            title="Uninstall {{ app.name }}"
+                            class="px-2.5 py-1.5 text-xs font-medium rounded-md
+                                   border border-default text-fg-danger
+                                   hover:bg-danger-soft transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+                        </svg>
                     </button>
                     {% endif %}
                 </footer>
@@ -141,4 +161,69 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('pvApps', () => ({
+            // Click handler for every Uninstall button. Fetches the
+            // dry-run preview, builds a human summary, and routes it
+            // through pvConfirm / pvAlert depending on whether the
+            // operation is allowed.
+            async confirmUninstall(name) {
+                let preview;
+                try {
+                    const r = await fetch(`/web/apps/${name}/uninstall-preview`, {
+                        credentials: 'same-origin',
+                    });
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    preview = await r.json();
+                } catch (e) {
+                    window.pvAlert(`Could not load preview: ${e.message}`,
+                                   { variant: 'danger', title: 'Uninstall' });
+                    return;
+                }
+
+                // Blockers short-circuit to an alert — nothing to confirm.
+                if (preview.blockers && preview.blockers.length) {
+                    window.pvAlert(
+                        'Cannot uninstall:\n  • ' + preview.blockers.join('\n  • '),
+                        { variant: 'warning', title: `Uninstall ${name}` }
+                    );
+                    return;
+                }
+
+                const lines = [`Uninstall ${name}? This will:`];
+                if (preview.tables && preview.tables.length) {
+                    lines.push(`  • DROP TABLE: ${preview.tables.join(', ')}`);
+                }
+                if (preview.views)  lines.push(`  • Delete ${preview.views} ir.ui.view row(s)`);
+                if (preview.menus)  lines.push(`  • Delete ${preview.menus} ir.ui.menu row(s)`);
+                lines.push('');
+                lines.push('This is irreversible.');
+
+                const ok = await window.pvConfirm(lines.join('\n'), {
+                    variant: 'danger',
+                    title: `Uninstall ${name}`,
+                    confirmLabel: 'Uninstall',
+                });
+                if (!ok) return;
+
+                // pvConfirm resolved positively; fire the action.
+                const form = new FormData();
+                const r = await fetch(`/web/apps/${name}/uninstall`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'HX-Request': 'true' },
+                });
+                if (r.ok || r.status === 204) {
+                    window.location.href = '/web/apps';
+                } else {
+                    const detail = await r.text().catch(() => r.statusText);
+                    window.pvAlert(`Uninstall failed: ${detail}`,
+                                   { variant: 'danger', title: 'Uninstall' });
+                }
+            },
+        }));
+    });
+</script>
 {% endblock %}

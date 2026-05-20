@@ -1308,6 +1308,137 @@ def upgrade_module_action(env, module_roots: list, target_name: str) -> dict:
     }
 
 
+def uninstall_preview(env, module_roots: list, target_name: str) -> dict:
+    """Compute what would happen if `target_name` were uninstalled.
+
+    Returns a dict shaped for both the JSON endpoint and the confirm
+    modal. `blockers` is the list of reasons the uninstall would be
+    refused; an empty list means it's safe to proceed.
+
+    Counts cover the user-visible side effects:
+      - tables: tables that would be DROP CASCADE'd
+      - views / menus / access / rules: row counts in ir_* tables
+    """
+    from . import loader as _loader
+
+    if target_name == "base":
+        return {
+            "target": target_name,
+            "blockers": ["`base` is the system module and cannot be uninstalled."],
+            "tables": [], "views": 0, "menus": 0, "access": 0, "rules": 0,
+            "reverse_deps": [],
+        }
+
+    blockers: list[str] = []
+
+    # Reverse dependency lookup: any installed module whose disk
+    # manifest declares `target_name` in DEPENDS blocks the uninstall.
+    specs = _loader.discover(module_roots) if module_roots else {}
+    installed_rows = env.conn.execute(
+        f'SELECT "name" FROM "{_loader.IR_MODULE_TABLE}"'
+    ).fetchall()
+    installed = {r[0] for r in installed_rows}
+    reverse_deps = []
+    for n in installed:
+        if n == target_name:
+            continue
+        s = specs.get(n)
+        if s and target_name in s.depends:
+            reverse_deps.append(n)
+    if reverse_deps:
+        blockers.append(
+            f"Still depended on by: {', '.join(sorted(reverse_deps))}"
+        )
+
+    # Modules that extend other models via _inherit aren't safely
+    # reversible today — the new columns sit on tables owned by
+    # other modules and we don't track per-module column ownership.
+    registry = env.registry
+    extends = list(registry._model_extensions.get(target_name, []))
+    if extends:
+        blockers.append(
+            f"Extends models via _inherit: {', '.join(sorted(extends))}. "
+            f"Uninstall would orphan their added columns."
+        )
+
+    # Tables owned by this module.
+    owned_tables: list[str] = []
+    for model_name, owner in registry._model_module.items():
+        if owner == target_name:
+            cls = registry._models.get(model_name)
+            if cls is not None:
+                owned_tables.append(cls._table)
+
+    # Counts of data rows we'd clean up. Each module's identity in
+    # ir.ui.view / ir.ui.menu is `module = <target_name>`.
+    def _count(table: str, where: str = '"module" = %s') -> int:
+        try:
+            row = env.conn.execute(
+                f'SELECT COUNT(*) FROM "{table}" WHERE {where}',
+                [target_name],
+            ).fetchone()
+            return int(row[0]) if row else 0
+        except Exception:  # noqa: BLE001
+            return 0
+
+    return {
+        "target": target_name,
+        "blockers": blockers,
+        "tables": sorted(owned_tables),
+        "views": _count("ir_ui_view"),
+        "menus": _count("ir_ui_menu"),
+        # ir.model.access / ir.rule entries are seeded by install hooks
+        # using "<group>/<model>"-style names; we don't track which
+        # module owns each one, so report 0 and let them linger. Same
+        # constraint Odoo lives with for very old data files.
+        "access": 0,
+        "rules": 0,
+        "reverse_deps": sorted(reverse_deps),
+    }
+
+
+def uninstall_module_action(env, module_roots: list, target_name: str) -> dict:
+    """Drop tables, delete view/menu records, and remove the ir_module
+    row for `target_name`. Refuses to proceed if `uninstall_preview`
+    returns blockers — that's the single safety gate.
+
+    Side effects are all wrapped in one transaction so a mid-flight
+    failure rolls everything back.
+    """
+    preview = uninstall_preview(env, module_roots, target_name)
+    if preview["blockers"]:
+        raise ValueError("; ".join(preview["blockers"]))
+
+    with env.transaction():
+        for table in preview["tables"]:
+            env.conn.execute(f'DROP TABLE IF EXISTS "{table}" CASCADE')
+        env.conn.execute(
+            'DELETE FROM "ir_ui_view" WHERE "module" = %s', [target_name]
+        )
+        env.conn.execute(
+            'DELETE FROM "ir_ui_menu" WHERE "module" = %s', [target_name]
+        )
+        env.conn.execute(
+            'DELETE FROM "ir_module" WHERE "name" = %s', [target_name]
+        )
+        # Forget the module's models from the live registry so future
+        # /web/apps catalog passes show it as Not installed.
+        registry = env.registry
+        forgotten = [
+            mn for mn, owner in list(registry._model_module.items())
+            if owner == target_name
+        ]
+        for mn in forgotten:
+            registry._model_module.pop(mn, None)
+            registry._models.pop(mn, None)
+
+    return {
+        "ok": True,
+        "uninstalled": target_name,
+        "message": f"Uninstalled {target_name}",
+    }
+
+
 def render_apps_page(env, module_roots: list,
                      current_path: str | None = None) -> str:
     """Read-only Apps catalog at `/web/apps`. Slice 2 adds the install /
