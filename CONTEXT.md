@@ -288,18 +288,89 @@ UI polish wave (post-0.7.0):
     operations (system module, reverse-deps, `_inherit` extensions).
     Optional manifest fields (`SUMMARY`, `DESCRIPTION`, `CATEGORY`,
     `AUTHOR`, `ICON`) drive the card content.
+  - **Demo seed module** — `examples/modules_demo/demo` lives in its
+    own discovery root so `serve.py` boots into a populated app
+    (~20 partners, 15 leads, tags, extra sales users, workflow
+    examples, mail thread) while `basic.py` keeps its minimal
+    Alice/Bob/Carol fixture. INSTALL_HOOK is idempotent — re-runs
+    are safe; uninstall drops the row but leaves seeded content
+    (the documented limitation).
+  - **Apps catalog filter** — client-side search + state pills
+    (All / Installed / Upgrade / Not installed) + category dropdown
+    on `/web/apps`. Filtering composes with AND, runs entirely in
+    Alpine (no server roundtrip), empty categories collapse their
+    header.
+
+Form-UX completeness wave (commits `1b9121d`, `d99bad4`, `558d3dd`):
+  - **Inline validation errors.** `parse_form_vals` returns
+    `(vals, errors)`; required-empty + type-coercion failures stamp
+    per-field messages; save returns 422 + edit fragment with errors
+    + submitted values resurrected so the user doesn't retype.
+    ORM-level failures land in a top-level banner. `htmx:beforeSwap`
+    listener opts 422 responses into the normal swap pipeline;
+    inline-row routes emit `HX-Trigger: pv-validation-error` toast
+    via `pvAlert`.
+  - **Many2many chip editor** (`widgets/m2m_input.html` + `pvM2m`
+    Alpine component). Selected records render as removable chips
+    (one hidden input per id, plus an always-empty marker so the
+    server tells "cleared" from "field not present"). Search input
+    hits `/api/m2o/search`; results filter out already-selected ids.
+    `parse_form_vals` M2m branch runs ahead of the `is_stored` gate.
+  - **Drag-reorder via `sequence`.** A list view opts in via
+    `arch["sequence"] = "<integer-field>"`. Renderer adds a handle
+    column, forces sort, disables pagination. Native HTML5 drag
+    handlers POST `{ids: […]}` to
+    `/web/records/{module}/{name}/reorder`; server rewrites the
+    field to `(position+1) × 10`. Wired up on `res.tag` —
+    `partners` bumped to 0.3.0 with migration 0_2_to_0_3, admin
+    module gains `tag.list` / `tag.form` views.
+
+Auth & deployment hardening wave (commits `9520446`, `095c768`,
+`a82791f`, `1a7985d`, `f5bd894`):
+  - **CSRF tokens.** `CsrfMiddleware` mints `pyvelm_csrf` cookie
+    (SameSite=Lax, not HttpOnly), validates via `X-CSRF-Token`
+    header or `_csrf` form field on every unsafe method. Exemptions:
+    Basic-auth requests (machine clients) and cookie-less calls.
+    HTMX integration is automatic via `htmx:configRequest`; plain
+    `<form method="post">` gets a hidden `_csrf` auto-injected by a
+    DOMContentLoaded + `htmx:afterSwap` handler. Non-HTMX fetches
+    (apps uninstall, row reorder, m2o quick-create, form autosave)
+    call `window.pvCsrf()` to add the header explicitly.
+  - **/login rate limit.** Per-IP in-memory sliding window, 5
+    attempts per 5 min → 429 + `Retry-After`. Both successful and
+    failed attempts count. Per-worker — multi-worker deployments
+    multiply the cap by N, called out in deployment doc with the
+    proxy-side limiter as the production answer.
+  - **Self-service password change.** `/web/account/password` form
+    (current / new / confirm). bcrypt verify + length + match +
+    ≠current checks; new value written through the Password field
+    which re-hashes on store. ACL-bypassed read so users without
+    explicit res.users access still self-serve. New entry in the
+    user-menu dropdown.
+  - **Deployment.** Multi-stage `Dockerfile` (node build CSS →
+    python runtime, non-root user), `gunicorn_conf.py` (UvicornWorker
+    + env-driven knobs), `docker-compose.yml` with postgres-16
+    sidecar + health check + named volume, `.dockerignore`, expanded
+    `.env.example`. New deployment doc section walks the four
+    scale-out gotchas (per-worker rate limit, X-Forwarded-For trust,
+    pool sizing, where to put a CDN).
 
 Next focus options:
+  - **Documents & attachments**: `ir.attachment` model + on-disk
+    storage backend + upload endpoint + form widget. Touches MIME
+    handling, storage abstraction, cleanup-on-uninstall.
+  - **Reporting / dashboards**: new `graph` or `pivot` view type
+    backed by SQL aggregation. Builds out a read-side aggregation
+    layer (none today) for charts / KPIs / exports.
   - **Stage 7 Slice C**: XPath/structural view arch patches.
-  - **Stage 6 hardening**: Cron as a real background task, SMTP mail
-    dispatch, message subtypes, followers/subscriptions.
-  - **Stage 5 hardening**: CSRF tokens, rate limit /login, password-
-    change UI.
+  - **Stage 6 hardening**: Cron as a real background task, SMTP
+    mail dispatch, message subtypes, followers/subscriptions.
 
 Still deferred: cache snapshot on transaction rollback, O2m/M2m
 caching + old-value snapshotting, auto-diff schema migrations,
-field-level validation feedback in the inline-edit form, multi-
-select widget for O2m/M2m editing, row-level reorder via a `sequence`
-field (Odoo "handle" widget), "Create and edit…" modal (combobox
-currently navigates to /new), m2o result caching beyond in-flight
-requests. None pressing.
+"Create and edit…" modal for the m2o combobox (currently navigates
+to /new), m2o result caching beyond in-flight requests, O2m editing
+widget (only M2m has one), session-token rotation on password
+change, shared-store rate limiter for multi-worker deployments,
+one-shot "run migrations once before workers start" entrypoint.
+None pressing.
