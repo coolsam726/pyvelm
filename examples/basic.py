@@ -956,6 +956,30 @@ def main():
             assert r_hdr.status_code == 401, r_hdr.status_code
             print("POST /login with CSRF header: accepted (header path works)")
 
+            # Rate limit: hammer /login from a fresh client until we
+            # exceed the window cap; subsequent attempts return 429.
+            app.state.login_attempts.clear()
+            burst = TestClient(app, follow_redirects=False)
+            burst_csrf = burst.get("/login").text  # set cookie
+            tok = burst.cookies.get("pyvelm_csrf")
+            # 5 attempts allowed in a 5-min window.
+            for i in range(5):
+                rb = burst.post(
+                    "/login",
+                    data={"login": "nobody", "password": "x", "_csrf": tok},
+                )
+                assert rb.status_code in (401, 303), (i, rb.status_code)
+            r_limited = burst.post(
+                "/login",
+                data={"login": "nobody", "password": "x", "_csrf": tok},
+            )
+            assert r_limited.status_code == 429, r_limited.status_code
+            assert r_limited.headers.get("Retry-After")
+            # Clear the bucket so the next legitimate POSTs (logout etc.)
+            # below don't trip the limit.
+            app.state.login_attempts.clear()
+            print("POST /login rate limit: 429 + Retry-After after 5/window")
+
             # POST /login with bad credentials returns 401 + error msg.
             r = anon2.post(
                 "/login",

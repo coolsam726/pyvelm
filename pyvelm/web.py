@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import time
 from typing import Any
 
 import base64
@@ -1145,9 +1146,48 @@ def create_app(registry: Registry, pool: Any,
             csrf_token=request.state.csrf_token,
         ))
 
+    # ── /login rate limit ──
+    # Per-IP sliding window. 5 attempts per 5 minutes; the 6th gets
+    # 429 + Retry-After. In-memory, so it's per-process — multi-worker
+    # deployments (gunicorn -w N) effectively multiply the limit by
+    # the worker count. Real production setups put a shared store
+    # (Redis, the reverse proxy's own rate limiter) in front; this
+    # is good enough for the dev server + small single-process
+    # deployments.
+    _LOGIN_RATE_WINDOW = 300  # seconds
+    _LOGIN_RATE_MAX = 5
+    _login_attempts: dict[str, list[float]] = {}
+
+    def _check_login_rate(ip: str) -> tuple[bool, int]:
+        now = time.monotonic()
+        cutoff = now - _LOGIN_RATE_WINDOW
+        attempts = _login_attempts.setdefault(ip, [])
+        attempts[:] = [t for t in attempts if t > cutoff]
+        if len(attempts) >= _LOGIN_RATE_MAX:
+            retry = int(attempts[0] + _LOGIN_RATE_WINDOW - now)
+            return False, max(retry, 1)
+        attempts.append(now)
+        return True, 0
+
+    app.state.login_attempts = _login_attempts  # for tests
+
     @app.post("/login")
     async def login_submit(request: Request):
         from .render import render_login_page
+
+        client_host = request.client.host if request.client else "unknown"
+        ok, retry_after = _check_login_rate(client_host)
+        if not ok:
+            return Response(
+                content=(
+                    f"Too many login attempts. Try again in {retry_after} seconds."
+                ),
+                status_code=429,
+                headers={
+                    "Retry-After": str(retry_after),
+                    "Content-Type": "text/plain; charset=utf-8",
+                },
+            )
 
         form = await request.form()
         login_val = (form.get("login") or "").strip()
