@@ -333,7 +333,10 @@
                 const r = await fetch(`/web/apps/${name}/uninstall`, {
                     method: 'POST',
                     credentials: 'same-origin',
-                    headers: { 'HX-Request': 'true' },
+                    headers: {
+                        'HX-Request': 'true',
+                        'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                    },
                 });
                 if (r.ok || r.status === 204) {
                     window.location.href = '/web/apps';

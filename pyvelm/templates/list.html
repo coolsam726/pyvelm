@@ -649,7 +649,10 @@ document.addEventListener('alpine:init', () => {
                     {
                         method: 'POST',
                         credentials: 'same-origin',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                        },
                         body: JSON.stringify({ ids }),
                     }
                 );

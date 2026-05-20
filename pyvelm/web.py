@@ -122,6 +122,99 @@ def create_app(registry: Registry, pool: Any,
     app = FastAPI(title="pyvelm")
     app.state.module_roots = list(module_roots or [])
 
+    # ── CSRF: double-submit cookie ──
+    # We mint a random `pyvelm_csrf` cookie on the first GET that
+    # doesn't carry one. Every unsafe method (POST/PUT/PATCH/DELETE)
+    # must echo the cookie value back either as the `X-CSRF-Token`
+    # header (HTMX requests do this automatically via the layout
+    # listener) or as the `_csrf` form field (the login template
+    # embeds it). The cookie is NOT HttpOnly because JS must read it
+    # for the header path; same-site=Lax keeps it from riding cross-
+    # origin POSTs.
+    #
+    # Machine clients using HTTP Basic auth typically don't carry
+    # cookies, so they're transparently skipped — the check only
+    # fires when *some* cookie is present.
+    _CSRF_COOKIE = "pyvelm_csrf"
+    _CSRF_HEADER = "X-CSRF-Token"
+    _CSRF_FORM_FIELD = "_csrf"
+    _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+    def _csrf_reject(detail: str) -> Response:
+        return Response(
+            content=detail,
+            status_code=403,
+            headers={"Content-Type": "text/plain; charset=utf-8"},
+        )
+
+    class CsrfMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            cookie_token = request.cookies.get(_CSRF_COOKIE)
+
+            # Make the token available to handlers via request.state so
+            # template renderers can embed it in `<input type="hidden">`
+            # without re-fetching cookies. For first-time visitors we
+            # mint the value here too — the cookie is then set on the
+            # response below.
+            request.state.csrf_token = cookie_token or secrets.token_urlsafe(32)
+
+            # Skip CSRF on Basic-auth requests — by definition the
+            # attacker can't forge the Authorization header in a
+            # CSRF attack, so the double-submit cookie buys nothing
+            # there. Machine clients / scripts use Basic.
+            auth_header = request.headers.get("authorization", "")
+            is_basic_auth = auth_header.startswith("Basic ")
+
+            if (
+                request.method not in _SAFE_METHODS
+                and request.cookies
+                and not is_basic_auth
+            ):
+                if not cookie_token:
+                    return _csrf_reject("CSRF token missing.")
+                header_token = request.headers.get(_CSRF_HEADER)
+                ok = header_token == cookie_token
+                if not ok:
+                    # Form-encoded body fallback. We only inspect
+                    # bodies that are actually form-urlencoded so
+                    # later multipart uploads don't get buffered into
+                    # memory by the middleware.
+                    ct = request.headers.get("content-type", "")
+                    if ct.startswith("application/x-www-form-urlencoded"):
+                        body = await request.body()
+                        from urllib.parse import parse_qs
+                        parsed = parse_qs(body.decode("latin-1"))
+                        form_token = (parsed.get(_CSRF_FORM_FIELD) or [""])[0]
+                        ok = form_token == cookie_token
+                        # Restore the consumed receive stream so the
+                        # downstream handler can parse the body itself.
+                        async def receive() -> dict:
+                            return {
+                                "type": "http.request",
+                                "body": body,
+                                "more_body": False,
+                            }
+                        request._receive = receive
+                    if not ok:
+                        return _csrf_reject("CSRF token invalid.")
+
+            response = await call_next(request)
+
+            # Mint a cookie on every response that didn't ride one in.
+            # 30-day max-age — only refreshes on logout / user clears.
+            if not cookie_token:
+                response.set_cookie(
+                    _CSRF_COOKIE,
+                    request.state.csrf_token,
+                    max_age=60 * 60 * 24 * 30,
+                    samesite="lax",
+                    httponly=False,
+                    path="/",
+                )
+            return response
+
+    app.add_middleware(CsrfMiddleware)
+
     # Prevent browsers from caching authenticated pages.  Without this
     # header the back-button serves a stale cached copy after logout.
     class NoCacheMiddleware(BaseHTTPMiddleware):
@@ -1047,7 +1140,10 @@ def create_app(registry: Registry, pool: Any,
                 env = Environment(conn, registry=registry, uid=None)
                 if _resolve_user_from_session(env, token) is not None:
                     return RedirectResponse(next or "/web/admin", status_code=302)
-        return HTMLResponse(render_login_page(next=next))
+        return HTMLResponse(render_login_page(
+            next=next,
+            csrf_token=request.state.csrf_token,
+        ))
 
     @app.post("/login")
     async def login_submit(request: Request):
@@ -1074,6 +1170,7 @@ def create_app(registry: Registry, pool: Any,
                             error="Invalid username or password.",
                             next=next_url,
                             prefill_login=login_val,
+                            csrf_token=request.state.csrf_token,
                         ),
                         status_code=401,
                     )

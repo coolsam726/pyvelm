@@ -928,12 +928,39 @@ def main():
             assert r.status_code == 200, r.text
             assert 'name="login"' in r.text
             assert 'name="password"' in r.text
+            assert 'name="_csrf"' in r.text  # CSRF hidden field embedded
             print("GET /login: login form rendered")
+
+            # The CSRF middleware set the cookie on the GET above; every
+            # POST must echo it back as a header or hidden form field.
+            csrf_tok = anon2.cookies.get("pyvelm_csrf")
+            assert csrf_tok, "expected pyvelm_csrf cookie after GET /login"
+
+            # POSTs with a cookie but no token are rejected — proves the
+            # protection is on.
+            r_no_csrf = anon2.post(
+                "/login",
+                data={"login": "admin", "password": "admin", "next": "/"},
+            )
+            assert r_no_csrf.status_code == 403, r_no_csrf.status_code
+            assert "CSRF" in r_no_csrf.text
+            print("POST /login without CSRF token: 403")
+
+            # Reuse the cookie via header — proves header path works
+            # alongside the form-field path used by the login template.
+            r_hdr = anon2.post(
+                "/login",
+                data={"login": "admin", "password": "WRONG", "next": "/"},
+                headers={"X-CSRF-Token": csrf_tok},
+            )
+            assert r_hdr.status_code == 401, r_hdr.status_code
+            print("POST /login with CSRF header: accepted (header path works)")
 
             # POST /login with bad credentials returns 401 + error msg.
             r = anon2.post(
                 "/login",
-                data={"login": "admin", "password": "WRONG", "next": "/"},
+                data={"login": "admin", "password": "WRONG", "next": "/",
+                      "_csrf": csrf_tok},
             )
             assert r.status_code == 401, r.status_code
             assert "Invalid username or password" in r.text
@@ -942,7 +969,8 @@ def main():
             # POST /login with correct credentials: 303 redirect + cookie.
             r = anon2.post(
                 "/login",
-                data={"login": "admin", "password": "admin", "next": "/"},
+                data={"login": "admin", "password": "admin", "next": "/",
+                      "_csrf": csrf_tok},
             )
             assert r.status_code == 303, (r.status_code, r.text)
             session_cookie = r.cookies.get("pyvelm_session")
@@ -964,7 +992,11 @@ def main():
             print("GET /login with active session: redirect away")
 
             # POST /logout clears cookie + revokes token in DB.
-            r = cookie_client.post("/logout")
+            # CSRF: send the token via header since /logout has no form.
+            r = cookie_client.post(
+                "/logout",
+                headers={"X-CSRF-Token": cookie_client.cookies.get("pyvelm_csrf") or ""},
+            )
             assert r.status_code == 303, r.status_code
             assert "pyvelm_session" not in r.cookies or r.cookies["pyvelm_session"] == ""
             print("POST /logout: 303 redirect + cookie cleared")
@@ -1001,7 +1033,10 @@ def main():
             print("HTMX edit endpoint redirects via HX-Redirect after logout")
             r = stale_client.post(
                 "/web/records/partners/partner.list/row/1",
-                headers={"HX-Request": "true"},
+                headers={
+                    "HX-Request": "true",
+                    "X-CSRF-Token": stale_client.cookies.get("pyvelm_csrf") or "",
+                },
                 data={"name": "Hacked"},
             )
             assert r.headers.get("HX-Redirect", "").startswith("/login"), (

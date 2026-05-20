@@ -1270,12 +1270,14 @@ def render_login_page(
     error: str = "",
     next: str = "",
     prefill_login: str = "",
+    csrf_token: str = "",
 ) -> str:
     template = _env.get_template("login.html")
     return template.render(
         error=error,
         next=next,
         prefill_login=prefill_login,
+        csrf_token=csrf_token,
     )
 
 

@@ -519,6 +519,22 @@
                 })));
 
         // ── Replace hx-confirm with the styled pvConfirm dialog ──
+        // ── CSRF: inject X-CSRF-Token on every HTMX request ──
+        // The middleware sets `pyvelm_csrf` cookie on first GET; we
+        // mirror it as a header on each subsequent unsafe request so
+        // the server can verify the double-submit token. JS form
+        // submissions (autosave, custom fetches) read the cookie
+        // through window.pvCsrf below.
+        function pvReadCsrf() {
+            const m = document.cookie.match(/(?:^|;\s*)pyvelm_csrf=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        }
+        window.pvCsrf = pvReadCsrf;
+        document.body.addEventListener('htmx:configRequest', e => {
+            const token = pvReadCsrf();
+            if (token) e.detail.headers['X-CSRF-Token'] = token;
+        });
+
         // HTMX fires `htmx:confirm` before it would call window.confirm.
         // We intercept every request that carries an hx-confirm message,
         // show our dialog instead, and call issueRequest(true) on "OK"
@@ -681,7 +697,11 @@
                 try {
                     const r = await fetch('/api/m2o/quick-create', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                        },
                         body: JSON.stringify({ model: this.comodel, name }),
                     });
                     if (r.status === 400) {
@@ -849,7 +869,10 @@
                     method,
                     body: new FormData(f),
                     credentials: 'same-origin',
-                    headers: { 'HX-Request': 'true' },
+                    headers: {
+                        'HX-Request': 'true',
+                        'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                    },
                 });
                 if (!r.ok) {
                     if (window.pvAlert) {
