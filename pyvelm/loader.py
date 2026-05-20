@@ -52,6 +52,7 @@ class ModuleSpec:
     # Filled during install from the data files.
     views: list[dict[str, Any]] = dc_field(default_factory=list)
     view_inherits: list[dict[str, Any]] = dc_field(default_factory=list)
+    menus: list[dict[str, Any]] = dc_field(default_factory=list)
     # Filled by the loader during the import pass.
     loaded: bool = False
 
@@ -319,6 +320,7 @@ def _load_data_files(spec: ModuleSpec) -> None:
         return
     views: list[dict[str, Any]] = []
     inherits: list[dict[str, Any]] = []
+    menus: list[dict[str, Any]] = []
     for rel_path in spec.data:
         path = spec.package_path / rel_path
         if not path.is_file():
@@ -339,6 +341,7 @@ def _load_data_files(spec: ModuleSpec) -> None:
             spec_obj.loader.exec_module(mod)
             views.extend(getattr(mod, "VIEWS", []))
             inherits.extend(getattr(mod, "VIEW_INHERITS", []))
+            menus.extend(getattr(mod, "MENUS", []))
         else:
             raise ValueError(
                 f"Module {spec.name!r}: data file {rel_path!r} has unsupported "
@@ -346,6 +349,7 @@ def _load_data_files(spec: ModuleSpec) -> None:
             )
     spec.views = views
     spec.view_inherits = inherits
+    spec.menus = menus
 
 
 def _sync_views(spec: ModuleSpec, env: Environment) -> None:
@@ -451,6 +455,68 @@ def _sync_view_inherits(spec: ModuleSpec, env: Environment) -> None:
             View.create(vals)
 
 
+def _sync_menus(spec: ModuleSpec, env: Environment) -> None:
+    """Upsert this module's MENUS as `ir.ui.menu` records.
+
+    Identity is `(module, name)`. The optional `parent` key references
+    another menu by `<module>.<name>` and is resolved to `parent_id`
+    here — the parent must already be installed (i.e. live in this
+    module or in a dep). Modules are installed in topo order, so the
+    only intra-module concern is that a child appears after its parent
+    in the MENUS list — sorting by absence-of-parent keeps that
+    automatic.
+    """
+    if not spec.menus:
+        return
+    if "ir.ui.menu" not in env.registry:
+        return
+    Menu = env["ir.ui.menu"]
+    # Roots first so children in the same module can resolve their parent.
+    ordered = sorted(spec.menus, key=lambda m: 0 if not m.get("parent") else 1)
+    for m in ordered:
+        required = {"name", "label"}
+        missing = required - m.keys()
+        if missing:
+            raise ValueError(
+                f"Module {spec.name!r}: menu {m.get('name')!r} missing "
+                f"keys {sorted(missing)}"
+            )
+        parent_ref = m.get("parent")
+        parent_id = None
+        if parent_ref:
+            if "." not in parent_ref:
+                raise ValueError(
+                    f"Menu parent {parent_ref!r} must be '<module>.<name>'"
+                )
+            p_mod, p_name = parent_ref.split(".", 1)
+            parent = Menu.search([("module", "=", p_mod), ("name", "=", p_name)])
+            if not parent:
+                raise ValueError(
+                    f"Module {spec.name!r}: menu {m['name']!r} references "
+                    f"parent {parent_ref!r} which is not (yet) installed."
+                )
+            parent.ensure_one()
+            parent_id = parent.id
+        vals = {
+            "module": spec.name,
+            "name": m["name"],
+            "label": m["label"],
+            "parent_id": parent_id,
+            "sequence": m.get("sequence", 10),
+            "href": m.get("href"),
+            "icon": m.get("icon"),
+            "active": m.get("active", True),
+        }
+        existing = Menu.search([
+            ("module", "=", spec.name),
+            ("name", "=", m["name"]),
+        ])
+        if existing:
+            existing.write(vals)
+        else:
+            Menu.create(vals)
+
+
 def install(specs: list[ModuleSpec], env: Environment) -> None:
     """Install or upgrade each module, in `specs` order, atomically per
     module. Models must already be loaded into `env.registry`."""
@@ -482,6 +548,7 @@ def install(specs: list[ModuleSpec], env: Environment) -> None:
             _load_data_files(spec)
             _sync_views(spec, env)
             _sync_view_inherits(spec, env)
+            _sync_menus(spec, env)
 
     # Build the compute graph once everything's loaded — depends paths
     # may cross module boundaries.

@@ -42,6 +42,7 @@ def install(env):
             "ir.cron",
             "mail.message",
             "res.company",
+            "ir.ui.menu",
         ):
             if model in env.registry:
                 Access.create({

@@ -238,7 +238,15 @@ def main():
             # Pagination controls present because total > page_size.
             assert 'id="pv-pagination"' in html
             assert "pvList" in html                          # Alpine DataTable component
+            # Sidebar entries come from ir.ui.menu — base ships Dashboard,
+            # admin ships Settings/Security/Workflows, partners ships Apps,
+            # crm ships CRM. If any of these are missing, the sync broke.
+            for label in ("Dashboard", "Apps", "Settings", "Security",
+                          "Workflows", "CRM", "Pipeline", "All Leads",
+                          "Partners", "Companies"):
+                assert label in html, f"sidebar missing {label!r}"
             print("HTML list view renders with Tailwind+Flowbite + pagination")
+            print("Sidebar populated from ir.ui.menu (all module entries present)")
 
             # 7. HTMX fragment endpoint returns just <tr>s + OOB pagination.
             resp = client.get(
@@ -1040,6 +1048,7 @@ def _drop_known_tables(conn):
         "ir_rule",
         "ir_model_access",
         "ir_ui_view",
+        "ir_ui_menu",
         "res_users",
         "res_groups",
         "mail_message",

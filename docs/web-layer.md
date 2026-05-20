@@ -276,9 +276,13 @@ use the record's display name).
 **Layout shell.** `pyvelm/templates/layouts/main.html` is the base
 template every page extends. It provides:
 
-- A persistent sidebar with a multi-level navigation tree (driven by
-  `_menu()` in `pyvelm/render.py`; hard-coded for now — `ir.ui.menu`
-  is the natural follow-up).
+- A persistent sidebar with a multi-level navigation tree driven by
+  the `ir.ui.menu` model. Each module contributes entries via a
+  `MENUS` list in one of its data files; the loader upserts them
+  keyed by `(module, name)` the same way it handles views.
+  `render._menu(env, current_path)` reads the table at render time
+  and emits the two-level tree the template renders. Parents are
+  referenced by `"<module>.<name>"`; `sequence` orders siblings.
 - A topbar with the page title, company switcher (Flowbite-style
   dropdown), theme toggle, and user menu.
 - A `class="dark"`/light theme toggle that persists in `localStorage`

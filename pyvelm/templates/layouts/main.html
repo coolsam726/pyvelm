@@ -578,7 +578,7 @@
                 this.loading = true;
                 try {
                     const url = this.searchUrl + '&q=' + encodeURIComponent(this.query);
-                    const r = await fetch(url, { signal: ctl.signal });
+                    const r = await fetch(url, { signal: ctl.signal, credentials: "same-origin" });
                     if (!r.ok) throw new Error('fetch failed');
                     const data = await r.json();
                     this.results = data.results || [];
