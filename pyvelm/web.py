@@ -390,6 +390,96 @@ def create_app(registry: Registry, pool: Any) -> FastAPI:
             rec.unlink()
         return Response(status_code=204)
 
+    # ---- Many2one combobox endpoints ----
+    #
+    # Drive the searchable / create-on-the-fly relationship widget.
+    # Both endpoints are authenticated (env.uid required) but rely on
+    # the normal ORM ACL underneath — a user without read on the
+    # comodel will see an empty list; a user without create gets 403
+    # on quick-create.
+
+    @app.get("/api/m2o/search")
+    def m2o_search(
+        model: str = Query(...),
+        q: str = Query(default=""),
+        limit: int = Query(default=10, ge=1, le=100),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if model not in registry:
+            raise HTTPException(status_code=404, detail=f"Unknown model {model!r}")
+        Model = env[model]
+        q = q.strip()
+        # Search the comodel by `name` ILIKE when available; otherwise
+        # fall back to whatever stored Char field exists.
+        cls = registry[model]
+        from .fields import Char, Text
+        text_field = None
+        if "name" in cls._fields and isinstance(cls._fields["name"], (Char, Text)):
+            text_field = "name"
+        else:
+            for fname, field in cls._fields.items():
+                if isinstance(field, (Char, Text)) and field.is_stored:
+                    text_field = fname
+                    break
+        domain = []
+        if q and text_field is not None:
+            domain.append((text_field, "ilike", f"%{q}%"))
+        recs = Model.search(domain, limit=limit, order='"id" ASC')
+        return {
+            "results": [
+                {"id": r.id, "label": _display_value(r)} for r in recs
+            ],
+        }
+
+    @app.post("/api/m2o/quick-create")
+    def m2o_quick_create(
+        body: dict = Body(...),
+        env: Environment = Depends(get_env),
+    ):
+        """Quick-create a comodel record with only `name` set.
+
+        Returns 400 if the comodel has additional required fields the
+        widget can't supply — the client falls back to navigating to
+        the comodel's form view's `/new` page.
+        """
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        model = body.get("model")
+        name = (body.get("name") or "").strip()
+        if not model or model not in registry:
+            raise HTTPException(status_code=404, detail=f"Unknown model {model!r}")
+        if not name:
+            raise HTTPException(status_code=400, detail="Missing 'name'")
+        cls = registry[model]
+        # Check for other required fields that aren't `name`. If any
+        # exist without a default, we can't quick-create — surface a
+        # 400 so the client can redirect to "Create and edit".
+        from .fields import Many2many
+        missing_required: list[str] = []
+        for fname, field in cls._fields.items():
+            if not field.required or fname == "name":
+                continue
+            if field.compute:
+                continue
+            if isinstance(field, Many2many):
+                continue
+            if field.default is not None:
+                continue
+            missing_required.append(fname)
+        if missing_required:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot quick-create {model!r}: requires "
+                    f"{sorted(missing_required)}. Use Create and edit instead."
+                ),
+            )
+        with env.transaction():
+            rec = env[model].create({"name": name})
+        return {"id": rec.id, "label": _display_value(rec)}
+
     @app.get("/api/records")
     def list_records(
         model: str,

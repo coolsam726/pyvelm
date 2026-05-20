@@ -371,7 +371,7 @@ mode)` with MRO + hint fallback. Built-in edit widgets:
 | `Integer` | `<input type="number" step="1">` |
 | `Float` | `<input type="number" step="any">` |
 | `Boolean` (and `+toggle`) | `<input type="checkbox">` with a paired hidden `""` so unchecked submits as false |
-| `Many2one` | `<select>` with options preloaded from the comodel |
+| `Many2one` | searchable combobox with create-on-the-fly + open-record link (`widgets/m2o_input.html`, `pvM2o` Alpine component) |
 | `One2many` / `Many2many` | display rendering (no multi-select widget yet) |
 
 The Boolean trick — a hidden `name="x" value=""` immediately before
@@ -570,6 +570,38 @@ plus `_parse_filters` and `_build_search_domain` in
 `filters` (JSON dict), `page`, `page_size` and returns the
 re-rendered table fragment; HTMX swaps it into
 `#pv-table-container`.
+
+## Many2one combobox
+
+Edit-mode Many2one fields render as a searchable combobox modelled
+after Odoo's classic m2o widget:
+
+- **Filter-as-you-type** against `GET /api/m2o/search?model=&q=&limit=`.
+  The endpoint ILIKE-matches the comodel's `name` field (or the first
+  stored Char/Text it can find) and returns `{results: [{id, label}, ...]}`.
+  Initial focus fetches the first page so the dropdown is useful even
+  before the user types.
+- **Create on the fly**: when the typed text doesn't exactly match any
+  result, the dropdown offers a `Create "<query>"` entry. Clicking
+  posts to `POST /api/m2o/quick-create` `{model, name}`. The endpoint
+  returns 400 with the list of missing required fields when the
+  comodel needs more than `name` — the client then falls back to
+  `Create and edit…` which navigates to the comodel's form view's
+  `/new` page.
+- **Open record**: when a value is selected and a form view exists for
+  the comodel, a small "↗" icon appears next to the input and links to
+  `/web/views/<module>/<form_view>/record/<id>`. The display-mode
+  Many2one widget shows the same affordance inline on hover.
+- **Keyboard nav**: ↑ ↓ move the cursor in the dropdown; Enter selects
+  (or triggers Create when the cursor is on the create entry); Esc
+  closes and restores the visible text to the last-selected label.
+
+The widget partial is `pyvelm/templates/widgets/m2o_input.html`. The
+Alpine component `pvM2o` lives in `layouts/main.html`'s global init
+block so any page that renders the partial picks it up. Per-record
+form-view URLs are stashed on the field-spec by
+`_enrich_specs_for_edit` so the widget never has to look them up at
+request time — the spec is enriched once per render.
 - **Field-level validation feedback in the inline-edit form** — today
   invalid input raises and HTMX won't swap. The intended UX is to
   return the edit fragment with inline error messages on 422; that

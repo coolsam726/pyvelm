@@ -517,6 +517,168 @@
                 window.dispatchEvent(new CustomEvent('pv-alert-request', {
                     detail: { message, resolve, ...opts },
                 })));
+
+        // ── Many2one combobox ──
+        // Searchable select with create-on-the-fly and "open record"
+        // link. The widget partial at `widgets/m2o_input.html` mounts
+        // this component with `cfg = {name, comodel, searchUrl,
+        // formViewUrl, initialId, initialLabel, readonly}`.
+        let _pvM2oUid = 0;
+        Alpine.data('pvM2o', (cfg) => ({
+            // Identity / inputs.
+            uid: ++_pvM2oUid,
+            name: cfg.name,
+            comodel: cfg.comodel,
+            searchUrl: cfg.searchUrl,
+            formViewUrl: cfg.formViewUrl,
+            readonly: !!cfg.readonly,
+
+            // State.
+            value: cfg.initialId != null ? Number(cfg.initialId) : null,
+            label: cfg.initialLabel || '',
+            query: '',
+            results: [],
+            cursor: 0,
+            open: false,
+            loading: false,
+            _abort: null,
+            _initialFetched: false,
+
+            init() {
+                // Show the current label in the input box on mount.
+                this.query = this.label;
+            },
+
+            // ── Computed-ish ──
+            get exactMatch() {
+                const q = this.query.trim().toLowerCase();
+                if (!q) return null;
+                return this.results.find(r => r.label.toLowerCase() === q) || null;
+            },
+            get createCandidate() {
+                // Show a "Create 'foo'" entry when the user has typed
+                // something that doesn't exactly match an existing
+                // record. Suppressed when readonly.
+                if (this.readonly) return false;
+                const q = this.query.trim();
+                return q.length > 0 && !this.exactMatch;
+            },
+            get canCreateAndEdit() {
+                // Always offer when the comodel has a form view, even
+                // if the user hasn't typed yet — they may want to
+                // create a record with multiple fields.
+                return !this.readonly && this.formViewUrl;
+            },
+
+            // ── Behavior ──
+            async fetchResults() {
+                if (this._abort) this._abort.abort();
+                const ctl = new AbortController();
+                this._abort = ctl;
+                this.loading = true;
+                try {
+                    const url = this.searchUrl + '&q=' + encodeURIComponent(this.query);
+                    const r = await fetch(url, { signal: ctl.signal });
+                    if (!r.ok) throw new Error('fetch failed');
+                    const data = await r.json();
+                    this.results = data.results || [];
+                    this.cursor = 0;
+                } catch (e) {
+                    if (e.name !== 'AbortError') {
+                        this.results = [];
+                    }
+                } finally {
+                    this.loading = false;
+                }
+            },
+            onFocus() {
+                this.open = true;
+                if (!this._initialFetched) {
+                    this._initialFetched = true;
+                    this.fetchResults();
+                }
+            },
+            onInput() {
+                this.open = true;
+                // Typing a new query invalidates the prior selection
+                // unless the user types back the exact label.
+                if (this.query !== this.label) {
+                    this.value = null;
+                    this.label = '';
+                }
+                this.fetchResults();
+            },
+            close() {
+                this.open = false;
+                // Restore the visible text to the selected label so the
+                // input never shows a stale partial query.
+                this.query = this.label;
+            },
+            moveCursor(delta) {
+                if (!this.open) { this.open = true; return; }
+                const max = this.results.length + (this.createCandidate ? 1 : 0) - 1;
+                if (max < 0) return;
+                this.cursor = Math.max(0, Math.min(max, this.cursor + delta));
+            },
+            onEnter() {
+                if (!this.open) return;
+                if (this.cursor < this.results.length) {
+                    this.pick(this.results[this.cursor]);
+                } else if (this.createCandidate) {
+                    this.createFromQuery();
+                }
+            },
+            pick(item) {
+                this.value = item.id;
+                this.label = item.label;
+                this.query = item.label;
+                this.open = false;
+            },
+            clearSelection() {
+                this.value = null;
+                this.label = '';
+                this.query = '';
+                this.cursor = 0;
+                this.open = false;
+                this.$refs.input.focus();
+            },
+            async createFromQuery() {
+                const name = this.query.trim();
+                if (!name) return;
+                try {
+                    const r = await fetch('/api/m2o/quick-create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model: this.comodel, name }),
+                    });
+                    if (r.status === 400) {
+                        // Comodel needs more than `name` — fall back to
+                        // the "Create and edit" flow if available.
+                        if (this.formViewUrl) {
+                            this.createAndEdit();
+                            return;
+                        }
+                        const body = await r.json();
+                        pvAlert(body.detail || 'Cannot create this record inline.',
+                                { variant: 'warning', title: 'Create blocked' });
+                        return;
+                    }
+                    if (!r.ok) throw new Error('create failed');
+                    const item = await r.json();
+                    // Push into the in-memory results list so it shows
+                    // a "selected" badge if the user opens again.
+                    this.results = [item, ...this.results.filter(x => x.id !== item.id)];
+                    this.pick(item);
+                } catch (e) {
+                    pvAlert('Unable to create record.',
+                            { variant: 'danger', title: 'Error' });
+                }
+            },
+            createAndEdit() {
+                if (!this.formViewUrl) return;
+                window.location.href = this.formViewUrl + '/new';
+            },
+        }));
     });
 </script>
 {% block scripts %}{% endblock %}

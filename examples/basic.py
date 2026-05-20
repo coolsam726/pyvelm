@@ -305,13 +305,16 @@ def main():
             edit_html = resp.text
             assert 'name="name"' in edit_html
             assert 'value="Alice"' in edit_html
-            # Many2one rendered as a <select>; France should be the
-            # selected option.
-            assert "<select" in edit_html
-            assert f'value="{france.id}" selected' in edit_html
+            # Many2one is now a combobox: hidden input carries the id;
+            # an `x-data='pvM2o(...)'` wrapper drives the search dropdown.
+            assert 'pvM2o(' in edit_html
+            assert "/api/m2o/search?model=res.country" in edit_html
+            # The hidden input pre-fills with the current Many2one id
+            # (no `selected` option to assert since there's no <select>).
+            assert f':value="value === null ? \'\' : value"' in edit_html
             # Save button has hx-post to the row's save endpoint.
             assert f"row/{alice['id']}" in edit_html
-            print("inline-edit row fragment served with form controls")
+            print("inline-edit row fragment served with combobox + form controls")
 
             # Save: post form-encoded updates, expect display row back.
             resp = client.post(
@@ -413,7 +416,8 @@ def main():
             assert "<html" not in frag         # body fragment only
             assert 'name="name"' in frag        # input present
             assert 'value="Alicia Doe"' in frag
-            assert "<select" in frag            # Many2one
+            # Many2one renders as the pvM2o combobox now.
+            assert "pvM2o(" in frag
             print("form display + edit fragments render")
 
             # Save: POST form-encoded to the record URL.

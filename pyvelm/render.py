@@ -126,10 +126,30 @@ def _render_toggle(value, spec, field):
 @widget(Many2one)
 def _render_m2o(value, spec, field):
     if not value:
-        return Markup('<span class="text-gray-300">&mdash;</span>')
+        return Markup('<span class="text-body-subtle/60">&mdash;</span>')
     # Use the same display-value rule as the JSON serializer.
     from .web import _display_value
-    return escape(_display_value(value))
+    label = escape(_display_value(value))
+    # When the spec was enriched with the comodel's form-view URL,
+    # wrap the label in a quiet inline link with a small "open"
+    # affordance — same UX as the edit-mode combobox's arrow icon.
+    form_view_url = spec.get("_form_view_url")
+    if not form_view_url:
+        return label
+    href = f"{form_view_url}/record/{value.id}"
+    return Markup(
+        f'<a href="{href}" '
+        f'class="inline-flex items-center gap-1 group/m2o '
+        f'text-body hover:text-fg-brand transition-colors">'
+        f'<span class="truncate">{label}</span>'
+        f'<svg class="w-3 h-3 opacity-0 group-hover/m2o:opacity-100 transition-opacity" '
+        f'fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+        f'<path stroke-linecap="round" stroke-linejoin="round" '
+        f'd="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5'
+        f'A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>'
+        f'</svg>'
+        f'</a>'
+    )
 
 
 @widget(Many2many)
@@ -218,29 +238,28 @@ def _edit_boolean(value, spec, field):
 
 @widget(Many2one, mode="edit")
 def _edit_m2o(value, spec, field):
-    """Server-rendered <select> with all comodel records as options.
+    """Searchable combobox with create-on-the-fly + open-record link.
 
-    Fine for small comodels (countries, regions). When comodel size
-    grows past a few hundred, swap to an HTMX-loaded search-select —
-    same `widget` hint, different renderer.
+    The actual markup lives in `widgets/m2o_input.html`; this widget
+    just hands off the spec data it was enriched with at render time
+    (see `_enrich_specs_for_edit`).
     """
     from .web import _display_value
 
-    # `field` carries the comodel name; resolve via the descriptor's
-    # env when we get hold of one. Here we don't have an env handy,
-    # so we use the field's comodel hint via a thread-local set by
-    # the row renderer. Simpler: stash the choices on spec.
-    choices = spec.get("_choices", [])
-    selected_id = value.id if value else None
-    options = ['<option value="">—</option>']
-    for cid, label in choices:
-        sel = " selected" if cid == selected_id else ""
-        options.append(
-            f'<option value="{cid}"{sel}>{escape(label)}</option>'
-        )
+    initial_id = value.id if value else None
+    initial_label = _display_value(value) if value else ""
+    partial = _env.get_template("widgets/m2o_input.html")
     return Markup(
-        f'<select name="{escape(spec["name"])}" class="{_INPUT_CLS}"'
-        f'{_readonly_marker(spec)}>{"".join(options)}</select>'
+        partial.render(
+            name=spec["name"],
+            comodel=spec.get("_comodel") or field.comodel_name,
+            search_url=spec.get("_search_url")
+                       or f"/api/m2o/search?model={field.comodel_name}",
+            form_view_url=spec.get("_form_view_url"),
+            initial_id=initial_id,
+            initial_label=initial_label,
+            readonly=bool(spec.get("readonly")),
+        )
     )
 
 
@@ -263,11 +282,20 @@ _env = jinja2.Environment(
 
 
 def _enrich_specs_for_edit(env, model_cls, fields_spec) -> list[dict]:
-    """For each Many2one field-spec, fetch the comodel's choices once
-    so the row renderer doesn't requery on every record.
+    """For each Many2one field-spec, stash the data the combobox widget
+    needs without re-resolving it per row:
 
-    Mutates copies of the specs (caller's list is untouched). The
-    enrichment lives on a `_choices` key inside each spec dict.
+      _comodel        — the comodel name string
+      _form_view_url  — base URL for "Open record" / "Create and edit"
+                        ("/web/views/<module>/<view_name>") or None if
+                        no form view targets the comodel yet
+      _search_url     — "/api/m2o/search?model=..." (built once)
+
+    Same enrichment runs for display-mode rendering too — the
+    `_form_view_url` powers the inline "open record" link next to a
+    rendered Many2one value, harmless when no widget needs it.
+
+    Mutates a copy of each spec; caller's list is untouched.
     """
     out = []
     for spec in fields_spec:
@@ -275,10 +303,18 @@ def _enrich_specs_for_edit(env, model_cls, fields_spec) -> list[dict]:
         fname = spec_copy["name"]
         field = model_cls._fields.get(fname)
         if isinstance(field, Many2one):
-            comodel = env[field.comodel_name]
-            recs = comodel.search([], order='"id" ASC')
-            from .web import _display_value
-            spec_copy["_choices"] = [(r.id, _display_value(r)) for r in recs]
+            spec_copy["_comodel"] = field.comodel_name
+            spec_copy["_search_url"] = (
+                f"/api/m2o/search?model={field.comodel_name}"
+            )
+            view_lookup = _form_view_for_model(env, field.comodel_name)
+            if view_lookup is not None:
+                module, view_name = view_lookup
+                spec_copy["_form_view_url"] = (
+                    f"/web/views/{module}/{view_name}"
+                )
+            else:
+                spec_copy["_form_view_url"] = None
         out.append(spec_copy)
     return out
 
@@ -356,8 +392,9 @@ def render_list_row(view, record, env, *, mode: str = "display") -> str:
     arch = resolve_arch(view)
     fields_spec = arch.get("fields", [])
     cls = env.registry[view.model]
-    if mode == "edit":
-        fields_spec = _enrich_specs_for_edit(env, cls, fields_spec)
+    # Enrich for both modes so the display-mode "open record" link
+    # under each Many2one gets its URL.
+    fields_spec = _enrich_specs_for_edit(env, cls, fields_spec)
     cells = _render_cells(record, fields_spec, mode=mode)
     template_name = "list_row_edit.html" if mode == "edit" else "list_row.html"
     template = _env.get_template(template_name)
@@ -648,6 +685,29 @@ def _find_form_view(view, env):
     return None
 
 
+def _form_view_for_model(env, model_name: str) -> tuple[str, str] | None:
+    """Return `(module, view_name)` for some form view that targets the
+    given model, or `None` if no such view is installed.
+
+    Used by relationship widgets to build "Open record" /
+    "Create and edit" URLs without each widget having to know which
+    module owns the comodel's UI.
+    """
+    if "ir.ui.view" not in env.registry:
+        return None
+    View = env["ir.ui.view"]
+    matches = View.search(
+        [("model", "=", model_name), ("view_type", "=", "form")],
+        limit=1,
+        order='"id" ASC',
+    )
+    if not matches:
+        return None
+    rec = matches
+    rec.ensure_one()
+    return (rec.module, rec.name)
+
+
 _SEARCHABLE_FIELD_TYPES = ("Char", "Text")
 
 
@@ -778,6 +838,9 @@ def render_list_page(view, env, *, page: int, page_size: int,
     total = Model.search_count(domain)
     offset = page * page_size
     recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
+    # Enrich specs so the display-mode Many2one widget can render an
+    # "open record" affordance pointing at the comodel's form view.
+    fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
     rows = _build_rows(view, recs, fields_spec)
     headers = _field_headers(model_cls, fields_spec)
     total_pages = max(1, (total + page_size - 1) // page_size)
@@ -821,6 +884,7 @@ def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", 
     total = Model.search_count(domain)
     offset = page * page_size
     recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
+    fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
     rows = _build_rows(view, recs, fields_spec)
     headers = _field_headers(model_cls, fields_spec)
     total_pages = max(1, (total + page_size - 1) // page_size)
