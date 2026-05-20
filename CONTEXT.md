@@ -233,25 +233,59 @@ Tailwind v4 + Flowbite build pipeline:
 - Login page stays standalone (no shell) and uses the same compiled
   stylesheet for consistency.
 
+UI polish wave (post-0.7.0):
+
+  - **Layout system** — proper page heading region (h2 + subtitle +
+    breadcrumb), unified across list/form/kanban/admin via
+    `render.layout_context()`. `build_breadcrumbs(menu, current_path,
+    leaf_label)` derives crumbs from the menu tree.
+  - **DataTable** (`templates/list.html` + `list_table.html`) — Alpine
+    `pvList` component adds per-column filters, drag-and-drop column
+    reorder with `localStorage` persistence, and search/sort on top of
+    the existing HTMX pagination. No external table lib.
+  - **Many2one combobox** — Odoo-style searchable relation widget at
+    `widgets/m2o_input.html` + `pvM2o` Alpine component. Endpoints
+    `GET /api/m2o/search` and `POST /api/m2o/quick-create` drive
+    debounced search, keyboard nav, "Create '<query>'" inline, and
+    "Create and edit…" navigation. Display mode wraps the label in a
+    hover-revealing "open record" link via `_form_view_for_model`.
+  - **`ir.ui.menu`** (0.8.0) — sidebar is now data-driven. Each module
+    contributes entries via a `MENUS` list in a data file; the loader's
+    `_sync_menus` upserts them with `(module, name)` identity (mirrors
+    `ir.ui.view`). Parents reference `<module>.<name>`; sequence orders
+    siblings. `render._menu(env, current_path)` walks the table at
+    render time and emits the two-level tree. Migration `0_7_to_0_8`
+    creates the table for upgraded installs.
+  - **Auth hardening** — every `/web/*` mutation route (row + form
+    save/edit/delete/create) now checks `env.uid` up front and returns
+    `HX-Redirect` for HTMX callers, 302 for direct navigation, 401 for
+    JSON. Logout adds `Clear-Site-Data: "cache", "cookies"` so the
+    browser bfcache can't replay an authenticated page after Back.
+  - **Autosave on navigation** — edit/new forms render with
+    `data-pv-autosave="<save-url>"` on `<form>`; a layout-level script
+    snapshots `FormData` at mount and after every `htmx:afterSwap`,
+    marks the form dirty on input, and intercepts internal `a[href]`
+    clicks to POST first and navigate on success. `beforeunload` falls
+    back to the native prompt because async work can't complete on
+    hard navigations.
+
 Next focus options:
-  - **ir.ui.menu**: replace the hard-coded sidebar menu with an
-    Odoo-style data model so apps extend the navigation the same way
-    they extend views.
+  - **Adopt the `pvConfirm` dialog** — replace remaining `hx-confirm`
+    browser prompts in `list_row.html` / `form_body.html` with the
+    styled dialog component (`data-pv-confirm` triggers).
+  - **Flowbite form-control polish** — improve edit-mode widget styling
+    using Flowbite form-control patterns (labels, helper text, error
+    states).
   - **Stage 7 Slice C**: XPath/structural view arch patches.
   - **Stage 6 hardening**: Cron as a real background task, SMTP mail
     dispatch, message subtypes, followers/subscriptions.
   - **Stage 5 hardening**: CSRF tokens, rate limit /login, password-
     change UI.
 
-Pending follow-ups, in order of "what'll hurt first":
-  - **Stage 7 Slice C.** XPath/structural view arch patches beyond
-    the existing dict-op VIEW_INHERITS mechanism.
-  - **Stage 6 hardening.** Cron runner as a real background task,
-    mail dispatch via SMTP, message subtypes, followers/subscriptions.
-  - **Stage 5 hardening.** CSRF tokens, rate limiting on /login,
-    password-change UI.
-
 Still deferred: cache snapshot on transaction rollback, O2m/M2m
 caching + old-value snapshotting, auto-diff schema migrations,
 field-level validation feedback in the inline-edit form, multi-
-select widget for O2m/M2m editing. None pressing.
+select widget for O2m/M2m editing, row-level reorder via a `sequence`
+field (Odoo "handle" widget), "Create and edit…" modal (combobox
+currently navigates to /new), m2o result caching beyond in-flight
+requests. None pressing.
