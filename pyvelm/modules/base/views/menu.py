@@ -28,5 +28,5 @@ _ICON_APPS = (
 # Root-level standalone items (no parent group, icon shown in sidebar).
 MENUS: list[Menu] = [
     menu_item("dashboard", "Dashboard", href="/web/admin", icon=_ICON_HOME, sequence=10),
-    menu_item("apps",      "Apps",      href="/web/apps",  icon=_ICON_APPS, sequence=20),
+    menu_item("apps",      "Apps",      href="/web/apps",  icon=_ICON_APPS, sequence=100),
 ]

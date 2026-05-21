@@ -344,7 +344,7 @@ def main():
             # upgrade endpoint and assert the version row caught up.
             with pool.connection() as side_conn:
                 side_conn.execute(
-                    "UPDATE ir_module SET version = '0.10.0' WHERE name = 'base'"
+                    "UPDATE ir_module SET version = '0.11.0' WHERE name = 'base'"
                 )
             r_no_follow = TestClient(app, follow_redirects=False)
             r_no_follow.auth = ("admin", "admin")
@@ -356,7 +356,7 @@ def main():
                 row = side_conn.execute(
                     "SELECT version FROM ir_module WHERE name = 'base'"
                 ).fetchone()
-            assert row == ("0.11.0",), row
+            assert row == ("0.12.0",), row
 
             # Non-superuser is rejected — install / upgrade is admin-only
             # since it executes install_hook code and DDL.
@@ -1547,7 +1547,7 @@ def main():
                         old.unlink()
                     Rate.create({
                         "currency_id": seeded["EUR"].id,
-                        "name": _dt.utcnow() - _td(days=1),
+                        "date": _dt.utcnow() - _td(days=1),
                         "rate": 0.92,
                     })
                 wf_env.cache.invalidate(model_name="res.currency.rate")
@@ -1565,7 +1565,7 @@ def main():
                 with wf_env.transaction():
                     Rate.create({
                         "currency_id": seeded["EUR"].id,
-                        "name": _dt.utcnow(),
+                        "date": _dt.utcnow(),
                         "rate": 0.85,
                     })
                 import time as _time

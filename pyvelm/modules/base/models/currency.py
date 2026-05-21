@@ -5,9 +5,8 @@ Two models cooperate:
 * ``res.currency`` — a currency definition: ISO 4217 code, display
   name, symbol, rounding step, active flag.
 * ``res.currency.rate`` — a dated exchange rate. Many rows per
-  currency; the conversion helper picks the one whose ``name``
-  (the effective-from date) is the latest at or before the query
-  date.
+  currency; the conversion helper picks the row whose ``date`` is the
+  largest value at or before the query date.
 
 Rates are stored on an implicit common reference — the base unit
 the seed picks (USD by default, with rate=1.0). Cross-currency
@@ -18,16 +17,15 @@ cancels:
     result        = amount_in_ref * rate_Y_at(date)
 
 That keeps the data model simple — no "anchor currency" column on
-``res.currency`` to maintain. A future improvement is to honor
-``res.company.currency_id`` as the per-company anchor (queued for
-slice B).
+``res.currency`` to maintain.
 """
 from __future__ import annotations
 
 from datetime import datetime
 
-from pyvelm import BaseModel, Boolean, Char, Float, Many2one, One2many
-from pyvelm.cron import _DatetimeField
+from pyvelm import (
+    BaseModel, Boolean, Char, Datetime, Float, Many2one, One2many, depends,
+)
 
 
 class Currency(BaseModel):
@@ -41,7 +39,7 @@ class Currency(BaseModel):
     name = Char()
     symbol = Char(default="$")
     # Smallest representable unit. 0.01 for cents, 1 for JPY, etc.
-    # The Monetary widget (slice C) will round amounts to this step.
+    # The Monetary widget rounds amounts to this step.
     rounding = Float(default=0.01)
     active = Boolean(default=True)
 
@@ -56,8 +54,8 @@ class Currency(BaseModel):
         """Convert ``amount`` from this currency to ``to_currency``.
 
         ``date`` selects the rate effective at that moment (the row
-        with the latest ``name`` at or before ``date``). When
-        omitted, defaults to "now" — the rate currently in effect.
+        with the latest ``date`` at or before ``date``). When omitted,
+        defaults to "now" — the rate currently in effect.
 
         Raises ``ValueError`` if either side has no rate covering
         the requested date.
@@ -81,9 +79,9 @@ class Currency(BaseModel):
         rates = Rate.search(
             [
                 ("currency_id", "=", self.id),
-                ("name", "<=", date),
+                ("date", "<=", date),
             ],
-            order='"name" DESC, "id" DESC',
+            order='"date" DESC, "id" DESC',
             limit=1,
         )
         if not rates:
@@ -97,14 +95,29 @@ class Currency(BaseModel):
 class CurrencyRate(BaseModel):
     """A dated exchange rate for a single currency.
 
-    Multiple rows per currency cover history. ``name`` is the
+    Multiple rows per currency cover history. ``date`` is the
     effective-from datetime; the rate stays in force until a later
-    row supersedes it. Conversion picks the row whose ``name`` is
-    the largest at or before the query date.
-    """
+    row supersedes it. Conversion picks the row whose ``date`` is the
+    largest at or before the query date.
+
+    ``name`` is a computed display label of the form ``"<code> @
+    <date>"`` so list views and Many2one fallbacks render something
+    meaningful without operators maintaining a separate label."""
 
     _name = "res.currency.rate"
 
     currency_id = Many2one("res.currency", ondelete="CASCADE", required=True)
-    name = _DatetimeField()        # effective-from datetime
+    date = Datetime(string="Conversion Date", required=True)
     rate = Float(default=1.0)
+
+    name = Char(compute="_compute_name", string="Label")
+
+    @depends("currency_id.code", "date")
+    def _compute_name(self):
+        for r in self:
+            code = r.currency_id.code if r.currency_id else ""
+            stamp = (
+                r.date.strftime("%Y-%m-%d %H:%M")
+                if r.date is not None else "—"
+            )
+            r.name = f"{code} @ {stamp}" if code else stamp

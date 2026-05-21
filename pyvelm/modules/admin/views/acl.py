@@ -113,11 +113,11 @@ VIEWS: list[View] = [
 
     # ---- res.currency.rate ----
     list_view("currency.rate.list", "res.currency.rate",
-              fields=["currency_id", "name", "rate"]),
+              fields=["currency_id", "date", "rate"]),
 
     form_view("currency.rate.form", "res.currency.rate",
               sections=[
-                  section("main", "Rate", ["currency_id", "name", "rate"]),
+                  section("main", "Rate", ["currency_id", "date", "rate"]),
               ]),
 
     # ---- ir.actions.server ----

@@ -129,7 +129,7 @@ def _seed_currencies(env):
         if not Rate.search([("currency_id", "=", ccy.id)], limit=1):
             Rate.create({
                 "currency_id": ccy.id,
-                "name": seeded_at,
+                "date": seeded_at,
                 "rate": rate,
             })
 
