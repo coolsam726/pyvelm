@@ -12,6 +12,7 @@ Slice A surface (read-only):
 Mutation endpoints come in Slice B. Auth is out of scope here — the
 intended deployment puts a real authentication layer in front.
 """
+
 from __future__ import annotations
 
 import json
@@ -61,9 +62,7 @@ def serialize_record(record, fields: list[str] | None = None) -> dict[str, Any]:
     record.ensure_one()
     model_cls = type(record)
     if fields is None:
-        fields = [
-            f for f, fld in model_cls._fields.items() if fld.is_stored
-        ]
+        fields = [f for f, fld in model_cls._fields.items() if fld.is_stored]
     out: dict[str, Any] = {"id": record.id}
     for fname in fields:
         if fname == "id":
@@ -103,8 +102,9 @@ def _parse_domain(domain_json: str) -> list:
     return [tuple(leaf) for leaf in domain]
 
 
-def create_app(registry: Registry, pool: Any,
-               module_roots: list | None = None) -> FastAPI:
+def create_app(
+    registry: Registry, pool: Any, module_roots: list | None = None
+) -> FastAPI:
     """Build the FastAPI app bound to a loaded registry and a Postgres
     connection pool. Each request checks out a connection, makes an
     Environment, and returns it on exit. The pool's own retry/backoff
@@ -184,9 +184,11 @@ def create_app(registry: Registry, pool: Any,
                     if ct.startswith("application/x-www-form-urlencoded"):
                         body = await request.body()
                         from urllib.parse import parse_qs
+
                         parsed = parse_qs(body.decode("latin-1"))
                         form_token = (parsed.get(_CSRF_FORM_FIELD) or [""])[0]
                         ok = form_token == cookie_token
+
                         # Restore the consumed receive stream so the
                         # downstream handler can parse the body itself.
                         async def receive() -> dict:
@@ -195,6 +197,7 @@ def create_app(registry: Registry, pool: Any,
                                 "body": body,
                                 "more_body": False,
                             }
+
                         request._receive = receive
                     if not ok:
                         return _csrf_reject("CSRF token invalid.")
@@ -224,7 +227,9 @@ def create_app(registry: Registry, pool: Any,
             path = request.url.path
             # Apply to all /web/ HTML routes except static assets.
             if path.startswith("/web/") and not path.startswith("/web/static"):
-                response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+                response.headers["Cache-Control"] = (
+                    "no-store, no-cache, must-revalidate, private"
+                )
                 response.headers["Pragma"] = "no-cache"
             return response
 
@@ -245,6 +250,7 @@ def create_app(registry: Registry, pool: Any,
 
     # Static assets shipped inside the package (CSS, eventually images).
     from .render import STATIC_DIR
+
     app.mount(
         "/web/static",
         StaticFiles(directory=str(STATIC_DIR)),
@@ -270,7 +276,9 @@ def create_app(registry: Registry, pool: Any,
         finally:
             env._acl_bypass = False
 
-    def _resolve_user_from_basic(env: Environment, header_value: str | None) -> int | None:
+    def _resolve_user_from_basic(
+        env: Environment, header_value: str | None
+    ) -> int | None:
         """Parse an HTTP Basic header and return the authenticated uid.
 
         Returns None for missing / invalid / failed-login cases. Callers
@@ -290,7 +298,8 @@ def create_app(registry: Registry, pool: Any,
         env._acl_bypass = True
         try:
             users = env["res.users"].search(
-                [("login", "=", login), ("active", "=", True)], limit=1,
+                [("login", "=", login), ("active", "=", True)],
+                limit=1,
             )
             if not users:
                 return None
@@ -306,9 +315,7 @@ def create_app(registry: Registry, pool: Any,
         with pool.connection() as conn:
             env = Environment(conn, registry=registry, uid=None)
             # Session cookie takes priority; fall back to HTTP Basic auth.
-            uid = _resolve_user_from_session(
-                env, request.cookies.get(_SESSION_COOKIE)
-            )
+            uid = _resolve_user_from_session(env, request.cookies.get(_SESSION_COOKIE))
             if uid is None:
                 uid = _resolve_user_from_basic(
                     env, request.headers.get("authorization")
@@ -329,9 +336,7 @@ def create_app(registry: Registry, pool: Any,
 
     def _load_view(env, module: str, name: str):
         if "ir.ui.view" not in registry:
-            raise HTTPException(
-                status_code=503, detail="No ir.ui.view model loaded"
-            )
+            raise HTTPException(status_code=503, detail="No ir.ui.view model loaded")
         View = env["ir.ui.view"]
         rec = View.search([("module", "=", module), ("name", "=", name)])
         if not rec:
@@ -408,9 +413,15 @@ def create_app(registry: Registry, pool: Any,
         if rec.view_type == "list":
             return HTMLResponse(
                 render_list_page(
-                    rec, env, page=page, page_size=page_size,
-                    search=search, order=order, filters=filters,
-                    group_by=group_by, current_path=path
+                    rec,
+                    env,
+                    page=page,
+                    page_size=page_size,
+                    search=search,
+                    order=order,
+                    filters=filters,
+                    group_by=group_by,
+                    current_path=path,
                 )
             )
         if rec.view_type == "kanban":
@@ -449,8 +460,13 @@ def create_app(registry: Registry, pool: Any,
             )
         return HTMLResponse(
             render_list_rows(
-                rec, env, page=page, page_size=page_size,
-                search=search, order=order, filters=filters,
+                rec,
+                env,
+                page=page,
+                page_size=page_size,
+                search=search,
+                order=order,
+                filters=filters,
                 group_by=group_by,
             )
         )
@@ -540,6 +556,7 @@ def create_app(registry: Registry, pool: Any,
         # fall back to whatever stored Char field exists.
         cls = registry[model]
         from .fields import Char, Text
+
         text_field = None
         if "name" in cls._fields and isinstance(cls._fields["name"], (Char, Text)):
             text_field = "name"
@@ -553,9 +570,7 @@ def create_app(registry: Registry, pool: Any,
             domain.append((text_field, "ilike", f"%{q}%"))
         recs = Model.search(domain, limit=limit, order='"id" ASC')
         return {
-            "results": [
-                {"id": r.id, "label": _display_value(r)} for r in recs
-            ],
+            "results": [{"id": r.id, "label": _display_value(r)} for r in recs],
         }
 
     @app.post("/api/m2o/quick-create")
@@ -582,6 +597,7 @@ def create_app(registry: Registry, pool: Any,
         # exist without a default, we can't quick-create — surface a
         # 400 so the client can redirect to "Create and edit".
         from .fields import Many2many
+
         missing_required: list[str] = []
         for fname, field in cls._fields.items():
             if not field.required or fname == "name":
@@ -616,15 +632,11 @@ def create_app(registry: Registry, pool: Any,
         env: Environment = Depends(get_env),
     ):
         if model not in registry:
-            raise HTTPException(
-                status_code=404, detail=f"Unknown model {model!r}"
-            )
+            raise HTTPException(status_code=404, detail=f"Unknown model {model!r}")
         domain_parsed = _parse_domain(domain)
         field_list = [f.strip() for f in fields.split(",") if f.strip()] or None
         Model = env[model]
-        recs = Model.search(
-            domain_parsed, limit=limit, offset=offset, order=order
-        )
+        recs = Model.search(domain_parsed, limit=limit, offset=offset, order=order)
         return {
             "model": model,
             "count": len(recs),
@@ -667,7 +679,9 @@ def create_app(registry: Registry, pool: Any,
         )
 
     @app.get("/web/records/{module}/{name}/new", response_class=HTMLResponse)
-    def web_row_new(module: str, name: str, request: Request, env: Environment = Depends(get_env)):
+    def web_row_new(
+        module: str, name: str, request: Request, env: Environment = Depends(get_env)
+    ):
         if env.uid is None:
             return _login_redirect(request)
         from .render import render_new_row
@@ -675,10 +689,13 @@ def create_app(registry: Registry, pool: Any,
         view = _load_view(env, module, name)
         return HTMLResponse(render_new_row(view, env))
 
-    @app.get("/web/records/{module}/{name}/row/{record_id}",
-             response_class=HTMLResponse)
+    @app.get(
+        "/web/records/{module}/{name}/row/{record_id}", response_class=HTMLResponse
+    )
     def web_row_display(
-        module: str, name: str, record_id: int,
+        module: str,
+        name: str,
+        record_id: int,
         request: Request,
         env: Environment = Depends(get_env),
     ):
@@ -690,10 +707,13 @@ def create_app(registry: Registry, pool: Any,
         rec = _load_record(env, view, record_id)
         return HTMLResponse(render_list_row(view, rec, env, mode="display"))
 
-    @app.get("/web/records/{module}/{name}/row/{record_id}/edit",
-             response_class=HTMLResponse)
+    @app.get(
+        "/web/records/{module}/{name}/row/{record_id}/edit", response_class=HTMLResponse
+    )
     def web_row_edit(
-        module: str, name: str, record_id: int,
+        module: str,
+        name: str,
+        record_id: int,
         request: Request,
         env: Environment = Depends(get_env),
     ):
@@ -705,10 +725,14 @@ def create_app(registry: Registry, pool: Any,
         rec = _load_record(env, view, record_id)
         return HTMLResponse(render_list_row(view, rec, env, mode="edit"))
 
-    @app.post("/web/records/{module}/{name}/row/{record_id}",
-              response_class=HTMLResponse)
+    @app.post(
+        "/web/records/{module}/{name}/row/{record_id}", response_class=HTMLResponse
+    )
     async def web_row_save(
-        module: str, name: str, record_id: int, request: Request,
+        module: str,
+        name: str,
+        record_id: int,
+        request: Request,
         env: Environment = Depends(get_env),
     ):
         if env.uid is None:
@@ -732,10 +756,13 @@ def create_app(registry: Registry, pool: Any,
         env.cache.invalidate(model_name=view.model, ids=[record_id])
         return HTMLResponse(render_list_row(view, rec, env, mode="display"))
 
-    @app.delete("/web/records/{module}/{name}/row/{record_id}",
-                response_class=HTMLResponse)
+    @app.delete(
+        "/web/records/{module}/{name}/row/{record_id}", response_class=HTMLResponse
+    )
     def web_row_delete(
-        module: str, name: str, record_id: int,
+        module: str,
+        name: str,
+        record_id: int,
         request: Request,
         env: Environment = Depends(get_env),
     ):
@@ -749,7 +776,9 @@ def create_app(registry: Registry, pool: Any,
 
     @app.post("/web/records/{module}/{name}/reorder")
     async def web_row_reorder(
-        module: str, name: str, request: Request,
+        module: str,
+        name: str,
+        request: Request,
         env: Environment = Depends(get_env),
     ):
         """Persist a new row ordering for a list view that declared
@@ -793,7 +822,9 @@ def create_app(registry: Registry, pool: Any,
 
     @app.post("/web/records/{module}/{name}", response_class=HTMLResponse)
     async def web_row_create(
-        module: str, name: str, request: Request,
+        module: str,
+        name: str,
+        request: Request,
         env: Environment = Depends(get_env),
     ):
         if env.uid is None:
@@ -818,14 +849,14 @@ def create_app(registry: Registry, pool: Any,
 
     def _require_form_view(rec):
         if rec.view_type != "form":
-            raise HTTPException(
-                400, f"View {rec.module}.{rec.name} is not a form view"
-            )
+            raise HTTPException(400, f"View {rec.module}.{rec.name} is not a form view")
         return rec
 
     @app.get("/web/views/{module}/{name}/new", response_class=HTMLResponse)
     def web_form_new(
-        module: str, name: str, request: Request,
+        module: str,
+        name: str,
+        request: Request,
         env: Environment = Depends(get_env),
     ):
         if env.uid is None:
@@ -850,15 +881,23 @@ def create_app(registry: Registry, pool: Any,
             else:
                 prefill[k] = v
         return HTMLResponse(
-            render_form_page(view, None, env, mode="new",
-                             current_path=str(request.url.path),
-                             prefill=prefill or None)
+            render_form_page(
+                view,
+                None,
+                env,
+                mode="new",
+                current_path=str(request.url.path),
+                prefill=prefill or None,
+            )
         )
 
-    @app.get("/web/views/{module}/{name}/record/{record_id}",
-             response_class=HTMLResponse)
+    @app.get(
+        "/web/views/{module}/{name}/record/{record_id}", response_class=HTMLResponse
+    )
     def web_form_display(
-        module: str, name: str, record_id: int,
+        module: str,
+        name: str,
+        record_id: int,
         request: Request,
         env: Environment = Depends(get_env),
     ):
@@ -872,15 +911,24 @@ def create_app(registry: Registry, pool: Any,
         # in-place swap; otherwise full page for direct navigation.
         body_only = request.headers.get("HX-Request") == "true"
         return HTMLResponse(
-            render_form_page(view, rec, env, mode="display",
-                             body_only=body_only,
-                             current_path=str(request.url.path))
+            render_form_page(
+                view,
+                rec,
+                env,
+                mode="display",
+                body_only=body_only,
+                current_path=str(request.url.path),
+            )
         )
 
-    @app.get("/web/views/{module}/{name}/record/{record_id}/edit",
-             response_class=HTMLResponse)
+    @app.get(
+        "/web/views/{module}/{name}/record/{record_id}/edit",
+        response_class=HTMLResponse,
+    )
     def web_form_edit(
-        module: str, name: str, record_id: int,
+        module: str,
+        name: str,
+        record_id: int,
         request: Request,
         env: Environment = Depends(get_env),
     ):
@@ -892,23 +940,33 @@ def create_app(registry: Registry, pool: Any,
         rec = _load_record(env, view, record_id)
         body_only = request.headers.get("HX-Request") == "true"
         return HTMLResponse(
-            render_form_page(view, rec, env, mode="edit",
-                             body_only=body_only,
-                             current_path=str(request.url.path))
+            render_form_page(
+                view,
+                rec,
+                env,
+                mode="edit",
+                body_only=body_only,
+                current_path=str(request.url.path),
+            )
         )
 
-    @app.post("/web/views/{module}/{name}/record/{record_id}",
-              response_class=HTMLResponse)
+    @app.post(
+        "/web/views/{module}/{name}/record/{record_id}", response_class=HTMLResponse
+    )
     async def web_form_save(
-        module: str, name: str, record_id: int,
+        module: str,
+        name: str,
+        record_id: int,
         request: Request,
         env: Environment = Depends(get_env),
     ):
         if env.uid is None:
             return _auth_required_response(request)
         from .render import (
-            apply_o2m_commands, harvest_o2m_commands,
-            parse_form_vals, render_form_page,
+            apply_o2m_commands,
+            harvest_o2m_commands,
+            parse_form_vals,
+            render_form_page,
         )
 
         view = _require_form_view(_load_view(env, module, name))
@@ -924,10 +982,16 @@ def create_app(registry: Registry, pool: Any,
             # per-field messages stamped + the user's typed values
             # resurrected so they don't have to retype.
             return HTMLResponse(
-                render_form_page(view, rec, env, mode="edit",
-                                 body_only=body_only,
-                                 errors=errors, submitted=vals,
-                                 current_path=str(request.url.path)),
+                render_form_page(
+                    view,
+                    rec,
+                    env,
+                    mode="edit",
+                    body_only=body_only,
+                    errors=errors,
+                    submitted=vals,
+                    current_path=str(request.url.path),
+                ),
                 status_code=422,
             )
         try:
@@ -939,11 +1003,16 @@ def create_app(registry: Registry, pool: Any,
             # Show a top-level banner so the user sees why the save
             # didn't stick instead of getting a silent 500.
             return HTMLResponse(
-                render_form_page(view, rec, env, mode="edit",
-                                 body_only=body_only,
-                                 submitted=vals,
-                                 form_error=str(exc),
-                                 current_path=str(request.url.path)),
+                render_form_page(
+                    view,
+                    rec,
+                    env,
+                    mode="edit",
+                    body_only=body_only,
+                    submitted=vals,
+                    form_error=str(exc),
+                    current_path=str(request.url.path),
+                ),
                 status_code=422,
             )
         env.cache.invalidate(model_name=view.model, ids=[record_id])
@@ -953,21 +1022,30 @@ def create_app(registry: Registry, pool: Any,
                 if ofield is not None:
                     env.cache.invalidate(model_name=ofield.comodel_name)
         return HTMLResponse(
-            render_form_page(view, rec, env, mode="display",
-                             body_only=body_only,
-                             current_path=str(request.url.path))
+            render_form_page(
+                view,
+                rec,
+                env,
+                mode="display",
+                body_only=body_only,
+                current_path=str(request.url.path),
+            )
         )
 
     @app.post("/web/views/{module}/{name}", response_class=HTMLResponse)
     async def web_form_create(
-        module: str, name: str, request: Request,
+        module: str,
+        name: str,
+        request: Request,
         env: Environment = Depends(get_env),
     ):
         if env.uid is None:
             return _auth_required_response(request)
         from .render import (
-            apply_o2m_commands, harvest_o2m_commands,
-            parse_form_vals, render_form_page,
+            apply_o2m_commands,
+            harvest_o2m_commands,
+            parse_form_vals,
+            render_form_page,
         )
 
         view = _require_form_view(_load_view(env, module, name))
@@ -979,10 +1057,16 @@ def create_app(registry: Registry, pool: Any,
         if errors or o2m_errors:
             errors = {**errors, **o2m_errors}
             return HTMLResponse(
-                render_form_page(view, None, env, mode="new",
-                                 body_only=body_only,
-                                 errors=errors, submitted=vals,
-                                 current_path=str(request.url.path)),
+                render_form_page(
+                    view,
+                    None,
+                    env,
+                    mode="new",
+                    body_only=body_only,
+                    errors=errors,
+                    submitted=vals,
+                    current_path=str(request.url.path),
+                ),
                 status_code=422,
             )
         try:
@@ -991,11 +1075,16 @@ def create_app(registry: Registry, pool: Any,
                 apply_o2m_commands(rec, o2m_cmds)
         except Exception as exc:  # noqa: BLE001
             return HTMLResponse(
-                render_form_page(view, None, env, mode="new",
-                                 body_only=body_only,
-                                 submitted=vals,
-                                 form_error=str(exc),
-                                 current_path=str(request.url.path)),
+                render_form_page(
+                    view,
+                    None,
+                    env,
+                    mode="new",
+                    body_only=body_only,
+                    submitted=vals,
+                    form_error=str(exc),
+                    current_path=str(request.url.path),
+                ),
                 status_code=422,
             )
         if o2m_cmds:
@@ -1004,9 +1093,14 @@ def create_app(registry: Registry, pool: Any,
                 if ofield is not None:
                     env.cache.invalidate(model_name=ofield.comodel_name)
         return HTMLResponse(
-            render_form_page(view, rec, env, mode="display",
-                             body_only=body_only,
-                             current_path=str(request.url.path))
+            render_form_page(
+                view,
+                rec,
+                env,
+                mode="display",
+                body_only=body_only,
+                current_path=str(request.url.path),
+            )
         )
 
     # ---- admin dashboard ----
@@ -1049,8 +1143,9 @@ def create_app(registry: Registry, pool: Any,
                 detail="Module install / upgrade requires superuser (uid=1)",
             )
 
-    def _apps_action_response(request: Request, env: Environment,
-                              result: dict) -> Response:
+    def _apps_action_response(
+        request: Request, env: Environment, result: dict
+    ) -> Response:
         """Convert an install/upgrade result into an HTMX response.
 
         HTMX clients get an empty body with `HX-Redirect: /web/apps`
@@ -1067,12 +1162,14 @@ def create_app(registry: Registry, pool: Any,
         return RedirectResponse("/web/apps", status_code=303)
 
     @app.post("/web/apps/{name}/install")
-    def web_app_install(name: str, request: Request,
-                        env: Environment = Depends(get_env)):
+    def web_app_install(
+        name: str, request: Request, env: Environment = Depends(get_env)
+    ):
         if env.uid is None:
             return _auth_required_response(request)
         _require_admin(env)
         from .render import install_module_action
+
         try:
             result = install_module_action(env, app.state.module_roots, name)
         except ValueError as e:
@@ -1080,12 +1177,14 @@ def create_app(registry: Registry, pool: Any,
         return _apps_action_response(request, env, result)
 
     @app.post("/web/apps/{name}/upgrade")
-    def web_app_upgrade(name: str, request: Request,
-                        env: Environment = Depends(get_env)):
+    def web_app_upgrade(
+        name: str, request: Request, env: Environment = Depends(get_env)
+    ):
         if env.uid is None:
             return _auth_required_response(request)
         _require_admin(env)
         from .render import upgrade_module_action
+
         try:
             result = upgrade_module_action(env, app.state.module_roots, name)
         except ValueError as e:
@@ -1093,8 +1192,9 @@ def create_app(registry: Registry, pool: Any,
         return _apps_action_response(request, env, result)
 
     @app.get("/web/apps/{name}/uninstall-preview")
-    def web_app_uninstall_preview(name: str, request: Request,
-                                  env: Environment = Depends(get_env)):
+    def web_app_uninstall_preview(
+        name: str, request: Request, env: Environment = Depends(get_env)
+    ):
         """Dry-run for the uninstall flow — returns the JSON the confirm
         modal renders into a "this is what we'll do / why we won't"
         summary. Auth-gated like the action endpoints since exposing
@@ -1103,15 +1203,18 @@ def create_app(registry: Registry, pool: Any,
             return _auth_required_response(request)
         _require_admin(env)
         from .render import uninstall_preview
+
         return uninstall_preview(env, app.state.module_roots, name)
 
     @app.post("/web/apps/{name}/uninstall")
-    def web_app_uninstall(name: str, request: Request,
-                          env: Environment = Depends(get_env)):
+    def web_app_uninstall(
+        name: str, request: Request, env: Environment = Depends(get_env)
+    ):
         if env.uid is None:
             return _auth_required_response(request)
         _require_admin(env)
         from .render import uninstall_module_action
+
         try:
             result = uninstall_module_action(env, app.state.module_roots, name)
         except ValueError as e:
@@ -1174,13 +1277,16 @@ def create_app(registry: Registry, pool: Any,
         if env.uid is None:
             return _login_redirect(request)
         from .render import render_password_page
-        return HTMLResponse(render_password_page(
-            env, current_path=str(request.url.path),
-        ))
+
+        return HTMLResponse(
+            render_password_page(
+                env,
+                current_path=str(request.url.path),
+            )
+        )
 
     @app.post("/web/account/password", response_class=HTMLResponse)
-    async def password_submit(request: Request,
-                              env: Environment = Depends(get_env)):
+    async def password_submit(request: Request, env: Environment = Depends(get_env)):
         if env.uid is None:
             return _auth_required_response(request)
         from .render import render_password_page
@@ -1204,7 +1310,9 @@ def create_app(registry: Registry, pool: Any,
         def reject(msg: str) -> HTMLResponse:
             return HTMLResponse(
                 render_password_page(
-                    env, current_path=str(request.url.path), error=msg,
+                    env,
+                    current_path=str(request.url.path),
+                    error=msg,
                 ),
                 status_code=422,
             )
@@ -1224,9 +1332,13 @@ def create_app(registry: Registry, pool: Any,
                 env["res.users"].browse(env.uid).write({"password": new})
         finally:
             env._acl_bypass = prev
-        return HTMLResponse(render_password_page(
-            env, current_path=str(request.url.path), success=True,
-        ))
+        return HTMLResponse(
+            render_password_page(
+                env,
+                current_path=str(request.url.path),
+                success=True,
+            )
+        )
 
     # ---- login / logout ----
 
@@ -1241,10 +1353,12 @@ def create_app(registry: Registry, pool: Any,
                 env = Environment(conn, registry=registry, uid=None)
                 if _resolve_user_from_session(env, token) is not None:
                     return RedirectResponse(next or "/web/admin", status_code=302)
-        return HTMLResponse(render_login_page(
-            next=next,
-            csrf_token=request.state.csrf_token,
-        ))
+        return HTMLResponse(
+            render_login_page(
+                next=next,
+                csrf_token=request.state.csrf_token,
+            )
+        )
 
     # ── /login rate limit ──
     # Per-IP sliding window. 5 attempts per 5 minutes; the 6th gets

@@ -16,6 +16,7 @@ Widgets are tiny functions: `(value, field_spec, field) -> Markup`.
 They MUST return a `markupsafe.Markup` to opt out of Jinja auto-escape;
 bare strings are escaped. This is the safety contract.
 """
+
 from __future__ import annotations
 
 import re
@@ -26,8 +27,18 @@ import jinja2
 from markupsafe import Markup, escape
 
 from .fields import (
-    Boolean, Char, Date, Datetime, Field, Float, Integer,
-    Many2many, Many2one, Monetary, One2many, Text,
+    Boolean,
+    Char,
+    Date,
+    Datetime,
+    Field,
+    Float,
+    Integer,
+    Many2many,
+    Many2one,
+    Monetary,
+    One2many,
+    Text,
 )
 
 
@@ -44,13 +55,17 @@ def widget(field_class: type, hint: str | None = None, mode: str = "display"):
     """Register a renderer for (field_class, hint) under `mode`.
     Decorator."""
     table = _registry if mode == "display" else _edit_registry
+
     def decorator(fn: WidgetRenderer) -> WidgetRenderer:
         table[(field_class, hint)] = fn
         return fn
+
     return decorator
 
 
-def find_renderer(field: Field, hint: str | None, mode: str = "display") -> WidgetRenderer:
+def find_renderer(
+    field: Field, hint: str | None, mode: str = "display"
+) -> WidgetRenderer:
     """Walk the field's MRO looking for an explicit hint match; fall
     back to a no-hint match at the same level; finally return the
     default renderer for the requested mode."""
@@ -187,7 +202,7 @@ def _render_toggle(value, spec, field):
         f'<span class="relative inline-block align-middle w-8 h-4 rounded-full {track}" '
         f'role="img" aria-label="{label}">'
         f'<span class="absolute top-0.5 {knob_pos} w-3 h-3 bg-white rounded-full transition-all"></span>'
-        f'</span>'
+        f"</span>"
     )
 
 
@@ -197,6 +212,7 @@ def _render_m2o(value, spec, field):
         return Markup('<span class="text-body-subtle/60">&mdash;</span>')
     # Use the same display-value rule as the JSON serializer.
     from .web import _display_value
+
     label = escape(_display_value(value))
     # When the spec was enriched with the comodel's form-view URL,
     # wrap the label in a quiet inline link with a small "open"
@@ -215,8 +231,8 @@ def _render_m2o(value, spec, field):
         f'<path stroke-linecap="round" stroke-linejoin="round" '
         f'd="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5'
         f'A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>'
-        f'</svg>'
-        f'</a>'
+        f"</svg>"
+        f"</a>"
     )
 
 
@@ -226,6 +242,7 @@ def _render_collection(value, spec, field):
     if not value:
         return Markup('<span class="text-gray-300">&mdash;</span>')
     from .web import _display_value
+
     parts: list[str] = []
     chip_cls = (
         "inline-flex items-center bg-gray-100 text-gray-700 "
@@ -236,15 +253,11 @@ def _render_collection(value, spec, field):
         "border-gray-300 text-gray-500 px-2 py-0.5 rounded-full text-xs"
     )
     for rec in list(value)[:3]:
-        parts.append(
-            f'<span class="{chip_cls}">{escape(_display_value(rec))}</span>'
-        )
+        parts.append(f'<span class="{chip_cls}">{escape(_display_value(rec))}</span>')
     total = len(value)
     if total > 3:
         parts.append(f'<span class="{more_cls}">+{total - 3}</span>')
-    return Markup(
-        f'<span class="inline-flex gap-1 flex-wrap">{"".join(parts)}</span>'
-    )
+    return Markup(f'<span class="inline-flex gap-1 flex-wrap">{"".join(parts)}</span>')
 
 
 def _resolve_o2m_table_fields(env, comodel_name, list_view_url):
@@ -259,12 +272,16 @@ def _resolve_o2m_table_fields(env, comodel_name, list_view_url):
         module, view_name = parts[-2], parts[-1]
         View = env["ir.ui.view"]
         match = View.search(
-            [("module", "=", module), ("name", "=", view_name),
-             ("view_type", "=", "list")],
+            [
+                ("module", "=", module),
+                ("name", "=", view_name),
+                ("view_type", "=", "list"),
+            ],
             limit=1,
         )
         if match:
             from .views import resolve_arch
+
             arch = resolve_arch(match)
             return list(arch.get("fields", []))
     # Fallback: every stored scalar on the comodel.
@@ -272,8 +289,7 @@ def _resolve_o2m_table_fields(env, comodel_name, list_view_url):
     return [
         {"name": fname}
         for fname, f in cls._fields.items()
-        if getattr(f, "is_stored", True)
-        and not isinstance(f, (One2many, Many2many))
+        if getattr(f, "is_stored", True) and not isinstance(f, (One2many, Many2many))
     ]
 
 
@@ -284,7 +300,11 @@ def _render_o2m_table(value, spec, field):
     Rows link to the comodel's form view. A footer "Add" button routes
     to the comodel's form-new endpoint with the inverse-FK prefilled
     from the parent record's id."""
-    env = value.env if value else (spec.get("_record").env if spec.get("_record") else None)
+    env = (
+        value.env
+        if value
+        else (spec.get("_record").env if spec.get("_record") else None)
+    )
     if env is None:
         return _render_collection(value, spec, field)
     comodel = spec.get("_comodel") or field.comodel_name
@@ -307,14 +327,14 @@ def _render_o2m_table(value, spec, field):
     for rec in list(value):
         cells = _render_cells(rec, fields_spec, mode="display")
         td_cells = "".join(
-            f'<td class="px-3 py-2 text-sm text-body">{c["html"]}</td>'
-            for c in cells
+            f'<td class="px-3 py-2 text-sm text-body">{c["html"]}</td>' for c in cells
         )
         href = f"{form_url}/record/{rec.id}" if form_url else None
         row_attrs = (
             f' class="hover:bg-neutral-secondary cursor-pointer transition-colors" '
             f'onclick="window.location.href={escape(repr(href))}"'
-            if href else ' class=""'
+            if href
+            else ' class=""'
         )
         body_rows.append(f"<tr{row_attrs}>{td_cells}</tr>")
 
@@ -331,7 +351,7 @@ def _render_o2m_table(value, spec, field):
             f'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
             f'<path stroke-linecap="round" stroke-linejoin="round" '
             f'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
-            f'Add</a></div>'
+            f"Add</a></div>"
         )
 
     header_html = "".join(
@@ -340,16 +360,20 @@ def _render_o2m_table(value, spec, field):
         for h in header_cells
     )
     empty_html = (
-        '<tr><td colspan="{}" class="px-3 py-4 text-center text-xs '
-        'text-body-subtle">No entries yet.</td></tr>'
-    ).format(len(header_cells)) if not body_rows else ""
+        (
+            '<tr><td colspan="{}" class="px-3 py-4 text-center text-xs '
+            'text-body-subtle">No entries yet.</td></tr>'
+        ).format(len(header_cells))
+        if not body_rows
+        else ""
+    )
 
     return Markup(
         f'<div class="border border-default rounded-lg overflow-hidden">'
         f'<table class="min-w-full divide-y divide-default">'
         f'<thead class="bg-neutral-secondary"><tr>{header_html}</tr></thead>'
         f'<tbody class="divide-y divide-default">{"".join(body_rows) or empty_html}</tbody>'
-        f'</table></div>{add_html}'
+        f"</table></div>{add_html}"
     )
 
 
@@ -367,14 +391,12 @@ def _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname):
         spec["_search_url"] = f"/api/m2o/search?model={field.comodel_name}"
         form_lookup = _form_view_for_model(env, field.comodel_name)
         spec["_form_view_url"] = (
-            f"/web/views/{form_lookup[0]}/{form_lookup[1]}"
-            if form_lookup else None
+            f"/web/views/{form_lookup[0]}/{form_lookup[1]}" if form_lookup else None
         )
     return spec
 
 
-def _render_o2m_edit_row(env, comodel_cls, rec_or_none, idx_token, oname,
-                         fields_spec):
+def _render_o2m_edit_row(env, comodel_cls, rec_or_none, idx_token, oname, fields_spec):
     """Render one editable `<tr>` of an inline-o2m table.
 
     `rec_or_none` is None for the blank template row (its idx is the
@@ -405,7 +427,8 @@ def _render_o2m_edit_row(env, comodel_cls, rec_or_none, idx_token, oname,
         renderer = find_renderer(sub_field, fs.get("widget"), mode="edit")
         if is_new:
             value = (
-                env[sub_field.comodel_name] if isinstance(sub_field, Many2one)
+                env[sub_field.comodel_name]
+                if isinstance(sub_field, Many2one)
                 else sub_field.default
             )
         else:
@@ -424,7 +447,7 @@ def _render_o2m_edit_row(env, comodel_cls, rec_or_none, idx_token, oname,
         'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
         '<path stroke-linecap="round" stroke-linejoin="round" '
         'd="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>'
-        '</svg></button></td>'
+        "</svg></button></td>"
     )
 
     return (
@@ -444,7 +467,11 @@ def _edit_o2m_table(value, spec, field):
     harvests the namespaced `<o2m_name>[<idx>][<sub>]` keys into a
     list of (op, id, vals) commands, and the form-save endpoint
     applies them inside the parent's transaction."""
-    env = value.env if value else (spec.get("_record").env if spec.get("_record") else None)
+    env = (
+        value.env
+        if value
+        else (spec.get("_record").env if spec.get("_record") else None)
+    )
     if env is None:
         return _render_o2m_table(value, spec, field)
     parent = spec.get("_record")
@@ -475,12 +502,17 @@ def _edit_o2m_table(value, spec, field):
         empty_html = (
             f'<tr data-pv-o2m-empty><td colspan="{len(fields_spec) + 1}" '
             f'class="px-3 py-4 text-center text-xs text-body-subtle">'
-            f'No entries yet.</td></tr>'
+            f"No entries yet.</td></tr>"
         )
 
     # Template row for client-side cloning.
     template_row = _render_o2m_edit_row(
-        env, co_cls, None, "__IDX__", oname, fields_spec,
+        env,
+        co_cls,
+        None,
+        "__IDX__",
+        oname,
+        fields_spec,
     )
 
     add_btn = (
@@ -492,35 +524,35 @@ def _edit_o2m_table(value, spec, field):
         'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
         '<path stroke-linecap="round" stroke-linejoin="round" '
         'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
-        'Add row</button></div>'
+        "Add row</button></div>"
     )
 
     next_idx = len(existing)
     js = (
-        '<script>(function(){\n'
-        'var root=document.currentScript.parentElement;\n'
+        "<script>(function(){\n"
+        "var root=document.currentScript.parentElement;\n"
         'var tbody=root.querySelector("tbody");\n'
         'var tmpl=root.querySelector("template[data-pv-o2m-template]");\n'
         'var addBtn=root.querySelector("[data-pv-o2m-add]");\n'
-        'var nextIdx=parseInt(root.dataset.pvO2mNext,10);\n'
+        "var nextIdx=parseInt(root.dataset.pvO2mNext,10);\n"
         'addBtn.addEventListener("click",function(){\n'
-        '  var html=tmpl.innerHTML.replace(/__IDX__/g,String(nextIdx++));\n'
-        '  var frag=document.createRange().createContextualFragment(html);\n'
+        "  var html=tmpl.innerHTML.replace(/__IDX__/g,String(nextIdx++));\n"
+        "  var frag=document.createRange().createContextualFragment(html);\n"
         '  var emptyRow=tbody.querySelector("[data-pv-o2m-empty]");\n'
-        '  if(emptyRow) emptyRow.remove();\n'
-        '  tbody.appendChild(frag);\n'
-        '});\n'
+        "  if(emptyRow) emptyRow.remove();\n"
+        "  tbody.appendChild(frag);\n"
+        "});\n"
         'root.addEventListener("click",function(e){\n'
         '  var btn=e.target.closest("[data-pv-o2m-delete]");\n'
-        '  if(!btn||!root.contains(btn)) return;\n'
+        "  if(!btn||!root.contains(btn)) return;\n"
         '  var tr=btn.closest("tr");\n'
-        '  if(!tr) return;\n'
+        "  if(!tr) return;\n"
         '  var op=tr.querySelector("input[name$=\\"[_op]\\"]");\n'
         '  if(op && op.value==="create"){ tr.remove(); return; }\n'
         '  if(op) op.value="delete";\n'
         '  tr.classList.add("opacity-40","line-through","pointer-events-none");\n'
-        '});\n'
-        '})();</script>'
+        "});\n"
+        "})();</script>"
     )
 
     return Markup(
@@ -531,9 +563,9 @@ def _edit_o2m_table(value, spec, field):
         f'<thead class="bg-neutral-secondary"><tr>{"".join(header_cells)}</tr></thead>'
         f'<tbody class="divide-y divide-default">'
         f'{"".join(body_rows) or empty_html}'
-        f'</tbody></table>'
-        f'<template data-pv-o2m-template>{template_row}</template>'
-        f'{js}</div>{add_btn}'
+        f"</tbody></table>"
+        f"<template data-pv-o2m-template>{template_row}</template>"
+        f"{js}</div>{add_btn}"
     )
 
 
@@ -576,8 +608,8 @@ def _edit_textarea(value, spec, field):
         f'<textarea name="{escape(spec["name"])}" rows="3" '
         f'placeholder="{placeholder}" '
         f'class="{_INPUT_CLS} resize-y"'
-        f'{_readonly_marker(spec)}{_required_marker(field)}>'
-        f'{val}</textarea>'
+        f"{_readonly_marker(spec)}{_required_marker(field)}>"
+        f"{val}</textarea>"
     )
 
 
@@ -607,7 +639,9 @@ def _edit_float(value, spec, field):
 def _edit_date(value, spec, field):
     val_attr = ""
     if value is not None:
-        val_attr = escape(value.isoformat() if hasattr(value, "isoformat") else str(value))
+        val_attr = escape(
+            value.isoformat() if hasattr(value, "isoformat") else str(value)
+        )
     return Markup(
         f'<input type="date" name="{escape(spec["name"])}" value="{val_attr}" '
         f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
@@ -639,7 +673,7 @@ def _edit_monetary(value, spec, field):
         if rounding > 0:
             step_attr = str(rounding)
     val_attr = str(value) if value is not None else ""
-    symbol = (ccy.symbol if ccy is not None and ccy.symbol else "")
+    symbol = ccy.symbol if ccy is not None and ccy.symbol else ""
     placeholder = escape(field.string or spec["name"])
     input_html = (
         f'<input type="number" step="{step_attr}" name="{escape(spec["name"])}" '
@@ -651,7 +685,7 @@ def _edit_monetary(value, spec, field):
     return Markup(
         f'<div class="flex items-center gap-1">'
         f'<span class="text-body-subtle text-sm">{escape(symbol)}</span>'
-        f'{input_html}</div>'
+        f"{input_html}</div>"
     )
 
 
@@ -669,7 +703,7 @@ def _edit_boolean(value, spec, field):
         f'<input type="checkbox" name="{escape(spec["name"])}" value="on" {checked} '
         f'class="w-4 h-4 rounded border-default bg-neutral-secondary '
         f'text-fg-brand checked:bg-fg-brand focus:ring-2 focus:ring-fg-brand cursor-pointer"'
-        f'{_readonly_marker(spec)}>'
+        f"{_readonly_marker(spec)}>"
     )
 
 
@@ -691,7 +725,7 @@ def _edit_m2o(value, spec, field):
             name=spec["name"],
             comodel=spec.get("_comodel") or field.comodel_name,
             search_url=spec.get("_search_url")
-                       or f"/api/m2o/search?model={field.comodel_name}",
+            or f"/api/m2o/search?model={field.comodel_name}",
             form_view_url=spec.get("_form_view_url"),
             initial_id=initial_id,
             initial_label=initial_label,
@@ -713,17 +747,16 @@ def _edit_m2m(value, spec, field):
     """
     from .web import _display_value
 
-    initial = [
-        {"id": rec.id, "label": _display_value(rec)}
-        for rec in value
-    ] if value else []
+    initial = (
+        [{"id": rec.id, "label": _display_value(rec)} for rec in value] if value else []
+    )
     partial = _env.get_template("widgets/m2m_input.html")
     return Markup(
         partial.render(
             name=spec["name"],
             comodel=spec.get("_comodel") or field.comodel_name,
             search_url=spec.get("_search_url")
-                       or f"/api/m2o/search?model={field.comodel_name}",
+            or f"/api/m2o/search?model={field.comodel_name}",
             initial=initial,
             readonly=bool(spec.get("readonly")),
         )
@@ -771,36 +804,28 @@ def _enrich_specs_for_edit(env, model_cls, fields_spec) -> list[dict]:
         field = model_cls._fields.get(fname)
         if isinstance(field, Many2one):
             spec_copy["_comodel"] = field.comodel_name
-            spec_copy["_search_url"] = (
-                f"/api/m2o/search?model={field.comodel_name}"
-            )
+            spec_copy["_search_url"] = f"/api/m2o/search?model={field.comodel_name}"
             view_lookup = _form_view_for_model(env, field.comodel_name)
             if view_lookup is not None:
                 module, view_name = view_lookup
-                spec_copy["_form_view_url"] = (
-                    f"/web/views/{module}/{view_name}"
-                )
+                spec_copy["_form_view_url"] = f"/web/views/{module}/{view_name}"
             else:
                 spec_copy["_form_view_url"] = None
         elif isinstance(field, Many2many):
             # M2m chip editor reuses the m2o search endpoint to find
             # candidate records (it's just ILIKE-on-name).
             spec_copy["_comodel"] = field.comodel_name
-            spec_copy["_search_url"] = (
-                f"/api/m2o/search?model={field.comodel_name}"
-            )
+            spec_copy["_search_url"] = f"/api/m2o/search?model={field.comodel_name}"
         elif isinstance(field, One2many):
             spec_copy["_comodel"] = field.comodel_name
             spec_copy["_inverse_name"] = field.inverse_name
             list_lookup = _list_view_for_model(env, field.comodel_name)
             spec_copy["_list_view_url"] = (
-                f"/web/views/{list_lookup[0]}/{list_lookup[1]}"
-                if list_lookup else None
+                f"/web/views/{list_lookup[0]}/{list_lookup[1]}" if list_lookup else None
             )
             form_lookup = _form_view_for_model(env, field.comodel_name)
             spec_copy["_form_view_url"] = (
-                f"/web/views/{form_lookup[0]}/{form_lookup[1]}"
-                if form_lookup else None
+                f"/web/views/{form_lookup[0]}/{form_lookup[1]}" if form_lookup else None
             )
         out.append(spec_copy)
     return out
@@ -854,10 +879,12 @@ def _build_rows(view, recordset, fields_spec) -> list[dict]:
     """For display-mode multi-row rendering."""
     out: list[dict] = []
     for record in recordset:
-        out.append({
-            "id": record.id,
-            "cells": _render_cells(record, fields_spec, mode="display"),
-        })
+        out.append(
+            {
+                "id": record.id,
+                "cells": _render_cells(record, fields_spec, mode="display"),
+            }
+        )
     return out
 
 
@@ -878,6 +905,7 @@ def _field_headers(model_cls, fields_spec) -> list[dict]:
     cleanly, so only those expose Group By entries.
     """
     from .fields import Boolean, Char, Many2one, Text
+
     out = []
     for spec in fields_spec:
         fname = spec["name"]
@@ -897,13 +925,15 @@ def _field_headers(model_cls, fields_spec) -> list[dict]:
             group_kind = "boolean"
         elif isinstance(field, (Char, Text)):
             filter_kind = "text"
-        out.append({
-            "name": fname,
-            "label": label or fname,
-            "filter_kind": filter_kind,
-            "group_kind": group_kind,
-            "comodel": comodel,
-        })
+        out.append(
+            {
+                "name": fname,
+                "label": label or fname,
+                "filter_kind": filter_kind,
+                "group_kind": group_kind,
+                "comodel": comodel,
+            }
+        )
     return out
 
 
@@ -1111,7 +1141,8 @@ def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
                 continue
             seq = (
                 form_data.getlist(fname)
-                if hasattr(form_data, "getlist") else [form_data[fname]]
+                if hasattr(form_data, "getlist")
+                else [form_data[fname]]
             )
             try:
                 ids = [int(v) for v in seq if v not in ("", None)]
@@ -1125,7 +1156,11 @@ def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
         if fname not in form_data:
             continue
         if isinstance(field, Boolean):
-            seq = form_data.getlist(fname) if hasattr(form_data, "getlist") else [form_data[fname]]
+            seq = (
+                form_data.getlist(fname)
+                if hasattr(form_data, "getlist")
+                else [form_data[fname]]
+            )
             last = seq[-1] if seq else ""
             vals[fname] = bool(last)
             continue
@@ -1172,10 +1207,17 @@ def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
 
 # ---- form view rendering ----
 
-def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
-                       errors: dict | None = None,
-                       submitted: dict | None = None,
-                       prefill: dict | None = None) -> list[dict]:
+
+def _form_section_html(
+    section_spec,
+    record_or_none,
+    env,
+    model_cls,
+    mode: str,
+    errors: dict | None = None,
+    submitted: dict | None = None,
+    prefill: dict | None = None,
+) -> list[dict]:
     """Build the per-field HTML for one section.
 
     Returns a list of cell dicts (`{name, label, required, error, html}`).
@@ -1210,7 +1252,11 @@ def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
             # both as recordsets so the widgets can render labels.
             raw = submitted[fname]
             if isinstance(field, Many2one):
-                value = env[field.comodel_name].browse(raw) if raw else env[field.comodel_name]
+                value = (
+                    env[field.comodel_name].browse(raw)
+                    if raw
+                    else env[field.comodel_name]
+                )
             elif isinstance(field, Many2many):
                 if raw:
                     value = env[field.comodel_name].browse(tuple(raw))
@@ -1223,14 +1269,16 @@ def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
                 raw = prefill[fname]
                 if isinstance(field, Many2one):
                     value = (
-                        env[field.comodel_name].browse(raw) if raw
+                        env[field.comodel_name].browse(raw)
+                        if raw
                         else env[field.comodel_name]
                     )
                 else:
                     value = raw
             else:
                 value = (
-                    env[field.comodel_name] if isinstance(field, Many2one)
+                    env[field.comodel_name]
+                    if isinstance(field, Many2one)
                     else field.default
                 )
         else:
@@ -1239,24 +1287,29 @@ def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
         spec_with_rec = {**spec, "_record": record_or_none}
         # Wide cells span both grid columns. O2m tables are full-width
         # so the embedded `<table>` isn't squished into half the form.
-        is_wide = (
-            isinstance(field, One2many) and spec.get("widget") == "table"
+        is_wide = isinstance(field, One2many) and spec.get("widget") == "table"
+        cells.append(
+            {
+                "name": fname,
+                "label": label,
+                "required": getattr(field, "required", False),
+                "error": errors.get(fname),
+                "wide": is_wide,
+                "html": renderer(value, spec_with_rec, field),
+            }
         )
-        cells.append({
-            "name": fname,
-            "label": label,
-            "required": getattr(field, "required", False),
-            "error": errors.get(fname),
-            "wide": is_wide,
-            "html": renderer(value, spec_with_rec, field),
-        })
     return cells
 
 
-def _form_sections(view, record_or_none, env, mode: str,
-                   errors: dict | None = None,
-                   submitted: dict | None = None,
-                   prefill: dict | None = None) -> list[dict]:
+def _form_sections(
+    view,
+    record_or_none,
+    env,
+    mode: str,
+    errors: dict | None = None,
+    submitted: dict | None = None,
+    prefill: dict | None = None,
+) -> list[dict]:
     from .views import resolve_arch
 
     arch = resolve_arch(view)
@@ -1264,14 +1317,22 @@ def _form_sections(view, record_or_none, env, mode: str,
     sections_spec = arch.get("sections", [])
     out: list[dict] = []
     for spec in sections_spec:
-        out.append({
-            "name": spec.get("name"),
-            "title": spec.get("title") or spec.get("name", ""),
-            "cells": _form_section_html(
-                spec, record_or_none, env, model_cls, mode,
-                errors=errors, submitted=submitted, prefill=prefill,
-            ),
-        })
+        out.append(
+            {
+                "name": spec.get("name"),
+                "title": spec.get("title") or spec.get("name", ""),
+                "cells": _form_section_html(
+                    spec,
+                    record_or_none,
+                    env,
+                    model_cls,
+                    mode,
+                    errors=errors,
+                    submitted=submitted,
+                    prefill=prefill,
+                ),
+            }
+        )
     return out
 
 
@@ -1287,7 +1348,7 @@ def _humanize_model(model_name: str, plural: bool = True) -> str:
     label = part.title()
     if plural:
         if label.endswith("s"):
-            pass                         # already plural
+            pass  # already plural
         elif label.endswith("y") and len(label) > 1:
             label = label[:-1] + "ies"
         else:
@@ -1317,12 +1378,19 @@ def _record_title(record_or_none, view_model: str, mode: str) -> str:
     return f"{view_model} #{record_or_none.id}"
 
 
-def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = False,
-                     current_path: str | None = None,
-                     errors: dict | None = None,
-                     submitted: dict | None = None,
-                     form_error: str | None = None,
-                     prefill: dict | None = None) -> str:
+def render_form_page(
+    view,
+    record_or_none,
+    env,
+    *,
+    mode: str,
+    body_only: bool = False,
+    current_path: str | None = None,
+    errors: dict | None = None,
+    submitted: dict | None = None,
+    form_error: str | None = None,
+    prefill: dict | None = None,
+) -> str:
     """Render the form HTML.
 
     `mode` is "display", "edit", or "new". For "new" the record is None
@@ -1337,8 +1405,13 @@ def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = 
     write — unique constraint, database error).
     """
     sections = _form_sections(
-        view, record_or_none, env, mode,
-        errors=errors, submitted=submitted, prefill=prefill,
+        view,
+        record_or_none,
+        env,
+        mode,
+        errors=errors,
+        submitted=submitted,
+        prefill=prefill,
     )
     title = _record_title(record_or_none, view.model, mode)
     template_name = "form_body.html" if body_only else "form.html"
@@ -1346,10 +1419,7 @@ def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = 
     # The form view doesn't have a menu entry — make the breadcrumb
     # come from the model's list view's group instead, with the
     # record's title as the leaf.
-    ctx = (
-        {} if body_only
-        else layout_context(env, current_path, leaf_label=title)
-    )
+    ctx = {} if body_only else layout_context(env, current_path, leaf_label=title)
     if not body_only:
         ctx["subtitle"] = f"{view.model} · {mode}"
     return template.render(
@@ -1365,6 +1435,7 @@ def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = 
 
 
 # ---- kanban view rendering ----
+
 
 def _render_field_label(record, spec: dict) -> dict:
     """Render one card field as `{label, html}`."""
@@ -1451,23 +1522,36 @@ def render_kanban_page(view, env, *, current_path: str | None = None) -> str:
     for grp in groups:
         cards = []
         for rec in grp["records"]:
-            cards.append({
-                "id": rec.id,
-                "title": _render_field_bare(rec, title_attr) if title_attr else Markup(""),
-                "subtitle": _render_field_bare(rec, subtitle_attr) if subtitle_attr else Markup(""),
-                "fields": [_render_field_label(rec, s) for s in fields_spec],
-                "badges": [_render_field_label(rec, s) for s in badges_spec],
-                "link": (
-                    f"/web/views/{view.module}/{form_view}/record/{rec.id}"
-                    if form_view else None
-                ),
-            })
-        columns.append({
-            "label": grp["label"],
-            "key": grp["key"],
-            "count": len(grp["records"]),
-            "cards": cards,
-        })
+            cards.append(
+                {
+                    "id": rec.id,
+                    "title": (
+                        _render_field_bare(rec, title_attr)
+                        if title_attr
+                        else Markup("")
+                    ),
+                    "subtitle": (
+                        _render_field_bare(rec, subtitle_attr)
+                        if subtitle_attr
+                        else Markup("")
+                    ),
+                    "fields": [_render_field_label(rec, s) for s in fields_spec],
+                    "badges": [_render_field_label(rec, s) for s in badges_spec],
+                    "link": (
+                        f"/web/views/{view.module}/{form_view}/record/{rec.id}"
+                        if form_view
+                        else None
+                    ),
+                }
+            )
+        columns.append(
+            {
+                "label": grp["label"],
+                "key": grp["key"],
+                "count": len(grp["records"]),
+                "cards": cards,
+            }
+        )
 
     page_title = _view_title(view, arch)
     template = _env.get_template("kanban.html")
@@ -1579,8 +1663,7 @@ def _parse_filters(model_cls, fields_spec: list, filters: str) -> list:
     # Normalize: convert legacy dict form into a chip list so the
     # rest of the function only deals with one shape.
     if isinstance(data, dict):
-        chips = [{"field": k, "op": "ilike", "value": v}
-                 for k, v in data.items()]
+        chips = [{"field": k, "op": "ilike", "value": v} for k, v in data.items()]
     elif isinstance(data, list):
         chips = data
     else:
@@ -1670,9 +1753,10 @@ def _safe_order(fields_spec: list, order: str) -> str:
     fields or 'id'.
     """
     import re
+
     if not order:
         return '"id" ASC'
-    m = re.fullmatch(r'(\w+)\s+(ASC|DESC)', order.strip(), re.IGNORECASE)
+    m = re.fullmatch(r"(\w+)\s+(ASC|DESC)", order.strip(), re.IGNORECASE)
     if not m:
         return '"id" ASC'
     field_name, direction = m.group(1), m.group(2).upper()
@@ -1682,7 +1766,9 @@ def _safe_order(fields_spec: list, order: str) -> str:
     return f'"{field_name}" {direction}'
 
 
-def _group_rows(records, view, fields_spec, group_by: str, env, model_cls) -> list[dict]:
+def _group_rows(
+    records, view, fields_spec, group_by: str, env, model_cls
+) -> list[dict]:
     """Bucket `records` by their `group_by` field value.
 
     Returns a list of `{key, label, count, rows}` dicts, ordered by
@@ -1723,19 +1809,29 @@ def _group_rows(records, view, fields_spec, group_by: str, env, model_cls) -> li
     groups = []
     for k in order:
         bucket = buckets[k]
-        groups.append({
-            "key": bucket["key"],
-            "label": bucket["label"],
-            "count": bucket["count"],
-            "rows": _build_rows(view, bucket["records"], fields_spec),
-        })
+        groups.append(
+            {
+                "key": bucket["key"],
+                "label": bucket["label"],
+                "count": bucket["count"],
+                "rows": _build_rows(view, bucket["records"], fields_spec),
+            }
+        )
     return groups
 
 
-def render_list_page(view, env, *, page: int, page_size: int,
-                     search: str = "", order: str = "", filters: str = "",
-                     group_by: str = "",
-                     current_path: str | None = None) -> str:
+def render_list_page(
+    view,
+    env,
+    *,
+    page: int,
+    page_size: int,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+    group_by: str = "",
+    current_path: str | None = None,
+) -> str:
     """Full HTML page for a list view: heading, toolbar, sortable DataTable
     with server-side search / ordering / pagination."""
     from .views import resolve_arch
@@ -1768,9 +1864,11 @@ def render_list_page(view, env, *, page: int, page_size: int,
     # Validate group_by against the headers' group_kind metadata. An
     # unknown column or one whose type doesn't group cleanly is silently
     # dropped — the value is user-controlled URL input.
-    safe_group_by = group_by if any(
-        h["name"] == group_by and h["group_kind"] != "none" for h in headers
-    ) else ""
+    safe_group_by = (
+        group_by
+        if any(h["name"] == group_by and h["group_kind"] != "none" for h in headers)
+        else ""
+    )
 
     total = Model.search_count(domain)
     if safe_group_by:
@@ -1818,7 +1916,17 @@ def render_list_page(view, env, *, page: int, page_size: int,
     )
 
 
-def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", order: str = "", filters: str = "", group_by: str = "") -> str:
+def render_list_rows(
+    view,
+    env,
+    *,
+    page: int,
+    page_size: int,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+    group_by: str = "",
+) -> str:
     """Table body fragment + oob pagination — used by HTMX control swaps."""
     from .views import resolve_arch
 
@@ -1841,9 +1949,11 @@ def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", 
 
     fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
     headers = _field_headers(model_cls, fields_spec)
-    safe_group_by = group_by if any(
-        h["name"] == group_by and h["group_kind"] != "none" for h in headers
-    ) else ""
+    safe_group_by = (
+        group_by
+        if any(h["name"] == group_by and h["group_kind"] != "none" for h in headers)
+        else ""
+    )
 
     total = Model.search_count(domain)
     if safe_group_by:
@@ -1883,8 +1993,9 @@ def render_list_rows(view, env, *, page: int, page_size: int, search: str = "", 
     )
 
 
-def render_password_page(env, *, current_path: str | None = None,
-                         error: str = "", success: bool = False) -> str:
+def render_password_page(
+    env, *, current_path: str | None = None, error: str = "", success: bool = False
+) -> str:
     """Self-service password-change form. The form lives outside the
     res.users edit flow because the bcrypt verification of the
     current password belongs to the user themselves; admins can still
@@ -1982,6 +2093,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
         }
     """
     from . import loader as _loader
+
     specs = _loader.discover(module_roots) if module_roots else {}
 
     installed: dict[str, str] = {}
@@ -2004,20 +2116,22 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
             state = "to_upgrade" if spec.version > installed_v else "installed"
         deps_missing = [d for d in spec.depends if d not in installed]
         deps_unknown = [d for d in deps_missing if d not in specs]
-        catalog.append({
-            "name": spec.name,
-            "summary": spec.summary,
-            "description": spec.description,
-            "category": spec.category or "Uncategorised",
-            "author": spec.author,
-            "icon": spec.icon,
-            "available_version": spec.version_str,
-            "installed_version": inst,
-            "state": state,
-            "depends": spec.depends,
-            "deps_missing": deps_missing,
-            "deps_unknown": deps_unknown,
-        })
+        catalog.append(
+            {
+                "name": spec.name,
+                "summary": spec.summary,
+                "description": spec.description,
+                "category": spec.category or "Uncategorised",
+                "author": spec.author,
+                "icon": spec.icon,
+                "available_version": spec.version_str,
+                "installed_version": inst,
+                "state": state,
+                "depends": spec.depends,
+                "deps_missing": deps_missing,
+                "deps_unknown": deps_unknown,
+            }
+        )
     catalog.sort(key=lambda c: (c["category"], c["name"]))
     return catalog
 
@@ -2043,7 +2157,8 @@ def install_module_action(env, module_roots: list, target_name: str) -> dict:
     # frontier.
     ordered = _loader.resolve_order(specs)
     installed = set(
-        r[0] for r in env.conn.execute(
+        r[0]
+        for r in env.conn.execute(
             f'SELECT "name" FROM "{_loader.IR_MODULE_TABLE}"'
         ).fetchall()
     )
@@ -2072,8 +2187,7 @@ def install_module_action(env, module_roots: list, target_name: str) -> dict:
         "installed": [s.name for s in to_install],
         "message": (
             f"Installed {target_name}"
-            + (f" + {len(to_install) - 1} dependencies"
-               if len(to_install) > 1 else "")
+            + (f" + {len(to_install) - 1} dependencies" if len(to_install) > 1 else "")
         ),
     }
 
@@ -2120,7 +2234,11 @@ def uninstall_preview(env, module_roots: list, target_name: str) -> dict:
         return {
             "target": target_name,
             "blockers": ["`base` is the system module and cannot be uninstalled."],
-            "tables": [], "views": 0, "menus": 0, "access": 0, "rules": 0,
+            "tables": [],
+            "views": 0,
+            "menus": 0,
+            "access": 0,
+            "rules": 0,
             "reverse_deps": [],
         }
 
@@ -2141,9 +2259,7 @@ def uninstall_preview(env, module_roots: list, target_name: str) -> dict:
         if s and target_name in s.depends:
             reverse_deps.append(n)
     if reverse_deps:
-        blockers.append(
-            f"Still depended on by: {', '.join(sorted(reverse_deps))}"
-        )
+        blockers.append(f"Still depended on by: {', '.join(sorted(reverse_deps))}")
 
     # Modules that extend other models via _inherit aren't safely
     # reversible today — the new columns sit on tables owned by
@@ -2207,20 +2323,15 @@ def uninstall_module_action(env, module_roots: list, target_name: str) -> dict:
     with env.transaction():
         for table in preview["tables"]:
             env.conn.execute(f'DROP TABLE IF EXISTS "{table}" CASCADE')
-        env.conn.execute(
-            'DELETE FROM "ir_ui_view" WHERE "module" = %s', [target_name]
-        )
-        env.conn.execute(
-            'DELETE FROM "ir_ui_menu" WHERE "module" = %s', [target_name]
-        )
-        env.conn.execute(
-            'DELETE FROM "ir_module" WHERE "name" = %s', [target_name]
-        )
+        env.conn.execute('DELETE FROM "ir_ui_view" WHERE "module" = %s', [target_name])
+        env.conn.execute('DELETE FROM "ir_ui_menu" WHERE "module" = %s', [target_name])
+        env.conn.execute('DELETE FROM "ir_module" WHERE "name" = %s', [target_name])
         # Forget the module's models from the live registry so future
         # /web/apps catalog passes show it as Not installed.
         registry = env.registry
         forgotten = [
-            mn for mn, owner in list(registry._model_module.items())
+            mn
+            for mn, owner in list(registry._model_module.items())
             if owner == target_name
         ]
         for mn in forgotten:
@@ -2234,8 +2345,7 @@ def uninstall_module_action(env, module_roots: list, target_name: str) -> dict:
     }
 
 
-def render_apps_page(env, module_roots: list,
-                     current_path: str | None = None) -> str:
+def render_apps_page(env, module_roots: list, current_path: str | None = None) -> str:
     """Read-only Apps catalog at `/web/apps`. Slice 2 adds the install /
     upgrade actions on top of the same template."""
     catalog = _apps_catalog(env, module_roots)
@@ -2287,9 +2397,11 @@ def _menu(env, current_path: str | None) -> list[dict]:
 
     def _mark(item: dict) -> dict:
         href = item.get("href")
-        active = bool(href and current_path and (
-            current_path == href or current_path.startswith(href + "/")
-        ))
+        active = bool(
+            href
+            and current_path
+            and (current_path == href or current_path.startswith(href + "/"))
+        )
         item["active"] = active
         for child in item.get("children", []) or []:
             _mark(child)
@@ -2301,8 +2413,9 @@ def _menu(env, current_path: str | None) -> list[dict]:
     env._acl_bypass = True
     try:
         Menu = env["ir.ui.menu"]
-        records = Menu.search([("active", "=", True)],
-                              order='"sequence" ASC, "label" ASC')
+        records = Menu.search(
+            [("active", "=", True)], order='"sequence" ASC, "label" ASC'
+        )
         by_parent: dict[int | None, list[dict]] = {}
         for r in records:
             entry = {
@@ -2333,8 +2446,9 @@ def _menu(env, current_path: str | None) -> list[dict]:
     return [_mark(item) for item in items]
 
 
-def build_breadcrumbs(menu_tree: list, current_path: str | None,
-                      leaf_label: str | None = None) -> list[dict]:
+def build_breadcrumbs(
+    menu_tree: list, current_path: str | None, leaf_label: str | None = None
+) -> list[dict]:
     """Derive crumbs from the menu structure.
 
     Walks the menu looking for a child whose `href` matches `current_path`.
@@ -2372,8 +2486,9 @@ def build_breadcrumbs(menu_tree: list, current_path: str | None,
     return crumbs
 
 
-def layout_context(env, current_path: str | None = None,
-                   leaf_label: str | None = None) -> dict:
+def layout_context(
+    env, current_path: str | None = None, leaf_label: str | None = None
+) -> dict:
     """Return the shell context every page renderer passes to the
     `layouts/main.html` base template."""
     name = ""
