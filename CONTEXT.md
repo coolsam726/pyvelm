@@ -414,6 +414,32 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     `ArchSection`, `Manifest`) — missing required keys now squiggle
     at edit time instead of failing at install.
 
+  ✅ **Stage 6 hardening — cron runner + outgoing-mail dispatcher**:
+  - `pyvelm.cli.cron_loop` + `pyvelm-cron` console_script tick
+    `CronJob.run_due` at `PYVELM_CRON_INTERVAL` (default 60s).
+    SIGTERM/SIGINT graceful drain. Dedicated `cron` service in
+    docker-compose, pinned at replicas: 1 because run_due does plain
+    SELECT-then-UPDATE (FOR UPDATE SKIP LOCKED is the future fix).
+  - `mail.message` gains `recipient_email` / `subject` / `state`
+    (outgoing/sent/failed) / `error`. `Message.dispatch_outgoing(env)`
+    drains the queue via a pluggable backend (`PYVELM_MAIL_BACKEND` =
+    `console` | `disabled` | `smtp` with PYVELM_SMTP_* knobs).
+    `MailThread.notify()` is the queue-it-and-log sugar. base/hooks
+    seeds the dispatcher cron + server action; 0_8_to_0_9 migration
+    adds the columns + calls the same seed for upgraded installs.
+    base bumped to 0.9.0.
+
+  ✅ **Bundled modules**: `base` + `admin` now ship inside the wheel
+  at `pyvelm/modules/<name>/`. `pyvelm.BUILTIN_MODULE_ROOTS` is the
+  single-entry list apps prepend to their discovery roots; the
+  `pyvelm-cron` CLI prepends it automatically. A poison
+  `pyvelm/modules/__init__.py` prevents `pyvelm.modules.base` from
+  being importable (would double-register every model class). The
+  Tags settings view + menu entry moved from `admin` to `partners`
+  since partners owns `res.tag`; partners contributes a leaf under
+  `admin.settings` via cross-module menu parenting. The framework
+  vs example-addon boundary is now explicit.
+
 Next focus options:
   - **Documents & attachments**: `ir.attachment` model + on-disk
     storage backend + upload endpoint + form widget. Touches MIME
@@ -421,8 +447,8 @@ Next focus options:
   - **Reporting / dashboards**: new `graph` or `pivot` view type
     backed by SQL aggregation. Builds out a read-side aggregation
     layer (none today) for charts / KPIs / exports.
-  - **Stage 6 hardening**: Cron as a real background task, SMTP
-    mail dispatch, message subtypes, followers/subscriptions.
+  - **Stage 6 Slice 3**: message subtypes + followers/subscriptions
+    layered on the dispatcher.
 
 Still deferred: cache snapshot on transaction rollback, O2m/M2m
 caching + old-value snapshotting, auto-diff schema migrations,
