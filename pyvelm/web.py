@@ -1227,14 +1227,19 @@ def create_app(
     ):
         """Execute a single cron job on demand.
 
-        Bypasses the schedule (does not touch ``nextcall``). Stamps
-        ``lastcall``. Admin-gated since cron actions can be arbitrary
-        Python via ``ir.actions.server`` ``action_type="code"``.
+        Stamps ``lastcall`` and advances ``nextcall``. Admin-gated
+        since cron actions can be arbitrary Python via
+        ``ir.actions.server`` ``action_type="code"``.
 
-        Returns 204 plus an ``HX-Trigger: pv-alert-request`` event so
-        the layout's toast picks up the success / failure message.
+        Returns the re-rendered ``cron.form`` body so the
+        ``hx-target="#pyvelm-form-shell"`` swap immediately shows the
+        new ``lastcall`` / ``nextcall`` values (localized to the
+        active company's tz). Adds an ``HX-Trigger: pv-toast`` event
+        so the layout's toast surfaces success / failure.
         """
         import json as _json
+
+        from .render import render_form_page
 
         if env.uid is None:
             return _auth_required_response(request)
@@ -1248,8 +1253,12 @@ def create_app(
             message = f"Ran {job.name!r}"
         except Exception as exc:  # noqa: BLE001
             message = f"Failed: {exc}"
-        return Response(
-            status_code=204,
+        view = _load_view(env, "admin", "cron.form")
+        html = render_form_page(
+            view, job, env, mode="display", body_only=True,
+        )
+        return HTMLResponse(
+            html,
             headers={
                 "HX-Trigger": _json.dumps({"pv-toast": message}),
             },

@@ -25,7 +25,8 @@
                            border border-default text-body rounded-md hover:bg-neutral-secondary transition"
                     hx-{{ act.method | lower }}="{{ act.url }}"
                     {% if act.confirm %}hx-confirm="{{ act.confirm }}"{% endif %}
-                    hx-swap="none">
+                    hx-target="#pyvelm-form-shell"
+                    hx-swap="innerHTML">
                 {{ act.label }}
             </button>
             {% endfor %}
