@@ -421,18 +421,30 @@ def _render_o2m_table(value, spec, field):
     recs = list(value)
     if sequence_field:
         recs.sort(key=lambda r: (getattr(r, sequence_field) or 0, r.id))
+    # Display-mode o2m rows and the "+ Add" button open the comodel's
+    # form inside the global floating dialog (alternative to inline
+    # editing). The `data-pv-dialog` attribute is handled by the
+    # delegated click listener in layouts/main.html — it loads `href`
+    # into the dialog body, and `data-pv-dialog-refresh` opts into a
+    # re-fetch of the host form's shell once the save succeeds so the
+    # table re-renders with the freshly-edited / created child row.
+    # No fallback navigation is needed: the click handler runs before
+    # the browser follows the link.
     for rec in recs:
         cells = _render_cells(rec, fields_spec, mode="display")
         td_cells = "".join(
             f'<td class="px-3 py-2 text-sm text-body">{c["html"]}</td>' for c in cells
         )
         href = f"{form_url}/record/{rec.id}" if form_url else None
-        row_attrs = (
-            f' class="hover:bg-neutral-secondary cursor-pointer transition-colors" '
-            f'onclick="window.location.href={escape(repr(href))}"'
-            if href
-            else ' class=""'
-        )
+        if href:
+            row_attrs = (
+                f' class="hover:bg-neutral-secondary cursor-pointer transition-colors"'
+                f' data-pv-dialog data-pv-dialog-refresh'
+                f' data-pv-dialog-title="Edit"'
+                f' data-pv-dialog-url="{escape(href)}"'
+            )
+        else:
+            row_attrs = ' class=""'
         body_rows.append(f"<tr{row_attrs}>{td_cells}</tr>")
 
     parent = spec.get("_record")
@@ -442,6 +454,8 @@ def _render_o2m_table(value, spec, field):
         add_html = (
             f'<div class="mt-2 flex justify-end">'
             f'<a href="{escape(add_href)}" '
+            f'data-pv-dialog data-pv-dialog-refresh '
+            f'data-pv-dialog-title="New" '
             f'class="inline-flex items-center gap-1 text-xs font-medium '
             f'text-fg-brand hover:underline">'
             f'<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '

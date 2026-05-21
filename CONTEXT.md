@@ -530,6 +530,63 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     `ADD COLUMN IF NOT EXISTS` so existing rows keep `NULL` (= no
     avatar, renders as initial-circle).
 
+  ✅ **Session-token rotation + draggable form dialog**:
+  - Self-service `/web/account/password` POST now mints a fresh
+    `session_token` and writes `{password, session_token}` in the
+    same atomic update, then sets the new value back on the response
+    cookie. All *other* browser sessions for the same user lose
+    their lookup match on the next request (we store a single token
+    per user) and the current tab stays signed in — symmetric to the
+    admin-reset flow which already wiped the token to kick the user
+    out of every device.
+  - New layout-level component `pvFormDialog` + `window.PvDialog`
+    imperative API. A single floating card (the only one — nested
+    dialogs replace rather than stack, deferred to a future
+    iteration) loaded via `htmx.ajax` into a `[data-pv-form-shell]`
+    body. Drag by the title bar (clamped so 60px of the card stays
+    in viewport), close by X / ESC / backdrop (backdrop opt-in via
+    `closeOnBackdrop`). HTMX requests fired from inside the body get
+    a `X-PV-Dialog: 1` header injected via a `htmx:configRequest`
+    listener; the server uses that to switch the form-save / form-
+    create routes' success path from a body swap to
+    `204 + HX-Trigger: pv-dialog-saved` carrying
+    `{id, label, model}`. The dialog listens for `pv-dialog-saved`
+    on the window, closes itself, and hands the payload to the
+    opener's `onResult` callback.
+  - Form-body buttons switched from `hx-target="#pyvelm-form-shell"`
+    to `hx-target="closest [data-pv-form-shell]"` so the same
+    markup works for the page form (shell wrapper in `form.html`)
+    and for the dialog (its body is the wrapper). Likewise `Save`
+    and `Create` switched their `hx-include` to
+    `closest [data-pv-form-shell]` so they grab the inputs of the
+    surrounding shell rather than a globally-resolved `#pyvelm-form`
+    (which would collide when the page also has a form behind the
+    dialog). `web_form_new` learned to honor `HX-Request: true` and
+    return the body-only fragment so the dialog can drop the form
+    straight into its body without the page chrome.
+  - Two consumers wired:
+    * M2o combobox's "Create and edit" no longer navigates away —
+      it calls `PvDialog.open({url: '<form_view>/new?name=<query>'})`
+      with the current search query prefilled as the `name`. On
+      `onResult({id, label})` the combobox `pick`s the new value,
+      so the parent form keeps composing.
+    * O2m table (display mode) rows and the "+ Add" footer link
+      both now carry `data-pv-dialog data-pv-dialog-refresh`. The
+      delegated click handler in `layouts/main.html` loads the
+      target URL into the dialog, and on save fires
+      `htmx.ajax('GET', location.pathname, ...)` against the
+      outermost `[data-pv-form-shell]` so the o2m table re-renders
+      with the freshly-edited / created child row.
+  - In-form toolbar buttons that would navigate the host page out
+    from under the dialog (new-mode `Cancel` calling `history.back`,
+    display-mode `Delete` doing the same on success) carry
+    `data-pv-hide-in-dialog`. A CSS rule
+    `.pv-fdialog-card [data-pv-hide-in-dialog] { display: none }`
+    hides them inside the dialog only; the page-level form still
+    shows them. The dialog's own X / ESC / backdrop cover cancel,
+    and deletion is still reachable from the comodel's full-page
+    form.
+
 Next focus options:
   - **Reporting / dashboards**: new `graph` or `pivot` view type
     backed by SQL aggregation. Builds out a read-side aggregation
@@ -540,9 +597,10 @@ Next focus options:
     alongside `LocalStorageBackend` for remote blob storage.
 
 Still deferred: cache snapshot on transaction rollback, O2m/M2m
-caching + old-value snapshotting, "Create and edit…" modal for the
-m2o combobox (currently navigates to /new), m2o result caching
-beyond in-flight requests, O2m editing widget (only M2m has one),
-session-token rotation on password change, shared-store rate
-limiter for multi-worker deployments, one-shot "run migrations
-once before workers start" entrypoint. None pressing.
+caching + old-value snapshotting, m2o result caching beyond
+in-flight requests, O2m editing widget (only M2m has one),
+shared-store rate limiter for multi-worker deployments,
+nested/stacked dialogs (current dialog is single-instance — a
+second `PvDialog.open()` replaces the body rather than stacking),
+one-shot "run migrations once before workers start" entrypoint.
+None pressing.

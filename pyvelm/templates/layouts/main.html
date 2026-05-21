@@ -71,6 +71,38 @@
 
       /* Slightly tinted backdrop on the global dialog. */
       #pv-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+
+      /* Floating draggable form dialog (pvFormDialog). Sits above
+         everything; the card is positioned absolutely so the drag
+         handler can update left/top directly. The default position
+         is set by the JS center() helper after the body loads. */
+      .pv-fdialog-backdrop {
+        position: fixed; inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 60;
+      }
+      .pv-fdialog-card {
+        position: fixed;
+        z-index: 61;
+        display: flex; flex-direction: column;
+        width: min(90vw, 720px);
+        max-height: 85vh;
+        background: var(--color-neutral-primary);
+        color: var(--color-body);
+        border: 1px solid var(--color-border-default);
+        border-radius: 0.75rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+      }
+      .pv-fdialog-card.is-dragging { cursor: grabbing; user-select: none; }
+      .pv-fdialog-title { cursor: grab; user-select: none; }
+      .pv-fdialog-title:active { cursor: grabbing; }
+      /* Toolbar buttons that would navigate the host page out from
+         under the dialog (in-form Cancel, Delete-then-history.back)
+         are hidden when rendered inside the dialog — the dialog's
+         own X button + ESC + backdrop already cover cancel, and
+         deletion is handled from the comodel's full-page form. */
+      .pv-fdialog-card [data-pv-hide-in-dialog] { display: none; }
     </style>
 
     {% block head_extra %}{% endblock %}
@@ -417,6 +449,54 @@
     </dialog>
 </div>
 
+{# ───── Floating draggable form dialog ───── #}
+{# Mounted once globally; opened imperatively via `window.PvDialog.open(...)`
+   or declaratively by clicking any element carrying `data-pv-dialog` (the
+   element's `href` or `data-pv-dialog-url` is loaded into the body via
+   HTMX). Inspired by Odoo's draggable record dialogs — drag the title bar
+   to reposition without losing the in-flight form. The body wraps loaded
+   content in a `[data-pv-form-shell]` div so the standard form-body
+   buttons (Save / Cancel / Edit) target the dialog's own shell via
+   `hx-target="closest [data-pv-form-shell]"` rather than the page form
+   behind us. #}
+<div x-data="pvFormDialog()"
+     @keydown.escape.window="open && close()"
+     @pv-dialog-saved.window="onSaved($event)">
+    <template x-if="open">
+        <div>
+            <div class="pv-fdialog-backdrop"
+                 @click="closeOnBackdrop && close()"></div>
+            <div class="pv-fdialog-card"
+                 :class="{ 'is-dragging': dragging }"
+                 x-ref="card"
+                 :style="cardStyle">
+                <div class="pv-fdialog-title flex items-center justify-between
+                            px-4 py-3 border-b border-default bg-neutral-secondary"
+                     @mousedown="startDrag($event)">
+                    <h3 class="text-sm font-semibold text-heading truncate"
+                        x-text="title || 'Dialog'"></h3>
+                    <button type="button" @click.stop="close()"
+                            aria-label="Close"
+                            class="p-1 rounded text-body-subtle hover:text-heading">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div data-pv-form-shell
+                     x-ref="body"
+                     class="flex-1 overflow-auto p-4">
+                    <template x-if="loading">
+                        <p class="text-sm text-body-subtle">Loading…</p>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
+
 <script>
     document.addEventListener('alpine:init', () => {
         // Shared sidebar / theme / nav-active state.
@@ -515,6 +595,195 @@
                 if (this.variant === 'success') return base + ' bg-success';
                 if (this.variant === 'warning') return base + ' bg-warning';
                 return base + ' bg-fg-brand';
+            },
+        }));
+
+        // ── Draggable form dialog ──
+        // Hosts an HTMX-loaded HTML body in a floating, draggable card.
+        // Public API:
+        //   window.PvDialog.open({url, title, closeOnBackdrop, onResult})
+        //   window.PvDialog.close(result?)
+        // The body marks itself with `data-pv-form-shell` so the standard
+        // form-body buttons (Save / Cancel / Edit) target the dialog's
+        // own shell via `hx-target="closest [data-pv-form-shell]"`. The
+        // server signals a successful create/save by returning 204 +
+        // `HX-Trigger: pv-dialog-saved` carrying `{id, label, model}`,
+        // which closes the dialog and invokes `onResult(result)`. Any
+        // request originating from inside the body gets tagged with
+        // `X-PV-Dialog: 1` so the server knows to emit that trigger.
+        Alpine.data('pvFormDialog', () => ({
+            open: false,
+            loading: false,
+            title: '',
+            closeOnBackdrop: false,
+            dragging: false,
+            _x: null, _y: null,           // current top-left position (px)
+            _dragOffset: null,            // mousedown offset within title bar
+            _resolve: null,               // onResult callback from opener
+            _moveHandler: null,
+            _upHandler: null,
+
+            init() {
+                // Imperative entry point — bind once.
+                window.PvDialog = {
+                    open: (cfg) => this.openWith(cfg || {}),
+                    close: (result) => this.closeWith(result),
+                };
+                // Tag every htmx request fired from inside the dialog
+                // body so the server can switch to the 204+trigger
+                // success contract.
+                document.body.addEventListener('htmx:configRequest', (ev) => {
+                    if (!this.open) return;
+                    const body = this.$refs.body;
+                    if (body && body.contains(ev.detail.elt)) {
+                        ev.detail.headers['X-PV-Dialog'] = '1';
+                    }
+                });
+                // Delegated trigger: any element carrying
+                // `data-pv-dialog` opens the dialog with its `href`
+                // (or `data-pv-dialog-url`). The optional callbacks
+                // hook via `data-pv-dialog-refresh` (when set, hits
+                // the current pathname again to reload the parent
+                // form's body after a save — used by o2m tables).
+                document.addEventListener('click', (e) => {
+                    const trigger = e.target.closest('[data-pv-dialog]');
+                    if (!trigger) return;
+                    const url = trigger.dataset.pvDialogUrl
+                        || trigger.getAttribute('href');
+                    if (!url) return;
+                    e.preventDefault();
+                    const refresh = trigger.hasAttribute('data-pv-dialog-refresh');
+                    this.openWith({
+                        url,
+                        title: trigger.dataset.pvDialogTitle || 'Edit',
+                        onResult: (result) => {
+                            if (refresh && result && result.id) {
+                                // Re-fetch the parent form into its
+                                // own shell. The parent shell carries
+                                // [data-pv-form-shell]; we want the
+                                // outermost (page-level) one, not the
+                                // dialog's own which has already
+                                // closed by this point.
+                                const shells = document.querySelectorAll(
+                                    '[data-pv-form-shell]');
+                                const pageShell = shells.length
+                                    ? shells[0] : null;
+                                if (pageShell && window.htmx) {
+                                    window.htmx.ajax('GET',
+                                        window.location.pathname,
+                                        { target: pageShell, swap: 'innerHTML' });
+                                }
+                            }
+                        },
+                    });
+                });
+            },
+
+            get cardStyle() {
+                if (this._x === null || this._y === null) {
+                    // Centered fallback before we measure the card.
+                    return 'left: 50%; top: 12vh; transform: translateX(-50%);';
+                }
+                return `left: ${this._x}px; top: ${this._y}px;`;
+            },
+
+            async openWith(cfg) {
+                this.title = cfg.title || '';
+                this.closeOnBackdrop = !!cfg.closeOnBackdrop;
+                this._resolve = cfg.onResult || null;
+                this._x = null;
+                this._y = null;
+                this.loading = true;
+                this.open = true;
+                await this.$nextTick();
+                try {
+                    if (cfg.url && window.htmx) {
+                        // `htmx.ajax` processes the swapped DOM so
+                        // hx-* attributes inside the loaded body
+                        // (Save button etc.) are wired up. Alpine's
+                        // MutationObserver picks up the x-data
+                        // widgets automatically.
+                        await window.htmx.ajax('GET', cfg.url, {
+                            target: this.$refs.body,
+                            swap: 'innerHTML',
+                        });
+                    }
+                } finally {
+                    this.loading = false;
+                    await this.$nextTick();
+                    this.center();
+                }
+            },
+
+            onSaved(ev) {
+                if (!this.open) return;
+                // The HX-Trigger detail is the JSON payload we set
+                // server-side: { id, label, model }.
+                this.closeWith(ev.detail || null);
+            },
+
+            closeWith(result) {
+                const cb = this._resolve;
+                this._resolve = null;
+                this.open = false;
+                this.title = '';
+                this.loading = false;
+                this._x = null;
+                this._y = null;
+                if (cb) {
+                    try { cb(result || null); } catch (_) {}
+                }
+            },
+
+            close() { this.closeWith(null); },
+
+            center() {
+                const card = this.$refs.card;
+                if (!card) return;
+                const rect = card.getBoundingClientRect();
+                this._x = Math.max(8, Math.round(
+                    (window.innerWidth - rect.width) / 2));
+                this._y = Math.max(8, Math.round(
+                    Math.min(window.innerHeight * 0.12,
+                             (window.innerHeight - rect.height) / 2)));
+            },
+
+            startDrag(ev) {
+                if (ev.button !== 0) return; // left button only
+                const card = this.$refs.card;
+                if (!card) return;
+                ev.preventDefault();
+                const rect = card.getBoundingClientRect();
+                // Lock in current pixel position before swapping
+                // from transform-centered to absolute coords.
+                this._x = Math.round(rect.left);
+                this._y = Math.round(rect.top);
+                this._dragOffset = {
+                    x: ev.clientX - rect.left,
+                    y: ev.clientY - rect.top,
+                };
+                this.dragging = true;
+                this._moveHandler = (e) => {
+                    // Keep at least the title bar on-screen so the
+                    // user can always grab the dialog again.
+                    const w = card.offsetWidth || 320;
+                    const h = card.offsetHeight || 60;
+                    const maxX = window.innerWidth - 60;
+                    const maxY = window.innerHeight - 40;
+                    const nx = e.clientX - this._dragOffset.x;
+                    const ny = e.clientY - this._dragOffset.y;
+                    this._x = Math.max(-w + 60, Math.min(maxX, nx));
+                    this._y = Math.max(0, Math.min(maxY, ny));
+                };
+                this._upHandler = () => {
+                    this.dragging = false;
+                    document.removeEventListener('mousemove', this._moveHandler);
+                    document.removeEventListener('mouseup', this._upHandler);
+                    this._moveHandler = null;
+                    this._upHandler = null;
+                };
+                document.addEventListener('mousemove', this._moveHandler);
+                document.addEventListener('mouseup', this._upHandler);
             },
         }));
 
@@ -774,7 +1043,36 @@
             },
             createAndEdit() {
                 if (!this.formViewUrl) return;
-                window.location.href = this.formViewUrl + '/new';
+                this.open = false;
+                // Pre-fill the new record's name with whatever the
+                // user has been typing so the dialog opens "warm".
+                const q = (this.query || '').trim();
+                const url = this.formViewUrl + '/new'
+                    + (q ? '?name=' + encodeURIComponent(q) : '');
+                const title = q ? `New "${q}"` : 'Create new';
+                if (!window.PvDialog) {
+                    // Fallback for old layouts without the dialog —
+                    // keep the previous full-page navigation working.
+                    window.location.href = url;
+                    return;
+                }
+                window.PvDialog.open({
+                    url,
+                    title,
+                    onResult: (result) => {
+                        if (result && result.id) {
+                            const item = {
+                                id: result.id,
+                                label: result.label || String(result.id),
+                            };
+                            this.results = [
+                                item,
+                                ...this.results.filter(x => x.id !== item.id),
+                            ];
+                            this.pick(item);
+                        }
+                    },
+                });
             },
         }));
 

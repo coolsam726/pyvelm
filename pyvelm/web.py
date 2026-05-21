@@ -897,12 +897,17 @@ def create_app(
                     continue
             else:
                 prefill[k] = v
+        # Body-only fragments are returned to HTMX-initiated GETs so
+        # the floating dialog can drop the form straight into its
+        # body without the layout chrome (sidebar, header, etc.).
+        body_only = request.headers.get("HX-Request") == "true"
         return HTMLResponse(
             render_form_page(
                 view,
                 None,
                 env,
                 mode="new",
+                body_only=body_only,
                 current_path=str(request.url.path),
                 prefill=prefill or None,
             )
@@ -1038,6 +1043,25 @@ def create_app(
                 ofield = cls._fields.get(oname)
                 if ofield is not None:
                     env.cache.invalidate(model_name=ofield.comodel_name)
+        # When the form is being saved inside the floating dialog (the
+        # client tags the request with X-PV-Dialog: 1), we don't want
+        # to swap the dialog body with the display-mode form — the
+        # dialog is about to close. Returning 204 + HX-Trigger tells
+        # HTMX to skip the swap and fires the JS event the dialog
+        # listens to in order to close and hand the result back to
+        # its caller.
+        if request.headers.get("X-PV-Dialog") == "1":
+            payload = {
+                "id": rec.id,
+                "label": _display_value(rec),
+                "model": view.model,
+            }
+            return Response(
+                status_code=204,
+                headers={
+                    "HX-Trigger": json.dumps({"pv-dialog-saved": payload}),
+                },
+            )
         return HTMLResponse(
             render_form_page(
                 view,
@@ -1109,6 +1133,23 @@ def create_app(
                 ofield = cls._fields.get(oname)
                 if ofield is not None:
                     env.cache.invalidate(model_name=ofield.comodel_name)
+        # See the matching block in ``web_form_save``: dialog-launched
+        # creates respond with a 204 + HX-Trigger so the floating
+        # dialog closes and hands ``{id, label, model}`` back to the
+        # opener (the m2o combobox's "Create and edit", an o2m table's
+        # "Add" button, etc.).
+        if request.headers.get("X-PV-Dialog") == "1":
+            payload = {
+                "id": rec.id,
+                "label": _display_value(rec),
+                "model": view.model,
+            }
+            return Response(
+                status_code=204,
+                headers={
+                    "HX-Trigger": json.dumps({"pv-dialog-saved": payload}),
+                },
+            )
         return HTMLResponse(
             render_form_page(
                 view,
@@ -1475,19 +1516,36 @@ def create_app(
         if new == current:
             return reject("New password must differ from the current one.")
 
+        # Rotate the session token along with the password write so any
+        # other browser session holding the old token is ejected on its
+        # next request. The current session stays alive — we mint a
+        # fresh token, persist it in the same atomic write, and refresh
+        # the cookie on the response below.
+        new_token = secrets.token_hex(32)
         env._acl_bypass = True
         try:
             with env.transaction():
-                env["res.users"].browse(env.uid).write({"password": new})
+                env["res.users"].browse(env.uid).write({
+                    "password": new,
+                    "session_token": new_token,
+                })
         finally:
             env._acl_bypass = prev
-        return HTMLResponse(
+        response = HTMLResponse(
             render_password_page(
                 env,
                 current_path=str(request.url.path),
                 success=True,
             )
         )
+        response.set_cookie(
+            _SESSION_COOKIE,
+            new_token,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+        return response
 
     # ---- login / logout ----
 
