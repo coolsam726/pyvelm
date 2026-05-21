@@ -21,4 +21,4 @@ node_modules/
 *.bak
 *.tmp
 *.swp
-*.swo
+*.swobuild/
