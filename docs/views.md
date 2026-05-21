@@ -148,6 +148,39 @@ dropdown so a record can't be added twice. Clearing every chip
 posts an empty marker so the server knows the value was emptied (vs.
 "not submitted").
 
+### One2many inline table
+
+A One2many field declared with `widget="table"` renders the child
+records as a full-width table inside the parent's form section
+instead of the default chip cluster:
+
+```python
+form_view("currency.form", "res.currency",
+    sections=[
+        section("main",  "Currency", ["code", "name", "symbol", "rounding"]),
+        section("rates", "Exchange rates",
+                [field("rate_ids", widget="table")]),
+    ])
+```
+
+The table uses the comodel's list view fields (or every stored scalar
+if no list view is installed). Each row is clickable and routes to
+the comodel's form view at `/web/views/<module>/<view>/record/<id>`.
+An "Add" link below the table opens the comodel's form-new endpoint
+with the inverse foreign key prefilled from the parent record:
+
+```
+/web/views/<module>/<view>/new?<inverse_name>=<parent_id>
+```
+
+`/new` accepts arbitrary field-name query params and uses them as
+defaults for the new record — useful any time you want to deep-link
+into a partially-filled form.
+
+Inline editing (add/edit/delete rows without leaving the parent
+form) is not yet wired; clicking through to the child form is the
+intended flow for now.
+
 ## Kanban views
 
 A kanban view groups records into columns and renders each one as a

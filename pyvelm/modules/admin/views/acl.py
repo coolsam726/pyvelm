@@ -107,7 +107,8 @@ VIEWS: list[View] = [
                       "rounding",
                       field("active", widget="toggle"),
                   ]),
-                  section("rates", "Exchange rates", ["rate_ids"]),
+                  section("rates", "Exchange rates",
+                          [field("rate_ids", widget="table")]),
               ]),
 
     # ---- res.currency.rate ----

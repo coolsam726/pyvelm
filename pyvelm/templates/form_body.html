@@ -109,6 +109,7 @@
                 <div data-field="{{ cell.name }}"
                      {% if cell.error %}data-pv-field-error{% endif %}
                      class="flex flex-col gap-1.5
+                            {% if cell.wide %}md:col-span-2{% endif %}
                             {% if cell.error %}pv-cell-error{% endif %}">
                     <label class="block text-sm font-medium text-heading">
                         {{ cell.label }}

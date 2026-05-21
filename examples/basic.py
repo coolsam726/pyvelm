@@ -1208,6 +1208,40 @@ def main():
                 assert r.status_code == 200, (view_name, r.status_code, r.text)
             print("admin form views: record display renders OK")
 
+            # O2m table widget: the currency form embeds a table of
+            # res.currency.rate rows. USD has at least one seeded rate;
+            # the parent form must render a <table> and an "Add" link
+            # carrying the currency_id back into the rate form's /new.
+            with pool.connection() as ccy_conn:
+                from pyvelm import Environment as _EnvCcy
+                ccy_env = _EnvCcy(ccy_conn, registry=reg, uid=1)
+                usd = ccy_env["res.currency"].search(
+                    [("code", "=", "USD")], limit=1,
+                )
+                assert usd, "USD must be seeded"
+                usd_id = usd.id
+            r = client.get(f"/web/views/admin/currency.form/record/{usd_id}")
+            assert r.status_code == 200, r.text
+            body = r.text
+            assert "Exchange rates" in body, "rates section missing"
+            assert "<table" in body, "o2m table widget did not emit a <table>"
+            expected_add = (
+                f'/web/views/admin/currency.rate.form/new?currency_id={usd_id}'
+            )
+            assert expected_add in body, (
+                "Add link missing or prefill absent: "
+                f"expected {expected_add!r} in form HTML"
+            )
+            # The /new endpoint must honor the prefill and render the
+            # parent as the Many2one's selected value.
+            r_new = client.get(expected_add)
+            assert r_new.status_code == 200, r_new.text
+            # Many2one display falls back to `name` — "US Dollar" for USD.
+            assert "US Dollar" in r_new.text, (
+                "prefilled currency_id label not shown"
+            )
+            print("o2m table: currency form lists rates + Add prefills currency_id OK")
+
             # Admin can create a group via the JSON API (ACL grant is active).
             r = client.post(
                 "/api/records",

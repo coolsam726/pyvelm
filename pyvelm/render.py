@@ -229,6 +229,121 @@ def _render_collection(value, spec, field):
     )
 
 
+def _resolve_o2m_table_fields(env, comodel_name, list_view_url):
+    """Pick the field list for the inline-o2m table.
+
+    Prefers the comodel's list view fields (so the table matches what
+    users see on the standalone list page). Falls back to all stored
+    scalar fields on the comodel when no list view is installed."""
+    if list_view_url and "ir.ui.view" in env.registry:
+        # list_view_url looks like /web/views/<module>/<name>
+        parts = list_view_url.rstrip("/").split("/")
+        module, view_name = parts[-2], parts[-1]
+        View = env["ir.ui.view"]
+        match = View.search(
+            [("module", "=", module), ("name", "=", view_name),
+             ("view_type", "=", "list")],
+            limit=1,
+        )
+        if match:
+            from .views import resolve_arch
+            arch = resolve_arch(match)
+            return list(arch.get("fields", []))
+    # Fallback: every stored scalar on the comodel.
+    cls = env.registry[comodel_name]
+    return [
+        {"name": fname}
+        for fname, f in cls._fields.items()
+        if getattr(f, "is_stored", True)
+        and not isinstance(f, (One2many, Many2many))
+    ]
+
+
+@widget(One2many, hint="table")
+def _render_o2m_table(value, spec, field):
+    """Inline read-only table of child records on the parent form.
+
+    Rows link to the comodel's form view. A footer "Add" button routes
+    to the comodel's form-new endpoint with the inverse-FK prefilled
+    from the parent record's id."""
+    env = value.env if value else (spec.get("_record").env if spec.get("_record") else None)
+    if env is None:
+        return _render_collection(value, spec, field)
+    comodel = spec.get("_comodel") or field.comodel_name
+    list_url = spec.get("_list_view_url")
+    form_url = spec.get("_form_view_url")
+    inverse = spec.get("_inverse_name") or field.inverse_name
+
+    fields_spec = _resolve_o2m_table_fields(env, comodel, list_url)
+    # Build header labels from the comodel's field strings.
+    co_cls = env.registry[comodel]
+    header_cells = []
+    for fs in fields_spec:
+        f = co_cls._fields.get(fs["name"])
+        label = fs.get("label") or (f.string if f else fs["name"])
+        header_cells.append(escape(label))
+
+    # Render each row's cells reusing _render_cells so widgets stay
+    # consistent with the rest of the system.
+    body_rows: list[str] = []
+    for rec in list(value):
+        cells = _render_cells(rec, fields_spec, mode="display")
+        td_cells = "".join(
+            f'<td class="px-3 py-2 text-sm text-body">{c["html"]}</td>'
+            for c in cells
+        )
+        href = f"{form_url}/record/{rec.id}" if form_url else None
+        row_attrs = (
+            f' class="hover:bg-neutral-secondary cursor-pointer transition-colors" '
+            f'onclick="window.location.href={escape(repr(href))}"'
+            if href else ' class=""'
+        )
+        body_rows.append(f"<tr{row_attrs}>{td_cells}</tr>")
+
+    parent = spec.get("_record")
+    add_html = ""
+    if form_url and parent is not None and parent._ids and inverse:
+        add_href = f"{form_url}/new?{inverse}={parent.id}"
+        add_html = (
+            f'<div class="mt-2 flex justify-end">'
+            f'<a href="{escape(add_href)}" '
+            f'class="inline-flex items-center gap-1 text-xs font-medium '
+            f'text-fg-brand hover:underline">'
+            f'<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '
+            f'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+            f'<path stroke-linecap="round" stroke-linejoin="round" '
+            f'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
+            f'Add</a></div>'
+        )
+
+    header_html = "".join(
+        f'<th class="px-3 py-2 text-left text-2xs font-semibold uppercase '
+        f'tracking-wider text-body-subtle">{h}</th>'
+        for h in header_cells
+    )
+    empty_html = (
+        '<tr><td colspan="{}" class="px-3 py-4 text-center text-xs '
+        'text-body-subtle">No entries yet.</td></tr>'
+    ).format(len(header_cells)) if not body_rows else ""
+
+    return Markup(
+        f'<div class="border border-default rounded-lg overflow-hidden">'
+        f'<table class="min-w-full divide-y divide-default">'
+        f'<thead class="bg-neutral-secondary"><tr>{header_html}</tr></thead>'
+        f'<tbody class="divide-y divide-default">{"".join(body_rows) or empty_html}</tbody>'
+        f'</table></div>{add_html}'
+    )
+
+
+# Slice 2 will add an inline-edit variant; until then the edit mode
+# falls back to the display table (still useful — the user can click
+# rows and the Add button still works because both endpoints work in
+# either parent-form mode).
+@widget(One2many, hint="table", mode="edit")
+def _edit_o2m_table(value, spec, field):
+    return _render_o2m_table(value, spec, field)
+
+
 # ---- edit-mode widgets ----
 
 _INPUT_CLS = (
@@ -454,6 +569,19 @@ def _enrich_specs_for_edit(env, model_cls, fields_spec) -> list[dict]:
             spec_copy["_search_url"] = (
                 f"/api/m2o/search?model={field.comodel_name}"
             )
+        elif isinstance(field, One2many):
+            spec_copy["_comodel"] = field.comodel_name
+            spec_copy["_inverse_name"] = field.inverse_name
+            list_lookup = _list_view_for_model(env, field.comodel_name)
+            spec_copy["_list_view_url"] = (
+                f"/web/views/{list_lookup[0]}/{list_lookup[1]}"
+                if list_lookup else None
+            )
+            form_lookup = _form_view_for_model(env, field.comodel_name)
+            spec_copy["_form_view_url"] = (
+                f"/web/views/{form_lookup[0]}/{form_lookup[1]}"
+                if form_lookup else None
+            )
         out.append(spec_copy)
     return out
 
@@ -677,7 +805,8 @@ def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
 
 def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
                        errors: dict | None = None,
-                       submitted: dict | None = None) -> list[dict]:
+                       submitted: dict | None = None,
+                       prefill: dict | None = None) -> list[dict]:
     """Build the per-field HTML for one section.
 
     Returns a list of cell dicts (`{name, label, required, error, html}`).
@@ -689,9 +818,11 @@ def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
     """
     errors = errors or {}
     submitted = submitted or {}
+    prefill = prefill or {}
     fields_spec = list(section_spec.get("fields", []))
-    if mode == "edit":
-        fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
+    # Spec enrichment (URLs for relationship widgets) is harmless in
+    # display mode and required by the O2m table widget, so always run.
+    fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
     cells: list[dict] = []
     for spec in fields_spec:
         fname = spec["name"]
@@ -719,19 +850,35 @@ def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
             else:
                 value = raw
         elif record_or_none is None:
-            value = (
-                env[field.comodel_name] if isinstance(field, Many2one)
-                else field.default
-            )
+            if fname in prefill:
+                raw = prefill[fname]
+                if isinstance(field, Many2one):
+                    value = (
+                        env[field.comodel_name].browse(raw) if raw
+                        else env[field.comodel_name]
+                    )
+                else:
+                    value = raw
+            else:
+                value = (
+                    env[field.comodel_name] if isinstance(field, Many2one)
+                    else field.default
+                )
         else:
             value = getattr(record_or_none, fname)
 
         spec_with_rec = {**spec, "_record": record_or_none}
+        # Wide cells span both grid columns. O2m tables are full-width
+        # so the embedded `<table>` isn't squished into half the form.
+        is_wide = (
+            isinstance(field, One2many) and spec.get("widget") == "table"
+        )
         cells.append({
             "name": fname,
             "label": label,
             "required": getattr(field, "required", False),
             "error": errors.get(fname),
+            "wide": is_wide,
             "html": renderer(value, spec_with_rec, field),
         })
     return cells
@@ -739,7 +886,8 @@ def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
 
 def _form_sections(view, record_or_none, env, mode: str,
                    errors: dict | None = None,
-                   submitted: dict | None = None) -> list[dict]:
+                   submitted: dict | None = None,
+                   prefill: dict | None = None) -> list[dict]:
     from .views import resolve_arch
 
     arch = resolve_arch(view)
@@ -752,7 +900,7 @@ def _form_sections(view, record_or_none, env, mode: str,
             "title": spec.get("title") or spec.get("name", ""),
             "cells": _form_section_html(
                 spec, record_or_none, env, model_cls, mode,
-                errors=errors, submitted=submitted,
+                errors=errors, submitted=submitted, prefill=prefill,
             ),
         })
     return out
@@ -804,7 +952,8 @@ def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = 
                      current_path: str | None = None,
                      errors: dict | None = None,
                      submitted: dict | None = None,
-                     form_error: str | None = None) -> str:
+                     form_error: str | None = None,
+                     prefill: dict | None = None) -> str:
     """Render the form HTML.
 
     `mode` is "display", "edit", or "new". For "new" the record is None
@@ -820,7 +969,7 @@ def render_form_page(view, record_or_none, env, *, mode: str, body_only: bool = 
     """
     sections = _form_sections(
         view, record_or_none, env, mode,
-        errors=errors, submitted=submitted,
+        errors=errors, submitted=submitted, prefill=prefill,
     )
     title = _record_title(record_or_none, view.model, mode)
     template_name = "form_body.html" if body_only else "form.html"
@@ -981,6 +1130,25 @@ def _find_form_view(view, env):
         for m in matches:
             return m.name
     return None
+
+
+def _list_view_for_model(env, model_name: str) -> tuple[str, str] | None:
+    """Return `(module, view_name)` for some list view that targets the
+    given model, or `None`. Used by the inline-O2m table widget to
+    learn which fields the comodel wants to surface in a table."""
+    if "ir.ui.view" not in env.registry:
+        return None
+    View = env["ir.ui.view"]
+    matches = View.search(
+        [("model", "=", model_name), ("view_type", "=", "list")],
+        limit=1,
+        order='"id" ASC',
+    )
+    if not matches:
+        return None
+    rec = matches
+    rec.ensure_one()
+    return (rec.module, rec.name)
 
 
 def _form_view_for_model(env, model_name: str) -> tuple[str, str] | None:

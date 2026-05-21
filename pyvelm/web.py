@@ -833,9 +833,26 @@ def create_app(registry: Registry, pool: Any,
         from .render import render_form_page
 
         view = _require_form_view(_load_view(env, module, name))
+        # Query params named after declared fields prefill the new
+        # record's defaults — used by the O2m inline-Add link to
+        # carry the parent FK into the child form.
+        model_cls = env.registry[view.model]
+        prefill: dict = {}
+        for k, v in request.query_params.items():
+            f = model_cls._fields.get(k)
+            if f is None:
+                continue
+            if isinstance(f, Many2one):
+                try:
+                    prefill[k] = int(v)
+                except (TypeError, ValueError):
+                    continue
+            else:
+                prefill[k] = v
         return HTMLResponse(
             render_form_page(view, None, env, mode="new",
-                             current_path=str(request.url.path))
+                             current_path=str(request.url.path),
+                             prefill=prefill or None)
         )
 
     @app.get("/web/views/{module}/{name}/record/{record_id}",
