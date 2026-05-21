@@ -8,6 +8,12 @@
 {% set rec_url = base ~ "/record/" ~ (record_id if record_id else 'new') %}
 
 <div class="max-w-4xl mx-auto space-y-6">
+    {# Page heading — visible in both full-page and body-only (HTMX swap)
+       contexts. The layout chrome only renders this when body_only=False,
+       so we duplicate it here so client-side swaps and direct HTMX GETs
+       both surface the title. #}
+    <h2 class="text-lg font-semibold text-heading">{{ title }}</h2>
+
     {# Action toolbar — small, right-aligned, mode-aware. #}
     <div class="flex items-center justify-between gap-3">
         <span class="inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider
