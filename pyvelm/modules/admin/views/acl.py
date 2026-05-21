@@ -118,4 +118,65 @@ VIEWS: list[View] = [
               sections=[
                   section("main", "Rate", ["currency_id", "name", "rate"]),
               ]),
+
+    # ---- ir.actions.server ----
+    list_view("action.list", "ir.actions.server",
+              title="Server Actions",
+              fields=["name", "model", "action_type"]),
+
+    form_view("action.form", "ir.actions.server",
+              sections=[
+                  section("main", "Action",
+                          ["name", "model", "action_type"]),
+                  section("payload", "Payload",
+                          ["vals_json", "code"]),
+              ]),
+
+    # ---- base.automation ----
+    list_view("automation.list", "base.automation",
+              title="Automation Rules",
+              fields=["name", "model", "trigger", "action_id",
+                      field("active", widget="toggle")]),
+
+    form_view("automation.form", "base.automation",
+              sections=[
+                  section("main", "Automation", [
+                      "name", "model", "trigger", "action_id",
+                      field("active", widget="toggle"),
+                  ]),
+              ]),
+
+    # ---- ir.cron ----
+    list_view("cron.list", "ir.cron",
+              title="Scheduled Jobs",
+              fields=["name", "action_id", "interval_number",
+                      "interval_type", "nextcall",
+                      field("active", widget="toggle")]),
+
+    form_view("cron.form", "ir.cron",
+              sections=[
+                  section("main", "Job",
+                          ["name", "action_id",
+                           field("active", widget="toggle")]),
+                  section("schedule", "Schedule",
+                          ["interval_number", "interval_type", "nextcall"]),
+              ]),
+
+    # ---- mail.message ----
+    list_view("message.list", "mail.message",
+              title="Messages",
+              fields=["date", "subject", "recipient_email",
+                      "state", "message_type"]),
+
+    form_view("message.form", "mail.message",
+              sections=[
+                  section("main", "Message", [
+                      "subject", "recipient_email", "date",
+                      "message_type", "state",
+                  ]),
+                  section("body", "Body", ["body"]),
+                  section("meta", "Meta", [
+                      "model", "res_id", "author_id", "subtype", "error",
+                  ]),
+              ]),
 ]
