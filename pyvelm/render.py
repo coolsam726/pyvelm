@@ -293,6 +293,37 @@ def _resolve_o2m_table_fields(env, comodel_name, list_view_url):
     ]
 
 
+def _resolve_o2m_sequence(env, comodel_name, list_view_url) -> str | None:
+    """Return the comodel list view's `arch["sequence"]` field (or None).
+
+    Inline-o2m tables inherit drag-reorder from the same `sequence`
+    declaration that powers standalone list views — when the comodel's
+    list view declares one, the embedded table renders a drag handle
+    and persists the new order through the parent's save.
+    """
+    if not list_view_url or "ir.ui.view" not in env.registry:
+        return None
+    parts = list_view_url.rstrip("/").split("/")
+    module, view_name = parts[-2], parts[-1]
+    match = env["ir.ui.view"].search(
+        [
+            ("module", "=", module),
+            ("name", "=", view_name),
+            ("view_type", "=", "list"),
+        ],
+        limit=1,
+    )
+    if not match:
+        return None
+    from .views import resolve_arch
+
+    seq = resolve_arch(match).get("sequence")
+    if not seq:
+        return None
+    cls = env.registry[comodel_name]
+    return seq if seq in cls._fields else None
+
+
 @widget(One2many, hint="table")
 def _render_o2m_table(value, spec, field):
     """Inline read-only table of child records on the parent form.
@@ -313,6 +344,7 @@ def _render_o2m_table(value, spec, field):
     inverse = spec.get("_inverse_name") or field.inverse_name
 
     fields_spec = _resolve_o2m_table_fields(env, comodel, list_url)
+    sequence_field = _resolve_o2m_sequence(env, comodel, list_url)
     # Build header labels from the comodel's field strings.
     co_cls = env.registry[comodel]
     header_cells = []
@@ -324,7 +356,10 @@ def _render_o2m_table(value, spec, field):
     # Render each row's cells reusing _render_cells so widgets stay
     # consistent with the rest of the system.
     body_rows: list[str] = []
-    for rec in list(value):
+    recs = list(value)
+    if sequence_field:
+        recs.sort(key=lambda r: (getattr(r, sequence_field) or 0, r.id))
+    for rec in recs:
         cells = _render_cells(rec, fields_spec, mode="display")
         td_cells = "".join(
             f'<td class="px-3 py-2 text-sm text-body">{c["html"]}</td>' for c in cells
@@ -396,11 +431,23 @@ def _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname):
     return spec
 
 
-def _render_o2m_edit_row(env, comodel_cls, rec_or_none, idx_token, oname, fields_spec):
+def _render_o2m_edit_row(
+    env,
+    comodel_cls,
+    rec_or_none,
+    idx_token,
+    oname,
+    fields_spec,
+    sequence_field: str | None = None,
+):
     """Render one editable `<tr>` of an inline-o2m table.
 
     `rec_or_none` is None for the blank template row (its idx is the
-    placeholder `__IDX__` that the Add-button JS rewrites)."""
+    placeholder `__IDX__` that the Add-button JS rewrites).
+
+    When `sequence_field` is set, a drag-handle cell precedes the data
+    cells and a hidden input carries the row's current sequence value
+    (drag-drop JS rewrites it in multiples of 10 on reorder)."""
     is_new = rec_or_none is None
     op_value = "create" if is_new else "update"
     prefix = f"{oname}[{idx_token}]"
@@ -414,11 +461,25 @@ def _render_o2m_edit_row(env, comodel_cls, rec_or_none, idx_token, oname, fields
             f'<input type="hidden" name="{escape(prefix)}[id]" '
             f'value="{rec_or_none.id}">'
         )
+    if sequence_field:
+        seq_value = (
+            "" if is_new else (getattr(rec_or_none, sequence_field) or 0)
+        )
+        hidden_html += (
+            f'<input type="hidden" data-pv-o2m-seq '
+            f'name="{escape(prefix)}[{escape(sequence_field)}]" '
+            f'value="{seq_value}">'
+        )
 
     # Render each visible cell as the comodel field's edit widget.
+    # Skip the sequence field when drag-reorder is active — the hidden
+    # input is the source of truth and a visible edit cell with the
+    # same name would collide on form-parse.
     td_cells: list[str] = []
     for fs in fields_spec:
         sub_name = fs["name"]
+        if sequence_field and sub_name == sequence_field:
+            continue
         sub_field = comodel_cls._fields.get(sub_name)
         if sub_field is None:
             td_cells.append('<td class="px-3 py-2"></td>')
@@ -450,10 +511,23 @@ def _render_o2m_edit_row(env, comodel_cls, rec_or_none, idx_token, oname, fields
         "</svg></button></td>"
     )
 
+    drag_handle = ""
+    if sequence_field:
+        drag_handle = (
+            '<td class="px-2 py-2 w-8 align-middle text-body-subtle '
+            'cursor-grab select-none" data-pv-o2m-drag '
+            'aria-label="Drag to reorder">'
+            '<svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" '
+            'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+            '<path stroke-linecap="round" stroke-linejoin="round" '
+            'd="M3.75 9h16.5m-16.5 6.75h16.5"/></svg></td>'
+        )
+
+    tr_attrs = ' draggable="true"' if sequence_field else ""
     return (
-        f'<tr data-pv-o2m-row class="align-top">'
+        f'<tr data-pv-o2m-row class="align-top"{tr_attrs}>'
         f'<td class="hidden">{hidden_html}</td>'
-        f'{"".join(td_cells)}{delete_btn}</tr>'
+        f'{drag_handle}{"".join(td_cells)}{delete_btn}</tr>'
     )
 
 
@@ -479,10 +553,18 @@ def _edit_o2m_table(value, spec, field):
     comodel = spec.get("_comodel") or field.comodel_name
     co_cls = env.registry[comodel]
     fields_spec = _resolve_o2m_table_fields(env, comodel, spec.get("_list_view_url"))
+    sequence_field = _resolve_o2m_sequence(env, comodel, spec.get("_list_view_url"))
 
-    # Column headers + one trailing column for the delete button.
+    # Column headers + one leading drag column (when sequenced) + one
+    # trailing column for the delete button. The sequence field itself
+    # is omitted from the visible columns — the drag handle replaces it.
     header_cells: list[str] = []
-    for fs in fields_spec:
+    if sequence_field:
+        header_cells.append('<th class="px-2 py-2 w-8"></th>')
+    visible_specs = [
+        fs for fs in fields_spec if fs["name"] != sequence_field
+    ] if sequence_field else fields_spec
+    for fs in visible_specs:
         f = co_cls._fields.get(fs["name"])
         label = fs.get("label") or (f.string if f else fs["name"])
         header_cells.append(
@@ -490,17 +572,23 @@ def _edit_o2m_table(value, spec, field):
             f'tracking-wider text-body-subtle">{escape(label)}</th>'
         )
     header_cells.append('<th class="px-3 py-2 w-8"></th>')
+    col_count = len(header_cells)
 
-    # Existing rows.
+    # Existing rows — sort by sequence_field when drag-reorder is on
+    # so the rendered order matches the persisted one.
     existing = list(value)
+    if sequence_field:
+        existing.sort(key=lambda r: (getattr(r, sequence_field) or 0, r.id))
     body_rows = [
-        _render_o2m_edit_row(env, co_cls, rec, idx, oname, fields_spec)
+        _render_o2m_edit_row(
+            env, co_cls, rec, idx, oname, fields_spec, sequence_field
+        )
         for idx, rec in enumerate(existing)
     ]
     empty_html = ""
     if not body_rows:
         empty_html = (
-            f'<tr data-pv-o2m-empty><td colspan="{len(fields_spec) + 1}" '
+            f'<tr data-pv-o2m-empty><td colspan="{col_count}" '
             f'class="px-3 py-4 text-center text-xs text-body-subtle">'
             f"No entries yet.</td></tr>"
         )
@@ -513,6 +601,7 @@ def _edit_o2m_table(value, spec, field):
         "__IDX__",
         oname,
         fields_spec,
+        sequence_field,
     )
 
     add_btn = (
@@ -528,6 +617,7 @@ def _edit_o2m_table(value, spec, field):
     )
 
     next_idx = len(existing)
+    drag_enabled = "true" if sequence_field else "false"
     js = (
         "<script>(function(){\n"
         "var root=document.currentScript.parentElement;\n"
@@ -535,12 +625,23 @@ def _edit_o2m_table(value, spec, field):
         'var tmpl=root.querySelector("template[data-pv-o2m-template]");\n'
         'var addBtn=root.querySelector("[data-pv-o2m-add]");\n'
         "var nextIdx=parseInt(root.dataset.pvO2mNext,10);\n"
+        f"var dragOn={drag_enabled};\n"
+        "function renumber(){\n"
+        "  if(!dragOn) return;\n"
+        '  var rows=tbody.querySelectorAll("tr[data-pv-o2m-row]");\n'
+        "  rows.forEach(function(tr,i){\n"
+        '    if(tr.classList.contains("line-through")) return;\n'
+        '    var seq=tr.querySelector("input[data-pv-o2m-seq]");\n'
+        "    if(seq) seq.value=String((i+1)*10);\n"
+        "  });\n"
+        "}\n"
         'addBtn.addEventListener("click",function(){\n'
         "  var html=tmpl.innerHTML.replace(/__IDX__/g,String(nextIdx++));\n"
         "  var frag=document.createRange().createContextualFragment(html);\n"
         '  var emptyRow=tbody.querySelector("[data-pv-o2m-empty]");\n'
         "  if(emptyRow) emptyRow.remove();\n"
         "  tbody.appendChild(frag);\n"
+        "  renumber();\n"
         "});\n"
         'root.addEventListener("click",function(e){\n'
         '  var btn=e.target.closest("[data-pv-o2m-delete]");\n'
@@ -548,10 +649,40 @@ def _edit_o2m_table(value, spec, field):
         '  var tr=btn.closest("tr");\n'
         "  if(!tr) return;\n"
         '  var op=tr.querySelector("input[name$=\\"[_op]\\"]");\n'
-        '  if(op && op.value==="create"){ tr.remove(); return; }\n'
+        '  if(op && op.value==="create"){ tr.remove(); renumber(); return; }\n'
         '  if(op) op.value="delete";\n'
         '  tr.classList.add("opacity-40","line-through","pointer-events-none");\n'
+        "  renumber();\n"
         "});\n"
+        "if(dragOn){\n"
+        "  var dragged=null;\n"
+        '  tbody.addEventListener("dragstart",function(e){\n'
+        '    var tr=e.target.closest("tr[data-pv-o2m-row]");\n'
+        "    if(!tr) return;\n"
+        "    dragged=tr;\n"
+        '    e.dataTransfer.effectAllowed="move";\n'
+        '    tr.classList.add("opacity-50");\n'
+        "  });\n"
+        '  tbody.addEventListener("dragend",function(){\n'
+        '    if(dragged) dragged.classList.remove("opacity-50");\n'
+        "    dragged=null;\n"
+        "  });\n"
+        '  tbody.addEventListener("dragover",function(e){\n'
+        "    if(!dragged) return;\n"
+        "    e.preventDefault();\n"
+        '    e.dataTransfer.dropEffect="move";\n'
+        '    var tr=e.target.closest("tr[data-pv-o2m-row]");\n'
+        "    if(!tr||tr===dragged) return;\n"
+        "    var rect=tr.getBoundingClientRect();\n"
+        "    var before=(e.clientY-rect.top)<(rect.height/2);\n"
+        "    tbody.insertBefore(dragged, before?tr:tr.nextSibling);\n"
+        "  });\n"
+        '  tbody.addEventListener("drop",function(e){\n'
+        "    if(!dragged) return;\n"
+        "    e.preventDefault();\n"
+        "    renumber();\n"
+        "  });\n"
+        "}\n"
         "})();</script>"
     )
 
