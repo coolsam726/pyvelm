@@ -76,83 +76,42 @@ Click around:
 
 ## 3. Add a module
 
-`pyvelm new` scaffolds a runnable module skeleton in the project's
-`app/modules/` directory. **Coming in the next release** — for
-now, you can hand-author the module:
+Run `pyvelm new` from inside the project — it auto-detects the
+modules root via the `pyvelm.toml` marker dropped by `pyvelm init`:
 
-Create `app/modules/tasks/__pyvelm__.py`:
-
-```python
-NAME: str = "tasks"
-VERSION: tuple[int, ...] = (0, 1, 0)
-SUMMARY: str = "A tiny task tracker."
-CATEGORY: str = "Productivity"
-DEPENDS: list[str] = ["base"]
-DATA: list[str] = ["views/task.py"]
+```bash
+pyvelm new tasks
 ```
 
-Add an empty `app/modules/tasks/__init__.py`, then declare a model:
+That creates `./app/modules/tasks/` with a working stub:
 
-```python
-# app/modules/tasks/models/__init__.py
-from . import task    # noqa: F401
+```
+tasks/
+├── __init__.py
+├── __pyvelm__.py          # manifest with NAME=tasks, DEPENDS=["base"]
+├── hooks.py               # one-time install hook
+├── models/
+│   ├── __init__.py
+│   └── tasks.py           # `class Entry(BaseModel)`
+├── views/
+│   ├── __init__.py
+│   ├── tasks.py           # list + form views
+│   └── menu.py            # sidebar group + item
+└── migrations/
+    └── __init__.py
 ```
 
-```python
-# app/modules/tasks/models/task.py
-from pyvelm import BaseModel, Boolean, Char, Many2one
-
-
-class Task(BaseModel):
-    _name = "tasks.task"
-
-    title = Char(required=True)
-    notes = Char()
-    done = Boolean(default=False)
-    assignee_id = Many2one("res.users", ondelete="SET NULL")
-```
-
-Add a list + form view and a sidebar entry:
-
-```python
-# app/modules/tasks/views/task.py
-from pyvelm.builders import (
-    field, form_view, list_view, menu_group, menu_item, section,
-)
-
-VIEWS = [
-    list_view(
-        "task.list", "tasks.task",
-        title="Tasks",
-        fields=["title", field("done", widget="toggle"), "assignee_id"],
-        form_view="task.form",
-    ),
-    form_view(
-        "task.form", "tasks.task",
-        sections=[
-            section("main", "Task", [
-                "title",
-                field("done", widget="toggle"),
-                "assignee_id",
-                "notes",
-            ]),
-        ],
-    ),
-]
-
-MENUS = [
-    menu_group("tasks", "Tasks", sequence=60),
-    menu_item("tasks.list", "All tasks",
-              parent="tasks.tasks",
-              href="/web/views/tasks/task.list",
-              sequence=10),
-]
-```
+The stub uses generic names (`Entry`, `entries`) — customise them
+freely.
 
 Restart the app (`docker compose restart app` or your service
-manager). The Apps page lists your new module under "Productivity".
-Click **Install**. Once the toast confirms, the sidebar shows a
-**Tasks** group with an **All tasks** entry inside it.
+manager). The Apps page lists `tasks` in the catalog. Click
+**Install**. The sidebar gains a **tasks** group with an **Entries**
+leaf inside it.
+
+See the [CLI reference](cli.md#pyvelm-new) for the full command
+shape, including the `--in <path>` override when you're working
+outside an init'd tree.
 
 ## What's next
 

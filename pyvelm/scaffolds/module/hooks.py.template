@@ -1,0 +1,41 @@
+"""Install hook for the {{name}} module.
+
+Runs once on first install (after schema setup, before view sync).
+Use it to seed default access entries, record rules, or any data
+your app needs out of the gate. The function receives a live
+``Environment``; use the ORM or drop to raw SQL via
+``env.conn.execute(...)``.
+
+Re-running on upgrade is the migrations' job, not this hook —
+hooks fire ONCE per database lifetime.
+"""
+
+
+def install(env):
+    # Example: grant the Admin group full CRUD on this module's
+    # entries. Remove this stub once your real seed lands.
+    if "ir.model.access" not in env.registry:
+        return
+    if "res.groups" not in env.registry:
+        return
+
+    Access = env["ir.model.access"]
+    Group = env["res.groups"]
+    admin = Group.search([("name", "=", "Admin")])
+    if not admin:
+        return
+    admin.ensure_one()
+
+    model = "{{name}}.entry"
+    if model not in env.registry:
+        return
+
+    Access.create({
+        "name": f"Admin/{model}",
+        "model": model,
+        "group_id": admin,
+        "perm_read": True,
+        "perm_write": True,
+        "perm_create": True,
+        "perm_unlink": True,
+    })

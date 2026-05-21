@@ -65,7 +65,13 @@ def _copy_tree(
     variables: dict[str, str],
 ) -> None:
     for entry in src.iterdir():
-        out_name = _rename_dotfile(entry.name)
+        # Substitute placeholders in filenames so a template named
+        # `{{name}}.py.template` materialises as `tasks.py` for
+        # `name=tasks`. Dotfile rename runs after substitution so
+        # `dot{{name}}rc` would become `.tasksrc` (no use case yet,
+        # but the order keeps the rules composable).
+        out_name = _substitute(entry.name, variables)
+        out_name = _rename_dotfile(out_name)
         if entry.is_dir():
             out_dir = dst / out_name
             out_dir.mkdir(exist_ok=True)
@@ -108,6 +114,25 @@ def _copy_file(
         dst.write_text(text, encoding="utf-8")
     else:
         dst.write_bytes(raw)
+
+
+def echo_next_steps_for_new(module_name: str, modules_root: Path) -> None:
+    """Print the post-`pyvelm new` walkthrough."""
+    msg = f"""
+Created {modules_root / module_name}/
+
+Next steps:
+  1. Restart your dev server (or `docker compose restart app`).
+  2. Visit /web/apps in the browser.
+  3. Find "{module_name}" in the catalog and click Install.
+
+Customise the module:
+  - models/{module_name}.py      Define your business model.
+  - views/{module_name}.py       List + form views.
+  - views/menu.py                Sidebar entry.
+  - hooks.py                     One-time install hook.
+""".rstrip()
+    print(msg, file=sys.stderr)
 
 
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")

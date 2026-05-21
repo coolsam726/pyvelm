@@ -1,0 +1,35 @@
+"""Sample views for the {{name}} module. Replace with your own."""
+
+from pyvelm.builders import (
+    field,
+    form_view,
+    list_view,
+    section,
+)
+
+
+VIEWS = [
+    list_view(
+        "{{name}}.list",
+        "{{name}}.entry",
+        title="{{name}}",
+        fields=[
+            "title",
+            field("done", widget="toggle"),
+            "assignee_id",
+        ],
+        form_view="{{name}}.form",
+    ),
+    form_view(
+        "{{name}}.form",
+        "{{name}}.entry",
+        sections=[
+            section("main", "Entry", [
+                "title",
+                field("done", widget="toggle"),
+                "assignee_id",
+                "notes",
+            ]),
+        ],
+    ),
+]

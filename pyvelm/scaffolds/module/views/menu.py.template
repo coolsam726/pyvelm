@@ -1,0 +1,19 @@
+"""Sidebar entries for the {{name}} module."""
+
+from pyvelm.builders import menu_group, menu_item
+
+
+MENUS = [
+    menu_group(
+        "home",                  # group identity: {{name}}.home
+        "{{name}}",              # sidebar label
+        sequence=60,
+    ),
+    menu_item(
+        "entries",               # leaf identity: {{name}}.entries
+        "Entries",               # sidebar label
+        parent="{{name}}.home",
+        href="/web/views/{{name}}/{{name}}.list",
+        sequence=10,
+    ),
+]

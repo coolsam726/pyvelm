@@ -12,7 +12,7 @@ Subcommands:
 |---|---|
 | [`pyvelm cron`](#pyvelm-cron) | Run the background cron + mail-dispatcher worker. |
 | [`pyvelm init <name>`](#pyvelm-init) | Scaffold a new pyvelm project. |
-| `pyvelm new <module>` | Drop a runnable module skeleton into a project. **Coming in the next release.** |
+| [`pyvelm new <module>`](#pyvelm-new) | Drop a runnable module skeleton into a project. |
 
 `pyvelm --help` shows the current list; `pyvelm <subcommand> --help`
 shows the flags for each one.
@@ -110,11 +110,57 @@ the same `--interval` and `--roots` flags.
 New deployments should use `pyvelm cron`; the legacy entry is
 documented but not advertised.
 
-## Coming soon
+## `pyvelm new`
 
-`pyvelm new <module>` will drop a runnable module skeleton inside
-the current project — `__pyvelm__.py` manifest, a sample model, a
-sample view, a sample sidebar menu entry, an install hook stub, and
-a `migrations/` directory. It accepts `--help` today and exits with
-a "coming soon" message; it'll start doing real work in the next
-release.
+Scaffolds a runnable module skeleton inside an existing project.
+Run from anywhere inside a `pyvelm init`'d tree — the command walks
+up looking for `pyvelm.toml` and uses its `modules_root` setting.
+
+```bash
+cd my_erp                 # inside a project from `pyvelm init`
+pyvelm new tasks
+# → ./app/modules/tasks/  is created
+```
+
+The generated tree:
+
+```
+tasks/
+├── __init__.py
+├── __pyvelm__.py          # NAME=tasks, VERSION=(0,1,0), DEPENDS=["base"]
+├── hooks.py               # def install(env): … sample access grants
+├── models/
+│   ├── __init__.py
+│   └── tasks.py           # `class Entry(BaseModel)` stub
+├── views/
+│   ├── __init__.py
+│   ├── tasks.py           # `list_view` + `form_view`
+│   └── menu.py            # `menu_group` + `menu_item`
+└── migrations/
+    └── __init__.py        # add `0_1_to_0_2.py` here when you bump
+```
+
+The model is named `Entry` and lives at `<module>.entry` — change
+it to something domain-specific once you start customising.
+
+After `pyvelm new` you typically:
+
+1. Edit the generated files to model your domain.
+2. Restart the app (`docker compose restart app` or your service
+   manager).
+3. Open `/web/apps`, find the new module, click **Install**.
+
+### Where the module lands
+
+By default the scaffolder walks up from the current directory
+looking for a `pyvelm.toml` marker (dropped by `pyvelm init`) and
+uses the `modules_root` it declares. Override with `--in`:
+
+```bash
+pyvelm new tasks --in /srv/my_erp/app/modules
+```
+
+If no marker is found and you don't pass `--in`, the command exits
+with an error explaining both options.
+
+## Legacy `pyvelm-cron` entry point

@@ -176,12 +176,48 @@ def _run_init(args: argparse.Namespace) -> None:
     echo_next_steps_for_init(name)
 
 
-def _run_new(_args: argparse.Namespace) -> None:
-    sys.exit(
-        "`pyvelm new` not yet implemented. Coming in the next release; "
-        "for now, hand-author a module directory under your app's "
-        "module root — see docs/modules.md for the on-disk shape."
+def _run_new(args: argparse.Namespace) -> None:
+    from .scaffolder import (
+        echo_next_steps_for_new,
+        find_modules_root,
+        materialise,
+        valid_name,
     )
+
+    name = args.name
+    if not valid_name(name):
+        sys.exit(
+            f"Invalid module name {name!r}. Use a Python-identifier-"
+            f"shaped name: letters, digits, and underscores; starts "
+            f"with a letter."
+        )
+
+    # Find the modules root: explicit --in wins, otherwise walk up
+    # from cwd looking for `pyvelm.toml`.
+    if args.modules_root is not None:
+        modules_root = Path(args.modules_root).resolve()
+    else:
+        modules_root = find_modules_root()
+        if modules_root is None:
+            sys.exit(
+                "Couldn't find a pyvelm.toml in cwd or any parent. "
+                "Run this from inside a `pyvelm init`'d project, or "
+                "pass `--in <path>` pointing at the modules directory."
+            )
+
+    # The modules root may not exist yet if the user is bootstrapping
+    # outside the scaffolder's tree. Create the directory chain so the
+    # module's parent is in place; the module itself must not exist.
+    modules_root.mkdir(parents=True, exist_ok=True)
+    target = modules_root / name
+    try:
+        materialise("module", target, variables={"name": name})
+    except FileExistsError:
+        sys.exit(
+            f"{target} already exists — pick a different module name "
+            f"or remove the existing directory."
+        )
+    echo_next_steps_for_new(name, modules_root)
 
 
 # ---------------------------------------------------------------------------
