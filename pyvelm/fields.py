@@ -116,6 +116,7 @@ class Char(Field):
         compute=None,
         store=None,
         size: int | None = None,
+        choices: list | None = None,
     ):
         super().__init__(
             string=string,
@@ -126,6 +127,17 @@ class Char(Field):
             store=store,
         )
         self.size = size
+        # `choices` constrains the value to a small enumeration. Items
+        # are either plain strings (label == value) or ``(value, label)``
+        # tuples. When set, edit widgets render a ``<select>`` instead
+        # of a text input. No DB-level CHECK is added — the constraint
+        # is UI-only by design (operators may still write programmatic
+        # values that bypass the form layer).
+        self.choices: list[tuple[str, str]] | None = (
+            [(c, c) if isinstance(c, str) else (c[0], c[1]) for c in choices]
+            if choices
+            else None
+        )
 
     def to_python(self, value):
         return None if value is None else str(value)

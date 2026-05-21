@@ -120,6 +120,25 @@ class ArchSection(TypedDict):
     fields: list[FieldRefLike]
 
 
+class ArchHeaderAction(TypedDict, total=False):
+    """One button rendered in the form's display-mode action toolbar.
+
+    Keys:
+
+    - ``label``   — button text (required).
+    - ``url``     — endpoint to hit; ``{id}`` is substituted with the
+                    current record id at render time.
+    - ``method``  — HTTP verb, default ``"POST"``.
+    - ``confirm`` — optional confirmation prompt; when set, the button
+                    asks before firing.
+    """
+
+    label: str
+    url: str
+    method: str
+    confirm: str
+
+
 class _ArchFormRequired(TypedDict):
     sections: list[ArchSection]
 
@@ -127,12 +146,15 @@ class _ArchFormRequired(TypedDict):
 class ArchForm(_ArchFormRequired, total=False):
     """Arch for ``view_type="form"`` views.
 
-    Only ``sections`` is required. Optional key:
+    Only ``sections`` is required. Optional keys:
 
     - ``title`` — overrides the auto-generated page heading.
+    - ``header_actions`` — list of buttons rendered next to Edit /
+      Delete in display mode (e.g. "Run Now" on a cron form).
     """
 
     title: str
+    header_actions: list[ArchHeaderAction]
 
 
 class ArchKanbanCard(TypedDict, total=False):

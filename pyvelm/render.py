@@ -721,7 +721,27 @@ def _required_marker(field) -> str:
 
 @widget(Char, mode="edit")
 def _edit_char(value, spec, field):
-    val_attr = escape(str(value)) if value is not None else ""
+    val_str = str(value) if value is not None else ""
+    if getattr(field, "choices", None):
+        # Constrained enumeration → render a <select> with one option
+        # per declared choice. The current value gets `selected`; the
+        # blank option only appears when the field is non-required and
+        # the value is currently empty.
+        opts = []
+        if not field.required and not val_str:
+            opts.append('<option value="" selected></option>')
+        for choice_val, choice_label in field.choices:
+            sel = " selected" if val_str == choice_val else ""
+            opts.append(
+                f'<option value="{escape(choice_val)}"{sel}>'
+                f"{escape(choice_label)}</option>"
+            )
+        return Markup(
+            f'<select name="{escape(spec["name"])}" '
+            f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
+            f'{"".join(opts)}</select>'
+        )
+    val_attr = escape(val_str)
     placeholder = escape(field.string or spec["name"])
     return Markup(
         f'<input type="text" name="{escape(spec["name"])}" value="{val_attr}" '
@@ -1553,6 +1573,24 @@ def render_form_page(
     ctx = {} if body_only else layout_context(env, current_path, leaf_label=title)
     if not body_only:
         ctx["subtitle"] = f"{view.model} · {mode}"
+    # Resolve header actions: substitute {id} with the current record's
+    # id (display-mode only; new/edit records can't take row-level
+    # actions). Anything without an id falls through with an empty list.
+    from .views import resolve_arch
+
+    arch = resolve_arch(view)
+    header_actions: list[dict] = []
+    if mode == "display" and record_or_none is not None and record_or_none._ids:
+        for act in arch.get("header_actions", []) or []:
+            url = (act.get("url") or "").replace("{id}", str(record_or_none.id))
+            header_actions.append(
+                {
+                    "label": act.get("label", "Run"),
+                    "url": url,
+                    "method": (act.get("method") or "POST").upper(),
+                    "confirm": act.get("confirm") or "",
+                }
+            )
     return template.render(
         view=view,
         record=record_or_none,
@@ -1561,6 +1599,7 @@ def render_form_page(
         mode=mode,
         sections=sections,
         form_error=form_error,
+        header_actions=header_actions,
         **ctx,
     )
 

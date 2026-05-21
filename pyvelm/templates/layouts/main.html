@@ -596,6 +596,16 @@
                            { variant: 'danger', title: 'Cannot save' });
         });
 
+        // ── Generic toast bridge for server-side actions (e.g. cron's
+        // "Run Now" button). The server emits `HX-Trigger: pv-toast`
+        // with a message string; we surface it via pvAlert as a plain
+        // info toast. Failures should send a different event or set
+        // variant via JSON detail down the road.
+        document.body.addEventListener('pv-toast', e => {
+            const msg = (e.detail && (e.detail.value || e.detail)) || '';
+            if (msg) window.pvAlert(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        });
+
         // ── Many2one combobox ──
         // Searchable select with create-on-the-fly and "open record"
         // link. The widget partial at `widgets/m2o_input.html` mounts

@@ -19,6 +19,16 @@
         </span>
         <div class="flex items-center gap-2">
             {% if mode == "display" and record_id %}
+            {% for act in header_actions or [] %}
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                           border border-default text-body rounded-md hover:bg-neutral-secondary transition"
+                    hx-{{ act.method | lower }}="{{ act.url }}"
+                    {% if act.confirm %}hx-confirm="{{ act.confirm }}"{% endif %}
+                    hx-swap="none">
+                {{ act.label }}
+            </button>
+            {% endfor %}
             <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
                            rounded-md bg-fg-brand hover:opacity-90 transition"
                     hx-get="{{ rec_url }}/edit"

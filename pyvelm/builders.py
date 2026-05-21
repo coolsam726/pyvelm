@@ -245,6 +245,7 @@ def form_view(
     sections: list[ArchSection],
     *,
     title: str | None = None,
+    header_actions: list[dict] | None = None,
     priority: int = 16,
 ) -> FormView:
     """Declare a ``view_type="form"`` view.
@@ -254,6 +255,11 @@ def form_view(
         model:     Dotted model name (e.g. ``"res.partner"``).
         sections:  List of ``section(...)`` dicts.
         title:     Optional heading override (default: humanized model name).
+        header_actions: Optional list of buttons rendered in display
+                   mode next to Edit / Delete. Each is a dict with
+                   ``label`` and ``url`` (required), plus optional
+                   ``method`` (default ``"POST"``) and ``confirm``.
+                   ``{id}`` in ``url`` is substituted at render time.
         priority:  Inheritance chain priority (default 16).
 
     Example::
@@ -266,6 +272,8 @@ def form_view(
     arch: ArchForm = {"sections": sections}
     if title is not None:
         arch["title"] = title
+    if header_actions:
+        arch["header_actions"] = list(header_actions)
     result: FormView = {
         "name": name,
         "model": model,
