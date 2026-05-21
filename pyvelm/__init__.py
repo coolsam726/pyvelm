@@ -16,6 +16,7 @@ from .fields import (
     Integer,
     Many2many,
     Many2one,
+    Monetary,
     One2many,
     Text,
 )
@@ -65,6 +66,7 @@ __all__ = [
     "Integer",
     "Many2many",
     "Many2one",
+    "Monetary",
     "One2many",
     "Registry",
     "Text",

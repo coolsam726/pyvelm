@@ -293,6 +293,41 @@ class Invoice(BaseModel):
 
 Operators change a company's currency from **Settings → Companies**.
 
+### Monetary amounts
+
+`Monetary` is a `Float` subclass that pairs each amount with a sibling
+field naming the relevant currency:
+
+```python
+from pyvelm import BaseModel, Char, Many2one, Monetary
+
+class Invoice(BaseModel):
+    _name = "account.invoice"
+
+    name        = Char(required=True)
+    currency_id = Many2one("res.currency")
+    amount      = Monetary(currency_field="currency_id")  # default
+```
+
+`currency_field` defaults to `"currency_id"` to match the convention
+that `res.company` and most domain records already use. The SQL
+column is `double precision` — no rounding is applied on write, the
+field stores whatever the caller provides.
+
+Snap an amount to its currency's rounding step (e.g. cents for USD,
+whole units for JPY) with the static helper:
+
+```python
+amount = Monetary.round_with(12.345, invoice.currency_id)  # → 12.35 for USD
+amount = Monetary.round_with(149.7,  jpy)                  # → 150.0
+```
+
+The display widget reads the sibling currency from the record, prefixes
+the configured symbol, and formats with the precision implied by
+`rounding` (0.01 → 2 decimals, 1.0 → 0). The edit widget sets the
+HTML `step` attribute from the same value so the browser's number
+input matches the currency's granularity.
+
 ## Defining a custom field type
 
 The built-ins cover most cases. When you need something specific

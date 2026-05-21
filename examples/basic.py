@@ -1551,6 +1551,33 @@ def main():
                         "convert() should raise when no rate covers the date"
                     )
                 print("currencies: seed, convert, dated rates, no-rate error OK")
+
+                # ----- Monetary field (Slice C of Stage 11) -----
+                # The field type itself, with rounding helper + widget
+                # registration. Lighter-touch than spinning up a full
+                # model with a Monetary column: this is what apps need
+                # to know about the API.
+                from pyvelm import Monetary
+                from pyvelm.fields import Float as _Float
+                from pyvelm.render import find_renderer
+                # Subclassing keeps Float's SQL type + python_type.
+                assert issubclass(Monetary, _Float)
+                m = Monetary(currency_field="company_currency_id")
+                assert m.currency_field == "company_currency_id"
+                # Defaults to "currency_id" — the convention slice B set up.
+                assert Monetary().currency_field == "currency_id"
+                # Rounding honors the currency's `rounding` step.
+                assert Monetary.round_with(12.345, seeded["USD"]) == 12.35
+                assert Monetary.round_with(149.7, seeded["JPY"]) == 150.0
+                assert Monetary.round_with(None, seeded["USD"]) is None
+                # No currency → passthrough.
+                assert Monetary.round_with(12.345, None) == 12.345
+                # Widget is registered for both display and edit modes.
+                disp = find_renderer(m, hint=None, mode="display")
+                edit = find_renderer(m, hint=None, mode="edit")
+                assert disp.__name__ == "_render_monetary", disp
+                assert edit.__name__ == "_edit_monetary", edit
+                print("Monetary: subclass, round_with, widgets registered OK")
             # partners_pro defines PartnerPro(_inherit="res.partner")
             # which adds `vip_note` and overrides `_compute_display_name`.
             with pool.connection() as s7_conn:

@@ -150,6 +150,46 @@ class Float(Field):
         return None if value is None else float(value)
 
 
+class Monetary(Float):
+    """A Float that carries a sibling-field reference to its currency.
+
+    ``currency_field`` names a Many2one(``res.currency``) on the same
+    record. Widgets read it to format the amount (symbol + rounding);
+    the model layer treats Monetary identically to Float — the value
+    is just a double in the column.
+
+    `round_with(amount, currency)` snaps an amount to the currency's
+    rounding step using banker's rounding via Python's built-in
+    ``round()``. Use it from application code when you want stored
+    values normalised; the field itself does not auto-round on write
+    (consistent with Float — explicit is better than magic)."""
+
+    def __init__(self, *args, currency_field: str = "currency_id", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.currency_field = currency_field
+
+    @staticmethod
+    def round_with(amount: float, currency) -> float:
+        """Round ``amount`` to ``currency.rounding``.
+
+        Tolerates an empty-recordset currency (no rounding info) by
+        returning the amount unchanged. Uses ``decimal.Decimal`` to
+        avoid the binary-float ``round(12.345 / 0.01) * 0.01 ==
+        12.34`` trap."""
+        if amount is None:
+            return None
+        if not currency:
+            return float(amount)
+        step = getattr(currency, "rounding", None) or 0.01
+        if step <= 0:
+            return float(amount)
+        from decimal import Decimal, ROUND_HALF_UP
+        d_amount = Decimal(str(amount))
+        d_step = Decimal(str(step))
+        quotient = (d_amount / d_step).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        return float(quotient * d_step)
+
+
 class Boolean(Field):
     sql_type = "boolean"
     python_type = bool

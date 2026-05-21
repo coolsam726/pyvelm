@@ -26,7 +26,7 @@ from markupsafe import Markup, escape
 
 from .fields import (
     Boolean, Char, Field, Float, Integer,
-    Many2many, Many2one, One2many, Text,
+    Many2many, Many2one, Monetary, One2many, Text,
 )
 
 
@@ -90,6 +90,54 @@ def _render_text(value, spec, field):
 @widget(Float)
 def _render_number(value, spec, field):
     return Markup("") if value is None else escape(str(value))
+
+
+def _resolve_currency(spec, field):
+    """Find the currency recordset for a Monetary field's record.
+
+    Returns ``None`` when there's no record on the spec (e.g. the empty
+    row in a fresh edit screen) or when the configured currency field
+    is missing or empty — callers fall back to rendering a bare number.
+    """
+    rec = spec.get("_record")
+    if rec is None:
+        return None
+    ccy_name = getattr(field, "currency_field", "currency_id")
+    if ccy_name not in type(rec)._fields:
+        return None
+    ccy = getattr(rec, ccy_name)
+    return ccy or None
+
+
+def _format_monetary(value, currency) -> str:
+    """Render ``value`` to the precision implied by ``currency.rounding``.
+
+    The number of fractional digits is derived from the rounding step
+    (0.01 → 2 digits, 1.0 → 0 digits). Falls back to ``str(value)``
+    when no currency context is available."""
+    if currency is None:
+        return str(value)
+    step = getattr(currency, "rounding", None) or 0.01
+    rounded = Monetary.round_with(value, currency)
+    # Digits after the decimal point. log10-style: 0.01 → 2, 1.0 → 0.
+    digits = 0
+    s = step
+    while s < 1 and digits < 12:
+        s *= 10
+        digits += 1
+    return f"{rounded:.{digits}f}"
+
+
+@widget(Monetary)
+def _render_monetary(value, spec, field):
+    if value is None:
+        return Markup("")
+    ccy = _resolve_currency(spec, field)
+    formatted = escape(_format_monetary(float(value), ccy))
+    if ccy is None:
+        return formatted
+    symbol = escape(ccy.symbol or ccy.code or "")
+    return Markup(f"{symbol}{formatted}") if symbol else formatted
 
 
 @widget(Boolean)
@@ -247,6 +295,31 @@ def _edit_float(value, spec, field):
     )
 
 
+@widget(Monetary, mode="edit")
+def _edit_monetary(value, spec, field):
+    ccy = _resolve_currency(spec, field)
+    step_attr = "any"
+    if ccy is not None:
+        rounding = getattr(ccy, "rounding", None) or 0.01
+        if rounding > 0:
+            step_attr = str(rounding)
+    val_attr = str(value) if value is not None else ""
+    symbol = (ccy.symbol if ccy is not None and ccy.symbol else "")
+    placeholder = escape(field.string or spec["name"])
+    input_html = (
+        f'<input type="number" step="{step_attr}" name="{escape(spec["name"])}" '
+        f'value="{val_attr}" placeholder="{placeholder}" '
+        f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
+    )
+    if not symbol:
+        return Markup(input_html)
+    return Markup(
+        f'<div class="flex items-center gap-1">'
+        f'<span class="text-body-subtle text-sm">{escape(symbol)}</span>'
+        f'{input_html}</div>'
+    )
+
+
 @widget(Boolean, mode="edit")
 @widget(Boolean, hint="toggle", mode="edit")
 def _edit_boolean(value, spec, field):
@@ -397,7 +470,12 @@ def _render_cells(record, fields_spec, mode: str) -> list[dict]:
         hint = spec.get("widget")
         renderer = find_renderer(field, hint, mode=mode)
         value = getattr(record, fname)
-        cells.append({"name": fname, "html": renderer(value, spec, field)})
+        # Widgets that need access to sibling fields (Monetary →
+        # currency_field) read the record via this private key. Kept
+        # off the public spec contract so view authors can't depend
+        # on it.
+        spec_with_rec = {**spec, "_record": record}
+        cells.append({"name": fname, "html": renderer(value, spec_with_rec, field)})
     return cells
 
 
@@ -648,12 +726,13 @@ def _form_section_html(section_spec, record_or_none, env, model_cls, mode: str,
         else:
             value = getattr(record_or_none, fname)
 
+        spec_with_rec = {**spec, "_record": record_or_none}
         cells.append({
             "name": fname,
             "label": label,
             "required": getattr(field, "required", False),
             "error": errors.get(fname),
-            "html": renderer(value, spec, field),
+            "html": renderer(value, spec_with_rec, field),
         })
     return cells
 
