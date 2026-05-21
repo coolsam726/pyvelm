@@ -1242,6 +1242,110 @@ def main():
             )
             print("o2m table: currency form lists rates + Add prefills currency_id OK")
 
+            # Slice 2C: edit-mode O2m table is editable.
+            # GET the /edit page and check the widget emitted inline
+            # inputs, a template row, and the Add-row button.
+            r_edit = client.get(
+                f"/web/views/admin/currency.form/record/{usd_id}/edit"
+            )
+            assert r_edit.status_code == 200, r_edit.text
+            edit_body = r_edit.text
+            assert "data-pv-o2m-root" in edit_body, "o2m root marker missing"
+            assert "data-pv-o2m-template" in edit_body, "template row missing"
+            assert "data-pv-o2m-add" in edit_body, "Add-row button missing"
+            assert 'name="rate_ids[0][_op]"' in edit_body, (
+                "namespaced o2m _op input missing"
+            )
+            assert 'value="update"' in edit_body, (
+                "existing rows should be flagged op=update"
+            )
+
+            # POST a parent save that performs all three commands in
+            # one transaction: update the existing rate, create a new
+            # one, and delete an arbitrary other rate. Then verify by
+            # reading the rates back.
+            with pool.connection() as ccy_conn2:
+                from pyvelm import Environment as _EnvCcy2
+                ccy_env2 = _EnvCcy2(ccy_conn2, registry=reg, uid=1)
+                usd_rec = ccy_env2["res.currency"].browse(usd_id)
+                rate_rows = list(usd_rec.rate_ids)
+                assert rate_rows, "USD must have at least one rate"
+                target_rate = rate_rows[0]
+                target_rate_id = target_rate.id
+
+                # Pick a delete target on a *different* currency so
+                # this test doesn't fight the rest of the suite.
+                other_ccy = ccy_env2["res.currency"].search(
+                    [("code", "=", "GBP")], limit=1,
+                )
+                assert other_ccy, "GBP must be seeded"
+                # GBP shares the same form, so post a separate save
+                # against GBP that deletes its first rate.
+                gbp_id = other_ccy.id
+                gbp_rate = list(other_ccy.rate_ids)[0]
+                gbp_rate_id = gbp_rate.id
+
+            # Update existing USD rate + add a new one in one save.
+            from datetime import datetime as _dt_e, timedelta as _td_e
+            new_date = (_dt_e.utcnow() - _td_e(days=2)).strftime(
+                "%Y-%m-%dT%H:%M"
+            )
+            old_date = (_dt_e.utcnow() - _td_e(days=10)).strftime(
+                "%Y-%m-%dT%H:%M"
+            )
+            r_save = client.post(
+                f"/web/views/admin/currency.form/record/{usd_id}",
+                data={
+                    "code": "USD",
+                    "name": "US Dollar",
+                    "symbol": "$",
+                    "rounding": "0.01",
+                    "active": "on",
+                    "rate_ids[0][_op]": "update",
+                    "rate_ids[0][id]": str(target_rate_id),
+                    "rate_ids[0][currency_id]": str(usd_id),
+                    "rate_ids[0][date]": old_date,
+                    "rate_ids[0][rate]": "1.00",
+                    "rate_ids[1][_op]": "create",
+                    "rate_ids[1][currency_id]": str(usd_id),
+                    "rate_ids[1][date]": new_date,
+                    "rate_ids[1][rate]": "1.05",
+                },
+            )
+            assert r_save.status_code == 200, (r_save.status_code, r_save.text)
+
+            # Delete the GBP rate via the same nested-form mechanism.
+            r_del = client.post(
+                f"/web/views/admin/currency.form/record/{gbp_id}",
+                data={
+                    "code": "GBP",
+                    "name": "Pound Sterling",
+                    "symbol": "£",
+                    "rounding": "0.01",
+                    "active": "on",
+                    "rate_ids[0][_op]": "delete",
+                    "rate_ids[0][id]": str(gbp_rate_id),
+                },
+            )
+            assert r_del.status_code == 200, (r_del.status_code, r_del.text)
+
+            # Verify: USD now has a fresh rate row at the new date,
+            # the original row's rate is 1.00, and the GBP rate is gone.
+            with pool.connection() as ccy_conn3:
+                from pyvelm import Environment as _EnvCcy3
+                ccy_env3 = _EnvCcy3(ccy_conn3, registry=reg, uid=1)
+                Rate = ccy_env3["res.currency.rate"]
+                updated = Rate.browse(target_rate_id)
+                assert abs(updated.rate - 1.00) < 1e-9, updated.rate
+                fresh = Rate.search(
+                    [("currency_id", "=", usd_id),
+                     ("rate", "=", 1.05)], limit=1,
+                )
+                assert fresh, "create-via-parent-form did not persist"
+                deleted = Rate.search([("id", "=", gbp_rate_id)])
+                assert not deleted, "delete-via-parent-form did not unlink"
+            print("o2m inline edit: create + update + delete commit via parent save OK")
+
             # Admin can create a group via the JSON API (ACL grant is active).
             r = client.post(
                 "/api/records",
@@ -1537,19 +1641,21 @@ def main():
                 # Same-currency convert is a passthrough.
                 assert seeded["USD"].convert(100.0, seeded["USD"]) == 100.0
 
-                # Normalize EUR's rate history — earlier runs of this
-                # script may have appended additional rates. Wipe and
-                # re-seed a single known 0.92 datapoint so the math is
-                # deterministic across re-runs.
+                # Normalize the rate histories — earlier runs of this
+                # script (and the o2m editing test upstream) may have
+                # appended rows. Wipe USD/EUR/JPY back to a known
+                # single-row state so the math is deterministic.
                 with wf_env.transaction():
-                    old = Rate.search([("currency_id", "=", seeded["EUR"].id)])
-                    if old:
-                        old.unlink()
-                    Rate.create({
-                        "currency_id": seeded["EUR"].id,
-                        "date": _dt.utcnow() - _td(days=1),
-                        "rate": 0.92,
-                    })
+                    for code, rate in (("USD", 1.00), ("EUR", 0.92),
+                                       ("JPY", 149.5)):
+                        old = Rate.search([("currency_id", "=", seeded[code].id)])
+                        if old:
+                            old.unlink()
+                        Rate.create({
+                            "currency_id": seeded[code].id,
+                            "date": _dt.utcnow() - _td(days=1),
+                            "rate": rate,
+                        })
                 wf_env.cache.invalidate(model_name="res.currency.rate")
 
                 # 100 USD → EUR uses the 0.92 rate.

@@ -906,15 +906,20 @@ def create_app(registry: Registry, pool: Any,
     ):
         if env.uid is None:
             return _auth_required_response(request)
-        from .render import parse_form_vals, render_form_page
+        from .render import (
+            apply_o2m_commands, harvest_o2m_commands,
+            parse_form_vals, render_form_page,
+        )
 
         view = _require_form_view(_load_view(env, module, name))
         rec = _load_record(env, view, record_id)
         form = await request.form()
         cls = env.registry[view.model]
         vals, errors = parse_form_vals(cls, form)
+        o2m_cmds, o2m_errors = harvest_o2m_commands(cls, form, env)
         body_only = request.headers.get("HX-Request") == "true"
-        if errors:
+        if errors or o2m_errors:
+            errors = {**errors, **o2m_errors}
             # Parse-side validation failed. Re-render the edit form with
             # per-field messages stamped + the user's typed values
             # resurrected so they don't have to retype.
@@ -928,6 +933,7 @@ def create_app(registry: Registry, pool: Any,
         try:
             with env.transaction():
                 rec.write(vals)
+                apply_o2m_commands(rec, o2m_cmds)
         except Exception as exc:  # noqa: BLE001
             # ORM-level failure (constraint, downstream DB error).
             # Show a top-level banner so the user sees why the save
@@ -941,6 +947,11 @@ def create_app(registry: Registry, pool: Any,
                 status_code=422,
             )
         env.cache.invalidate(model_name=view.model, ids=[record_id])
+        if o2m_cmds:
+            for oname, cmds in o2m_cmds.items():
+                ofield = cls._fields.get(oname)
+                if ofield is not None:
+                    env.cache.invalidate(model_name=ofield.comodel_name)
         return HTMLResponse(
             render_form_page(view, rec, env, mode="display",
                              body_only=body_only,
@@ -954,14 +965,19 @@ def create_app(registry: Registry, pool: Any,
     ):
         if env.uid is None:
             return _auth_required_response(request)
-        from .render import parse_form_vals, render_form_page
+        from .render import (
+            apply_o2m_commands, harvest_o2m_commands,
+            parse_form_vals, render_form_page,
+        )
 
         view = _require_form_view(_load_view(env, module, name))
         form = await request.form()
         cls = env.registry[view.model]
         vals, errors = parse_form_vals(cls, form)
+        o2m_cmds, o2m_errors = harvest_o2m_commands(cls, form, env)
         body_only = request.headers.get("HX-Request") == "true"
-        if errors:
+        if errors or o2m_errors:
+            errors = {**errors, **o2m_errors}
             return HTMLResponse(
                 render_form_page(view, None, env, mode="new",
                                  body_only=body_only,
@@ -972,6 +988,7 @@ def create_app(registry: Registry, pool: Any,
         try:
             with env.transaction():
                 rec = env[view.model].create(vals)
+                apply_o2m_commands(rec, o2m_cmds)
         except Exception as exc:  # noqa: BLE001
             return HTMLResponse(
                 render_form_page(view, None, env, mode="new",
@@ -981,6 +998,11 @@ def create_app(registry: Registry, pool: Any,
                                  current_path=str(request.url.path)),
                 status_code=422,
             )
+        if o2m_cmds:
+            for oname, cmds in o2m_cmds.items():
+                ofield = cls._fields.get(oname)
+                if ofield is not None:
+                    env.cache.invalidate(model_name=ofield.comodel_name)
         return HTMLResponse(
             render_form_page(view, rec, env, mode="display",
                              body_only=body_only,

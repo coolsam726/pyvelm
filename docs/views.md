@@ -177,9 +177,21 @@ with the inverse foreign key prefilled from the parent record:
 defaults for the new record — useful any time you want to deep-link
 into a partially-filled form.
 
-Inline editing (add/edit/delete rows without leaving the parent
-form) is not yet wired; clicking through to the child form is the
-intended flow for now.
+In **display mode** rows are read-only links to the child form. In
+**edit mode** each row becomes a horizontal strip of inline inputs
+keyed by `<o2m_name>[<idx>][<sub_field>]`, plus a hidden
+`<o2m_name>[<idx>][_op]` marker (`create` / `update` / `delete`) and
+a hidden `<o2m_name>[<idx>][id]` for existing rows. An "Add row"
+button clones a `<template>` row with a fresh index; a per-row
+delete button flips the row's `_op` to `delete` and visually marks
+it.
+
+On the parent's save POST, `harvest_o2m_commands` reassembles those
+nested keys into commands and `apply_o2m_commands` applies them
+inside the parent's transaction (new rows get the inverse FK
+auto-set to the parent's id). A failed save renders the same edit
+view back with per-row errors stamped on namespaced keys, so the
+user doesn't lose typed input.
 
 ## Kanban views
 

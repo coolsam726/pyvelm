@@ -18,6 +18,7 @@ bare strings are escaped. This is the safety contract.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -352,13 +353,188 @@ def _render_o2m_table(value, spec, field):
     )
 
 
-# Slice 2 will add an inline-edit variant; until then the edit mode
-# falls back to the display table (still useful — the user can click
-# rows and the Add button still works because both endpoints work in
-# either parent-form mode).
+def _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname):
+    """Build a spec dict for one inline-o2m cell, namespacing the input
+    so the server can re-assemble it as `oname[idx][sub_name]`.
+
+    Many2one cells are enriched with the same `_search_url` /
+    `_form_view_url` data the standalone form uses, so the combobox
+    renders identically inside the inline table."""
+    spec = {"name": f"{oname}[{idx_token}][{sub_name}]"}
+    field = comodel_cls._fields.get(sub_name)
+    if isinstance(field, Many2one):
+        spec["_comodel"] = field.comodel_name
+        spec["_search_url"] = f"/api/m2o/search?model={field.comodel_name}"
+        form_lookup = _form_view_for_model(env, field.comodel_name)
+        spec["_form_view_url"] = (
+            f"/web/views/{form_lookup[0]}/{form_lookup[1]}"
+            if form_lookup else None
+        )
+    return spec
+
+
+def _render_o2m_edit_row(env, comodel_cls, rec_or_none, idx_token, oname,
+                         fields_spec):
+    """Render one editable `<tr>` of an inline-o2m table.
+
+    `rec_or_none` is None for the blank template row (its idx is the
+    placeholder `__IDX__` that the Add-button JS rewrites)."""
+    is_new = rec_or_none is None
+    op_value = "create" if is_new else "update"
+    prefix = f"{oname}[{idx_token}]"
+
+    # Hidden id (only for existing rows) + op marker.
+    hidden_html = (
+        f'<input type="hidden" name="{escape(prefix)}[_op]" value="{op_value}">'
+    )
+    if not is_new:
+        hidden_html += (
+            f'<input type="hidden" name="{escape(prefix)}[id]" '
+            f'value="{rec_or_none.id}">'
+        )
+
+    # Render each visible cell as the comodel field's edit widget.
+    td_cells: list[str] = []
+    for fs in fields_spec:
+        sub_name = fs["name"]
+        sub_field = comodel_cls._fields.get(sub_name)
+        if sub_field is None:
+            td_cells.append('<td class="px-3 py-2"></td>')
+            continue
+        spec = _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname)
+        renderer = find_renderer(sub_field, fs.get("widget"), mode="edit")
+        if is_new:
+            value = (
+                env[sub_field.comodel_name] if isinstance(sub_field, Many2one)
+                else sub_field.default
+            )
+        else:
+            value = getattr(rec_or_none, sub_name)
+        td_cells.append(
+            f'<td class="px-3 py-2 align-top">{renderer(value, spec, sub_field)}</td>'
+        )
+
+    # Trailing cell: delete button.
+    delete_btn = (
+        '<td class="px-3 py-2 align-top text-right w-8">'
+        '<button type="button" data-pv-o2m-delete '
+        'class="text-body-subtle hover:text-fg-danger transition-colors" '
+        'aria-label="Delete row">'
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" '
+        'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+        '<path stroke-linecap="round" stroke-linejoin="round" '
+        'd="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>'
+        '</svg></button></td>'
+    )
+
+    return (
+        f'<tr data-pv-o2m-row class="align-top">'
+        f'<td class="hidden">{hidden_html}</td>'
+        f'{"".join(td_cells)}{delete_btn}</tr>'
+    )
+
+
 @widget(One2many, hint="table", mode="edit")
 def _edit_o2m_table(value, spec, field):
-    return _render_o2m_table(value, spec, field)
+    """Editable inline table: each existing child is a row of inputs,
+    an "Add" button clones a template row, and per-row delete buttons
+    flag rows for unlink on the parent's save.
+
+    The parent form posts everything together; `parse_form_vals`
+    harvests the namespaced `<o2m_name>[<idx>][<sub>]` keys into a
+    list of (op, id, vals) commands, and the form-save endpoint
+    applies them inside the parent's transaction."""
+    env = value.env if value else (spec.get("_record").env if spec.get("_record") else None)
+    if env is None:
+        return _render_o2m_table(value, spec, field)
+    parent = spec.get("_record")
+    oname = spec["name"]
+    comodel = spec.get("_comodel") or field.comodel_name
+    co_cls = env.registry[comodel]
+    fields_spec = _resolve_o2m_table_fields(env, comodel, spec.get("_list_view_url"))
+
+    # Column headers + one trailing column for the delete button.
+    header_cells: list[str] = []
+    for fs in fields_spec:
+        f = co_cls._fields.get(fs["name"])
+        label = fs.get("label") or (f.string if f else fs["name"])
+        header_cells.append(
+            f'<th class="px-3 py-2 text-left text-2xs font-semibold uppercase '
+            f'tracking-wider text-body-subtle">{escape(label)}</th>'
+        )
+    header_cells.append('<th class="px-3 py-2 w-8"></th>')
+
+    # Existing rows.
+    existing = list(value)
+    body_rows = [
+        _render_o2m_edit_row(env, co_cls, rec, idx, oname, fields_spec)
+        for idx, rec in enumerate(existing)
+    ]
+    empty_html = ""
+    if not body_rows:
+        empty_html = (
+            f'<tr data-pv-o2m-empty><td colspan="{len(fields_spec) + 1}" '
+            f'class="px-3 py-4 text-center text-xs text-body-subtle">'
+            f'No entries yet.</td></tr>'
+        )
+
+    # Template row for client-side cloning.
+    template_row = _render_o2m_edit_row(
+        env, co_cls, None, "__IDX__", oname, fields_spec,
+    )
+
+    add_btn = (
+        '<div class="mt-2 flex justify-end">'
+        '<button type="button" data-pv-o2m-add '
+        'class="inline-flex items-center gap-1 text-xs font-medium '
+        'text-fg-brand hover:underline">'
+        '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '
+        'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+        '<path stroke-linecap="round" stroke-linejoin="round" '
+        'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
+        'Add row</button></div>'
+    )
+
+    next_idx = len(existing)
+    js = (
+        '<script>(function(){\n'
+        'var root=document.currentScript.parentElement;\n'
+        'var tbody=root.querySelector("tbody");\n'
+        'var tmpl=root.querySelector("template[data-pv-o2m-template]");\n'
+        'var addBtn=root.querySelector("[data-pv-o2m-add]");\n'
+        'var nextIdx=parseInt(root.dataset.pvO2mNext,10);\n'
+        'addBtn.addEventListener("click",function(){\n'
+        '  var html=tmpl.innerHTML.replace(/__IDX__/g,String(nextIdx++));\n'
+        '  var frag=document.createRange().createContextualFragment(html);\n'
+        '  var emptyRow=tbody.querySelector("[data-pv-o2m-empty]");\n'
+        '  if(emptyRow) emptyRow.remove();\n'
+        '  tbody.appendChild(frag);\n'
+        '});\n'
+        'root.addEventListener("click",function(e){\n'
+        '  var btn=e.target.closest("[data-pv-o2m-delete]");\n'
+        '  if(!btn||!root.contains(btn)) return;\n'
+        '  var tr=btn.closest("tr");\n'
+        '  if(!tr) return;\n'
+        '  var op=tr.querySelector("input[name$=\\"[_op]\\"]");\n'
+        '  if(op && op.value==="create"){ tr.remove(); return; }\n'
+        '  if(op) op.value="delete";\n'
+        '  tr.classList.add("opacity-40","line-through","pointer-events-none");\n'
+        '});\n'
+        '})();</script>'
+    )
+
+    return Markup(
+        f'<div class="border border-default rounded-lg overflow-hidden" '
+        f'data-pv-o2m-root data-pv-o2m-name="{escape(oname)}" '
+        f'data-pv-o2m-next="{next_idx}">'
+        f'<table class="min-w-full divide-y divide-default">'
+        f'<thead class="bg-neutral-secondary"><tr>{"".join(header_cells)}</tr></thead>'
+        f'<tbody class="divide-y divide-default">'
+        f'{"".join(body_rows) or empty_html}'
+        f'</tbody></table>'
+        f'<template data-pv-o2m-template>{template_row}</template>'
+        f'{js}</div>{add_btn}'
+    )
 
 
 # ---- edit-mode widgets ----
@@ -763,6 +939,145 @@ def render_new_row(view, env) -> str:
     cells = _render_cells_empty(env, cls, fields_spec, mode="edit")
     template = _env.get_template("list_row_edit.html")
     return template.render(view=view, row={"id": None, "cells": cells})
+
+
+_O2M_NESTED_KEY = re.compile(r"^([a-zA-Z_][\w]*)\[(\d+)\]\[([a-zA-Z_][\w]*)\]$")
+
+
+def _parse_scalar(field, raw):
+    """Coerce a form-submitted string to its field's Python type.
+
+    Returns (value, error_msg | None). Caller decides whether to
+    apply the value or stash the error against the field name."""
+    if isinstance(field, Boolean):
+        # The hidden-then-checkbox pair means callers always see a
+        # last value; "on" → True, anything else → False.
+        return (raw == "on", None)
+    if raw in ("", None):
+        if getattr(field, "required", False):
+            return (None, "This field is required.")
+        return (None, None)
+    try:
+        if isinstance(field, Integer):
+            return (int(raw), None)
+        if isinstance(field, Float):
+            return (float(raw), None)
+        if isinstance(field, Many2one):
+            return (int(raw), None)
+        if isinstance(field, Datetime):
+            return (field.to_sql_param(raw), None)
+        if isinstance(field, Date):
+            return (field.to_sql_param(raw), None)
+        return (raw, None)
+    except (TypeError, ValueError):
+        if isinstance(field, Integer):
+            return (None, "Must be a whole number.")
+        if isinstance(field, Float):
+            return (None, "Must be a number.")
+        if isinstance(field, Many2one):
+            return (None, "Invalid record reference.")
+        if isinstance(field, Date):
+            return (None, "Must be a date (YYYY-MM-DD).")
+        if isinstance(field, Datetime):
+            return (None, "Must be a datetime.")
+        return (None, "Invalid value.")
+
+
+def harvest_o2m_commands(model_cls, form_data, env) -> tuple[dict, dict]:
+    """Pull inline-O2m commands out of a flat form-data MultiDict.
+
+    Returns ``(commands_by_field, errors)``:
+
+    * ``commands_by_field`` maps each O2m parent field name to an
+      ordered list of dicts like
+      ``{"op": "create"|"update"|"delete", "id": int|None,
+         "vals": {...}}``.
+    * ``errors`` maps the namespaced sub-key
+      (``"rate_ids[0][rate]"``) to a human-readable message, suitable
+      for surfacing in a form-level banner.
+
+    Keys not matching the nested pattern are ignored — the top-level
+    ``parse_form_vals`` keeps doing its own thing for scalar fields."""
+    by_field: dict[str, dict[int, dict]] = {}
+    keys = list(form_data.keys()) if hasattr(form_data, "keys") else list(form_data)
+    for key in keys:
+        m = _O2M_NESTED_KEY.match(key)
+        if not m:
+            continue
+        oname, idx, sub = m.group(1), int(m.group(2)), m.group(3)
+        ofield = model_cls._fields.get(oname)
+        if not isinstance(ofield, One2many):
+            continue
+        bucket = by_field.setdefault(oname, {}).setdefault(idx, {})
+        bucket[sub] = form_data[key]
+
+    commands_by_field: dict[str, list] = {}
+    errors: dict[str, str] = {}
+    for oname, by_idx in by_field.items():
+        ofield = model_cls._fields[oname]
+        co_cls = env.registry[ofield.comodel_name]
+        cmds: list[dict] = []
+        for idx in sorted(by_idx):
+            raw = dict(by_idx[idx])
+            op = raw.pop("_op", "update")
+            rid_raw = raw.pop("id", None)
+            try:
+                rid = int(rid_raw) if rid_raw not in (None, "") else None
+            except (TypeError, ValueError):
+                rid = None
+            if op == "delete":
+                if rid is None:
+                    continue
+                cmds.append({"op": "delete", "id": rid, "vals": {}})
+                continue
+            child_vals: dict = {}
+            had_error = False
+            for sub_name, sub_raw in raw.items():
+                sub_field = co_cls._fields.get(sub_name)
+                if sub_field is None or not sub_field.is_stored:
+                    continue
+                value, err = _parse_scalar(sub_field, sub_raw)
+                if err:
+                    errors[f"{oname}[{idx}][{sub_name}]"] = err
+                    had_error = True
+                    continue
+                child_vals[sub_name] = value
+            if had_error:
+                continue
+            if op == "create":
+                cmds.append({"op": "create", "id": None, "vals": child_vals})
+            else:
+                if rid is None:
+                    continue
+                cmds.append({"op": "update", "id": rid, "vals": child_vals})
+        if cmds:
+            commands_by_field[oname] = cmds
+    return commands_by_field, errors
+
+
+def apply_o2m_commands(parent_record, commands_by_field):
+    """Persist O2m commands harvested by :func:`harvest_o2m_commands`.
+
+    Runs inside the caller's transaction. For ``create`` commands the
+    inverse FK is set to the parent record so the new child stays
+    linked even when the form didn't surface that field explicitly.
+    """
+    env = parent_record.env
+    parent_cls = type(parent_record)
+    for oname, cmds in commands_by_field.items():
+        ofield = parent_cls._fields[oname]
+        Child = env[ofield.comodel_name]
+        inverse = ofield.inverse_name
+        for cmd in cmds:
+            op = cmd["op"]
+            if op == "create":
+                vals = dict(cmd["vals"])
+                vals.setdefault(inverse, parent_record.id)
+                Child.create(vals)
+            elif op == "update":
+                Child.browse(cmd["id"]).write(cmd["vals"])
+            elif op == "delete":
+                Child.browse(cmd["id"]).unlink()
 
 
 def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
