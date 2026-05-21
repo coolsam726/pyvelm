@@ -898,3 +898,38 @@ What the Dockerfile does, in order:
   fine for small deployments. Production-grade setups should put a
   CDN or the reverse proxy in front, serving the contents of
   `pyvelm/static/dist/` directly.
+
+### Background cron runner
+
+`pyvelm-cron` is a long-running CLI that ticks
+`CronJob.run_due(env)` against a connection pool at a configurable
+cadence. The `cron` service in `docker-compose.yml` runs it
+alongside the app:
+
+```yaml
+cron:
+  command: ["pyvelm-cron"]
+  environment:
+    PYVELM_DSN: postgresql://…
+    PYVELM_MODULE_ROOTS: /app/examples/modules:/app/examples/modules_demo
+    PYVELM_CRON_INTERVAL: 60
+```
+
+Env / CLI knobs:
+
+| variable / arg | default | what it does |
+|----------------|---------|--------------|
+| `PYVELM_DSN`              | (required) | Postgres connection string |
+| `PYVELM_MODULE_ROOTS`     | (required) | Colon-separated module dirs |
+| `PYVELM_CRON_INTERVAL` / `--interval` | `60` | Seconds between ticks |
+| `--roots` | env var | Override the module-root list inline |
+
+SIGTERM / SIGINT flip a shutdown flag; the loop drains the current
+tick and exits — graceful for container restarts.
+
+**Run exactly one cron worker per database.** `CronJob.run_due` does
+a plain SELECT-then-UPDATE without row-level locking, so fanning out
+to multiple cron workers will occasionally double-fire a job at its
+exact due time. `docker-compose.yml`'s `cron` service is pinned at
+`replicas: 1` for that reason. A future hardening will switch to
+`SELECT … FOR UPDATE SKIP LOCKED` and let the worker count scale.

@@ -40,5 +40,23 @@ services:
     ports:
       - "${PYVELM_PORT:-8000}:8000"
 
+  # Dedicated cron worker. CronJob.run_due is not safe to fan out
+  # across replicas (plain SELECT-then-UPDATE), so keep this at one
+  # instance per database — replicas: 1 is the safety baseline.
+  # Tune the polling cadence via PYVELM_CRON_INTERVAL.
+  cron:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PYVELM_DSN: "postgresql://${POSTGRES_USER:-pyvelm}:${POSTGRES_PASSWORD:-pyvelm}@db:5432/${POSTGRES_DB:-pyvelm}"
+      PYVELM_MODULE_ROOTS: "/app/examples/modules:/app/examples/modules_demo"
+      PYVELM_CRON_INTERVAL: ${PYVELM_CRON_INTERVAL:-60}
+    command: ["pyvelm-cron"]
+    deploy:
+      replicas: 1
+
 volumes:
   db_data:

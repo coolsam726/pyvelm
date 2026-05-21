@@ -1372,6 +1372,26 @@ def main():
                 assert "Test cron" not in ran2, ran2
                 print("cron: future job skipped OK")
 
+                # pyvelm.cli._tick mirrors what the background runner
+                # calls on every loop iteration: open a connection from
+                # a pool, wrap it in an env, run_due against the live
+                # registry. Confirms the CLI wrapper hands the right
+                # shape to CronJob even though the loop itself can't
+                # be unit-tested without spawning a subprocess.
+                from pyvelm import cli as _cli
+                past = _dt.utcnow() - _td(seconds=1)
+                with wf_env.transaction():
+                    cron.write({"nextcall": past})
+                wf_env.cache.invalidate(model_name="ir.cron", ids=[cron.id])
+                _cli._tick(pool, reg)
+                with pool.connection() as side_conn:
+                    rows = side_conn.execute(
+                        "SELECT nextcall FROM ir_cron WHERE id = %s",
+                        [cron.id],
+                    ).fetchone()
+                assert rows is not None and rows[0] > _dt.utcnow(), rows
+                print("cron CLI: _tick advances nextcall via the pool path")
+
                 # ----- Slice D: mail threads -----
                 alice = wf_env["res.partner"].search([], limit=1)
                 assert alice, "need a partner for mail test"
