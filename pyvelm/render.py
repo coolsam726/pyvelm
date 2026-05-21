@@ -25,7 +25,7 @@ import jinja2
 from markupsafe import Markup, escape
 
 from .fields import (
-    Boolean, Char, Field, Float, Integer,
+    Boolean, Char, Date, Datetime, Field, Float, Integer,
     Many2many, Many2one, Monetary, One2many, Text,
 )
 
@@ -90,6 +90,23 @@ def _render_text(value, spec, field):
 @widget(Float)
 def _render_number(value, spec, field):
     return Markup("") if value is None else escape(str(value))
+
+
+@widget(Date)
+def _render_date(value, spec, field):
+    if value is None:
+        return Markup("")
+    return escape(value.isoformat() if hasattr(value, "isoformat") else str(value))
+
+
+@widget(Datetime)
+def _render_datetime(value, spec, field):
+    if value is None:
+        return Markup("")
+    if hasattr(value, "strftime"):
+        # Minute precision is plenty for UI display.
+        return escape(value.strftime("%Y-%m-%d %H:%M"))
+    return escape(str(value))
 
 
 def _resolve_currency(spec, field):
@@ -406,6 +423,33 @@ def _edit_float(value, spec, field):
     return Markup(
         f'<input type="number" step="any" name="{escape(spec["name"])}" '
         f'value="{val_attr}" placeholder="{placeholder}" '
+        f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
+    )
+
+
+@widget(Date, mode="edit")
+def _edit_date(value, spec, field):
+    val_attr = ""
+    if value is not None:
+        val_attr = escape(value.isoformat() if hasattr(value, "isoformat") else str(value))
+    return Markup(
+        f'<input type="date" name="{escape(spec["name"])}" value="{val_attr}" '
+        f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
+    )
+
+
+@widget(Datetime, mode="edit")
+def _edit_datetime(value, spec, field):
+    val_attr = ""
+    if value is not None and hasattr(value, "strftime"):
+        # HTML <input type="datetime-local"> wants ISO without timezone
+        # and minute precision.
+        val_attr = escape(value.strftime("%Y-%m-%dT%H:%M"))
+    elif value is not None:
+        val_attr = escape(str(value))
+    return Markup(
+        f'<input type="datetime-local" name="{escape(spec["name"])}" '
+        f'value="{val_attr}" '
         f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
     )
 
@@ -787,6 +831,12 @@ def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
                 vals[fname] = float(raw)
             elif isinstance(field, Many2one):
                 vals[fname] = int(raw)
+            elif isinstance(field, Datetime):
+                # HTML datetime-local sends "YYYY-MM-DDTHH:MM"; the
+                # field's to_sql_param accepts ISO 8601 either way.
+                vals[fname] = field.to_sql_param(raw)
+            elif isinstance(field, Date):
+                vals[fname] = field.to_sql_param(raw)
             else:
                 vals[fname] = raw
         except (TypeError, ValueError):
@@ -796,6 +846,10 @@ def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
                 errors[fname] = "Must be a number."
             elif isinstance(field, Many2one):
                 errors[fname] = "Invalid record reference."
+            elif isinstance(field, Date):
+                errors[fname] = "Must be a date (YYYY-MM-DD)."
+            elif isinstance(field, Datetime):
+                errors[fname] = "Must be a datetime."
             else:
                 errors[fname] = "Invalid value."
     return vals, errors

@@ -38,26 +38,7 @@ _INTERVAL_DELTAS = {
 }
 
 
-class _DatetimeField(Field):
-    """Minimal datetime field — stored as TIMESTAMP, Python datetime."""
-
-    sql_type = "timestamp"
-    python_type = datetime
-
-    def column_ddl(self) -> str:
-        null = "" if self.required else " NULL"
-        return f'"{self.column}" timestamp{null}'
-
-    def to_sql_param(self, value):
-        if value is None or value is False:
-            return None
-        if isinstance(value, datetime):
-            return value
-        # Accept ISO 8601 strings.
-        return datetime.fromisoformat(str(value))
-
-    def to_python(self, value):
-        return value  # psycopg returns datetime already
+from .fields import Datetime as _DatetimeField  # noqa: E402,F401
 
 
 class CronJob(BaseModel):

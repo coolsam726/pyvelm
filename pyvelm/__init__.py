@@ -11,6 +11,8 @@ from .env import Environment
 from .fields import (
     Boolean,
     Char,
+    Date,
+    Datetime,
     Field,
     Float,
     Integer,
@@ -60,6 +62,8 @@ __all__ = [
     "BaseModel",
     "Boolean",
     "Char",
+    "Date",
+    "Datetime",
     "Environment",
     "Field",
     "Float",

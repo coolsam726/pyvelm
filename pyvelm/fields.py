@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date as _date, datetime as _datetime
 from typing import Any
 
 
@@ -188,6 +189,58 @@ class Monetary(Float):
         d_step = Decimal(str(step))
         quotient = (d_amount / d_step).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
         return float(quotient * d_step)
+
+
+class Datetime(Field):
+    """A naive (no-tzinfo) datetime, stored as ``timestamp``.
+
+    Accepts datetime, ISO 8601 strings, or HTML ``datetime-local``
+    submissions (``YYYY-MM-DDTHH:MM``) on write."""
+
+    sql_type = "timestamp"
+    python_type = _datetime
+
+    def column_ddl(self) -> str:
+        null = "" if self.required else " NULL"
+        return f'"{self.column}" timestamp{null}'
+
+    def to_sql_param(self, value):
+        if value is None or value is False or value == "":
+            return None
+        if isinstance(value, _datetime):
+            return value
+        if isinstance(value, _date):
+            return _datetime(value.year, value.month, value.day)
+        return _datetime.fromisoformat(str(value))
+
+    def to_python(self, value):
+        return value  # psycopg returns datetime already
+
+
+class Date(Field):
+    """A calendar date, stored as ``date``.
+
+    Accepts ``date``, ``datetime`` (truncated to day), or
+    ``YYYY-MM-DD`` strings (HTML ``<input type=\"date\">``)."""
+
+    sql_type = "date"
+    python_type = _date
+
+    def column_ddl(self) -> str:
+        null = "" if self.required else " NULL"
+        return f'"{self.column}" date{null}'
+
+    def to_sql_param(self, value):
+        if value is None or value is False or value == "":
+            return None
+        if isinstance(value, _datetime):
+            return value.date()
+        if isinstance(value, _date):
+            return value
+        return _date.fromisoformat(str(value))
+
+    def to_python(self, value):
+        return value
 
 
 class Boolean(Field):
