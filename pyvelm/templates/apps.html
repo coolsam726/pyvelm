@@ -169,21 +169,21 @@
                    dialog wraps each one with a "are you sure" prompt. #}
                 <footer class="mt-auto pt-2 border-t border-default flex gap-2">
                     {% if app.state == "uninstalled" %}
-                        {% if app.deps_missing %}
+                        {% if app.deps_unknown %}
                         <button type="button" disabled
                                 class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md
                                        bg-neutral-tertiary text-body-subtle cursor-not-allowed"
-                                title="Missing deps: {{ app.deps_missing | join(', ') }}">
+                                title="Missing deps not on disk: {{ app.deps_unknown | join(', ') }}">
                             Missing deps
                         </button>
                         {% else %}
                         <button type="button"
                                 hx-post="/web/apps/{{ app.name }}/install"
                                 hx-swap="none"
-                                hx-confirm="Install {{ app.name }}? Its dependencies will be installed too."
+                                hx-confirm="{% if app.deps_missing %}Install {{ app.name }}? This will cascade-install {{ app.deps_missing | join(', ') }} first.{% else %}Install {{ app.name }}?{% endif %}"
                                 class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-md
                                        bg-fg-brand text-white hover:opacity-90 transition-opacity">
-                            Install
+                            Install{% if app.deps_missing %} (+ {{ app.deps_missing | length }} dep{% if app.deps_missing | length > 1 %}s{% endif %}){% endif %}
                         </button>
                         {% endif %}
                     {% elif app.state == "to_upgrade" %}

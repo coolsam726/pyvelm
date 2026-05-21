@@ -1972,7 +1972,13 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
           "installed_version": str | None,
           "state": "installed" | "to_upgrade" | "uninstalled",
           "depends": list[str],
-          "deps_missing": list[str],  # names of deps not yet installed
+          "deps_missing": list[str],   # names of deps not yet installed
+          "deps_unknown": list[str],   # subset of deps_missing that are
+                                       # also absent from the on-disk
+                                       # module roots — these block install
+                                       # because the cascade can't pick them
+                                       # up. Empty list means "cascade can
+                                       # handle it."
         }
     """
     from . import loader as _loader
@@ -1997,6 +2003,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
             installed_v = tuple(int(p) for p in inst.split("."))
             state = "to_upgrade" if spec.version > installed_v else "installed"
         deps_missing = [d for d in spec.depends if d not in installed]
+        deps_unknown = [d for d in deps_missing if d not in specs]
         catalog.append({
             "name": spec.name,
             "summary": spec.summary,
@@ -2009,6 +2016,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
             "state": state,
             "depends": spec.depends,
             "deps_missing": deps_missing,
+            "deps_unknown": deps_unknown,
         })
     catalog.sort(key=lambda c: (c["category"], c["name"]))
     return catalog
