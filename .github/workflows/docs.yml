@@ -1,0 +1,69 @@
+# Build the MkDocs site on every push to main and publish via the
+# official GitHub Pages deploy action (Pages → "Build and deployment"
+# → Source = "GitHub Actions" must be enabled once in the repo
+# settings; nothing else needs configuration).
+#
+# Manual runs via the Actions tab are wired up too for one-off
+# rebuilds (e.g. after fixing only docstrings).
+
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "pyvelm/**.py"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch full history so the "git revision date" plugin (if we
+          # add it later) and any `edit_uri` links resolve cleanly.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install pyvelm + docs deps
+        run: |
+          python -m pip install --upgrade pip
+          # Install pyvelm itself so mkdocstrings can import it. The
+          # `docs` extra pulls mkdocs + material + mkdocstrings[python].
+          pip install -e ".[docs]"
+      - name: Build site
+        # `--strict` is intentionally off: docs/modules.md links to
+        # source files via relative paths (`../pyvelm/foo.py`) that
+        # only resolve in the source tree, not the rendered site.
+        # The warnings are cosmetic; broken-link enforcement can come
+        # back once those are rewritten as GitHub URLs.
+        run: mkdocs build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

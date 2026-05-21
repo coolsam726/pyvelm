@@ -1,0 +1,108 @@
+site_name: pyvelm
+site_description: Odoo-style ERP framework — recordsets, declarative models, env-bound cache.
+site_url: https://example.github.io/pyvelm/
+repo_url: https://github.com/example/pyvelm
+edit_uri: edit/main/docs/
+
+# All prose lives under docs/ already; mkdocstrings stubs land in
+# docs/api/. site/ is the build output and is in .gitignore.
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.instant
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+    - search.suggest
+    - search.share
+  palette:
+    # Light mode default; toggles to dark via the icon in the header.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [.]            # so `pyvelm.X` imports resolve from repo root
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_root_full_path: false
+            show_source: true
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            filters: ["!^_"]    # hide dunder/private by default
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Guides:
+      - Architecture: architecture.md
+      - Module loading: module-loading.md
+      - Modules reference: modules.md
+      - ACL & security: acl.md
+      - Extending fields: extending-fields.md
+      - Web layer: web-layer.md
+  - API reference:
+      - Overview: api/index.md
+      - Recordsets & fields:
+          - pyvelm.model: api/model.md
+          - pyvelm.fields: api/fields.md
+          - pyvelm.depends: api/depends.md
+          - pyvelm.registry: api/registry.md
+          - pyvelm.env: api/env.md
+          - pyvelm.domain: api/domain.md
+      - Modules & loader:
+          - pyvelm.loader: api/loader.md
+          - pyvelm.builders: api/builders.md
+          - pyvelm.types: api/types.md
+      - Views & rendering:
+          - pyvelm.views: api/views.md
+          - pyvelm.render: api/render.md
+      - Workflows:
+          - pyvelm.actions: api/actions.md
+          - pyvelm.automation: api/automation.md
+          - pyvelm.cron: api/cron.md
+          - pyvelm.mail: api/mail.md
+      - HTTP & CLI:
+          - pyvelm.web: api/web.md
+          - pyvelm.cli: api/cli.md
