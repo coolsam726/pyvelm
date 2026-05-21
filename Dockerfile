@@ -10,7 +10,7 @@
 #     docker compose up
 
 # ────────────────────────────── Stage 1: build CSS ──
-FROM node:20-alpine AS css
+FROM node:24-alpine AS css
 
 WORKDIR /src
 

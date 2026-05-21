@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "Tailwind + Flowbite build for pyvelm's bundled HTMX UI",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "vendor": "cp ./node_modules/flowbite/dist/flowbite.min.js ./pyvelm/static/dist/flowbite.min.js",
     "build": "tailwindcss -i ./pyvelm/static/tailwind.css -o ./pyvelm/static/dist/pyvelm.css --minify && npm run vendor",
