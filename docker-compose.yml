@@ -64,7 +64,7 @@ services:
       PYVELM_SMTP_PASSWORD: ${PYVELM_SMTP_PASSWORD:-}
       PYVELM_SMTP_FROM: ${PYVELM_SMTP_FROM:-}
       PYVELM_SMTP_USE_TLS: ${PYVELM_SMTP_USE_TLS:-1}
-    command: ["pyvelm-cron"]
+    command: ["pyvelm", "cron"]
     deploy:
       replicas: 1
 

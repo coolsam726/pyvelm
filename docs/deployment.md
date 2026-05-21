@@ -65,7 +65,7 @@ reverse proxy:
 
 ## The cron worker
 
-`pyvelm-cron` is the background runner. It boots the registry once,
+`pyvelm cron` is the background runner. It boots the registry once,
 opens a connection pool, and ticks `CronJob.run_due` every N
 seconds — which fires due cron jobs, including the built-in mail
 dispatcher. The compose file ships a `cron` service that runs it
@@ -73,7 +73,7 @@ alongside the app.
 
 ```yaml
 cron:
-  command: ["pyvelm-cron"]
+  command: ["pyvelm", "cron"]
   environment:
     PYVELM_DSN: postgresql://…
     PYVELM_MODULE_ROOTS: /app/examples/modules:/app/examples/modules_demo

@@ -83,6 +83,7 @@ nav:
       - Modules: modules.md
       - Security: security.md
       - Deployment: deployment.md
+      - CLI reference: cli.md
       - Architecture: architecture.md
   - API reference:
       - Overview: api/index.md

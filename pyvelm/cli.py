@@ -1,41 +1,22 @@
 """pyvelm command-line entry points.
 
-Today this ships a single command — ``pyvelm-cron`` — but the file is
-intentionally `cli` (not `cron_cli`) so additional commands can land
-here without churning the entry-point table.
+A single ``pyvelm`` command dispatches subcommands:
 
-The cron runner is a thin loop around ``CronJob.run_due``:
+    pyvelm cron            Background cron + mail-dispatcher worker.
+    pyvelm init <name>     Scaffold a new pyvelm project.
+    pyvelm new <module>    Drop a runnable module skeleton into a project.
 
-    ┌──────────── boot (once) ────────────┐
-    │   pool = ConnectionPool(...)         │
-    │   reg  = Registry();                 │
-    │   loader.load_and_install(roots,…)   │
-    └──────────────────────────────────────┘
-                  │
-                  ▼
-    ┌──────── steady-state (tick) ─────────┐
-    │   with pool.connection() as conn:    │
-    │     env = Environment(conn, reg)     │
-    │     CronJob.run_due(env)             │
-    │   sleep(interval)                    │
-    └──────────────────────────────────────┘
+The legacy ``pyvelm-cron`` entry point keeps working — it's a thin
+alias for ``pyvelm cron`` so existing docker-compose files and
+systemd units don't need editing during upgrades.
 
-Concurrency caveat: ``CronJob.run_due`` does a plain SELECT-then-
-UPDATE, so running multiple cron workers against the same database
-will occasionally double-fire jobs at exactly their due time. Until a
-``SELECT … FOR UPDATE SKIP LOCKED`` lands, the rule is **one cron
-worker per DB**. Configure ``GUNICORN_WORKERS=1`` if you're rolling
-the cron loop inside the web container (not the recommended layout);
-the better pattern is the dedicated ``cron`` service in
-``docker-compose.yml`` which runs exactly one replica.
+Configuration is env-driven (CLI flags override). Most apps set
+these in their ``.env``:
 
-Configuration is env-driven (with CLI overrides):
-
-    PYVELM_DSN              Postgres DSN. Required.
-    PYVELM_MODULE_ROOTS     Colon-separated module directories. Required.
-                            Override with ``--roots``.
-    PYVELM_CRON_INTERVAL    Seconds between ticks. Default 60.
-                            Override with ``--interval``.
+    PYVELM_DSN              Postgres DSN. Required for ``cron``.
+    PYVELM_MODULE_ROOTS     Colon-separated module directories.
+                            ``cron`` defaults to ``PYVELM_MODULE_ROOTS``.
+    PYVELM_CRON_INTERVAL    Seconds between cron ticks. Default 60.
 """
 from __future__ import annotations
 
@@ -61,6 +42,10 @@ log = logging.getLogger("pyvelm.cron")
 def _parse_roots(value: str) -> list[Path]:
     return [Path(p) for p in (value or "").split(":") if p]
 
+
+# ---------------------------------------------------------------------------
+# cron subcommand
+# ---------------------------------------------------------------------------
 
 def cron_loop(*, dsn: str, roots: list[Path], interval: float) -> None:
     """Boot the registry against `dsn` + `roots`, then loop forever.
@@ -119,13 +104,9 @@ def _tick(pool, registry: Registry) -> None:
             log.info("ran %d job(s): %s", len(executed), executed)
 
 
-def main() -> None:
-    load_dotenv(".env")
-
-    parser = argparse.ArgumentParser(
-        prog="pyvelm-cron",
-        description="pyvelm background cron runner",
-    )
+def _add_cron_args(parser: argparse.ArgumentParser) -> None:
+    """Attach the cron-runner flags. Shared between ``pyvelm cron``
+    (as a subparser) and the legacy ``pyvelm-cron`` (top-level)."""
     parser.add_argument(
         "--interval", type=float,
         default=float(os.environ.get("PYVELM_CRON_INTERVAL", "60")),
@@ -136,11 +117,13 @@ def main() -> None:
         default=_parse_roots(os.environ.get("PYVELM_MODULE_ROOTS", "")),
         help=(
             "One or more module-discovery roots. Defaults to the colon-"
-            "separated PYVELM_MODULE_ROOTS env var."
+            "separated PYVELM_MODULE_ROOTS env var. The framework's "
+            "BUILTIN_MODULE_ROOTS are always prepended automatically."
         ),
     )
-    args = parser.parse_args()
 
+
+def _run_cron(args: argparse.Namespace) -> None:
     dsn = os.environ.get("PYVELM_DSN")
     if not dsn:
         sys.exit("PYVELM_DSN not set")
@@ -165,6 +148,111 @@ def main() -> None:
         roots=all_roots,
         interval=args.interval,
     )
+
+
+# ---------------------------------------------------------------------------
+# init / new subcommands (real implementations in slices 2 + 3)
+# ---------------------------------------------------------------------------
+
+def _run_init(_args: argparse.Namespace) -> None:
+    sys.exit(
+        "`pyvelm init` not yet implemented. Coming in the next release; "
+        "for now, clone the repo and copy examples/serve.py as a "
+        "starting point."
+    )
+
+
+def _run_new(_args: argparse.Namespace) -> None:
+    sys.exit(
+        "`pyvelm new` not yet implemented. Coming in the next release; "
+        "for now, hand-author a module directory under your app's "
+        "module root — see docs/modules.md for the on-disk shape."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Entry points
+# ---------------------------------------------------------------------------
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="pyvelm",
+        description=(
+            "pyvelm command-line tool. Subcommands: `cron` (background "
+            "worker), `init` (scaffold a project), `new` (scaffold a "
+            "module)."
+        ),
+    )
+    subs = parser.add_subparsers(dest="command", required=True, metavar="<command>")
+
+    cron = subs.add_parser(
+        "cron",
+        help="Run the background cron + mail-dispatcher worker.",
+        description=(
+            "Long-running loop that ticks CronJob.run_due against a "
+            "connection pool. SIGTERM/SIGINT exits gracefully."
+        ),
+    )
+    _add_cron_args(cron)
+    cron.set_defaults(func=_run_cron)
+
+    init = subs.add_parser(
+        "init",
+        help="Scaffold a new pyvelm project (coming soon).",
+    )
+    init.add_argument(
+        "name",
+        help="Project directory to create.",
+    )
+    init.set_defaults(func=_run_init)
+
+    new = subs.add_parser(
+        "new",
+        help="Scaffold a new module inside the current project (coming soon).",
+    )
+    new.add_argument(
+        "name",
+        help="Module name (also becomes the directory name).",
+    )
+    new.add_argument(
+        "--in", dest="modules_root", default=None,
+        help=(
+            "Modules root directory. Defaults to auto-detection via "
+            "pyvelm.toml in cwd or any parent."
+        ),
+    )
+    new.set_defaults(func=_run_new)
+
+    return parser
+
+
+def main() -> None:
+    """``pyvelm`` entry point — subcommand dispatch."""
+    load_dotenv(".env")
+    parser = _build_parser()
+    args = parser.parse_args()
+    args.func(args)
+
+
+def cron_main() -> None:
+    """``pyvelm-cron`` legacy entry point.
+
+    Same shape as the old ``pyvelm-cron`` command (``--interval``,
+    ``--roots``), still works without subcommand prefix. Kept so
+    existing docker-compose files and systemd units survive a
+    pyvelm upgrade without edits.
+    """
+    load_dotenv(".env")
+    parser = argparse.ArgumentParser(
+        prog="pyvelm-cron",
+        description=(
+            "Legacy entry; same as `pyvelm cron`. Kept for "
+            "backward-compat with existing deployment configs."
+        ),
+    )
+    _add_cron_args(parser)
+    args = parser.parse_args()
+    _run_cron(args)
 
 
 if __name__ == "__main__":  # pragma: no cover

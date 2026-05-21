@@ -23,7 +23,11 @@ docs = [
 ]
 
 [project.scripts]
-pyvelm-cron = "pyvelm.cli:main"
+pyvelm = "pyvelm.cli:main"
+# Legacy entry — `pyvelm cron` is the canonical form going forward.
+# Kept so existing docker-compose / systemd configs survive upgrades
+# without edits.
+pyvelm-cron = "pyvelm.cli:cron_main"
 
 [build-system]
 requires = ["setuptools>=68"]
