@@ -1,0 +1,352 @@
+{% extends "layouts/main.html" %}
+{% block title %}{{ page_title }} — pyvelm{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{# Module catalog (Slice 1 — read-only). Cards are grouped by
+   category. Each card carries name, summary, dependency list, and
+   a state badge (Installed / To upgrade / Not installed). Action
+   buttons land in Slice 2; for now everything is informational. #}
+{% block content %}
+<div class="space-y-6" x-data="pvApps()">
+    {% set grouped = {} %}
+    {% for app in catalog %}
+        {% set _ = grouped.setdefault(app.category, []).append(app) %}
+    {% endfor %}
+    {% set categories = grouped.keys() | list %}
+
+    {# ── Toolbar: search + state pills + category dropdown. All three
+       filters compose with AND. Filtering is client-side (the catalog
+       fits comfortably on one page) so there's no server round-trip;
+       the @input handlers just toggle Alpine state and CSS classes
+       react. #}
+    <div class="flex flex-wrap items-center gap-2">
+        <div class="relative flex-1 min-w-[200px] max-w-sm">
+            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-body-subtle pointer-events-none"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
+            </svg>
+            <input type="search"
+                   x-model="query"
+                   @input="apply()"
+                   placeholder="Search modules…"
+                   class="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border border-default
+                          bg-neutral-primary text-body placeholder:text-body-subtle
+                          focus:outline-none focus:ring-2 focus:ring-fg-brand/40 focus:border-fg-brand">
+        </div>
+
+        {# State pill group — single-select. The fourth chip ("All")
+           resets the state filter. #}
+        <div data-pv-apps-state class="flex items-center gap-1 text-xs">
+            <template x-for="opt in [
+                {key: '',           label: 'All'},
+                {key: 'installed',  label: 'Installed'},
+                {key: 'to_upgrade', label: 'Upgrade'},
+                {key: 'uninstalled', label: 'Not installed'}
+            ]" :key="opt.key">
+                <button type="button"
+                        @click="stateFilter = opt.key; apply()"
+                        :class="stateFilter === opt.key
+                                ? 'bg-fg-brand text-white border-fg-brand'
+                                : 'bg-neutral-primary text-body border-default hover:bg-neutral-secondary'"
+                        class="px-2.5 py-1 rounded-full border font-medium transition-colors">
+                    <span x-text="opt.label"></span>
+                </button>
+            </template>
+        </div>
+
+        {# Category dropdown — populated from the categories present
+           in the rendered catalog. #}
+        <select x-model="categoryFilter" @change="apply()"
+                class="text-xs rounded-md border border-default bg-neutral-primary text-body
+                       py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand/40
+                       focus:border-fg-brand">
+            <option value="">All categories</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+        </select>
+
+        <div class="flex-1"></div>
+
+        {# Match count — updated by apply(). #}
+        <span class="text-xs text-body-subtle"
+              x-text="`${visibleCount} of ${{ catalog | length }} module${{ 's' if (catalog | length) != 1 else '' }}`">
+        </span>
+    </div>
+
+    {# Empty-results panel that shows when the filters exclude every card. #}
+    <div x-show="visibleCount === 0 && {{ catalog | length }}" x-cloak
+         class="bg-neutral-primary border border-default rounded-xl p-6 text-center">
+        <p class="text-sm text-body-subtle">No modules match the current filters.</p>
+        <button type="button" @click="reset()"
+                class="mt-2 text-xs text-fg-brand hover:underline">
+            Clear filters
+        </button>
+    </div>
+
+    {% for category, apps in grouped.items() %}
+    <section class="space-y-3"
+             data-pv-apps-section
+             data-pv-category="{{ category }}">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-body-subtle px-1">
+            {{ category }}
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for app in apps %}
+            <article data-pv-app="{{ app.name }}"
+                     data-pv-app-state="{{ app.state }}"
+                     data-pv-app-category="{{ app.category }}"
+                     data-pv-app-haystack="{{ (app.name ~ ' ' ~ app.summary ~ ' ' ~ app.author ~ ' ' ~ app.category) | lower }}"
+                     class="bg-neutral-primary border border-default rounded-xl p-4
+                            shadow-sm flex flex-col gap-2">
+                <header class="flex items-start justify-between gap-2">
+                    <div class="flex items-start gap-2.5">
+                        <div class="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center
+                                    bg-brand-softer text-fg-brand">
+                            {% if app.icon %}
+                                {{ app.icon | safe }}
+                            {% else %}
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
+                                     viewBox="0 0 24 24" stroke-width="1.8">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                          d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/>
+                                </svg>
+                            {% endif %}
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="text-sm font-semibold text-heading truncate">{{ app.name }}</h4>
+                            {% if app.author %}
+                            <p class="text-2xs text-body-subtle truncate">by {{ app.author }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {# State badge — colour-coded by lifecycle stage. #}
+                    {% if app.state == "installed" %}
+                    <span class="text-2xs font-medium px-2 py-0.5 rounded-full bg-success-soft text-success-strong shrink-0">
+                        Installed
+                    </span>
+                    {% elif app.state == "to_upgrade" %}
+                    <span class="text-2xs font-medium px-2 py-0.5 rounded-full bg-warning-soft text-warning-strong shrink-0">
+                        Upgrade →
+                    </span>
+                    {% else %}
+                    <span class="text-2xs font-medium px-2 py-0.5 rounded-full bg-neutral-tertiary text-body-subtle shrink-0">
+                        Not installed
+                    </span>
+                    {% endif %}
+                </header>
+
+                {% if app.summary %}
+                <p class="text-sm text-body">{{ app.summary }}</p>
+                {% endif %}
+
+                <div class="text-2xs text-body-subtle space-y-0.5">
+                    <p>
+                        <span class="font-medium">Version:</span>
+                        {% if app.installed_version and app.state == "to_upgrade" %}
+                        <span class="text-warning-strong">{{ app.installed_version }} → {{ app.available_version }}</span>
+                        {% elif app.installed_version %}
+                        <span>{{ app.installed_version }}</span>
+                        {% else %}
+                        <span>{{ app.available_version }}</span>
+                        {% endif %}
+                    </p>
+                    {% if app.depends %}
+                    <p>
+                        <span class="font-medium">Depends:</span>
+                        {% for d in app.depends %}<span
+                            class="{% if d in app.deps_missing %}text-fg-danger{% endif %}"
+                            >{{ d }}</span>{% if not loop.last %}, {% endif %}{% endfor %}
+                    </p>
+                    {% endif %}
+                </div>
+
+                {# Action footer — install / upgrade / uninstall.
+                   Buttons POST via HTMX so the response can swap the
+                   page chrome via HX-Redirect; the styled pvConfirm
+                   dialog wraps each one with a "are you sure" prompt. #}
+                <footer class="mt-auto pt-2 border-t border-default flex gap-2">
+                    {% if app.state == "uninstalled" %}
+                        {% if app.deps_missing %}
+                        <button type="button" disabled
+                                class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md
+                                       bg-neutral-tertiary text-body-subtle cursor-not-allowed"
+                                title="Missing deps: {{ app.deps_missing | join(', ') }}">
+                            Missing deps
+                        </button>
+                        {% else %}
+                        <button type="button"
+                                hx-post="/web/apps/{{ app.name }}/install"
+                                hx-swap="none"
+                                hx-confirm="Install {{ app.name }}? Its dependencies will be installed too."
+                                class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-md
+                                       bg-fg-brand text-white hover:opacity-90 transition-opacity">
+                            Install
+                        </button>
+                        {% endif %}
+                    {% elif app.state == "to_upgrade" %}
+                    <button type="button"
+                            hx-post="/web/apps/{{ app.name }}/upgrade"
+                            hx-swap="none"
+                            hx-confirm="Upgrade {{ app.name }} from {{ app.installed_version }} to {{ app.available_version }}? Migrations run inside one transaction; restart the server afterwards so any new field declarations take effect."
+                            class="flex-1 px-3 py-1.5 text-xs font-semibold rounded-md
+                                   bg-warning text-white hover:opacity-90 transition-opacity">
+                        Upgrade to {{ app.available_version }}
+                    </button>
+                    {% else %}
+                    <button type="button" disabled
+                            class="flex-1 px-3 py-1.5 text-xs font-medium rounded-md
+                                   bg-neutral-tertiary text-body-subtle cursor-not-allowed">
+                        Up to date
+                    </button>
+                    {% endif %}
+
+                    {# Uninstall — only on installed/to_upgrade modules,
+                       and never on `base`. The button fetches the
+                       dry-run preview first and feeds the result into
+                       a pvConfirm prompt so the user sees exactly what
+                       will be dropped before committing. #}
+                    {% if app.state != "uninstalled" and app.name != "base" %}
+                    <button type="button"
+                            @click="confirmUninstall('{{ app.name }}')"
+                            title="Uninstall {{ app.name }}"
+                            class="px-2.5 py-1.5 text-xs font-medium rounded-md
+                                   border border-default text-fg-danger
+                                   hover:bg-danger-soft transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+                        </svg>
+                    </button>
+                    {% endif %}
+                </footer>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+
+    {% if not catalog %}
+    <div class="bg-neutral-primary border border-default rounded-xl p-8 text-center">
+        <p class="text-sm text-body-subtle">
+            No modules discovered. Configure <code>module_roots</code> on
+            <code>create_app()</code> to point at a directory of modules.
+        </p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('pvApps', () => ({
+            // Filter state. All three compose with AND. Visible count
+            // is recomputed by apply() so the toolbar can show a live
+            // "N of M" indicator and the empty-state panel can flip on.
+            query: '',
+            stateFilter: '',
+            categoryFilter: '',
+            visibleCount: 0,
+            init() {
+                // First pass after the template renders so visibleCount
+                // matches what the user sees.
+                this.$nextTick(() => this.apply());
+            },
+            apply() {
+                const q = (this.query || '').trim().toLowerCase();
+                let visible = 0;
+                document.querySelectorAll('[data-pv-app]').forEach(card => {
+                    const stateOk = !this.stateFilter
+                        || card.getAttribute('data-pv-app-state') === this.stateFilter;
+                    const catOk = !this.categoryFilter
+                        || card.getAttribute('data-pv-app-category') === this.categoryFilter;
+                    const queryOk = !q
+                        || (card.getAttribute('data-pv-app-haystack') || '').includes(q);
+                    const show = stateOk && catOk && queryOk;
+                    card.style.display = show ? '' : 'none';
+                    if (show) visible++;
+                });
+                // Hide an entire category section if all its cards are
+                // filtered out — saves an empty heading floating alone.
+                document.querySelectorAll('[data-pv-apps-section]').forEach(section => {
+                    const anyVisible = section.querySelector(
+                        '[data-pv-app]:not([style*="display: none"])'
+                    );
+                    section.style.display = anyVisible ? '' : 'none';
+                });
+                this.visibleCount = visible;
+            },
+            reset() {
+                this.query = '';
+                this.stateFilter = '';
+                this.categoryFilter = '';
+                this.apply();
+            },
+
+            // Click handler for every Uninstall button. Fetches the
+            // dry-run preview, builds a human summary, and routes it
+            // through pvConfirm / pvAlert depending on whether the
+            // operation is allowed.
+            async confirmUninstall(name) {
+                let preview;
+                try {
+                    const r = await fetch(`/web/apps/${name}/uninstall-preview`, {
+                        credentials: 'same-origin',
+                    });
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    preview = await r.json();
+                } catch (e) {
+                    window.pvAlert(`Could not load preview: ${e.message}`,
+                                   { variant: 'danger', title: 'Uninstall' });
+                    return;
+                }
+
+                // Blockers short-circuit to an alert — nothing to confirm.
+                if (preview.blockers && preview.blockers.length) {
+                    window.pvAlert(
+                        'Cannot uninstall:\n  • ' + preview.blockers.join('\n  • '),
+                        { variant: 'warning', title: `Uninstall ${name}` }
+                    );
+                    return;
+                }
+
+                const lines = [`Uninstall ${name}? This will:`];
+                if (preview.tables && preview.tables.length) {
+                    lines.push(`  • DROP TABLE: ${preview.tables.join(', ')}`);
+                }
+                if (preview.views)  lines.push(`  • Delete ${preview.views} ir.ui.view row(s)`);
+                if (preview.menus)  lines.push(`  • Delete ${preview.menus} ir.ui.menu row(s)`);
+                lines.push('');
+                lines.push('This is irreversible.');
+
+                const ok = await window.pvConfirm(lines.join('\n'), {
+                    variant: 'danger',
+                    title: `Uninstall ${name}`,
+                    confirmLabel: 'Uninstall',
+                });
+                if (!ok) return;
+
+                // pvConfirm resolved positively; fire the action.
+                const form = new FormData();
+                const r = await fetch(`/web/apps/${name}/uninstall`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'HX-Request': 'true',
+                        'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                    },
+                });
+                if (r.ok || r.status === 204) {
+                    window.location.href = '/web/apps';
+                } else {
+                    const detail = await r.text().catch(() => r.statusText);
+                    window.pvAlert(`Uninstall failed: ${detail}`,
+                                   { variant: 'danger', title: 'Uninstall' });
+                }
+            },
+        }));
+    });
+</script>
+{% endblock %}

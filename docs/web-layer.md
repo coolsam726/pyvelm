@@ -692,16 +692,47 @@ app = create_app(registry, pool, module_roots=[MODULES_ROOT])
 Multiple roots work — useful when you split addons by deployment tier
 (`["./core/modules", "./custom/modules", "/opt/site-addons"]`). Each
 directory is scanned for subdirectories containing a `__pyvelm__.py`.
-`examples/serve.py` ships this layout for demo purposes:
+
+The framework itself ships two modules inside the wheel:
+
+- **`base`** — the primitives every app needs (`ir.ui.view`,
+  `res.users`, `res.groups`, `ir.model.access`, `ir.rule`,
+  `ir.actions.server`, `base.automation`, `ir.cron`, `mail.message`,
+  `res.country`, `res.region`, `res.company`, `ir.ui.menu`) and the
+  install hook that seeds the admin group + uid=1 superuser + ACL
+  defaults + the mail-dispatcher cron.
+- **`admin`** — list/form views + sidebar menus that put a working
+  management UI in front of those models. No new Python models.
+
+They live at `pyvelm/modules/<name>/` inside the package and are
+exposed as `pyvelm.BUILTIN_MODULE_ROOTS` — a single-entry list that
+apps prepend to their own discovery roots:
 
 ```python
-MODULES_ROOT = HERE / "modules"        # framework example modules
-DEMO_ROOT    = HERE / "modules_demo"   # optional `demo` module that
-                                       # seeds ~20 partners, 15 leads,
-                                       # tags, extra users, etc.
-loader.load_and_install([MODULES_ROOT, DEMO_ROOT], env)
-app = create_app(reg, pool, module_roots=[MODULES_ROOT, DEMO_ROOT])
+from pyvelm import BUILTIN_MODULE_ROOTS
+loader.load_and_install(BUILTIN_MODULE_ROOTS + [my_app_root], env)
+app = create_app(reg, pool, module_roots=BUILTIN_MODULE_ROOTS + [my_app_root])
 ```
+
+The `pyvelm/modules/` directory carries a poison `__init__.py` that
+raises on `import pyvelm.modules.X` — the bundled modules are
+discovered via the loader's `sys.path` injection only, same as
+external addons. Without the poison they'd register twice (once as
+`base.models.X`, once as `pyvelm.modules.base.models.X`) and the
+registry would silently double-load.
+
+`examples/serve.py` shows the canonical wiring:
+
+```python
+EXAMPLE_ROOT = HERE / "modules"        # partners, partners_pro, crm
+DEMO_ROOT    = HERE / "modules_demo"   # optional `demo` seed module
+MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [EXAMPLE_ROOT, DEMO_ROOT]
+loader.load_and_install(MODULE_ROOTS, env)
+app = create_app(reg, pool, module_roots=MODULE_ROOTS)
+```
+
+`pyvelm-cron` prepends `BUILTIN_MODULE_ROOTS` automatically — the
+`PYVELM_MODULE_ROOTS` env var only needs to list app-side addons.
 
 ### What the page shows
 

@@ -32,4 +32,10 @@ pyvelm = [
     "templates/**/*.html",
     "static/*.css",
     "static/dist/*",
+    # Bundled modules. The directory deliberately has no __init__.py
+    # so `pyvelm.modules.<name>` is NOT importable — the loader picks
+    # up each module via sys.path injection on `pyvelm/modules/`, the
+    # same path it uses for example addons.
+    "modules/**/*.py",
+    "modules/**/__pyvelm__.py",
 ]

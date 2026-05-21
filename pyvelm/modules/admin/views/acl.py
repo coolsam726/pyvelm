@@ -80,18 +80,6 @@ VIEWS: list[View] = [
                   ]),
               ]),
 
-    # ---- res.tag ----
-    list_view("tag.list", "res.tag",
-              # `sequence` opts the list into drag-to-reorder: the renderer
-              # adds a handle column and forces sort by this field.
-              sequence="sequence",
-              fields=["name"]),
-
-    form_view("tag.form", "res.tag",
-              sections=[
-                  section("main", "Tag", ["name"]),
-              ]),
-
     # ---- res.company ----
     list_view("company.list", "res.company",
               fields=["name", field("active", widget="toggle")]),

@@ -52,6 +52,8 @@ services:
         condition: service_healthy
     environment:
       PYVELM_DSN: "postgresql://${POSTGRES_USER:-pyvelm}:${POSTGRES_PASSWORD:-pyvelm}@db:5432/${POSTGRES_DB:-pyvelm}"
+      # pyvelm-cron prepends pyvelm.BUILTIN_MODULE_ROOTS (base + admin)
+      # automatically; only the app-side addons need to be listed here.
       PYVELM_MODULE_ROOTS: "/app/examples/modules:/app/examples/modules_demo"
       PYVELM_CRON_INTERVAL: ${PYVELM_CRON_INTERVAL:-60}
       # Mail dispatcher — see .env.example for the full SMTP knob list.

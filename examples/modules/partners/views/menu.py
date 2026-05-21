@@ -16,7 +16,7 @@ _ICON_GRID = (
 
 
 MENUS: list[Menu] = [
-    menu_group("business", "Business", icon=_ICON_GRID, sequence=50),
+    menu_group("business", "Business Logic", icon=_ICON_GRID, sequence=50),
     menu_item(
         "business.partners",
         "Partners",
@@ -26,9 +26,20 @@ MENUS: list[Menu] = [
     ),
     menu_item(
         "business.partner_board",
-        "Partner board",
+        label="Partner Board",
         parent="partners.business",
         href="/web/views/partners/partner.kanban",
         sequence=20,
+    ),
+    # Tags settings entry: lives here (not admin) because partners owns
+    # res.tag. Hangs off admin.settings — admin still owns the group;
+    # partners just contributes a leaf entry to it. Cross-module menu
+    # parenting is supported by the ir.ui.menu sync layer.
+    menu_item(
+        "business.tags",
+        label="Tags",
+        parent="admin.settings",
+        href="/web/views/partners/tag.list",
+        sequence=40,
     ),
 ]

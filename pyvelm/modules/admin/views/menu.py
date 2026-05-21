@@ -37,8 +37,9 @@ MENUS: list[Menu] = [
               href="/web/views/admin/group.list",   sequence=20),
     menu_item("settings.companies", "Companies", parent="admin.settings",
               href="/web/views/admin/company.list", sequence=30),
-    menu_item("settings.tags",      "Tags",      parent="admin.settings",
-              href="/web/views/admin/tag.list",     sequence=40),
+    # Note: the Tags entry now ships with the `partners` module since
+    # res.tag lives there. Admin no longer references model-specific
+    # views it can't own.
 
     # ----- Security -----
     menu_group("security", "Security", icon=_ICON_SHIELD, sequence=90),

@@ -1,0 +1,136 @@
+{# Form body, swappable as a unit. Rendered both as the whole document
+   (via form.html) and as the HTMX swap target on Save/Cancel/Edit.
+
+   The layout's heading region owns the title / breadcrumb / subtitle;
+   this body only carries the action buttons (which must move with the
+   swap because they change between display/edit modes). #}
+{% set base = "/web/views/" ~ view.module ~ "/" ~ view.name %}
+{% set rec_url = base ~ "/record/" ~ (record_id if record_id else 'new') %}
+
+<div class="max-w-4xl mx-auto space-y-6">
+    {# Action toolbar — small, right-aligned, mode-aware. #}
+    <div class="flex items-center justify-between gap-3">
+        <span class="inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider
+                     px-2 py-0.5 rounded-full
+                     {% if mode == 'edit' %}bg-warning-soft text-warning-strong
+                     {% elif mode == 'new' %}bg-success-soft text-success-strong
+                     {% else %}bg-neutral-tertiary text-body-subtle{% endif %}">
+            {{ mode }}
+        </span>
+        <div class="flex items-center gap-2">
+            {% if mode == "display" and record_id %}
+            <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+                           rounded-md bg-fg-brand hover:opacity-90 transition"
+                    hx-get="{{ rec_url }}/edit"
+                    hx-target="#pyvelm-form-shell"
+                    hx-swap="innerHTML">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>
+                </svg>
+                Edit
+            </button>
+            <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-default
+                           text-fg-danger rounded-md hover:bg-danger-soft transition"
+                    hx-delete="/api/records/{{ record_id }}?model={{ view.model }}"
+                    hx-confirm="Delete this record?"
+                    hx-on::after-request="if(event.detail.successful) window.history.back()">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+                </svg>
+                Delete
+            </button>
+            {% elif mode == "edit" %}
+            <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+                           rounded-md bg-success hover:opacity-90 transition"
+                    hx-post="{{ rec_url }}"
+                    hx-include="#pyvelm-form"
+                    hx-target="#pyvelm-form-shell"
+                    hx-swap="innerHTML">
+                Save
+            </button>
+            <button class="px-3 py-1.5 text-sm border border-default bg-neutral-primary text-body
+                           rounded-md hover:bg-neutral-secondary transition"
+                    hx-get="{{ rec_url }}"
+                    hx-target="#pyvelm-form-shell"
+                    hx-swap="innerHTML">
+                Cancel
+            </button>
+            {% elif mode == "new" %}
+            <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+                           rounded-md bg-success hover:opacity-90 transition"
+                    hx-post="{{ base }}"
+                    hx-include="#pyvelm-form"
+                    hx-target="#pyvelm-form-shell"
+                    hx-swap="innerHTML">
+                Create
+            </button>
+            <button type="button"
+                    class="px-3 py-1.5 text-sm border border-default bg-neutral-primary text-body
+                           rounded-md hover:bg-neutral-secondary transition"
+                    onclick="window.history.back()">
+                Cancel
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Whole-form error banner — e.g. an ORM-level rejection during
+       write/create (unique constraint, downstream DB error). Per-field
+       errors get rendered next to the offending input below. #}
+    {% if form_error %}
+    <div data-pv-form-error
+         class="px-4 py-3 rounded-lg bg-danger-soft border border-fg-danger/30 text-fg-danger text-sm">
+        <p class="font-semibold">Could not save:</p>
+        <p>{{ form_error }}</p>
+    </div>
+    {% endif %}
+
+    {# `data-pv-autosave` opts this form into the layout-level
+       autosave/navigation interceptor: editing inputs marks the form
+       dirty, and any subsequent link click triggers a POST to the
+       declared URL before letting the browser follow the link. The
+       attribute is absent in display mode so navigation stays cheap. #}
+    <form id="pyvelm-form" class="space-y-6" onsubmit="return false"
+          {% if mode in ("edit", "new") %}
+          data-pv-autosave="{{ rec_url if mode == 'edit' else base }}"
+          data-pv-autosave-method="POST"
+          {% endif %}>
+        {% for section in sections %}
+        <fieldset class="bg-neutral-primary border border-default rounded-xl p-6 shadow-sm">
+            {% if section.title %}
+            <legend class="px-2 text-xs font-semibold uppercase tracking-wider text-body-subtle">
+                {{ section.title }}
+            </legend>
+            {% endif %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                {% for cell in section.cells %}
+                <div data-field="{{ cell.name }}"
+                     {% if cell.error %}data-pv-field-error{% endif %}
+                     class="flex flex-col gap-1.5
+                            {% if cell.error %}pv-cell-error{% endif %}">
+                    <label class="block text-sm font-medium text-heading">
+                        {{ cell.label }}
+                        {% if mode in ("edit", "new") and cell.required %}
+                        <span class="text-fg-danger ml-0.5" aria-hidden="true">*</span>
+                        {% endif %}
+                    </label>
+                    <div class="text-sm text-body">{{ cell.html }}</div>
+                    {% if cell.error %}
+                    <p class="text-xs text-fg-danger flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                        </svg>
+                        {{ cell.error }}
+                    </p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </fieldset>
+        {% endfor %}
+    </form>
+</div>

@@ -1,0 +1,694 @@
+{% extends "layouts/main.html" %}
+{% block title %}{{ page_title }} — pyvelm{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block page_actions %}
+{% if form_view_name %}
+<a href="/web/views/{{ view.module }}/{{ form_view_name }}/new"
+   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+          rounded-md bg-fg-brand hover:opacity-90 transition-opacity">
+{% else %}
+<a href="#"
+   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+          rounded-md bg-fg-brand hover:opacity-90 transition-opacity">
+{% endif %}
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+    </svg>
+    New
+</a>
+{% endblock %}
+
+{# ── Main content ── #}
+{% block content %}
+<script>
+    window._pvListCfg = {
+        module: {{ view.module | tojson }},
+        name: {{ view.name | tojson }},
+        search: {{ search | tojson }},
+        order: {{ order | tojson }},
+        filters: {{ filters | tojson }},
+        groupBy: {{ group_by | tojson }},
+        page: {{ page }},
+        pageSize: {{ page_size }},
+        fieldNames: {{ headers | map(attribute='name') | list | tojson }},
+        // Filter / group-by metadata per column — drives the dropdown
+        // UI. Each entry: {name, label, filter_kind, group_kind, comodel}.
+        headers: {{ headers | tojson }},
+        // Set when the arch declared `sequence` — turns on the drag
+        // handle column + row-reorder POST. null = feature disabled.
+        sequenceField: {{ sequence_field | tojson }},
+    };
+</script>
+<div x-data="pvList(window._pvListCfg)"
+     class="space-y-3">
+
+    {# ── Toolbar: Odoo-style single search bar.
+
+       The search bar is a single full-width control with active-filter
+       chips sitting below it (in their own row when present). Click
+       the × on a chip to drop that filter. Free-text search is itself
+       a chip — typing into the input updates an in-flight chip that
+       commits on debounce. A trailing "Filters" button toggles the
+       per-column dropdown (Filter By + Group By). #}
+    <div data-pv-search-bar
+         class="relative bg-neutral-primary border border-default rounded-lg"
+         @click.outside="panelOpen = false"
+         @keydown.escape="panelOpen = false">
+
+        {# Top row: chips + input #}
+        <div class="flex items-center flex-wrap gap-1.5 px-2.5 py-1.5 min-h-[40px]">
+            <svg class="w-4 h-4 text-body-subtle shrink-0"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
+            </svg>
+
+            {# Active filter chips (free-text search + future Filter-By). #}
+            <template x-for="(chip, i) in chips" :key="i">
+                <span class="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded
+                             bg-brand-soft text-fg-brand text-xs font-medium">
+                    <span x-text="chip.label" class="max-w-[200px] truncate"></span>
+                    <button @click="removeChip(i)" type="button"
+                            aria-label="Remove filter"
+                            class="ml-0.5 p-0.5 rounded hover:bg-fg-brand/20 transition-colors">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </span>
+            </template>
+
+            <input type="search"
+                   x-model="searchInput"
+                   @input.debounce.400ms="onSearchChange()"
+                   @keydown.escape="clearSearch()"
+                   :placeholder="chips.length ? '' : 'Search…'"
+                   class="flex-1 min-w-[120px] bg-transparent border-0 px-1 py-1 text-sm text-body
+                          placeholder:text-body-subtle focus:outline-none focus:ring-0">
+
+            {# Loading indicator #}
+            <svg x-show="loading" x-cloak
+                 class="w-4 h-4 animate-spin text-fg-brand shrink-0"
+                 fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+
+            {# Clear-all when at least one chip is active. #}
+            <button x-show="chips.length || groupBy" x-cloak type="button"
+                    @click="clearAll()"
+                    class="text-2xs text-body-subtle hover:text-fg-brand underline shrink-0 px-1">
+                clear all
+            </button>
+
+            {# Filters toggle — opens the per-column Filter By + Group By panel. #}
+            <button type="button"
+                    @click="panelOpen = !panelOpen"
+                    :class="panelOpen ? 'bg-brand-soft text-fg-brand border-fg-brand' : 'text-body-subtle hover:text-fg-brand border-default'"
+                    class="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium shrink-0
+                           transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z"/>
+                </svg>
+                <span>Filters</span>
+                <svg class="w-3 h-3 transition-transform" :class="{ 'rotate-180': panelOpen }"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+                </svg>
+            </button>
+        </div>
+
+        {# ── Dropdown: Filter By + Group By ──
+           Anchored to the search bar, two-column on md+, stacked on
+           small screens. Each Filter By item is a <details>-like
+           toggle that reveals its type-appropriate sub-control:
+             - m2o      → searchable picker via /api/m2o/search
+             - boolean  → fixed Yes / No buttons
+             - other    → not in this slice
+           Group By items are single-select; clicking the active one
+           clears the grouping. #}
+        <div x-show="panelOpen" x-cloak x-transition.opacity.duration.100ms
+             class="absolute left-0 right-0 top-full mt-1 z-30
+                    bg-neutral-primary border border-default rounded-lg shadow-sm
+                    grid grid-cols-1 md:grid-cols-2 divide-x divide-default"
+             data-pv-filter-panel>
+
+            {# ── Filter By column ── #}
+            <section class="p-3 space-y-1">
+                <header class="px-2 py-1 text-2xs font-bold uppercase tracking-wider text-body-subtle">
+                    Filter By
+                </header>
+                <template x-for="h in filterableHeaders()" :key="h.name">
+                    <div>
+                        <button type="button"
+                                @click="toggleFilterField(h.name)"
+                                class="w-full flex items-center justify-between gap-1 px-2 py-1.5 rounded
+                                       text-sm text-body hover:bg-neutral-secondary transition-colors">
+                            <span x-text="h.label"></span>
+                            <svg class="w-3 h-3 text-body-subtle transition-transform"
+                                 :class="{ 'rotate-90': openFilterField === h.name }"
+                                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+                            </svg>
+                        </button>
+
+                        {# Boolean: two static buttons #}
+                        <div x-show="openFilterField === h.name && h.filter_kind === 'boolean'"
+                             class="pl-3 py-1 space-y-1">
+                            <button type="button" @click="addBooleanFilter(h, true)"
+                                    class="w-full text-left px-2 py-1 text-sm text-body rounded
+                                           hover:bg-neutral-secondary">Yes</button>
+                            <button type="button" @click="addBooleanFilter(h, false)"
+                                    class="w-full text-left px-2 py-1 text-sm text-body rounded
+                                           hover:bg-neutral-secondary">No</button>
+                        </div>
+
+                        {# Many2one: inline search input + result list backed
+                           by /api/m2o/search. We piggyback on the same
+                           endpoint the m2o combobox uses. #}
+                        <div x-show="openFilterField === h.name && h.filter_kind === 'm2o'"
+                             class="pl-3 py-1 space-y-1">
+                            <input type="search"
+                                   placeholder="Search…"
+                                   x-model="m2oQuery[h.name]"
+                                   @input.debounce.250ms="searchM2o(h)"
+                                   @focus="searchM2o(h)"
+                                   class="w-full px-2 py-1 text-sm rounded border border-default
+                                          bg-neutral-primary text-body placeholder:text-body-subtle
+                                          focus:outline-none focus:ring-1 focus:ring-fg-brand/40
+                                          focus:border-fg-brand">
+                            <template x-for="opt in (m2oResults[h.name] || [])" :key="opt.id">
+                                <button type="button" @click="addM2oFilter(h, opt)"
+                                        class="w-full text-left px-2 py-1 text-sm text-body rounded
+                                               hover:bg-neutral-secondary truncate">
+                                    <span x-text="opt.label"></span>
+                                </button>
+                            </template>
+                            <template x-if="(m2oResults[h.name] || []).length === 0">
+                                <p class="px-2 py-1 text-2xs text-body-subtle">Type to search.</p>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="filterableHeaders().length === 0">
+                    <p class="px-2 py-1 text-xs text-body-subtle">No filterable columns.</p>
+                </template>
+            </section>
+
+            {# ── Group By column ── #}
+            <section class="p-3 space-y-1">
+                <header class="px-2 py-1 text-2xs font-bold uppercase tracking-wider text-body-subtle">
+                    Group By
+                </header>
+                <template x-for="h in groupableHeaders()" :key="h.name">
+                    <button type="button"
+                            @click="setGroupBy(groupBy === h.name ? null : h.name)"
+                            :class="groupBy === h.name
+                                    ? 'bg-brand-soft text-fg-brand'
+                                    : 'text-body hover:bg-neutral-secondary'"
+                            class="w-full flex items-center justify-between gap-1 px-2 py-1.5 rounded
+                                   text-sm transition-colors">
+                        <span x-text="h.label"></span>
+                        <svg x-show="groupBy === h.name" class="w-3.5 h-3.5"
+                             fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                        </svg>
+                    </button>
+                </template>
+                <template x-if="groupableHeaders().length === 0">
+                    <p class="px-2 py-1 text-xs text-body-subtle">No groupable columns.</p>
+                </template>
+            </section>
+        </div>
+    </div>
+
+    {# Group-by chip (rendered separately from search chips because the
+       grouping is a single-value mode rather than an AND-leaf). #}
+    <div x-show="groupBy" x-cloak class="flex items-center gap-1.5">
+        <span class="text-2xs text-body-subtle uppercase tracking-wider">Grouped by</span>
+        <span class="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded
+                     bg-warning-soft text-warning-strong text-xs font-medium">
+            <span x-text="groupByLabel()"></span>
+            <button @click="setGroupBy(null)" type="button"
+                    aria-label="Remove grouping"
+                    class="ml-0.5 p-0.5 rounded hover:bg-warning-strong/20 transition-colors">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </span>
+    </div>
+
+    {# Secondary control strip (page size, sticky right). #}
+    <div class="flex items-center justify-end gap-1.5 text-xs text-body-subtle">
+        <span>Rows</span>
+        <select x-model.number="pageSize"
+                @change="page = 0; load()"
+                class="text-xs rounded-md border border-default bg-neutral-primary text-body
+                       py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand/40
+                       focus:border-fg-brand">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+        </select>
+    </div>
+
+    {# ── Table + Pagination — HTMX swap target #}
+    <div id="pv-table-container">
+        {% include "list_table.html" %}
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('pvList', (cfg) => ({
+        module: cfg.module,
+        name: cfg.name,
+        // Free-text in-progress search (uncommitted typing).
+        searchInput: cfg.search || '',
+        order: cfg.order || '',
+        // chips is a list of `{field, op, value, label}` entries — the
+        // central representation for everything visible in the search
+        // bar (free-text + future Filter-By selections). Each chip
+        // becomes one domain leaf server-side. Free-text search lives
+        // as a chip with field=null so the user can drop it like any
+        // other filter.
+        chips: (() => {
+            const out = [];
+            // Free-text search comes in via the dedicated `search=` URL
+            // param so deep links keep working; synthesize a chip for it
+            // so the new UI shows it consistently with field filters.
+            const s = (cfg.search || '').trim();
+            if (s) out.push({
+                field: null, op: 'ilike', value: s, label: `Search: "${s}"`,
+            });
+            try {
+                const fieldChips = JSON.parse(cfg.filters || '[]');
+                if (Array.isArray(fieldChips)) out.push(...fieldChips);
+            } catch (e) {}
+            return out;
+        })(),
+        page: cfg.page || 0,
+        pageSize: cfg.pageSize || 10,
+        fieldNames: cfg.fieldNames || [],
+        headers: cfg.headers || [],
+        sequenceField: cfg.sequenceField || null,
+        // Single-value: currently grouped column, or null.
+        groupBy: cfg.groupBy || null,
+        // Dropdown state.
+        panelOpen: false,
+        // Which Filter By field is currently expanded inside the
+        // dropdown (only one at a time).
+        openFilterField: null,
+        // Per-field state for the Many2one inline picker.
+        m2oQuery: {},
+        m2oResults: {},
+        loading: false,
+        // Column reorder state. Persisted to localStorage keyed by
+        // (module, view_name). When set, applies on every table render.
+        get _orderKey() { return `pv-list-order-${this.module}-${this.name}`; },
+
+        // The free-text "search" chip is the one with field===null.
+        // Helpers below add/replace it on input commits.
+        _searchChipIndex() {
+            return this.chips.findIndex(c => c.field === null);
+        },
+        get _searchValue() {
+            const i = this._searchChipIndex();
+            return i >= 0 ? this.chips[i].value : '';
+        },
+        get _params() {
+            // Split chips: the free-text chip (field===null) rides the
+            // dedicated `search=` param so the server's OR-across-Char
+            // search path stays in one place; the rest go in `filters=`
+            // as a list of `{field, op, value, label}` leaves.
+            const fieldChips = this.chips.filter(c => c.field !== null);
+            const p = new URLSearchParams({
+                search: this._searchValue,
+                order: this.order,
+                filters: fieldChips.length ? JSON.stringify(fieldChips) : '',
+                page: this.page,
+                page_size: this.pageSize,
+            });
+            if (this.groupBy) p.set('group_by', this.groupBy);
+            return p;
+        },
+        get _rowsUrl() {
+            return `/web/records/${this.module}/${this.name}?${this._params}`;
+        },
+
+        load() {
+            this.loading = true;
+            const newUrl = `/web/views/${this.module}/${this.name}?${this._params}`;
+            window.history.pushState({}, '', newUrl);
+            htmx.ajax('GET', this._rowsUrl, {
+                target: '#pv-table-container',
+                swap: 'innerHTML',
+            }).then(() => {
+                this.loading = false;
+                this.applyColumnOrder();
+            }).catch(() => { this.loading = false; });
+        },
+
+        // ── Search input commit ──
+        // The debounced input writes into a `search` chip (creating
+        // or updating in place). Empty input drops the chip.
+        onSearchChange() {
+            const value = (this.searchInput || '').trim();
+            const i = this._searchChipIndex();
+            if (!value) {
+                if (i >= 0) this.chips.splice(i, 1);
+            } else {
+                const chip = {
+                    field: null,
+                    op: 'ilike',
+                    value,
+                    label: `Search: "${value}"`,
+                };
+                if (i >= 0) this.chips[i] = chip;
+                else this.chips.push(chip);
+            }
+            this.page = 0;
+            this.load();
+        },
+        clearSearch() {
+            this.searchInput = '';
+            this.onSearchChange();
+        },
+
+        // ── Chip management ──
+        removeChip(i) {
+            const chip = this.chips[i];
+            this.chips.splice(i, 1);
+            // Removing the free-text chip clears the input too.
+            if (chip && chip.field === null) this.searchInput = '';
+            this.page = 0;
+            this.load();
+        },
+        clearAll() {
+            this.chips = [];
+            this.searchInput = '';
+            this.groupBy = null;
+            this.page = 0;
+            this.load();
+        },
+
+        // ── Filter By dropdown ──
+        filterableHeaders() {
+            return this.headers.filter(
+                h => h.filter_kind === 'm2o' || h.filter_kind === 'boolean'
+            );
+        },
+        groupableHeaders() {
+            return this.headers.filter(
+                h => h.group_kind === 'm2o' || h.group_kind === 'boolean'
+            );
+        },
+        toggleFilterField(name) {
+            this.openFilterField = this.openFilterField === name ? null : name;
+        },
+        _findHeader(name) {
+            return this.headers.find(h => h.name === name);
+        },
+
+        // Add a chip from a Filter By selection. The chip carries a
+        // human-readable label so it can render in the bar; the server
+        // turns it into a domain leaf via _parse_filters.
+        addBooleanFilter(h, value) {
+            this.chips.push({
+                field: h.name,
+                op: '=',
+                value: value,
+                label: `${h.label}: ${value ? 'Yes' : 'No'}`,
+            });
+            this.openFilterField = null;
+            this.panelOpen = false;
+            this.page = 0;
+            this.load();
+        },
+        async searchM2o(h) {
+            const q = this.m2oQuery[h.name] || '';
+            try {
+                const r = await fetch(
+                    `/api/m2o/search?model=${encodeURIComponent(h.comodel)}&q=${encodeURIComponent(q)}`,
+                    { credentials: 'same-origin' }
+                );
+                if (!r.ok) throw new Error('fetch failed');
+                const data = await r.json();
+                this.m2oResults[h.name] = data.results || [];
+            } catch (e) {
+                this.m2oResults[h.name] = [];
+            }
+        },
+        addM2oFilter(h, opt) {
+            this.chips.push({
+                field: h.name,
+                op: '=',
+                value: opt.id,
+                label: `${h.label}: ${opt.label}`,
+            });
+            this.openFilterField = null;
+            this.panelOpen = false;
+            this.m2oQuery[h.name] = '';
+            this.m2oResults[h.name] = [];
+            this.page = 0;
+            this.load();
+        },
+
+        // ── Group By ──
+        setGroupBy(name) {
+            this.groupBy = name;
+            this.panelOpen = false;
+            this.page = 0;
+            this.load();
+        },
+        groupByLabel() {
+            const h = this._findHeader(this.groupBy);
+            return h ? h.label : this.groupBy;
+        },
+
+        toggleSort(field) {
+            if (this.order === field + ' ASC') {
+                this.order = field + ' DESC';
+            } else if (this.order === field + ' DESC') {
+                this.order = '';
+            } else {
+                this.order = field + ' ASC';
+            }
+            this.page = 0;
+            this.load();
+        },
+
+        goPage(p) {
+            this.page = p;
+            this.load();
+        },
+
+        // ── Column reorder via native HTML5 drag-and-drop. ──
+        // We store a list of field names in localStorage; on every
+        // render we permute the column DOM nodes (thead cells + each
+        // tbody row's cells + the filter row) accordingly. The Actions
+        // column stays at the end (it isn't draggable).
+
+        savedOrder() {
+            try {
+                const raw = localStorage.getItem(this._orderKey);
+                if (!raw) return null;
+                const arr = JSON.parse(raw);
+                return Array.isArray(arr) ? arr : null;
+            } catch (e) { return null; }
+        },
+        persistOrder(arr) {
+            try { localStorage.setItem(this._orderKey, JSON.stringify(arr)); }
+            catch (e) {}
+        },
+        applyColumnOrder() {
+            const order = this.savedOrder();
+            if (!order || !order.length) return;
+            const table = this.$root.querySelector('[data-pv-list-table]');
+            if (!table) return;
+            // Build the per-row reorder function once.
+            const reorder = (row) => {
+                if (!row) return;
+                const cells = Array.from(row.children);
+                const byField = new Map();
+                let trailing = null;  // Actions cell — no data-field; always last.
+                cells.forEach(c => {
+                    const f = c.getAttribute('data-field');
+                    if (f) byField.set(f, c);
+                    else trailing = c;
+                });
+                // Append in saved-order; any field not in the saved list
+                // gets appended after, preserving its current order.
+                const seen = new Set();
+                order.forEach(f => {
+                    const c = byField.get(f);
+                    if (c) { row.appendChild(c); seen.add(f); }
+                });
+                cells.forEach(c => {
+                    const f = c.getAttribute('data-field');
+                    if (f && !seen.has(f)) row.appendChild(c);
+                });
+                if (trailing) row.appendChild(trailing);
+            };
+            // Reorder all known rows.
+            reorder(table.querySelector('[data-pv-header-row]'));
+            table.querySelectorAll('tbody > tr').forEach(reorder);
+        },
+        captureCurrentOrder() {
+            const table = this.$root.querySelector('[data-pv-list-table]');
+            if (!table) return [];
+            const hdr = table.querySelector('[data-pv-header-row]');
+            if (!hdr) return [];
+            return Array.from(hdr.children)
+                .map(c => c.getAttribute('data-field'))
+                .filter(Boolean);
+        },
+
+        // Drag-and-drop handlers. Bound on a delegated dragstart at
+        // the table level; the dragged element is identified by the
+        // `data-field` attribute on its <th>.
+        initDragReorder() {
+            const tbl = this.$root.querySelector('[data-pv-list-table]');
+            if (!tbl) return;
+            let draggedField = null;
+
+            tbl.addEventListener('dragstart', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (!th) return;
+                draggedField = th.getAttribute('data-field');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', draggedField);
+            });
+            tbl.addEventListener('dragover', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (!th || !draggedField) return;
+                e.preventDefault();
+                th.setAttribute('data-pv-drag-over', 'true');
+            });
+            tbl.addEventListener('dragleave', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (th) th.removeAttribute('data-pv-drag-over');
+            });
+            tbl.addEventListener('drop', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (!th || !draggedField) return;
+                e.preventDefault();
+                th.removeAttribute('data-pv-drag-over');
+                const targetField = th.getAttribute('data-field');
+                if (targetField === draggedField) { draggedField = null; return; }
+                const order = this.captureCurrentOrder();
+                const from = order.indexOf(draggedField);
+                const to = order.indexOf(targetField);
+                if (from < 0 || to < 0) { draggedField = null; return; }
+                order.splice(to, 0, order.splice(from, 1)[0]);
+                this.persistOrder(order);
+                this.applyColumnOrder();
+                draggedField = null;
+            });
+        },
+
+        // ── Row drag-reorder (sequence-field driven) ──
+        // Native HTML5 drag events on the row's handle cell. We
+        // capture the source row id on dragstart, decide insert-
+        // position on drop, mutate the DOM optimistically, then
+        // POST the new ordering to the server. Server failure rolls
+        // back to the persisted order via a full table refresh.
+        initRowReorder() {
+            if (!this.sequenceField) return;
+            const tbl = this.$root.querySelector('[data-pv-list-table]');
+            if (!tbl) return;
+            let draggedRow = null;
+            tbl.addEventListener('dragstart', e => {
+                const h = e.target.closest('[data-pv-row-handle]');
+                if (!h) return;
+                draggedRow = h.closest('tr[data-record-id]');
+                if (!draggedRow) return;
+                e.dataTransfer.effectAllowed = 'move';
+                draggedRow.classList.add('opacity-40');
+            });
+            tbl.addEventListener('dragend', () => {
+                if (draggedRow) draggedRow.classList.remove('opacity-40');
+                draggedRow = null;
+            });
+            tbl.addEventListener('dragover', e => {
+                if (!draggedRow) return;
+                const target = e.target.closest('tr[data-record-id]');
+                if (!target || target === draggedRow) return;
+                e.preventDefault();
+                const rect = target.getBoundingClientRect();
+                const above = (e.clientY - rect.top) < (rect.height / 2);
+                target.parentNode.insertBefore(
+                    draggedRow,
+                    above ? target : target.nextSibling,
+                );
+            });
+            tbl.addEventListener('drop', e => {
+                if (!draggedRow) return;
+                e.preventDefault();
+                draggedRow.classList.remove('opacity-40');
+                this.commitRowReorder();
+                draggedRow = null;
+            });
+        },
+
+        async commitRowReorder() {
+            const tbl = this.$root.querySelector('[data-pv-list-table]');
+            if (!tbl) return;
+            const ids = Array.from(
+                tbl.querySelectorAll('tbody tr[data-record-id]')
+            ).map(tr => Number(tr.getAttribute('data-record-id')));
+            try {
+                const r = await fetch(
+                    `/web/records/${this.module}/${this.name}/reorder`,
+                    {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                        },
+                        body: JSON.stringify({ ids }),
+                    }
+                );
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            } catch (e) {
+                window.pvAlert &&
+                    window.pvAlert(`Could not save new order: ${e.message}`,
+                                   { variant: 'danger', title: 'Reorder failed' });
+                // Reload to drop the optimistic mutation.
+                this.load();
+            }
+        },
+
+        init() {
+            // Rehydrate the in-progress search input from the active
+            // search chip, if any — so a deep-link reload shows the
+            // user's query inside the bar rather than only as a chip.
+            this.searchInput = this._searchValue;
+            // Defer one tick so the initial server-rendered HTML is in
+            // the DOM before we permute it.
+            this.$nextTick(() => {
+                this.applyColumnOrder();
+                this.initDragReorder();
+                this.initRowReorder();
+            });
+            // Re-apply column order + re-bind drag handlers after
+            // every HTMX swap, since the <table> element itself is
+            // recreated by list_table.html.
+            this.$el.addEventListener('htmx:afterSwap', () => {
+                this.applyColumnOrder();
+                this.initDragReorder();
+                this.initRowReorder();
+            });
+        },
+    }));
+});
+</script>
+{% endblock %}
+

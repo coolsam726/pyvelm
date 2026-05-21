@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in — pyvelm</title>
+
+    {# Apply saved theme before paint to avoid FOUC. #}
+    <script>
+        (function () {
+            var t = localStorage.getItem('pyvelm-theme');
+            if (t === 'dark' ||
+                (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="/web/static/dist/pyvelm.css">
+</head>
+<body class="bg-neutral-secondary text-body min-h-screen flex items-center justify-center font-sans antialiased">
+<div class="w-full max-w-sm px-6">
+    <div class="bg-neutral-primary border border-default rounded-xl shadow-sm px-8 py-10">
+        <div class="flex flex-col items-center text-center mb-8">
+            <div class="w-10 h-10 rounded-xl bg-fg-brand flex items-center justify-center mb-4">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor"
+                     viewBox="0 0 24 24" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3.75 7.5L12 3l8.25 4.5M3.75 7.5v9L12 21l8.25-4.5v-9M3.75 7.5L12 12m0 0l8.25-4.5M12 12v9"/>
+                </svg>
+            </div>
+            <h1 class="text-lg font-semibold text-heading">Sign in to pyvelm</h1>
+            <p class="mt-1 text-xs text-body-subtle">Welcome back.</p>
+        </div>
+
+        {% if error %}
+        <p class="mb-4 text-sm text-fg-danger bg-danger-soft border border-danger-subtle rounded-md px-3 py-2">
+            {{ error }}
+        </p>
+        {% endif %}
+
+        <form method="post" action="/login" class="space-y-4">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            {% if next %}
+            <input type="hidden" name="next" value="{{ next }}">
+            {% endif %}
+            <div>
+                <label class="block text-xs font-medium text-body mb-1.5" for="login">Username</label>
+                <input id="login" name="login" type="text" required autofocus
+                       value="{{ prefill_login }}"
+                       class="w-full bg-neutral-primary border border-default rounded-md px-3 py-2 text-sm
+                              text-heading focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-body mb-1.5" for="password">Password</label>
+                <input id="password" name="password" type="password" required
+                       class="w-full bg-neutral-primary border border-default rounded-md px-3 py-2 text-sm
+                              text-heading focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand">
+            </div>
+            <button type="submit"
+                    class="w-full py-2 px-4 bg-fg-brand text-white text-sm font-medium rounded-md
+                           hover:opacity-90 transition-opacity">
+                Sign in
+            </button>
+        </form>
+    </div>
+    <p class="mt-6 text-center text-2xs text-body-subtle">
+        pyvelm · Tailwind + Flowbite
+    </p>
+</div>
+</body>
+</html>

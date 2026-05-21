@@ -39,4 +39,19 @@ VIEWS: list[View] = [
         group_by="country_id",
         form_view="partner.form",
     ),
+
+    # ---- res.tag ----
+    # Moved here from admin: partners owns res.tag, so it owns the
+    # views too. The Settings → Tags sidebar entry (see views/menu.py)
+    # still parents under admin.settings via cross-module menu refs.
+    list_view(
+        "tag.list", "res.tag",
+        # sequence opts into drag-reorder (handle column, forced sort).
+        sequence="sequence",
+        fields=["name"],
+    ),
+    form_view(
+        "tag.form", "res.tag",
+        sections=[section("main", "Tag", ["name"])],
+    ),
 ]

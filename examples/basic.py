@@ -14,13 +14,17 @@ from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
-from pyvelm import Environment, Registry, loader
+from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
 from pyvelm.web import create_app
 
 load_dotenv(".env")
 
 HERE = Path(__file__).parent
-MODULES_ROOT = HERE / "modules"
+# Built-in modules (`base` + `admin`) ship with the pyvelm wheel; the
+# illustrative addons (partners, partners_pro, crm) live under
+# examples/modules. The smoke test discovers both.
+EXAMPLE_ROOT = HERE / "modules"
+MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [EXAMPLE_ROOT]
 
 
 def main():
@@ -40,7 +44,7 @@ def main():
         # so each run starts clean.
         _drop_known_tables(conn)
 
-        specs = loader.load_and_install([MODULES_ROOT], env)
+        specs = loader.load_and_install(MODULE_ROOTS, env)
         print("Loaded modules:", [s.name for s in specs])
 
         Partner = env["res.partner"]
@@ -141,7 +145,7 @@ def main():
     # app against the loaded registry, and exercise the read endpoints
     # via ASGI in-process (no port binding).
     with ConnectionPool(dsn, min_size=1, max_size=2, open=True) as pool:
-        app = create_app(reg, pool, module_roots=[MODULES_ROOT])
+        app = create_app(reg, pool, module_roots=MODULE_ROOTS)
         with TestClient(app) as client:
             # Default identity for the bulk of the smoke test is the
             # superuser. ACL-specific assertions further down construct
@@ -746,7 +750,7 @@ def main():
             # tag.list ships with `arch["sequence"] = "sequence"`, so
             # the list page renders a drag-handle column and forces
             # the order to "sequence ASC".
-            resp_tags = client.get("/web/views/admin/tag.list")
+            resp_tags = client.get("/web/views/partners/tag.list")
             assert resp_tags.status_code == 200, resp_tags.text
             tag_body = resp_tags.text
             assert "data-pv-row-handle" in tag_body
@@ -761,7 +765,7 @@ def main():
             # Issue a reorder that swaps wholesale ahead of vip.
             new_order = list(reversed(ids_in_order))
             r_reorder = client.post(
-                "/web/records/admin/tag.list/reorder",
+                "/web/records/partners/tag.list/reorder",
                 json={"ids": new_order},
             )
             assert r_reorder.status_code == 204, r_reorder.text

@@ -1,0 +1,53 @@
+<tr data-record-id="{{ row.id }}"
+    class="hover:bg-neutral-secondary transition-colors cursor-pointer"
+    {{ row_extra | default('') | safe }}
+    {% if form_view_name %}
+    onclick="window.location.href='/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}'"
+    {% endif %}>
+    {# Leftmost checkbox — placeholder for future bulk selection. #}
+    <td class="w-9 px-3 py-4 align-middle" onclick="event.stopPropagation()">
+        <input type="checkbox" class="rounded border-default w-3.5 h-3.5 cursor-not-allowed opacity-40"
+               disabled aria-label="Select row">
+    </td>
+    {% if sequence_field %}
+    {# Drag handle cell — only on sequence-reorder rows. #}
+    <td class="w-6 px-2 py-4 align-middle text-body-subtle"
+        onclick="event.stopPropagation()">
+        <span data-pv-row-handle draggable="true"
+              class="inline-flex items-center justify-center w-5 h-5 rounded
+                     cursor-grab active:cursor-grabbing hover:bg-neutral-tertiary
+                     text-body-subtle/60 hover:text-fg-brand"
+              aria-label="Drag to reorder">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                 viewBox="0 0 24 24" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5"/>
+            </svg>
+        </span>
+    </td>
+    {% endif %}
+    {% for cell in row.cells %}
+    <td data-field="{{ cell.name }}" class="px-4 py-4 align-middle text-body">{{ cell.html }}</td>
+    {% endfor %}
+    <td class="px-4 py-4 text-right whitespace-nowrap text-xs"
+        onclick="event.stopPropagation()">
+        {% if form_view_name %}
+        <a href="/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}/edit"
+           class="text-fg-brand hover:underline font-medium mr-3"
+           title="Edit">Edit</a>
+        {% else %}
+        <button class="text-fg-brand hover:underline font-medium mr-3"
+                hx-get="/web/records/{{ view.module }}/{{ view.name }}/row/{{ row.id }}/edit"
+                hx-target="closest tr"
+                hx-swap="outerHTML">
+            Edit
+        </button>
+        {% endif %}
+        <button class="text-fg-danger hover:underline font-medium"
+                hx-delete="/web/records/{{ view.module }}/{{ view.name }}/row/{{ row.id }}"
+                hx-target="closest tr"
+                hx-swap="outerHTML"
+                hx-confirm="Delete this record? This cannot be undone.">
+            Delete
+        </button>
+    </td>
+</tr>

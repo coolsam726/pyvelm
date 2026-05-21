@@ -21,23 +21,24 @@ import psycopg
 from dotenv import load_dotenv
 from psycopg_pool import ConnectionPool
 
-from pyvelm import Environment, Registry, loader
+from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
 from pyvelm.web import create_app
 
 load_dotenv(".env")
 
 HERE = Path(__file__).parent
-# Two discovery roots:
-#   - `modules/` is the framework's example modules (base, admin,
-#     partners, partners_pro, crm) — same as basic.py uses.
-#   - `modules_demo/` ships the optional `demo` module whose install
-#     hook seeds rich content for live testing (~20 partners, leads
-#     across stages, tags, extra users, workflow + mail records).
-#     Splitting roots keeps the smoke test (basic.py) clean while
-#     letting serve.py boot with a populated app on first run.
-MODULES_ROOT = HERE / "modules"
+# Three discovery roots:
+#   - BUILTIN_MODULE_ROOTS (inside the pyvelm wheel) ships `base` +
+#     `admin` — the framework primitives and their management UI.
+#   - `examples/modules/` is the illustrative addons set: partners,
+#     partners_pro, crm. These show off patterns rather than being
+#     required by the framework.
+#   - `examples/modules_demo/` carries the optional `demo` module
+#     whose install hook seeds ~20 partners + 15 leads so the UI is
+#     populated for live testing.
+EXAMPLE_ROOT = HERE / "modules"
 DEMO_ROOT = HERE / "modules_demo"
-MODULE_ROOTS = [MODULES_ROOT, DEMO_ROOT]
+MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [EXAMPLE_ROOT, DEMO_ROOT]
 
 
 def _build_app():

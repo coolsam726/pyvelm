@@ -1,0 +1,21 @@
+{% extends "layouts/main.html" %}
+{% block title %}Administration — pyvelm{% endblock %}
+{% block page_title %}Administration{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for card in cards %}
+    <a href="{{ card.url }}"
+       class="group block bg-neutral-primary border border-default rounded-xl shadow-sm px-6 py-6
+              hover:shadow-md hover:border-fg-brand/40 transition">
+        <p class="text-2xs font-mono uppercase tracking-wider text-body-subtle mb-2">
+            {{ card.subtitle }}
+        </p>
+        <p class="text-base font-semibold text-heading group-hover:text-fg-brand transition-colors">
+            {{ card.title }}
+        </p>
+        <p class="mt-2 text-sm text-body leading-relaxed">{{ card.description }}</p>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}
