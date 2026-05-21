@@ -2,9 +2,11 @@
 
 A single ``pyvelm`` command dispatches subcommands:
 
-    pyvelm cron            Background cron + mail-dispatcher worker.
-    pyvelm init <name>     Scaffold a new pyvelm project.
-    pyvelm new <module>    Drop a runnable module skeleton into a project.
+    pyvelm cron                Background cron + mail-dispatcher worker.
+    pyvelm init <name>         Scaffold a new pyvelm project.
+    pyvelm new <module>        Drop a runnable module skeleton into a project.
+    pyvelm db diff <module>    Print the schema delta for a module.
+    pyvelm db autogen <module> Write an additive migration file.
 
 The legacy ``pyvelm-cron`` entry point keeps working — it's a thin
 alias for ``pyvelm cron`` so existing docker-compose files and
@@ -13,9 +15,9 @@ systemd units don't need editing during upgrades.
 Configuration is env-driven (CLI flags override). Most apps set
 these in their ``.env``:
 
-    PYVELM_DSN              Postgres DSN. Required for ``cron``.
+    PYVELM_DSN              Postgres DSN. Required for ``cron``/``db``.
     PYVELM_MODULE_ROOTS     Colon-separated module directories.
-                            ``cron`` defaults to ``PYVELM_MODULE_ROOTS``.
+                            ``cron``/``db`` default to PYVELM_MODULE_ROOTS.
     PYVELM_CRON_INTERVAL    Seconds between cron ticks. Default 60.
 """
 from __future__ import annotations
@@ -224,16 +226,168 @@ def _run_new(args: argparse.Namespace) -> None:
 # Entry points
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# db subcommand — schema diff + migration autogen
+# ---------------------------------------------------------------------------
+
+
+def _add_db_subcommand(subs) -> None:
+    db = subs.add_parser(
+        "db",
+        help="Schema utilities (diff, autogen-migration).",
+        description=(
+            "Inspect or update the DB schema against the loaded module "
+            "registry. `diff` prints what's missing; `autogen` writes a "
+            "migration file. Both require PYVELM_DSN."
+        ),
+    )
+    db_subs = db.add_subparsers(
+        dest="db_command", required=True, metavar="<db-command>"
+    )
+
+    diff_p = db_subs.add_parser(
+        "diff",
+        help="Print the schema delta for a module (no file write).",
+    )
+    diff_p.add_argument("module", help="Module name (e.g. 'base').")
+    diff_p.add_argument(
+        "--roots", nargs="*",
+        default=_parse_roots(os.environ.get("PYVELM_MODULE_ROOTS", "")),
+        help="Module-discovery roots (defaults to PYVELM_MODULE_ROOTS).",
+    )
+    diff_p.set_defaults(func=_run_db_diff)
+
+    auto_p = db_subs.add_parser(
+        "autogen",
+        help=(
+            "Write a migration file from the schema delta, bumping the "
+            "module's minor version."
+        ),
+    )
+    auto_p.add_argument("module", help="Module name.")
+    auto_p.add_argument(
+        "--roots", nargs="*",
+        default=_parse_roots(os.environ.get("PYVELM_MODULE_ROOTS", "")),
+        help="Module-discovery roots (defaults to PYVELM_MODULE_ROOTS).",
+    )
+    auto_p.add_argument(
+        "--version", dest="target_version", default=None,
+        help=(
+            "Explicit target version (e.g. '0.17.0'). Defaults to a "
+            "minor bump of the module's current VERSION."
+        ),
+    )
+    auto_p.add_argument(
+        "--dry-run", action="store_true",
+        help="Print the would-be file contents instead of writing.",
+    )
+    auto_p.set_defaults(func=_run_db_autogen)
+
+
+def _build_db_env_and_spec(args):
+    """Common bootstrap for db subcommands.
+
+    Returns ``(env, spec, conn)`` — caller is responsible for closing
+    the connection. Exits with a clear error if the module isn't
+    found or if PYVELM_DSN is missing.
+    """
+    import psycopg
+
+    from . import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
+
+    dsn = os.environ.get("PYVELM_DSN")
+    if not dsn:
+        sys.exit("PYVELM_DSN not set")
+    roots = list(BUILTIN_MODULE_ROOTS) + [Path(p) for p in args.roots]
+    specs = loader.discover(roots)
+    if args.module not in specs:
+        sys.exit(
+            f"Module {args.module!r} not discovered. "
+            f"Known: {sorted(specs)}"
+        )
+    ordered = loader.resolve_order(specs)
+    registry = Registry()
+    for spec in ordered:
+        loader._load_models(spec, registry)
+    conn = psycopg.connect(dsn, autocommit=True)
+    env = Environment(conn, registry=registry)
+    return env, specs[args.module], conn
+
+
+def _run_db_diff(args: argparse.Namespace) -> None:
+    from . import db_autogen
+
+    env, _spec, conn = _build_db_env_and_spec(args)
+    try:
+        diff = db_autogen.compute_diff(env, args.module)
+    finally:
+        conn.close()
+    if diff.is_empty:
+        print(f"{args.module}: no schema changes.")
+        return
+    print(f"{args.module}: {db_autogen._summary(diff)}")
+    for table, _ddl in diff.new_tables:
+        print(f"  + table {table}")
+    for table, col, _stmt, was_required in diff.new_columns:
+        tag = " (required — needs backfill)" if was_required else ""
+        print(f"  + column {table}.{col}{tag}")
+    for table, col in diff.orphan_columns:
+        print(f"  - orphan {table}.{col}")
+
+
+def _run_db_autogen(args: argparse.Namespace) -> None:
+    from . import db_autogen
+
+    env, spec, conn = _build_db_env_and_spec(args)
+    try:
+        diff = db_autogen.compute_diff(env, args.module)
+    finally:
+        conn.close()
+    cur_version = tuple(spec.version)
+    if args.target_version:
+        new_version = db_autogen.parse_version(args.target_version)
+    else:
+        new_version = db_autogen.next_minor_version(cur_version)
+    body = db_autogen.render_migration(diff, cur_version, new_version)
+    fname = db_autogen.migration_filename(cur_version, new_version)
+    mig_dir = Path(spec.package_path) / "migrations"
+    target = mig_dir / fname
+    if args.dry_run:
+        print(f"# would write {target}\n")
+        print(body, end="")
+        return
+    if target.exists():
+        sys.exit(f"Refusing to overwrite existing migration: {target}")
+    mig_dir.mkdir(exist_ok=True)
+    target.write_text(body)
+    # Bump VERSION in __pyvelm__.py.
+    manifest = Path(spec.package_path) / "__pyvelm__.py"
+    text = manifest.read_text()
+    old_v_repr = repr(tuple(cur_version))
+    new_v_repr = repr(tuple(new_version))
+    if old_v_repr not in text:
+        sys.exit(
+            f"Could not find VERSION = {old_v_repr} in {manifest}; "
+            f"bump it manually."
+        )
+    manifest.write_text(text.replace(old_v_repr, new_v_repr, 1))
+    print(f"Wrote {target}")
+    print(f"Bumped VERSION: {cur_version} → {new_version}")
+    if diff.is_empty:
+        print("(Migration body is a no-op — review whether you really need it.)")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pyvelm",
         description=(
             "pyvelm command-line tool. Subcommands: `cron` (background "
             "worker), `init` (scaffold a project), `new` (scaffold a "
-            "module)."
+            "module), `db` (schema utilities)."
         ),
     )
     subs = parser.add_subparsers(dest="command", required=True, metavar="<command>")
+    _add_db_subcommand(subs)
 
     cron = subs.add_parser(
         "cron",
