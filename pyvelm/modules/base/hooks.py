@@ -37,7 +37,7 @@ def install(env):
         user_vals["company_id"] = company
     User.create(user_vals)
 
-    # Grant Admin full CRUD on Stage 6 workflow models.
+    # Grant Admin full CRUD on the base-owned management surface.
     if "ir.model.access" in env.registry:
         Access = env["ir.model.access"]
         for model in (
@@ -47,6 +47,8 @@ def install(env):
             "mail.message",
             "res.company",
             "ir.ui.menu",
+            "res.currency",
+            "res.currency.rate",
         ):
             if model in env.registry:
                 Access.create({
@@ -72,6 +74,61 @@ def install(env):
     # Mail dispatcher: server action + ir.cron entry that drains
     # mail.message rows in state="outgoing".
     _seed_mail_dispatcher(env)
+
+    # Minimal currency list. Replace rates with real ones via the
+    # Settings → Currencies form (or scripted seed) when accuracy
+    # matters; these are starter values so a fresh install can do
+    # cross-currency math out of the box.
+    _seed_currencies(env)
+
+
+def _seed_currencies(env):
+    """Idempotently seed a small list of currencies + opening rates.
+
+    Looks each currency up by ``code`` before creating so re-running
+    (from either the install hook or the 0_9_to_0_10 migration) is a
+    no-op. Rates are stored as "units per implicit reference" with
+    USD = 1.0; conversion math doesn't reference USD by name.
+    """
+    if "res.currency" not in env.registry:
+        return
+    if "res.currency.rate" not in env.registry:
+        return
+    from datetime import datetime
+
+    Currency = env["res.currency"]
+    Rate = env["res.currency.rate"]
+    seeded_at = datetime.utcnow()
+
+    # (code, name, symbol, rounding, opening rate vs. implicit reference).
+    # Real-world rates change daily — these are illustrative starter
+    # values, not advice. Operators should replace via the UI.
+    seed = [
+        ("USD", "US Dollar", "$", 0.01, 1.00),
+        ("EUR", "Euro", "€", 0.01, 0.92),
+        ("GBP", "Pound Sterling", "£", 0.01, 0.79),
+        ("JPY", "Japanese Yen", "¥", 1.0, 149.5),
+    ]
+    for code, name, symbol, rounding, rate in seed:
+        existing = Currency.search([("code", "=", code)], limit=1)
+        if existing:
+            ccy = existing
+        else:
+            ccy = Currency.create({
+                "code": code,
+                "name": name,
+                "symbol": symbol,
+                "rounding": rounding,
+                "active": True,
+            })
+        # Only create an opening rate if the currency has none. We
+        # never overwrite existing rates — operators manage them.
+        if not Rate.search([("currency_id", "=", ccy.id)], limit=1):
+            Rate.create({
+                "currency_id": ccy.id,
+                "name": seeded_at,
+                "rate": rate,
+            })
 
 
 def _seed_mail_dispatcher(env):

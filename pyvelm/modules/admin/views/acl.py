@@ -91,4 +91,30 @@ VIEWS: list[View] = [
                       field("active", widget="toggle"),
                   ]),
               ]),
+
+    # ---- res.currency ----
+    list_view("currency.list", "res.currency",
+              fields=["code", "name", "symbol", "rounding",
+                      field("active", widget="toggle")]),
+
+    form_view("currency.form", "res.currency",
+              sections=[
+                  section("main", "Currency", [
+                      "code",
+                      "name",
+                      "symbol",
+                      "rounding",
+                      field("active", widget="toggle"),
+                  ]),
+                  section("rates", "Exchange rates", ["rate_ids"]),
+              ]),
+
+    # ---- res.currency.rate ----
+    list_view("currency.rate.list", "res.currency.rate",
+              fields=["currency_id", "name", "rate"]),
+
+    form_view("currency.rate.form", "res.currency.rate",
+              sections=[
+                  section("main", "Rate", ["currency_id", "name", "rate"]),
+              ]),
 ]

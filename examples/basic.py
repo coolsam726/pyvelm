@@ -344,7 +344,7 @@ def main():
             # upgrade endpoint and assert the version row caught up.
             with pool.connection() as side_conn:
                 side_conn.execute(
-                    "UPDATE ir_module SET version = '0.8.0' WHERE name = 'base'"
+                    "UPDATE ir_module SET version = '0.9.0' WHERE name = 'base'"
                 )
             r_no_follow = TestClient(app, follow_redirects=False)
             r_no_follow.auth = ("admin", "admin")
@@ -356,7 +356,7 @@ def main():
                 row = side_conn.execute(
                     "SELECT version FROM ir_module WHERE name = 'base'"
                 ).fetchone()
-            assert row == ("0.9.0",), row
+            assert row == ("0.10.0",), row
 
             # Non-superuser is rejected — install / upgrade is admin-only
             # since it executes install_hook code and DDL.
@@ -1488,7 +1488,69 @@ def main():
                 assert cron_row.action_id.name == "Mail dispatcher"
                 print("mail dispatcher: cron + action seeded by base hook")
 
-            # ===== Stage 7: _inherit model extension =====
+                # ----- Currencies (Slice A of Stage 11) -----
+                # Fresh install seeded USD / EUR / GBP / JPY with
+                # opening rates; verify the convert helper picks the
+                # right rate for the requested date.
+                from datetime import datetime as _dt, timedelta as _td
+                Currency = wf_env["res.currency"]
+                Rate = wf_env["res.currency.rate"]
+                seeded = {c.code: c for c in Currency.search([])}
+                assert {"USD", "EUR", "GBP", "JPY"} <= set(seeded), seeded
+                assert seeded["JPY"].rounding == 1.0
+                assert seeded["USD"].rounding == 0.01
+
+                # Same-currency convert is a passthrough.
+                assert seeded["USD"].convert(100.0, seeded["USD"]) == 100.0
+
+                # Normalize EUR's rate history — earlier runs of this
+                # script may have appended additional rates. Wipe and
+                # re-seed a single known 0.92 datapoint so the math is
+                # deterministic across re-runs.
+                with wf_env.transaction():
+                    old = Rate.search([("currency_id", "=", seeded["EUR"].id)])
+                    if old:
+                        old.unlink()
+                    Rate.create({
+                        "currency_id": seeded["EUR"].id,
+                        "name": _dt.utcnow() - _td(days=1),
+                        "rate": 0.92,
+                    })
+                wf_env.cache.invalidate(model_name="res.currency.rate")
+
+                # 100 USD → EUR uses the 0.92 rate.
+                eur = seeded["USD"].convert(100.0, seeded["EUR"])
+                assert abs(eur - 92.0) < 1e-9, eur
+
+                # 100 EUR → JPY rides USD as the implicit reference:
+                # 100 / 0.92 * 149.5
+                jpy = seeded["EUR"].convert(100.0, seeded["JPY"])
+                assert abs(jpy - (100.0 / 0.92 * 149.5)) < 1e-6, jpy
+
+                # Adding a newer rate shifts the conversion result.
+                with wf_env.transaction():
+                    Rate.create({
+                        "currency_id": seeded["EUR"].id,
+                        "name": _dt.utcnow(),
+                        "rate": 0.85,
+                    })
+                import time as _time
+                _time.sleep(0.05)
+                wf_env.cache.invalidate(model_name="res.currency.rate")
+                eur2 = seeded["USD"].convert(100.0, seeded["EUR"])
+                assert abs(eur2 - 85.0) < 1e-9, eur2
+
+                # No rate covering an early historical date → raises.
+                long_ago = _dt(2000, 1, 1)
+                try:
+                    seeded["USD"].convert(100.0, seeded["EUR"], date=long_ago)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError(
+                        "convert() should raise when no rate covers the date"
+                    )
+                print("currencies: seed, convert, dated rates, no-rate error OK")
             # partners_pro defines PartnerPro(_inherit="res.partner")
             # which adds `vip_note` and overrides `_compute_display_name`.
             with pool.connection() as s7_conn:

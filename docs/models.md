@@ -238,6 +238,41 @@ matching that id. Useful for tenant-style isolation. The
 `pyvelm_company` cookie + the company switcher in the topbar drive
 the env.
 
+## Currencies
+
+`pyvelm.modules.base` ships two collaborating models for money:
+
+- `res.currency` — `code`, `name`, `symbol`, `rounding`, `active`, and a
+  `rate_ids` One2many to its history.
+- `res.currency.rate` — `currency_id` (Many2one), `name` (datetime the
+  rate becomes effective), and `rate` (units per the implicit reference).
+
+The install hook seeds USD / EUR / GBP / JPY with starter rates so a
+fresh database can do cross-currency math out of the box. Operators
+replace those rates from **Settings → Currencies** (or from a scripted
+seed) when accuracy matters.
+
+### Converting amounts
+
+```python
+USD = env["res.currency"].search([("code", "=", "USD")], limit=1)
+EUR = env["res.currency"].search([("code", "=", "EUR")], limit=1)
+
+eur_amount = USD.convert(100.0, EUR)            # uses today's rate
+back_then  = USD.convert(100.0, EUR, date=dt)   # uses the rate effective at dt
+```
+
+`convert` resolves the latest `res.currency.rate` row whose `name <=
+date` for both the source and target currency, then computes
+`amount / from_rate * to_rate`. Both sides ride the same implicit
+reference (USD = 1.0 in the seed), so the reference cancels in the
+arithmetic and never has to be named explicitly. If no rate is
+effective at or before `date`, `convert` raises `ValueError`.
+
+`Currency.convert` and `_rate_at` require `ensure_one()` — call them
+on a single-record recordset (e.g. `currency` rather than the
+results of a multi-record `search`).
+
 ## Defining a custom field type
 
 The built-ins cover most cases. When you need something specific

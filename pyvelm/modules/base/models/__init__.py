@@ -5,3 +5,4 @@ from . import menu  # noqa: F401
 from . import security  # noqa: F401
 from . import actions  # noqa: F401
 from . import company  # noqa: F401
+from . import currency  # noqa: F401
