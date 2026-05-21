@@ -986,6 +986,56 @@ def _edit_o2m_readonly(value, spec, field):
     return _render_collection(value, spec, field)
 
 
+# ---- attachment widget (field-less; addressed by res_model + res_id) ----
+
+
+def _attachment_initial(env, res_model: str, res_id: int | None) -> list[dict]:
+    """Read the existing ir.attachment rows for ``(res_model, res_id)``.
+
+    Returns one ``{id, name, mimetype, size}`` dict per row, ordered by
+    id ascending (= upload order). Yields an empty list when the row's
+    res_id isn't set yet (i.e. on a brand-new, unsaved parent record)
+    or when ir.attachment isn't loaded at all."""
+    if "ir.attachment" not in env.registry or not res_id:
+        return []
+    rows = env["ir.attachment"].search(
+        [("res_model", "=", res_model), ("res_id", "=", res_id)],
+    )
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "mimetype": r.mimetype,
+            "size": r.file_size or 0,
+        }
+        for r in rows
+    ]
+
+
+def _render_attachment_widget(
+    spec: dict, record, env, model_cls, mode: str
+) -> Markup:
+    """Render the attachment uploader for a host record.
+
+    Works in both display and edit modes — display just sets
+    ``readonly=true`` on the Alpine config which hides the upload
+    affordance and the delete buttons."""
+    res_model = model_cls._name
+    res_id = record.id if record else 0
+    initial = _attachment_initial(env, res_model, res_id)
+    readonly = (mode == "display") or bool(spec.get("readonly"))
+    partial = _env.get_template("widgets/attachment.html")
+    return Markup(
+        partial.render(
+            name=spec.get("name") or "attachment_ids",
+            res_model=res_model,
+            res_id=res_id,
+            initial=initial,
+            readonly=readonly,
+        )
+    )
+
+
 # ----- Jinja environment -----
 
 _env = jinja2.Environment(
@@ -1474,6 +1524,22 @@ def _form_section_html(
     for spec in fields_spec:
         fname = spec["name"]
         if fname not in model_cls._fields:
+            # Pure-widget entries (no backing field on the host model).
+            # ``widget="attachment"`` is the first of these — generic
+            # over (res_model, res_id), so it doesn't need a column.
+            if spec.get("widget") == "attachment":
+                html = _render_attachment_widget(
+                    spec, record_or_none, env, model_cls, mode
+                )
+                cells.append({
+                    "name": fname,
+                    "label": spec.get("label") or "Attachments",
+                    "required": False,
+                    "error": None,
+                    "wide": True,
+                    "html": html,
+                })
+                continue
             cells.append({"name": fname, "label": fname, "html": Markup("")})
             continue
         field = model_cls._fields[fname]

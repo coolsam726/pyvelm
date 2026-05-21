@@ -300,6 +300,28 @@ class Message(BaseModel):
         return {"sent": sent, "failed": failed}
 
 
+def _link_attachments(
+    env, attachment_ids: list[int] | None, res_model: str, res_id: int
+) -> None:
+    """Point each attachment row at (res_model, res_id).
+
+    Used by ``MailThread.message_post`` / ``notify`` to re-home
+    just-uploaded ``ir.attachment`` rows onto the freshly-created
+    message. No-op when ``ir.attachment`` isn't loaded or the caller
+    passed nothing.
+
+    Silently skips ids that don't resolve — a missing attachment
+    shouldn't fail the whole post."""
+    if not attachment_ids:
+        return
+    if "ir.attachment" not in env.registry:
+        return
+    Att = env["ir.attachment"]
+    rows = Att.browse(tuple(attachment_ids))
+    for rec in rows:
+        rec.write({"res_model": res_model, "res_id": res_id})
+
+
 class MailThread:
     """Mixin that adds chatter / message-thread capability to any model.
 
@@ -316,12 +338,18 @@ class MailThread:
         *,
         message_type: str = "comment",
         subtype: str = "",
+        attachment_ids: list[int] | None = None,
     ) -> "Message":
         """Create a new ``mail.message`` log entry for this record.
 
         The returned message is NOT queued for SMTP — it's just a log
         line. Use ``notify()`` when you want both a log entry and an
         outgoing email.
+
+        ``attachment_ids`` re-points existing ``ir.attachment`` rows
+        at the new message (``res_model = "mail.message"``, ``res_id =
+        msg.id``). Callers upload the bytes first (via
+        ``POST /api/attachment/upload``) and pass the resulting ids in.
         """
         self.ensure_one()
         if "mail.message" not in self.env.registry:
@@ -340,7 +368,9 @@ class MailThread:
             vals["subtype"] = subtype
         if self.env.uid is not None and "res.users" in self.env.registry:
             vals["author_id"] = self.env.uid
-        return self.env["mail.message"].create(vals)
+        msg = self.env["mail.message"].create(vals)
+        _link_attachments(self.env, attachment_ids, "mail.message", msg.id)
+        return msg
 
     def notify(
         self,
@@ -350,12 +380,18 @@ class MailThread:
         subject: str = "",
         message_type: str = "email",
         subtype: str = "",
+        attachment_ids: list[int] | None = None,
     ) -> "Message":
         """Log a message AND queue it for SMTP delivery.
 
         Same shape as ``message_post`` but additionally sets the
         ``recipient_email`` and ``subject`` fields so the next
         dispatcher tick picks the row up.
+
+        ``attachment_ids`` works the same way as in ``message_post`` —
+        the SMTP backend currently doesn't add the bytes to the
+        outgoing mail (that's a follow-up), but the linkage is
+        recorded so the chatter UI can render them.
         """
         self.ensure_one()
         if "mail.message" not in self.env.registry:
@@ -374,7 +410,9 @@ class MailThread:
             vals["subtype"] = subtype
         if self.env.uid is not None and "res.users" in self.env.registry:
             vals["author_id"] = self.env.uid
-        return self.env["mail.message"].create(vals)
+        msg = self.env["mail.message"].create(vals)
+        _link_attachments(self.env, attachment_ids, "mail.message", msg.id)
+        return msg
 
     @property
     def message_ids(self) -> list[int]:

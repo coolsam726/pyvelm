@@ -58,6 +58,7 @@ def install(env):
             "ir.ui.menu",
             "res.currency",
             "res.currency.rate",
+            "ir.attachment",
         ):
             if model in env.registry:
                 Access.create(

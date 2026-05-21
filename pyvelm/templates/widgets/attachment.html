@@ -1,0 +1,110 @@
+{# Attachment widget — drag-and-drop file uploads + chip list.
+
+   Used for the `attachments` virtual field on any form. Reads the
+   existing rows via /api/records?model=ir.attachment&domain=... and
+   POSTs new files to /api/attachment/upload. Deletion hits
+   /api/attachment/{id}.
+
+   Expected variables:
+       name            field attribute name (form input name — also
+                       posted as one hidden input per attachment id so
+                       the parent form save preserves the linkage even
+                       before res_id is known).
+       res_model       owning model name (e.g. "crm.lead").
+       res_id          owning record id, or 0 if the parent record
+                       hasn't been saved yet. The widget POSTs uploads
+                       with this id; for new records (res_id=0) the
+                       server creates orphan rows that the parent save
+                       re-links via a follow-up PATCH.
+       initial         list of {id, name, mimetype, size} for already-
+                       linked attachments.
+       readonly        bool — disables uploads + deletions.
+#}
+<div class="pv-attachment"
+     x-data='pvAttachment({{ ({
+        "name": name,
+        "resModel": res_model,
+        "resId": res_id,
+        "initial": initial,
+        "readonly": readonly,
+     }) | tojson }})'
+     @dragover.prevent="onDragOver($event)"
+     @dragleave.prevent="dragging = false"
+     @drop.prevent="onDrop($event)">
+
+    {# Hidden empty marker — same trick as the m2m widget so the server
+       can tell "user cleared everything" from "field not posted". #}
+    <input type="hidden" :name="name" value="">
+
+    {# Drop zone + button. #}
+    <div class="rounded-lg border-2 border-dashed transition-colors px-3 py-4 text-center"
+         :class="dragging ? 'border-fg-brand bg-brand-soft' : 'border-default bg-neutral-secondary'">
+        <template x-if="!readonly">
+            <div>
+                <label class="inline-flex items-center gap-2 cursor-pointer
+                              text-sm font-medium text-fg-brand hover:underline">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                         viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 7.5m0 0L7.5 12M12 7.5v9"/>
+                    </svg>
+                    <span x-text="dragging ? 'Drop to upload' : 'Choose files or drag here'"></span>
+                    <input type="file" multiple class="sr-only"
+                           @change="onPick($event)">
+                </label>
+            </div>
+        </template>
+        <template x-if="readonly && items.length === 0">
+            <span class="text-sm text-body-subtle">No attachments.</span>
+        </template>
+    </div>
+
+    {# Upload progress chips for in-flight uploads. #}
+    <template x-if="uploading.length > 0">
+        <ul class="mt-2 space-y-1">
+            <template x-for="u in uploading" :key="u.id">
+                <li class="flex items-center gap-2 text-xs text-body-subtle">
+                    <svg class="w-3 h-3 animate-spin" fill="none"
+                         stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="9" stroke-width="2"
+                                stroke-dasharray="40 40" stroke-linecap="round"></circle>
+                    </svg>
+                    <span x-text="u.name" class="truncate"></span>
+                </li>
+            </template>
+        </ul>
+    </template>
+
+    {# Existing attachments. One <input type="hidden" name=...> per id
+       so the parent form save sees the full id list. #}
+    <ul class="mt-2 space-y-1">
+        <template x-for="item in items" :key="item.id">
+            <li class="flex items-center gap-2 px-2 py-1.5 rounded-md
+                       bg-neutral-primary border border-default text-sm">
+                <input type="hidden" :name="name" :value="item.id">
+                <svg class="w-4 h-4 text-body-subtle shrink-0" fill="none"
+                     stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"
+                     aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M13.5 2.25v6a.75.75 0 00.75.75h6M15 2.25H6a2.25 2.25 0 00-2.25 2.25v15a2.25 2.25 0 002.25 2.25h12a2.25 2.25 0 002.25-2.25V8.25l-6-6z"/>
+                </svg>
+                <a :href="`/api/attachment/${item.id}/download`"
+                   class="flex-1 truncate text-fg-brand hover:underline"
+                   x-text="item.name"></a>
+                <span class="text-xs text-body-subtle"
+                      x-text="formatSize(item.size)"></span>
+                <button x-show="!readonly" type="button"
+                        @click="remove(item.id)"
+                        aria-label="Remove"
+                        class="p-1 rounded hover:bg-neutral-tertiary
+                               text-body-subtle hover:text-fg-danger transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                         viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </li>
+        </template>
+    </ul>
+</div>

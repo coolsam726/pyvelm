@@ -23,7 +23,10 @@ from typing import Any
 import base64
 import binascii
 
-from fastapi import Body, Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi import (
+    Body, Depends, FastAPI, File, Form, HTTPException, Query, Request,
+    UploadFile,
+)
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -1535,5 +1538,134 @@ def create_app(
         # the explicit delete_cookie calls above.
         response.headers["Clear-Site-Data"] = '"cache", "cookies"'
         return response
+
+    # ---- Attachment upload / download --------------------------------------
+
+    @app.post("/api/attachment/upload", status_code=201)
+    def upload_attachment(
+        request: Request,
+        file: UploadFile = File(...),
+        res_model: str | None = Form(None),
+        res_id: int | None = Form(None),
+        env: Environment = Depends(get_env),
+    ):
+        """Persist an uploaded blob into ``ir.attachment``.
+
+        Multipart form fields:
+          file       The uploaded file (required).
+          res_model  Owning model name (e.g. ``crm.lead``). Optional —
+                     omit when uploading to a not-yet-saved record; the
+                     widget patches ``res_id`` on parent-form save.
+          res_id     Primary key of the owning record. Same caveat.
+
+        Returns JSON with the new row's ``{id, name, mimetype, size}``.
+        """
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(
+                status_code=503, detail="ir.attachment model not loaded"
+            )
+        content = file.file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file")
+
+        from .storage import get_backend
+        backend = get_backend()
+        original_name = file.filename or "file"
+        storage_key = backend.save(original_name, content)
+        # The DB backend returns "" and expects the bytes inline in
+        # the row; the local backend returns a key and skips datas.
+        datas = (
+            base64.b64encode(content).decode("ascii")
+            if not storage_key
+            else None
+        )
+        # MIME comes from the client's Content-Type with a server-side
+        # extension fallback for clients that send nothing useful.
+        import mimetypes
+        mimetype = (
+            file.content_type
+            or mimetypes.guess_type(original_name)[0]
+            or "application/octet-stream"
+        )
+        with env.transaction():
+            att = env["ir.attachment"].create({
+                "name": original_name,
+                "datas_fname": original_name,
+                "mimetype": mimetype,
+                "file_size": len(content),
+                "res_model": res_model or None,
+                "res_id": res_id if res_id else None,
+                "type": "binary",
+                "storage_key": storage_key,
+                "datas": datas,
+            })
+        return {
+            "id": att.id,
+            "name": att.name,
+            "mimetype": att.mimetype,
+            "size": att.file_size,
+        }
+
+    @app.get("/api/attachment/{att_id}/download")
+    def download_attachment(
+        att_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        """Stream a single attachment's bytes back as a file download.
+
+        ``Content-Disposition: attachment`` plus the original filename
+        triggers a browser download; the widget links to this URL
+        directly so users get save-as semantics."""
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(
+                status_code=503, detail="ir.attachment model not loaded"
+            )
+        att = env["ir.attachment"].browse(att_id)
+        if not att:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        att.ensure_one()
+        if att.type == "url":
+            # External link — bounce the browser there rather than
+            # streaming nothing.
+            return RedirectResponse(att.url, status_code=302)
+        content = att.fetch_content()
+        filename = att.datas_fname or att.name or f"attachment-{att.id}"
+        # Quote double-quotes in the filename to keep the header valid.
+        safe_filename = filename.replace('"', "")
+        return Response(
+            content,
+            media_type=att.mimetype or "application/octet-stream",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_filename}"',
+                # Cache by id (immutable once written) so repeated views
+                # of a form don't re-download.
+                "Cache-Control": "private, max-age=3600",
+            },
+        )
+
+    @app.delete("/api/attachment/{att_id}", status_code=204, response_class=Response)
+    def delete_attachment(
+        att_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        """Remove an attachment row and its backing blob."""
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(
+                status_code=503, detail="ir.attachment model not loaded"
+            )
+        att = env["ir.attachment"].browse(att_id)
+        if not att:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        with env.transaction():
+            att.unlink()
+        return Response(status_code=204)
 
     return app

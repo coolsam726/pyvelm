@@ -459,15 +459,50 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
   - Out of scope (hand-written still): renames, type changes,
     data backfills, M2m junction tables.
 
+  ✅ **Documents & attachments** (`ir.attachment` + `pyvelm.storage`,
+  base bumped to 0.17.0):
+  - `ir.attachment` model: `name`, `datas_fname`, `mimetype`,
+    `file_size`, `res_model`, `res_id`, `type` (`binary` | `url`),
+    `url`, `storage_key`, `datas` (base64 for db backend). No FK on
+    `res_id` — generic across host models, same trick as Odoo.
+    `unlink()` deletes backing blobs before dropping rows.
+  - `pyvelm.storage` — pluggable backend selector via
+    `PYVELM_ATTACHMENT_BACKEND` (default `local`).
+    * `LocalStorageBackend` writes to `PYVELM_ATTACHMENT_DIR`
+      (default `./data/attachments`) with two-level hex sharding
+      (`<aa>/<bb>/<uuid>_<safe-name>`). Path-traversal / absolute
+      keys rejected. Empty shard dirs swept on delete.
+    * `DbStorageBackend` returns an empty storage_key and expects
+      the row's `datas` column to hold the bytes — useful for tests
+      and tiny installs where pg_dump captures everything.
+  - `/api/attachment/upload` (multipart `file` + optional
+    `res_model`/`res_id`) → JSON `{id, name, mimetype, size}`.
+    `/api/attachment/{id}/download` streams with
+    `Content-Disposition: attachment` and `Cache-Control: private,
+    max-age=3600`. `DELETE /api/attachment/{id}` removes row + blob.
+    All three require an authenticated session.
+  - Form widget: `widget="attachment"` on a *fieldless* arch entry
+    (the widget is generic; doesn't need a column on the host
+    model). Template at `widgets/attachment.html`, Alpine component
+    `pvAttachment` registered in `layouts/main.html`. Drag-and-drop
+    drop zone + file picker, in-flight upload chips, existing
+    attachments as download links with byte-size badges and delete
+    buttons. Read-only mode hides upload + delete affordances.
+  - `MailThread.message_post()` and `notify()` grew an
+    `attachment_ids` kwarg that re-homes just-uploaded rows onto
+    the freshly-created message.
+  - Migration `0_16_to_0_17.py` creates the table + a composite
+    `(res_model, res_id)` index, plus an idempotent Admin access
+    grant so upgraded installs match fresh installs.
+
 Next focus options:
-  - **Documents & attachments**: `ir.attachment` model + on-disk
-    storage backend + upload endpoint + form widget. Touches MIME
-    handling, storage abstraction, cleanup-on-uninstall.
   - **Reporting / dashboards**: new `graph` or `pivot` view type
     backed by SQL aggregation. Builds out a read-side aggregation
     layer (none today) for charts / KPIs / exports.
   - **Stage 6 Slice 3**: message subtypes + followers/subscriptions
     layered on the dispatcher.
+  - **S3 / minio storage backend**: drop into `pyvelm.storage`
+    alongside `LocalStorageBackend` for remote blob storage.
 
 Still deferred: cache snapshot on transaction rollback, O2m/M2m
 caching + old-value snapshotting, "Create and edit…" modal for the

@@ -838,6 +838,108 @@
                 this.selected = this.selected.filter(s => s.id !== id);
             },
         }));
+
+        // ── Attachment uploader ──
+        // Mounted by `widgets/attachment.html`. Each existing
+        // attachment becomes a hidden `<input name="<field>">` so the
+        // parent form save preserves the linkage; new uploads POST to
+        // /api/attachment/upload (multipart) and the returned row is
+        // appended to `items` (which immediately mints a hidden input
+        // for it). Deletions hit DELETE /api/attachment/{id}.
+        Alpine.data('pvAttachment', (cfg) => ({
+            name: cfg.name,
+            resModel: cfg.resModel || '',
+            resId: cfg.resId || 0,
+            readonly: !!cfg.readonly,
+            items: Array.isArray(cfg.initial) ? cfg.initial.slice() : [],
+            uploading: [],       // in-flight {id, name}
+            dragging: false,
+            _seq: 0,
+            // pretty byte formatter — kB / MB / GB
+            formatSize(n) {
+                if (n == null) return '';
+                if (n < 1024) return n + ' B';
+                if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' kB';
+                if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+                return (n / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+            },
+            onPick(ev) {
+                this.uploadFiles(Array.from(ev.target.files || []));
+                ev.target.value = '';   // allow re-picking the same file
+            },
+            onDragOver(ev) {
+                if (this.readonly) return;
+                this.dragging = true;
+            },
+            onDrop(ev) {
+                this.dragging = false;
+                if (this.readonly) return;
+                const files = Array.from(ev.dataTransfer.files || []);
+                if (files.length) this.uploadFiles(files);
+            },
+            async uploadFiles(files) {
+                for (const f of files) {
+                    const slotId = ++this._seq;
+                    this.uploading.push({ id: slotId, name: f.name });
+                    const fd = new FormData();
+                    fd.append('file', f);
+                    if (this.resModel) fd.append('res_model', this.resModel);
+                    if (this.resId) fd.append('res_id', String(this.resId));
+                    try {
+                        // The CSRF middleware enforces a token on every
+                        // unsafe method when a session cookie is present.
+                        // window.pvCsrf() is defined further down in this
+                        // template for non-htmx callers.
+                        const r = await fetch('/api/attachment/upload', {
+                            method: 'POST',
+                            body: fd,
+                            headers: {
+                                'X-CSRF-Token': (window.pvCsrf && window.pvCsrf()) || '',
+                            },
+                            credentials: 'same-origin',
+                        });
+                        if (!r.ok) throw new Error('upload failed: ' + r.status);
+                        const row = await r.json();
+                        this.items.push({
+                            id: row.id,
+                            name: row.name,
+                            mimetype: row.mimetype,
+                            size: row.size,
+                        });
+                    } catch (e) {
+                        // Surface as a toast — pvAlert is the layout's
+                        // dialog component (defined later in this file).
+                        if (window.pvAlert) {
+                            window.pvAlert('Upload failed: ' + (e.message || e));
+                        } else {
+                            console.error(e);
+                        }
+                    } finally {
+                        this.uploading = this.uploading.filter(u => u.id !== slotId);
+                    }
+                }
+            },
+            async remove(id) {
+                if (this.readonly) return;
+                try {
+                    const r = await fetch('/api/attachment/' + id, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-CSRF-Token': (window.pvCsrf && window.pvCsrf()) || '',
+                        },
+                        credentials: 'same-origin',
+                    });
+                    if (!r.ok && r.status !== 204) throw new Error('delete failed: ' + r.status);
+                    this.items = this.items.filter(it => it.id !== id);
+                } catch (e) {
+                    if (window.pvAlert) {
+                        window.pvAlert('Delete failed: ' + (e.message || e));
+                    } else {
+                        console.error(e);
+                    }
+                }
+            },
+        }));
     });
 
     // ---- Odoo-style autosave on navigation ----------------------------
