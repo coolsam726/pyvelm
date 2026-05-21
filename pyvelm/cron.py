@@ -30,11 +30,25 @@ from pyvelm import BaseModel, Boolean, Char, Integer, Many2one
 from pyvelm.fields import Field
 
 
+# Spacing between successive runs, derived from (interval_number,
+# interval_type). Two semantic families share the field:
+#
+# * "every N <unit>" — minutes / hours / days / weeks / months / years.
+#   Months and years are approximated (30 / 365 days) — for calendar-
+#   exact recurrence, operators tweak ``nextcall`` by hand.
+# * "<N> times per <unit>" — per_hour / per_day / per_week / per_month.
+#   Spacing is ``unit / N`` (e.g. ``per_day=3`` → 8h between runs).
 _INTERVAL_DELTAS = {
     "minutes": lambda n: timedelta(minutes=n),
     "hours": lambda n: timedelta(hours=n),
     "days": lambda n: timedelta(days=n),
     "weeks": lambda n: timedelta(weeks=n),
+    "months": lambda n: timedelta(days=30 * n),
+    "years": lambda n: timedelta(days=365 * n),
+    "per_hour": lambda n: timedelta(hours=1) / max(n, 1),
+    "per_day": lambda n: timedelta(days=1) / max(n, 1),
+    "per_week": lambda n: timedelta(weeks=1) / max(n, 1),
+    "per_month": lambda n: timedelta(days=30) / max(n, 1),
 }
 
 
@@ -46,10 +60,56 @@ class CronJob(BaseModel):
 
     name = Char(required=True)
     action_id = Many2one("ir.actions.server", ondelete="CASCADE")
-    interval_number = Integer(default=1)
-    interval_type = Char(default="hours")   # minutes/hours/days/weeks
-    nextcall = _DatetimeField()
+    interval_number = Integer(default=1, string="Interval")
+    interval_type = Char(
+        default="hours",
+        string="Unit",
+        # Two families: "every N <unit>" and "<N> times per <unit>".
+        # The cron runner picks the right spacing via _INTERVAL_DELTAS.
+        choices=[
+            ("minutes", "Minutes"),
+            ("hours", "Hours"),
+            ("days", "Days"),
+            ("weeks", "Weeks"),
+            ("months", "Months"),
+            ("years", "Years"),
+            ("per_hour", "Times / hour"),
+            ("per_day", "Times / day"),
+            ("per_week", "Times / week"),
+            ("per_month", "Times / month"),
+        ],
+    )
+    nextcall = _DatetimeField(string="Next call")
+    # Stamped by `run_due` (and by the "Run Now" admin button) every
+    # time the job's action executes, regardless of outcome. Operators
+    # use this to confirm a job is actually firing.
+    lastcall = _DatetimeField(string="Last call")
     active = Boolean(default=True)
+
+    def run_now(self):
+        """Execute this job's action immediately.
+
+        Bypasses the schedule entirely — does **not** read or update
+        ``nextcall``. Stamps ``lastcall`` so the admin UI shows the
+        run. Re-raises any exception from the action so the caller can
+        surface it; advancing schedule state is the periodic
+        ``run_due`` loop's job, not the on-demand button's.
+        """
+        self.ensure_one()
+        env = self.env
+        if not self.action_id:
+            raise RuntimeError(f"Cron {self.name!r} has no action_id")
+        action = env["ir.actions.server"].browse(self.action_id.id)
+        prev_bypass = env._acl_bypass
+        env._acl_bypass = True
+        try:
+            try:
+                action.run()
+            finally:
+                with env.transaction():
+                    self.write({"lastcall": datetime.utcnow()})
+        finally:
+            env._acl_bypass = prev_bypass
 
     @classmethod
     def run_due(cls, env) -> list[str]:
@@ -86,13 +146,16 @@ class CronJob(BaseModel):
                         file=sys.stderr,
                     )
                 # Advance nextcall regardless of success so we don't tight-loop.
+                # Stamp lastcall in the same write so operators can confirm
+                # the job actually fired.
                 interval_n = job.interval_number or 1
                 interval_t = job.interval_type or "hours"
                 delta_fn = _INTERVAL_DELTAS.get(interval_t)
+                updates: dict = {"lastcall": now}
                 if delta_fn:
-                    new_next = (nextcall or now) + delta_fn(interval_n)
-                    with env.transaction():
-                        job.write({"nextcall": new_next})
+                    updates["nextcall"] = (nextcall or now) + delta_fn(interval_n)
+                with env.transaction():
+                    job.write(updates)
         finally:
             env._acl_bypass = prev_bypass
 

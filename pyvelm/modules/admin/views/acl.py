@@ -151,16 +151,25 @@ VIEWS: list[View] = [
     list_view("cron.list", "ir.cron",
               title="Scheduled Jobs",
               fields=["name", "action_id", "interval_number",
-                      "interval_type", "nextcall",
+                      "interval_type", "lastcall", "nextcall",
                       field("active", widget="toggle")]),
 
     form_view("cron.form", "ir.cron",
+              header_actions=[
+                  {
+                      "label": "Run Now",
+                      "url": "/web/cron/{id}/run-now",
+                      "method": "POST",
+                      "confirm": "Run this job now?",
+                  },
+              ],
               sections=[
                   section("main", "Job",
                           ["name", "action_id",
                            field("active", widget="toggle")]),
                   section("schedule", "Schedule",
-                          ["interval_number", "interval_type", "nextcall"]),
+                          ["interval_number", "interval_type",
+                           "nextcall", "lastcall"]),
               ]),
 
     # ---- mail.message ----

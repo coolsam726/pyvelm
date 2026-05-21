@@ -1221,6 +1221,40 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(e))
         return _apps_action_response(request, env, result)
 
+    @app.post("/web/cron/{cron_id}/run-now")
+    def web_cron_run_now(
+        cron_id: int, request: Request, env: Environment = Depends(get_env)
+    ):
+        """Execute a single cron job on demand.
+
+        Bypasses the schedule (does not touch ``nextcall``). Stamps
+        ``lastcall``. Admin-gated since cron actions can be arbitrary
+        Python via ``ir.actions.server`` ``action_type="code"``.
+
+        Returns 204 plus an ``HX-Trigger: pv-alert-request`` event so
+        the layout's toast picks up the success / failure message.
+        """
+        import json as _json
+
+        if env.uid is None:
+            return _auth_required_response(request)
+        _require_admin(env)
+        Cron = env["ir.cron"]
+        if not Cron.search([("id", "=", cron_id)]):
+            raise HTTPException(404, f"ir.cron({cron_id}) not found")
+        job = Cron.browse(cron_id)
+        try:
+            job.run_now()
+            message = f"Ran {job.name!r}"
+        except Exception as exc:  # noqa: BLE001
+            message = f"Failed: {exc}"
+        return Response(
+            status_code=204,
+            headers={
+                "HX-Trigger": _json.dumps({"pv-toast": message}),
+            },
+        )
+
     @app.post("/web/switch-company")
     async def web_switch_company(
         request: Request,
