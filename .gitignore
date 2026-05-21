@@ -24,3 +24,4 @@ node_modules/
 *.swo
 build/
 site/
+data/
