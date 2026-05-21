@@ -21,4 +21,8 @@ MENUS: list[Menu] = [
               href="/web/views/crm/lead.kanban", sequence=10),
     menu_item("crm.leads",    "All Leads", parent="crm.crm",
               href="/web/views/crm/lead.list",   sequence=20),
+    menu_item("crm.revenue",  "Revenue",   parent="crm.crm",
+              href="/web/views/crm/lead.graph",  sequence=30),
+    menu_item("crm.pivot",    "Pipeline pivot", parent="crm.crm",
+              href="/web/views/crm/lead.pivot",  sequence=40),
 ]

@@ -1935,6 +1935,499 @@ def render_kanban_page(view, env, *, current_path: str | None = None) -> str:
             f"{len(recs)} record{'s' if len(recs) != 1 else ''}"
             f" · {len(columns)} column{'s' if len(columns) != 1 else ''}"
         ),
+        view_switcher=_other_views_for_model(env, view),
+        **layout_context(env, current_path),
+    )
+
+
+def _other_views_for_model(env, view) -> list[dict]:
+    """List sibling views of the same module+model for the view-switcher.
+
+    Returns one entry per sibling (and the current view) shaped as
+    ``{label, view_type, href, active}`` ordered list → kanban →
+    graph → pivot → form. Form views don't get an entry because
+    their URL needs a record id (the bare URL is 501).
+    """
+    if "ir.ui.view" not in env.registry:
+        return []
+    View = env["ir.ui.view"]
+    # Pull every view registered for the same (module, model). The
+    # switcher only shows view types that have a meaningful top-level
+    # page — form is bare-URL-only so it gets dropped.
+    sibling_types = ("list", "kanban", "graph", "pivot")
+    matches = View.search(
+        [
+            ("module", "=", view.module),
+            ("model", "=", view.model),
+            ("view_type", "in", list(sibling_types)),
+        ],
+        order='"view_type" ASC, "priority" ASC, "id" ASC',
+    )
+    # Deduplicate by view_type — first hit (lowest priority) wins,
+    # matching the same precedence the loader uses for base views.
+    by_type: dict[str, str] = {}
+    for m in matches:
+        by_type.setdefault(m.view_type, m.name)
+    order_priority = {t: i for i, t in enumerate(sibling_types)}
+    pairs = sorted(by_type.items(), key=lambda p: order_priority.get(p[0], 99))
+    out: list[dict] = []
+    for view_type, name in pairs:
+        label = {
+            "list": "List", "kanban": "Kanban",
+            "graph": "Graph", "pivot": "Pivot",
+        }.get(view_type, view_type.title())
+        out.append({
+            "label": label,
+            "view_type": view_type,
+            "href": f"/web/views/{view.module}/{name}",
+            "active": view.view_type == view_type,
+        })
+    return out
+
+
+def _format_group_label(value, fname: str, trunc: str | None, model_cls) -> str:
+    """Best-effort human label for a read_group raw value.
+
+    The value is whatever ``read_group`` puts in the row dict for a
+    given group spec. Many2one labels are pre-resolved by ``read_group``
+    and consumed via the ``<spec>__label`` sibling key (which the caller
+    reads in preference to this helper) — this function handles the
+    *other* primitive cases the renderer might see.
+    """
+    if value is None:
+        return "(no value)"
+    if trunc:
+        # date_trunc returns a datetime — render a compact label per
+        # trunc granularity.
+        from datetime import date as _date, datetime as _datetime
+        if not isinstance(value, (_date, _datetime)):
+            return str(value)
+        if trunc == "day":
+            return value.strftime("%Y-%m-%d")
+        if trunc == "week":
+            return value.strftime("Wk %V %Y")
+        if trunc == "month":
+            return value.strftime("%b %Y")
+        if trunc == "quarter":
+            quarter = ((value.month - 1) // 3) + 1
+            return f"Q{quarter} {value.year}"
+        if trunc == "year":
+            return str(value.year)
+    field = model_cls._fields.get(fname)
+    if field is not None and field.__class__.__name__ == "Boolean":
+        return "Yes" if value else "No"
+    return str(value)
+
+
+def render_graph_page(
+    view,
+    env,
+    *,
+    search: str = "",
+    filters: str = "",
+    current_path: str | None = None,
+) -> str:
+    """Render a graph view: one chart aggregating one measure by one
+    groupby field, rendered by ApexCharts on the client.
+
+    Arch shape::
+
+        {"groupby": "stage",
+         "measure": "expected_revenue:sum",
+         "chart":   "bar" | "line" | "pie",
+         "title":   "...",      # optional
+         "stacked": False,      # optional, bar only
+         "horizontal": False,   # optional, bar only
+         "domain":  [...]}      # optional, ANDed with URL filters
+    """
+    from .views import resolve_arch
+
+    arch = resolve_arch(view)
+    groupby_spec = arch["groupby"]
+    measure_spec = arch.get("measure") or "__count"
+    chart_type = arch.get("chart", "bar")
+    static_domain = list(arch.get("domain") or [])
+
+    model_cls = env.registry[view.model]
+    Model = env[view.model]
+
+    # The graph page doesn't ship the full chip-style filter UI yet, so
+    # we synthesize a `fields_spec` listing every stored field on the
+    # model. This keeps the existing helpers happy and lets free-text
+    # search hit the model's Char/Text columns naturally.
+    pseudo_fields_spec = [
+        {"name": n} for n, f in model_cls._fields.items() if f.is_stored
+    ]
+    domain = list(static_domain)
+    if search:
+        domain.extend(_build_search_domain(model_cls, pseudo_fields_spec, search))
+    if filters:
+        domain.extend(_parse_filters(model_cls, pseudo_fields_spec, filters))
+
+    rows = Model.read_group(
+        domain,
+        groupby=[groupby_spec],
+        measures=[measure_spec],
+    )
+
+    # Trunc / field name resolution mirrors read_group's parsing.
+    if ":" in groupby_spec:
+        gfname, gtrunc = groupby_spec.split(":", 1)
+    else:
+        gfname, gtrunc = groupby_spec, None
+    label_key = f"{groupby_spec}__label"  # only set for M2o groupbys
+
+    labels: list[str] = []
+    values: list[float] = []
+    for r in rows:
+        raw = r.get(groupby_spec)
+        if label_key in r and r[label_key] is not None:
+            label = str(r[label_key])
+        else:
+            label = _format_group_label(raw, gfname, gtrunc, model_cls)
+        labels.append(label)
+        v = r.get(measure_spec, 0)
+        # `count` results come back as ints, everything else as float
+        # or Decimal — coerce to float for JSON friendliness.
+        try:
+            values.append(float(v or 0))
+        except (TypeError, ValueError):
+            values.append(0.0)
+
+    # Measure label for axis / legend display. Fall back to the raw
+    # measure spec when the field doesn't carry a `string` attr.
+    if measure_spec == "__count":
+        measure_label = "Count"
+    else:
+        mfname = measure_spec.split(":", 1)[0]
+        mf = model_cls._fields.get(mfname)
+        base_label = (mf.string if mf and mf.string else mfname) if mf else mfname
+        agg = measure_spec.split(":", 1)[1] if ":" in measure_spec else "sum"
+        measure_label = f"{base_label} ({agg})"
+
+    page_title = _view_title(view, arch)
+    chart_data = {
+        "chart_type": chart_type,
+        "labels": labels,
+        "values": values,
+        "measure_label": measure_label,
+        "stacked": bool(arch.get("stacked")),
+        "horizontal": bool(arch.get("horizontal")),
+    }
+    template = _env.get_template("graph.html")
+    return template.render(
+        view=view,
+        chart_data=chart_data,
+        search=search,
+        filters=filters,
+        page_title=page_title,
+        subtitle=f"{len(rows)} group{'s' if len(rows) != 1 else ''}",
+        view_switcher=_other_views_for_model(env, view),
+        **layout_context(env, current_path),
+    )
+
+
+def _pivot_axis_labels(rows, axis_specs, model_cls):
+    """Collect distinct ``(value, label)`` tuples for each axis spec.
+
+    ``rows`` is the output of ``read_group``. ``axis_specs`` is the
+    ordered list of ``"field"`` / ``"field:trunc"`` strings used in
+    that read_group call (in the order they were passed).
+
+    Returns a list, one entry per axis level, of ordered lists of
+    ``{"value": <raw>, "label": <human>}`` dicts. Each axis is sorted
+    by raw value with ``None`` floated to the end so missing-value
+    rows always appear last regardless of which combinations the
+    underlying read_group happened to surface first.
+    """
+    out: list[list[dict]] = []
+    for spec in axis_specs:
+        if ":" in spec:
+            fname, trunc = spec.split(":", 1)
+        else:
+            fname, trunc = spec, None
+        label_key = f"{spec}__label"
+        seen: dict = {}
+        for r in rows:
+            raw = r.get(spec)
+            if raw in seen:
+                continue
+            if label_key in r and r[label_key] is not None:
+                label = str(r[label_key])
+            else:
+                label = _format_group_label(raw, fname, trunc, model_cls)
+            seen[raw] = label
+        # Sort by the raw value; None always last (we can't compare it
+        # against other types in Python 3). Falls back to string
+        # comparison so heterogenous types still produce a stable
+        # ordering instead of a TypeError.
+        def _key(v):
+            return (v is None, _sort_key(v))
+        ordered_values = sorted(seen.keys(), key=_key)
+        out.append([{"value": v, "label": seen[v]} for v in ordered_values])
+    return out
+
+
+def _sort_key(v):
+    """Coerce a value to a comparable sort key.
+
+    Used by ``_pivot_axis_labels`` so axes with mixed-typish content
+    (e.g. an Integer + the occasional NULL → None) still produce a
+    stable sort order in Python 3 where ``None < 0`` raises TypeError.
+    """
+    if v is None:
+        return ""
+    if isinstance(v, (int, float)):
+        return (0, float(v))
+    return (1, str(v))
+
+
+def _measure_label(spec: str, model_cls) -> str:
+    """Human label for a measure spec ("field:agg" / "__count")."""
+    if spec == "__count":
+        return "Count"
+    if ":" in spec:
+        fname, agg = spec.split(":", 1)
+    else:
+        fname, agg = spec, "sum"
+    f = model_cls._fields.get(fname)
+    base = (f.string if f and f.string else fname) if f else fname
+    return f"{base} ({agg})"
+
+
+def _format_pivot_cell(value, measure_spec: str) -> str:
+    """Format one cell value as a string for display.
+
+    Counts render as integers, everything else as either a float with
+    two decimals or its native ``str()`` form. ``None`` (no rows
+    matched the row × col intersection) renders as an em dash.
+    """
+    if value is None:
+        return "—"
+    if measure_spec == "__count":
+        try:
+            return f"{int(value):,}"
+        except (TypeError, ValueError):
+            return str(value)
+    try:
+        return f"{float(value):,.2f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def render_pivot_page(
+    view,
+    env,
+    *,
+    search: str = "",
+    filters: str = "",
+    current_path: str | None = None,
+) -> str:
+    """Render a pivot view: a cross-tab table aggregating one or more
+    measures over the cartesian product of ``row_groupby`` × ``col_groupby``.
+
+    Single ``read_group`` call covers the whole table: we ask for all
+    rows and cols together, then pivot the flat result into a nested
+    HTML matrix in Python. Row totals (per row) and a grand-total
+    column / row are computed cell-by-cell — Postgres' ROLLUP could
+    do it server-side but for the cardinalities a pivot is useful at
+    (a few rows × a few cols × few measures), client-side aggregation
+    is plenty fast and avoids burning round-trips.
+    """
+    from .views import resolve_arch
+
+    arch = resolve_arch(view)
+    row_specs = list(arch.get("row_groupby") or [])
+    col_specs = list(arch.get("col_groupby") or [])
+    measure_specs = list(arch.get("measures") or ["__count"])
+    static_domain = list(arch.get("domain") or [])
+
+    model_cls = env.registry[view.model]
+    Model = env[view.model]
+
+    pseudo_fields_spec = [
+        {"name": n} for n, f in model_cls._fields.items() if f.is_stored
+    ]
+    domain = list(static_domain)
+    if search:
+        domain.extend(_build_search_domain(model_cls, pseudo_fields_spec, search))
+    if filters:
+        domain.extend(_parse_filters(model_cls, pseudo_fields_spec, filters))
+
+    flat_rows = Model.read_group(
+        domain,
+        groupby=row_specs + col_specs,
+        measures=measure_specs,
+    )
+
+    # Order is "first seen in the read_group result" per axis spec —
+    # consistent because read_group's default ORDER BY mirrors the
+    # group-key order we requested.
+    row_axes = _pivot_axis_labels(flat_rows, row_specs, model_cls)
+    col_axes = _pivot_axis_labels(flat_rows, col_specs, model_cls)
+
+    # Index flat_rows by (row_key_tuple, col_key_tuple) for O(1) cell
+    # lookup. Each cell holds the per-measure dict.
+    cell_index: dict[tuple, dict] = {}
+    for r in flat_rows:
+        row_key = tuple(r.get(s) for s in row_specs)
+        col_key = tuple(r.get(s) for s in col_specs)
+        cell_index[(row_key, col_key)] = {
+            m: r.get(m) for m in measure_specs
+        }
+
+    # Materialize the cartesian product of row / col axes. With more
+    # than ~5k cells the page gets unwieldy; we trust the view author
+    # to keep cardinalities sane (Odoo applies the same convention).
+    def _product(axes):
+        from itertools import product as _ip
+        if not axes:
+            return [()]
+        return list(_ip(*[[entry["value"] for entry in a] for a in axes]))
+
+    row_combos = _product(row_axes)
+    col_combos = _product(col_axes)
+
+    # Headers: one row per col_groupby level, repeating each parent
+    # label across its children for the right colspan. The first
+    # column carries the row-axis label; the trailing column is
+    # the "Total" grand-sum.
+    header_levels: list[list[dict]] = []
+    if col_axes:
+        for level_idx, level in enumerate(col_axes):
+            # The colspan at this level is the product of sizes of
+            # the levels *below* it.
+            below = col_axes[level_idx + 1:]
+            span_per_label = 1
+            for b in below:
+                span_per_label *= max(1, len(b))
+            # Repeat each label as many times as the parent product
+            # above (group-by-group). The label here repeats once per
+            # combination of levels *above*, but visually we collapse
+            # consecutive duplicates into a single th with colspan.
+            cells = []
+            for entry in level:
+                cells.append({
+                    "label": entry["label"],
+                    "colspan": span_per_label * len(measure_specs),
+                })
+            header_levels.append(cells)
+    # Final header row: measure labels, one per leaf-col entry plus
+    # the grand-total column.
+    measure_label_row: list[dict] = []
+    for _combo in col_combos:
+        for m in measure_specs:
+            measure_label_row.append({
+                "label": _measure_label(m, model_cls),
+                "colspan": 1,
+            })
+    # Grand total column header — one cell spanning len(measure_specs)
+    # at the right side. We emit it on each level, and the measure
+    # row gets one entry per measure under it.
+    grand_header = {
+        "label": "Total",
+        "colspan": len(measure_specs),
+    }
+
+    # Body rows: nested by row_groupby. For first iteration we render
+    # a flat list (no row indentation between levels — that's a polish
+    # task) but still surface row totals.
+    body_rows: list[dict] = []
+    for row_combo in row_combos:
+        row_labels: list[str] = []
+        for level_idx, key_val in enumerate(row_combo):
+            entries = row_axes[level_idx]
+            label = next(
+                (e["label"] for e in entries if e["value"] == key_val),
+                str(key_val),
+            )
+            row_labels.append(label)
+        cells: list[dict] = []
+        # Per-measure row totals (summed across columns).
+        row_totals: dict[str, float | int] = {m: 0 for m in measure_specs}
+        for col_combo in col_combos:
+            measures_at_cell = cell_index.get((row_combo, col_combo))
+            for m in measure_specs:
+                value = measures_at_cell.get(m) if measures_at_cell else None
+                cells.append({
+                    "value": value,
+                    "display": _format_pivot_cell(value, m),
+                })
+                if value is not None:
+                    try:
+                        row_totals[m] += float(value)
+                    except (TypeError, ValueError):
+                        pass
+        # Grand-total cells (rightmost) — one per measure.
+        for m in measure_specs:
+            total = row_totals[m]
+            cells.append({
+                "value": total,
+                "display": _format_pivot_cell(total, m),
+                "is_total": True,
+            })
+        body_rows.append({"labels": row_labels, "cells": cells})
+
+    # Column-grand-total row at the bottom.
+    col_totals: list[dict] = []
+    grand_grand: dict[str, float | int] = {m: 0 for m in measure_specs}
+    for col_combo in col_combos:
+        for m in measure_specs:
+            running: float | int = 0
+            for row_combo in row_combos:
+                measures_at_cell = cell_index.get((row_combo, col_combo))
+                if measures_at_cell is None:
+                    continue
+                v = measures_at_cell.get(m)
+                if v is None:
+                    continue
+                try:
+                    running += float(v)
+                except (TypeError, ValueError):
+                    pass
+            col_totals.append({
+                "value": running,
+                "display": _format_pivot_cell(running, m),
+                "is_total": True,
+            })
+            grand_grand[m] += running
+    for m in measure_specs:
+        col_totals.append({
+            "value": grand_grand[m],
+            "display": _format_pivot_cell(grand_grand[m], m),
+            "is_total": True,
+        })
+
+    # Row-axis header column titles ("Stage" / "Salesperson"…).
+    row_axis_titles: list[str] = []
+    for spec in row_specs:
+        fname = spec.split(":", 1)[0]
+        f = model_cls._fields.get(fname)
+        label = (f.string if f and f.string else fname) if f else fname
+        if ":" in spec:
+            label += f" ({spec.split(':', 1)[1]})"
+        row_axis_titles.append(label)
+
+    page_title = _view_title(view, arch)
+    template = _env.get_template("pivot.html")
+    return template.render(
+        view=view,
+        row_axis_titles=row_axis_titles,
+        header_levels=header_levels,
+        measure_label_row=measure_label_row,
+        grand_header=grand_header,
+        body_rows=body_rows,
+        col_totals=col_totals,
+        measure_count=len(measure_specs),
+        col_combos_count=len(col_combos),
+        search=search,
+        filters=filters,
+        page_title=page_title,
+        subtitle=(
+            f"{len(row_combos)} row{'s' if len(row_combos) != 1 else ''}"
+            f" × {max(1, len(col_combos))} column{'s' if len(col_combos) != 1 else ''}"
+        ),
+        view_switcher=_other_views_for_model(env, view),
         **layout_context(env, current_path),
     )
 
@@ -2283,6 +2776,7 @@ def render_list_page(
         form_view_name=form_view_name,
         page_title=page_title,
         subtitle=f"{total} record{'s' if total != 1 else ''}",
+        view_switcher=_other_views_for_model(env, view),
         **layout_context(env, current_path),
     )
 

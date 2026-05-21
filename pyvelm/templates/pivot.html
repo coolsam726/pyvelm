@@ -1,0 +1,156 @@
+{% extends "layouts/main.html" %}
+{% block title %}{{ page_title }} — pyvelm{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{# Pivot view: cross-tab matrix produced by ``read_group`` and pivoted
+   server-side. Headers, row labels, cells, and totals are all rendered
+   as plain HTML — no client-side JS — so this works for users on
+   crippled browsers and shows up unchanged in PDF print exports later.
+   The view-switcher lets the user flip between list / kanban / graph
+   / pivot for the same (module, model). #}
+{% block content %}
+<div class="space-y-4">
+
+    {% if view_switcher %}
+    {% include "_view_switcher.html" %}
+    {% endif %}
+
+    {# Minimal search bar — same shape as graph.html so the two pages
+       share UX until the fuller chip-style bar is extracted as a
+       partial. #}
+    <form method="get" class="flex items-center gap-2"
+          aria-label="Filter pivot">
+        <div class="relative flex-1 max-w-md">
+            <svg class="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2
+                        text-body-subtle pointer-events-none"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
+            </svg>
+            <input type="search" name="search" value="{{ search }}"
+                   placeholder="Search…"
+                   class="w-full pl-8 pr-3 py-1.5 text-sm rounded-md
+                          border border-default bg-neutral-primary text-body
+                          placeholder:text-body-subtle
+                          focus:outline-none focus:ring-2 focus:ring-fg-brand/40
+                          focus:border-fg-brand">
+        </div>
+        {% if filters %}
+        <input type="hidden" name="filters" value="{{ filters }}">
+        {% endif %}
+        <button type="submit"
+                class="px-3 py-1.5 text-sm font-medium rounded-md bg-fg-brand
+                       text-white hover:opacity-90 transition-opacity">
+            Apply
+        </button>
+        {% if search or filters %}
+        <a href="?"
+           class="px-3 py-1.5 text-sm rounded-md border border-default
+                  text-body hover:bg-neutral-secondary transition-colors">
+            Clear
+        </a>
+        {% endif %}
+    </form>
+
+    <p class="text-xs text-body-subtle">{{ subtitle }}</p>
+
+    {# Pivot table. Sticky first column + header for big matrices.
+       Rounded outer frame matches the rest of the design language. #}
+    <div class="border border-default rounded-lg overflow-auto bg-neutral-primary">
+        <table class="min-w-full text-sm">
+            <thead class="bg-neutral-secondary">
+                {# Top-level col_groupby headers — repeated per nest level. #}
+                {% for level in header_levels %}
+                <tr>
+                    {# Empty cells under the row-axis title columns —
+                       only on the first header level. #}
+                    {% if loop.first %}
+                    <th colspan="{{ row_axis_titles | length }}"
+                        rowspan="{{ header_levels | length + 1 }}"
+                        class="sticky left-0 z-10 bg-neutral-secondary
+                               border-b border-r border-default
+                               px-3 py-2 text-left text-2xs font-semibold
+                               uppercase tracking-wider text-body-subtle">
+                        {{ row_axis_titles | join(' / ') }}
+                    </th>
+                    {% endif %}
+                    {% for h in level %}
+                    <th colspan="{{ h.colspan }}"
+                        class="border-b border-default px-3 py-2 text-center
+                               text-2xs font-semibold uppercase tracking-wider
+                               text-body-subtle">
+                        {{ h.label }}
+                    </th>
+                    {% endfor %}
+                    {% if loop.first %}
+                    <th colspan="{{ grand_header.colspan }}"
+                        rowspan="{{ header_levels | length + 1 }}"
+                        class="border-b border-l border-default
+                               px-3 py-2 text-center
+                               text-2xs font-semibold uppercase tracking-wider
+                               text-fg-brand bg-brand-soft">
+                        {{ grand_header.label }}
+                    </th>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+                {# Measure-label row (only when there are col_groupbys
+                   OR more than one measure — otherwise it'd be a
+                   redundant single-cell header). #}
+                {% if header_levels or measure_count > 1 %}
+                <tr>
+                    {% for m in measure_label_row %}
+                    <th class="border-b border-default px-3 py-1.5 text-right
+                               text-2xs font-medium text-body-subtle">
+                        {{ m.label }}
+                    </th>
+                    {% endfor %}
+                </tr>
+                {% endif %}
+            </thead>
+            <tbody class="divide-y divide-default">
+                {% for row in body_rows %}
+                <tr class="hover:bg-neutral-secondary/40 transition-colors">
+                    {% for label in row.labels %}
+                    <td class="px-3 py-2 text-sm font-medium text-heading
+                               {% if loop.first %}sticky left-0 bg-neutral-primary z-[1]{% endif %}">
+                        {{ label }}
+                    </td>
+                    {% endfor %}
+                    {% for cell in row.cells %}
+                    <td class="px-3 py-2 text-right tabular-nums
+                               {% if cell.is_total %}font-semibold text-fg-brand bg-brand-soft/40{% endif %}">
+                        {{ cell.display }}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                {% if body_rows | length == 0 %}
+                <tr>
+                    <td colspan="{{ row_axis_titles | length + measure_count + (col_combos_count * measure_count) }}"
+                        class="px-3 py-8 text-center text-sm text-body-subtle">
+                        No data to pivot. Adjust the search or filters above.
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+            {% if body_rows | length > 0 %}
+            <tfoot>
+                <tr class="bg-neutral-secondary font-semibold text-fg-brand">
+                    <td colspan="{{ row_axis_titles | length }}"
+                        class="sticky left-0 z-[1] bg-neutral-secondary
+                               px-3 py-2 text-2xs uppercase tracking-wider">
+                        Total
+                    </td>
+                    {% for cell in col_totals %}
+                    <td class="px-3 py-2 text-right tabular-nums">
+                        {{ cell.display }}
+                    </td>
+                    {% endfor %}
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+{% endblock %}

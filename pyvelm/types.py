@@ -173,8 +173,64 @@ class ArchKanban(TypedDict, total=False):
     form_view: str
 
 
+class _ArchGraphRequired(TypedDict):
+    # Field name (with optional ``:day|week|month|quarter|year`` suffix
+    # on a Date/Datetime field) used to bucket records along the chart's
+    # x-axis. Many2one is allowed — the renderer resolves labels via
+    # ``read_group``'s built-in M2o label resolution.
+    groupby: str
+    # Measure spec — ``"field"`` or ``"field:agg"`` where agg ∈ ``sum |
+    # avg | min | max | count``. Use ``"__count"`` for the row count.
+    measure: str
+
+
+class ArchGraph(_ArchGraphRequired, total=False):
+    """Arch for ``view_type="graph"`` views.
+
+    Required keys are ``groupby`` and ``measure``. Optional:
+
+    - ``title``     — page heading (defaults to the model's plural form).
+    - ``chart``     — ``"bar" | "line" | "pie"`` (default ``"bar"``).
+    - ``stacked``   — bar charts only: stack measures (no-op until we
+                      grow multi-measure bar support).
+    - ``horizontal`` — bar charts only: render horizontally.
+    - ``domain``    — extra static domain ANDed with the search filters.
+    """
+
+    title: str
+    chart: Literal["bar", "line", "pie"]
+    stacked: bool
+    horizontal: bool
+    domain: list
+
+
+class _ArchPivotRequired(TypedDict):
+    # Row groupby specs (innermost group last). At least one required;
+    # `[]` would degenerate into a 1-row table.
+    row_groupby: list[str]
+    # Column groupby specs. Empty list means a single measure column
+    # per measure entry — a flat "category vs measure" matrix.
+    col_groupby: list[str]
+    # Measure specs — same syntax as ``ArchGraph.measure``. Multiple
+    # measures stack as extra columns within each leaf-col group.
+    measures: list[str]
+
+
+class ArchPivot(_ArchPivotRequired, total=False):
+    """Arch for ``view_type="pivot"`` views.
+
+    Required: ``row_groupby``, ``col_groupby``, ``measures``. Optional:
+
+    - ``title``  — page heading.
+    - ``domain`` — extra static domain ANDed with the search filters.
+    """
+
+    title: str
+    domain: list
+
+
 # Any view's arch must be one of these shapes (matching `view_type`).
-Arch = Union[ArchList, ArchForm, ArchKanban]
+Arch = Union[ArchList, ArchForm, ArchKanban, ArchGraph, ArchPivot]
 
 
 # ---- discriminated-union view types ----
@@ -224,10 +280,36 @@ class KanbanView(_KanbanViewRequired, total=False):
     priority: int
 
 
+class _GraphViewRequired(TypedDict):
+    name: str
+    model: str
+    view_type: Literal["graph"]
+    arch: ArchGraph
+
+
+class GraphView(_GraphViewRequired, total=False):
+    """A ``view_type="graph"`` view declaration."""
+
+    priority: int
+
+
+class _PivotViewRequired(TypedDict):
+    name: str
+    model: str
+    view_type: Literal["pivot"]
+    arch: ArchPivot
+
+
+class PivotView(_PivotViewRequired, total=False):
+    """A ``view_type="pivot"`` view declaration."""
+
+    priority: int
+
+
 # Union alias kept for backwards compatibility and for lists that mix
 # view types (the common case).
-ViewType = Literal["list", "form", "kanban"]
-View = Union[ListView, FormView, KanbanView]
+ViewType = Literal["list", "form", "kanban", "graph", "pivot"]
+View = Union[ListView, FormView, KanbanView, GraphView, PivotView]
 
 
 # ---- inheritance ops ----------------------------------------------
@@ -338,15 +420,19 @@ class Manifest(_ManifestRequired, total=False):
 __all__ = [
     "Arch",
     "ArchForm",
+    "ArchGraph",
     "ArchKanban",
     "ArchKanbanCard",
     "ArchList",
+    "ArchPivot",
     "ArchSection",
     "FieldRef",
     "FieldRefLike",
     "FormView",
+    "GraphView",
     "KanbanView",
     "ListView",
+    "PivotView",
     "Manifest",
     "Menu",
     "OpKind",

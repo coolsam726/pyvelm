@@ -587,14 +587,65 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     and deletion is still reachable from the comodel's full-page
     form.
 
+  ✅ **Graph + pivot views + `read_group` aggregation**:
+  - `BaseModel.read_group(domain, groupby, measures)` — the missing
+    read-side aggregation layer. Mirrors `search_count` for ACL +
+    record rules + company scope, then issues a single SQL `GROUP BY`
+    against the base table and returns one dict per group. Group
+    specs accept `"<field>"` or `"<field>:<trunc>"` where trunc ∈
+    `day | week | month | quarter | year` (Date / Datetime only) and
+    measure specs accept `"<field>[:<agg>]"` where agg ∈
+    `sum | avg | min | max | count`. Numeric defaults are `sum`,
+    everything else defaults to `count`. The special token
+    `"__count"` returns `COUNT(*)` and is *always* added so consumers
+    can rely on `row["__count"]` for the group's record count.
+    Many2one group-bys get their human labels resolved in a single
+    follow-up read per comodel and surfaced as `<spec>__label` on
+    each row — no N+1 walk in the renderer.
+  - `graph_view(name, model, *, groupby, measure, chart="bar"|"line"|"pie", …)`
+    builder + `view_type="graph"` rendering. The renderer feeds the
+    `read_group` output into ApexCharts (CDN-loaded, lazy on graph
+    pages only) via an Alpine `pvGraph` component that picks up
+    theme tokens from the resolved CSS variables so light/dark
+    just works. Free-text search re-runs the aggregation server-side
+    (no client-side filtering).
+  - `pivot_view(name, model, *, row_groupby, col_groupby, measures, …)`
+    builder + `view_type="pivot"` rendering. One `read_group` call
+    over the cartesian product of row + col group-bys produces a
+    flat list; the renderer cross-tabs it into a nested HTML table
+    with per-row totals, a grand-total column, and a footer totals
+    row. Axes are sorted by value (numeric → numeric ascending,
+    everything else string-ascending) with `None` floated last so
+    sparse cells don't shuffle the column order.
+  - `web_view_page` learned `view_type=="graph"` / `=="pivot"`
+    dispatching alongside `list` / `kanban`. Form views still bare-
+    URL-only (no top-level page).
+  - New view-switcher partial (`_view_switcher.html`) shipped on
+    list / kanban / graph / pivot pages — chips for every sibling
+    view registered for the same `(module, model)`, ordered list →
+    kanban → graph → pivot. The current view is highlighted via
+    `brand-soft`. Form views are excluded because their URL needs
+    a record id.
+  - Demo views on `crm.lead`: `lead.graph` (bar, expected_revenue
+    summed by stage) and `lead.pivot` (rows = stage, cols =
+    priority, measures = __count + expected_revenue:sum). Menu
+    items wired under "CRM" so the demo data shows up immediately.
+
+Still deferred on graph/pivot: rich chip-style search bar shared
+between list / graph / pivot (currently each has its own minimal
+GET form), multi-measure bar charts with proper stacking, label
+formatting via field widgets (e.g. Monetary chart values rendered
+with the company currency), client-side resort / pivot pivot-axis
+swapping.
+
 Next focus options:
-  - **Reporting / dashboards**: new `graph` or `pivot` view type
-    backed by SQL aggregation. Builds out a read-side aggregation
-    layer (none today) for charts / KPIs / exports.
   - **Stage 6 Slice 3**: message subtypes + followers/subscriptions
     layered on the dispatcher.
   - **S3 / minio storage backend**: drop into `pyvelm.storage`
     alongside `LocalStorageBackend` for remote blob storage.
+  - **Vellum ORM veneer (Phase 1)**: kick off the design doc — start
+    with the chainable query builder + method-based relationships
+    + scopes.
 
 Still deferred: cache snapshot on transaction rollback, O2m/M2m
 caching + old-value snapshotting, m2o result caching beyond

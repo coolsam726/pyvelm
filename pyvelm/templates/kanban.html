@@ -3,6 +3,11 @@
 {% block page_title %}{{ page_title }}{% endblock %}
 
 {% block content %}
+{% if view_switcher %}
+<div class="mb-3">
+    {% include "_view_switcher.html" %}
+</div>
+{% endif %}
 <div class="flex gap-4 overflow-x-auto pb-4">
     {% for col in columns %}
     <section class="flex-none w-72 bg-neutral-tertiary/70 rounded-xl p-3">

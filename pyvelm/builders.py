@@ -66,17 +66,21 @@ from typing import Any
 
 from pyvelm.types import (
     ArchForm,
+    ArchGraph,
     ArchKanban,
     ArchKanbanCard,
     ArchList,
+    ArchPivot,
     ArchSection,
     FieldRef,
     FieldRefLike,
     FormView,
+    GraphView,
     KanbanView,
     ListView,
     Menu,
     Operation,
+    PivotView,
     TargetSegment,
     ViewInherit,
     WidgetHint,
@@ -91,6 +95,8 @@ __all__ = [
     "list_view",
     "form_view",
     "kanban_view",
+    "graph_view",
+    "pivot_view",
     # view-inherit constructor + op helpers
     "inherit_view",
     "op_after",
@@ -330,6 +336,123 @@ def kanban_view(
         "priority": priority,
     }
     return result
+
+
+def graph_view(
+    name: str,
+    model: str,
+    *,
+    groupby: str,
+    measure: str,
+    chart: str = "bar",
+    title: str | None = None,
+    stacked: bool | None = None,
+    horizontal: bool | None = None,
+    domain: list | None = None,
+    priority: int = 16,
+) -> GraphView:
+    """Declare a ``view_type="graph"`` view.
+
+    Args:
+        name:        Unique view name (e.g. ``"lead.graph"``).
+        model:       Dotted model name (e.g. ``"crm.lead"``).
+        groupby:     Field name (optionally ``"<field>:<trunc>"`` on
+                     Date/Datetime). Many2one fields are supported and
+                     get human labels resolved automatically.
+        measure:     ``"<field>"`` or ``"<field>:<agg>"`` where agg ∈
+                     ``sum | avg | min | max | count``. ``"__count"``
+                     plots the per-group record count.
+        chart:       ``"bar" | "line" | "pie"``. Defaults to ``"bar"``.
+        title:       Page heading; defaults to the auto-derived model
+                     name.
+        stacked:     Bar charts only — stack measures (no-op until
+                     multi-measure bar lands).
+        horizontal:  Bar charts only — render horizontally.
+        domain:      Extra static domain ANDed with the URL filters
+                     before aggregation.
+        priority:    Inheritance chain priority (default 16).
+
+    Example::
+
+        graph_view("lead.graph", "crm.lead",
+                   groupby="stage",
+                   measure="expected_revenue:sum",
+                   chart="bar",
+                   title="Pipeline by stage")
+    """
+    arch: ArchGraph = {"groupby": groupby, "measure": measure}
+    if chart:
+        arch["chart"] = chart  # type: ignore[typeddict-item]
+    if title is not None:
+        arch["title"] = title
+    if stacked is not None:
+        arch["stacked"] = stacked
+    if horizontal is not None:
+        arch["horizontal"] = horizontal
+    if domain is not None:
+        arch["domain"] = domain
+    return {
+        "name": name,
+        "model": model,
+        "view_type": "graph",
+        "arch": arch,
+        "priority": priority,
+    }
+
+
+def pivot_view(
+    name: str,
+    model: str,
+    *,
+    row_groupby: list[str],
+    col_groupby: list[str] | None = None,
+    measures: list[str],
+    title: str | None = None,
+    domain: list | None = None,
+    priority: int = 16,
+) -> PivotView:
+    """Declare a ``view_type="pivot"`` view.
+
+    Args:
+        name:         Unique view name.
+        model:        Dotted model name.
+        row_groupby:  Ordered list of field names used to nest rows
+                      (outermost first). Same suffix syntax as
+                      ``graph_view``'s ``groupby``.
+        col_groupby:  Ordered list of field names used to nest columns.
+                      Empty / ``None`` means a flat "measures only"
+                      column header — each entry in ``measures`` shows
+                      as its own column.
+        measures:     Measure specs (``"field"`` / ``"field:agg"`` /
+                      ``"__count"``). Multiple measures stack as
+                      sibling columns under each leaf col group.
+        title:        Page heading.
+        domain:       Extra static domain ANDed with URL filters.
+        priority:     Inheritance chain priority (default 16).
+
+    Example::
+
+        pivot_view("lead.pivot", "crm.lead",
+                   row_groupby=["stage"],
+                   col_groupby=["priority"],
+                   measures=["__count", "expected_revenue:sum"])
+    """
+    arch: ArchPivot = {
+        "row_groupby": list(row_groupby),
+        "col_groupby": list(col_groupby or []),
+        "measures": list(measures),
+    }
+    if title is not None:
+        arch["title"] = title
+    if domain is not None:
+        arch["domain"] = domain
+    return {
+        "name": name,
+        "model": model,
+        "view_type": "pivot",
+        "arch": arch,
+        "priority": priority,
+    }
 
 
 # ---------------------------------------------------------------------------

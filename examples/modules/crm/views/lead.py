@@ -1,6 +1,15 @@
 """View declarations for the ``crm`` module."""
 
-from pyvelm.builders import card, field, form_view, kanban_view, list_view, section
+from pyvelm.builders import (
+    card,
+    field,
+    form_view,
+    graph_view,
+    kanban_view,
+    list_view,
+    pivot_view,
+    section,
+)
 from pyvelm.types import View
 
 VIEWS: list[View] = [
@@ -45,5 +54,21 @@ VIEWS: list[View] = [
             ],
             badges=["active"],
         ),
+    ),
+
+    graph_view(
+        "lead.graph", "crm.lead",
+        title="Revenue by stage",
+        groupby="stage",
+        measure="expected_revenue:sum",
+        chart="bar",
+    ),
+
+    pivot_view(
+        "lead.pivot", "crm.lead",
+        title="Pipeline pivot",
+        row_groupby=["stage"],
+        col_groupby=["priority"],
+        measures=["__count", "expected_revenue:sum"],
     ),
 ]

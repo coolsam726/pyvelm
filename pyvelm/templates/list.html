@@ -43,6 +43,10 @@
 <div x-data="pvList(window._pvListCfg)"
      class="space-y-3">
 
+    {% if view_switcher %}
+    {% include "_view_switcher.html" %}
+    {% endif %}
+
     {# ── Toolbar: Odoo-style single search bar.
 
        The search bar is a single full-width control with active-filter

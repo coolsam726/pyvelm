@@ -423,7 +423,7 @@ def create_app(
     ):
         if env.uid is None:
             return _login_redirect(request)
-        from .render import render_kanban_page, render_list_page
+        from .render import render_graph_page, render_kanban_page, render_list_page
 
         rec = _load_view(env, module, name)
         path = str(request.url.path)
@@ -443,6 +443,28 @@ def create_app(
             )
         if rec.view_type == "kanban":
             return HTMLResponse(render_kanban_page(rec, env, current_path=path))
+        if rec.view_type == "graph":
+            return HTMLResponse(
+                render_graph_page(
+                    rec,
+                    env,
+                    search=search,
+                    filters=filters,
+                    current_path=path,
+                )
+            )
+        if rec.view_type == "pivot":
+            from .render import render_pivot_page
+
+            return HTMLResponse(
+                render_pivot_page(
+                    rec,
+                    env,
+                    search=search,
+                    filters=filters,
+                    current_path=path,
+                )
+            )
         # Form views land on /record/{id}; bare URL is meaningless.
         raise HTTPException(
             status_code=501,

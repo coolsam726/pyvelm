@@ -578,3 +578,223 @@ class BaseModel(metaclass=MetaModel):
         base = f'"{self._table}"'
         sql = f'SELECT COUNT(*) FROM {base}{joins} WHERE {where}'
         return self.env.conn.execute(sql, params).fetchone()[0]
+
+    # ---- aggregated reads (read_group) ------------------------------
+    #
+    # `read_group(domain, groupby, measures)` issues a single SQL GROUP BY
+    # against the base table and returns one dict per group. It mirrors
+    # `search_count` for ACL / record rules / company scope so the
+    # aggregates can never include rows the caller wouldn't see in a
+    # plain ``search()``.
+    #
+    # Grouping
+    #     `groupby` is a list of field names. A date/datetime field can
+    #     be suffixed with `:day|week|month|quarter|year` to bucket by
+    #     ``date_trunc``. Many2one fields group on the FK id; labels
+    #     are resolved in a single follow-up read per comodel and
+    #     surfaced as ``<spec>__label`` on each result row.
+    #
+    # Measures
+    #     `measures` is a list of strings of the form ``"field"`` or
+    #     ``"field:agg"`` where agg ∈ ``sum|avg|min|max|count``. The
+    #     default agg for Integer/Float/Monetary is ``sum``; everything
+    #     else defaults to ``count``. The special token ``"__count"``
+    #     returns ``COUNT(*)``; it's always added automatically when
+    #     missing, so consumers can rely on ``row["__count"]`` for the
+    #     group's record count.
+    #
+    # Limits
+    #     `limit` / `offset` paginate the group result set (not the
+    #     underlying rows). `order` is an opaque SQL fragment that
+    #     references the SELECT aliases — for first-iteration use the
+    #     caller is expected to know what they're sorting on.
+    #
+    # Out of scope for now: cube / rollup totals, having clauses,
+    # group-by on M2m fields (would need a JOIN through the rel
+    # table), and label resolution for non-M2o grouping that wants a
+    # human form (e.g. Boolean → "Yes/No" — caller does it client-side).
+    def read_group(
+        self,
+        domain: list[tuple] | None = None,
+        groupby: "list[str] | tuple[str, ...] | str" = (),
+        measures: "list[str] | str | None" = None,
+        limit: int | None = None,
+        offset: int = 0,
+        order: str | None = None,
+    ) -> list[dict[str, Any]]:
+        from .fields import Date, Datetime, Float, Integer, Many2one
+
+        self.env.check_access(self._name, "read")
+        full_domain = list(domain or [])
+        rule_leaves = self.env.collect_record_rules(self._name, "read")
+        if rule_leaves:
+            full_domain.extend(rule_leaves)
+        if (
+            not self.env._acl_bypass
+            and self.env.company_id is not None
+            and getattr(self.__class__, "_company_scoped", False)
+        ):
+            full_domain.append(("company_id", "=", self.env.company_id))
+
+        if isinstance(groupby, str):
+            groupby = [groupby] if groupby else []
+        else:
+            groupby = list(groupby or [])
+        if isinstance(measures, str):
+            measures = [measures]
+        measures = list(measures or [])
+
+        cls = self.__class__
+        base = f'"{self._table}"'
+        _VALID_TRUNCS = ("day", "week", "month", "quarter", "year")
+        _VALID_AGGS = ("sum", "avg", "min", "max", "count")
+
+        select_parts: list[str] = []
+        group_sql_parts: list[str] = []
+        # group_keys: list of (output_key, field_name, trunc_or_None,
+        #                     is_m2o, comodel_name_or_None)
+        group_keys: list[tuple[str, str, str | None, bool, str | None]] = []
+        for spec in groupby:
+            if ":" in spec:
+                fname, trunc = spec.split(":", 1)
+            else:
+                fname, trunc = spec, None
+            if fname not in cls._fields:
+                raise ValueError(
+                    f"read_group: unknown groupby field {fname!r} on {self._name}"
+                )
+            field = cls._fields[fname]
+            if not field.is_stored:
+                raise ValueError(
+                    f"read_group: cannot group by non-stored field {fname!r}"
+                )
+            col_sql = f'{base}."{field.column}"'
+            if trunc:
+                if not isinstance(field, (Date, Datetime)):
+                    raise ValueError(
+                        f"read_group: trunc {trunc!r} only valid on Date / "
+                        f"Datetime fields, not {field.__class__.__name__}"
+                    )
+                if trunc not in _VALID_TRUNCS:
+                    raise ValueError(
+                        f"read_group: bad trunc {trunc!r}, "
+                        f"expected one of {_VALID_TRUNCS}"
+                    )
+                expr = f"date_trunc('{trunc}', {col_sql})"
+                # The output key is the original spec so callers can
+                # round-trip it (and the front-end can index by it).
+                alias = f"g_{len(group_keys)}"
+                select_parts.append(f'{expr} AS "{alias}"')
+                group_sql_parts.append(expr)
+                group_keys.append((spec, fname, trunc, False, None))
+            else:
+                alias = f"g_{len(group_keys)}"
+                select_parts.append(f'{col_sql} AS "{alias}"')
+                group_sql_parts.append(col_sql)
+                is_m2o = isinstance(field, Many2one)
+                comodel = field.comodel_name if is_m2o else None
+                group_keys.append((spec, fname, None, is_m2o, comodel))
+
+        # measure_keys: list of (output_key, agg, field_name_or_None)
+        measure_keys: list[tuple[str, str, str | None]] = []
+        seen_count = False
+        for spec in measures:
+            if spec == "__count":
+                if seen_count:
+                    continue
+                seen_count = True
+                select_parts.append('COUNT(*) AS "__count"')
+                measure_keys.append(("__count", "count_star", None))
+                continue
+            if ":" in spec:
+                mfield, agg = spec.split(":", 1)
+            else:
+                mfield, agg = spec, None
+            if mfield not in cls._fields:
+                raise ValueError(
+                    f"read_group: unknown measure field {mfield!r} on {self._name}"
+                )
+            mf = cls._fields[mfield]
+            if not mf.is_stored:
+                raise ValueError(
+                    f"read_group: cannot aggregate non-stored field {mfield!r}"
+                )
+            if agg is None:
+                agg = "sum" if isinstance(mf, (Integer, Float)) else "count"
+            if agg not in _VALID_AGGS:
+                raise ValueError(
+                    f"read_group: bad agg {agg!r} for {mfield!r}, "
+                    f"expected one of {_VALID_AGGS}"
+                )
+            out_key = f"{mfield}:{agg}"
+            alias = f"m_{len(measure_keys)}"
+            col = f'{base}."{mf.column}"'
+            select_parts.append(f'{agg.upper()}({col}) AS "{alias}"')
+            measure_keys.append((out_key, agg, mfield))
+        if not seen_count:
+            # `__count` is always present so consumers can rely on it
+            # without conditional logic — matches Odoo's read_group.
+            select_parts.append('COUNT(*) AS "__count"')
+            measure_keys.append(("__count", "count_star", None))
+
+        where, params, joins = domain_to_sql(
+            full_domain, cls, self.env.registry
+        )
+        sql = (
+            f"SELECT {', '.join(select_parts)} "
+            f"FROM {base}{joins} WHERE {where}"
+        )
+        if group_sql_parts:
+            sql += " GROUP BY " + ", ".join(group_sql_parts)
+        if order:
+            sql += f" ORDER BY {order}"
+        elif group_sql_parts:
+            # Default: stable order on the group keys themselves.
+            sql += " ORDER BY " + ", ".join(group_sql_parts)
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        if offset:
+            sql += f" OFFSET {int(offset)}"
+
+        cur = self.env.conn.execute(sql, params)
+        # We aliased every output column and unpack by position below
+        # — group columns first, then measures — so the SELECT order
+        # is the contract. ``cur.description`` isn't consulted to
+        # stay resilient if the driver ever exposes extra metadata.
+        raw_rows = cur.fetchall()
+        rows: list[dict[str, Any]] = []
+        # Indexes into col_names — group columns first, then measures,
+        # then the trailing __count if present.
+        n_groups = len(group_keys)
+        for raw in raw_rows:
+            d: dict[str, Any] = {}
+            for i, (out_key, *_rest) in enumerate(group_keys):
+                d[out_key] = raw[i]
+            for j, (out_key, *_rest) in enumerate(measure_keys):
+                d[out_key] = raw[n_groups + j]
+            rows.append(d)
+
+        # Resolve labels for Many2one groupbys in a single follow-up
+        # query per comodel — keeps the chart / pivot renderers from
+        # having to do an N+1 walk.
+        for out_key, _fname, _trunc, is_m2o, comodel in group_keys:
+            if not is_m2o or comodel is None:
+                continue
+            ids = {r[out_key] for r in rows if r[out_key] is not None}
+            if not ids:
+                continue
+            labels: dict[int, str] = {}
+            CoModel = self.env[comodel]
+            for rec in CoModel.browse(tuple(ids)):
+                for attr in ("display_name", "name"):
+                    if attr in rec._fields:
+                        labels[rec.id] = str(getattr(rec, attr) or rec.id)
+                        break
+                else:
+                    labels[rec.id] = str(rec.id)
+            label_key = f"{out_key}__label"
+            for r in rows:
+                rid = r[out_key]
+                r[label_key] = labels.get(rid) if rid is not None else None
+
+        return rows
