@@ -62,7 +62,7 @@ Quick-start
 """
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import Any
 
 from pyvelm.types import (
     ArchForm,
@@ -77,7 +77,9 @@ from pyvelm.types import (
     ListView,
     Menu,
     Operation,
+    TargetSegment,
     ViewInherit,
+    WidgetHint,
 )
 
 __all__ = [
@@ -110,9 +112,10 @@ __all__ = [
 def field(
     name: str,
     *,
-    widget: str | None = None,
+    widget: WidgetHint | None = None,
     label: str | None = None,
     readonly: bool | None = None,
+    required: bool | None = None,
     **extra: Any,
 ) -> FieldRef:
     """Build a field-spec dict.
@@ -139,6 +142,8 @@ def field(
         result["label"] = label
     if readonly is not None:
         result["readonly"] = readonly
+    if required is not None:
+        result["required"] = required
     result.update(extra)  # type: ignore[arg-type]
     return result
 
@@ -358,11 +363,7 @@ def inherit_view(
 # Operation helpers
 # ---------------------------------------------------------------------------
 
-# Segment type alias (mirrors Operation.target element type)
-_Segment = Union[str, int, dict]
-
-
-def op_remove(target: list[_Segment]) -> Operation:
+def op_remove(target: list[TargetSegment]) -> Operation:
     """Remove the node at ``target`` from the arch.
 
     Example::
@@ -373,7 +374,7 @@ def op_remove(target: list[_Segment]) -> Operation:
     return {"op": "remove", "target": target}
 
 
-def op_set(target: list[_Segment], value: Any) -> Operation:
+def op_set(target: list[TargetSegment], value: Any) -> Operation:
     """Set a single attribute at ``target`` to ``value``.
 
     Use this when you want to write one scalar (string, bool, int) into
@@ -388,7 +389,7 @@ def op_set(target: list[_Segment], value: Any) -> Operation:
     return {"op": "set", "target": target, "value": value}
 
 
-def op_replace(target: list[_Segment], value: Any) -> Operation:
+def op_replace(target: list[TargetSegment], value: Any) -> Operation:
     """Replace the node at ``target`` entirely with ``value``.
 
     Example::
@@ -400,7 +401,7 @@ def op_replace(target: list[_Segment], value: Any) -> Operation:
     return {"op": "replace", "target": target, "value": value}
 
 
-def op_update(target: list[_Segment], **attrs: Any) -> Operation:
+def op_update(target: list[TargetSegment], **attrs: Any) -> Operation:
     """Merge keyword arguments into the dict at ``target``.
 
     This is the ergonomic equivalent of Odoo's
@@ -416,7 +417,7 @@ def op_update(target: list[_Segment], **attrs: Any) -> Operation:
     return {"op": "update", "target": target, "value": dict(attrs)}
 
 
-def op_after(target: list[_Segment], value: Any) -> Operation:
+def op_after(target: list[TargetSegment], value: Any) -> Operation:
     """Insert ``value`` immediately after the node at ``target``.
 
     ``value`` should match the type of siblings at that level
@@ -433,7 +434,7 @@ def op_after(target: list[_Segment], value: Any) -> Operation:
     return {"op": "after", "target": target, "value": value}
 
 
-def op_before(target: list[_Segment], value: Any) -> Operation:
+def op_before(target: list[TargetSegment], value: Any) -> Operation:
     """Insert ``value`` immediately before the node at ``target``.
 
     Example::

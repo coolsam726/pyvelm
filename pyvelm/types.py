@@ -49,23 +49,43 @@ from __future__ import annotations
 from typing import Any, Literal, TypedDict, Union
 
 
-# ---- field references inside arch ----
+# ---- widget hints --------------------------------------------------
+#
+# Field-spec dicts may carry a ``widget`` key that picks a named
+# renderer variant. ``WidgetHint`` enumerates the values the registry
+# actually understands — Pyright will autocomplete from this set and
+# flag typos like ``widget="toogle"`` at edit time. Extending the
+# registry with a new hint means adding the string here too.
 
-class FieldRef(TypedDict, total=False):
+WidgetHint = Literal["toggle"]
+
+
+# ---- field references inside arch ---------------------------------
+
+class _FieldRefRequired(TypedDict):
+    name: str
+
+
+class FieldRef(_FieldRefRequired, total=False):
     """One field entry inside an arch list (list.fields,
     form.sections[*].fields, kanban.card.fields, kanban.card.badges).
 
     Authoring sugar: a bare string ``"name"`` is equivalent to
     ``{"name": "name"}``. The normalizer rewrites strings to dicts on
     storage so inheritance has stable addresses.
+
+    ``name`` is the only required key. Everything else is optional
+    and surface only when the matching renderer / form-control honors
+    it (``widget`` → widget registry, ``required`` → red ``*`` + the
+    server-side validator, etc.). App-specific attributes that aren't
+    in this list are still accepted by the loader at runtime; the
+    type checker just won't autocomplete them.
     """
 
-    name: str
-    widget: str
+    widget: WidgetHint
     label: str
     readonly: bool
-    # Extra app-specific attributes are allowed; total=False keeps the
-    # TypedDict open to additional keys without complaining.
+    required: bool
 
 
 # Authoring form: string or dict.
@@ -188,12 +208,23 @@ ViewType = Literal["list", "form", "kanban"]
 View = Union[ListView, FormView, KanbanView]
 
 
-# ---- inheritance ops ----
+# ---- inheritance ops ----------------------------------------------
 
 OpKind = Literal["set", "replace", "update", "remove", "before", "after"]
 
+# A single ``target`` segment. The ``Literal["**"]`` alternative is
+# what makes the wildcard prefix autocomplete in editors — it's only
+# valid as the first element of the segment list (``apply_operations``
+# enforces that at install time).
+TargetSegment = Union[str, int, dict, Literal["**"]]
 
-class Operation(TypedDict, total=False):
+
+class _OperationRequired(TypedDict):
+    op: OpKind
+    target: list[TargetSegment]
+
+
+class Operation(_OperationRequired, total=False):
     """One inheritance operation against a parent view's arch.
 
     ``target`` is a list of segments. Slice C of Stage 7 widens the
@@ -207,21 +238,25 @@ class Operation(TypedDict, total=False):
                    finds any descendant where the next segment would
                    succeed and anchors the rest of the lookup there
 
-    ``value`` is required for every op except ``remove``.
+    ``value`` is required for every op except ``remove``. The type
+    checker can't easily express "required for op != remove" so
+    ``value`` stays optional here; ``apply_operations`` raises at
+    install time when it's missing.
     """
 
-    op: OpKind
-    target: list[Union[str, int, dict]]
-    value: Any  # required except for remove; type is op-dependent
+    value: Any
 
 
-class ViewInherit(TypedDict, total=False):
+class _ViewInheritRequired(TypedDict):
+    name: str
+    inherit: str                # ``"<module>.<view_name>"``
+    operations: list[Operation]
+
+
+class ViewInherit(_ViewInheritRequired, total=False):
     """An extension view that patches another via ``operations``."""
 
-    name: str
-    inherit: str               # `<module>.<view_name>`
     priority: int
-    operations: list[Operation]
 
 
 # ---- sidebar menu entries ----
@@ -245,24 +280,37 @@ class Menu(_MenuRequired, total=False):
     sequence: int
 
 
-# ---- manifest globals ----
+# ---- manifest globals ---------------------------------------------
 
-class Manifest(TypedDict, total=False):
+class _ManifestRequired(TypedDict):
+    NAME: str
+    VERSION: tuple[int, ...]
+
+
+class Manifest(_ManifestRequired, total=False):
     """Shape of a ``__pyvelm__.py`` manifest's module-level globals.
 
     The loader reads these as individual attributes, so a manifest
     declares them at module scope rather than building a dict named
     Manifest. This TypedDict exists for tooling that wants to
     validate a manifest as a single shape.
+
+    Only ``NAME`` and ``VERSION`` are strictly required by the loader;
+    everything else (the install hook, model package, dependencies,
+    catalog metadata) has sensible defaults.
     """
 
-    NAME: str
-    VERSION: tuple[int, ...]
     DEPENDS: list[str]
     DATA: list[str]
     MODELS_PACKAGE: str
     MIGRATIONS_PACKAGE: str
-    INSTALL_HOOK: str          # dotted reference, e.g. "pkg.mod:fn"
+    INSTALL_HOOK: str            # dotted reference, e.g. "pkg.mod:fn"
+    # Apps catalog metadata — purely informational, drives /web/apps.
+    SUMMARY: str
+    DESCRIPTION: str
+    CATEGORY: str
+    AUTHOR: str
+    ICON: str                    # raw inline SVG markup
 
 
 __all__ = [
@@ -281,7 +329,9 @@ __all__ = [
     "Menu",
     "OpKind",
     "Operation",
+    "TargetSegment",
     "View",
     "ViewInherit",
     "ViewType",
+    "WidgetHint",
 ]

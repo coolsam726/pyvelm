@@ -393,6 +393,27 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
   `list_row.html`, `list_row_edit.html`, `render.py`,
   `static/dist/pyvelm.css`.
 
+  ✅ **Author-side IDE help** for view declarations:
+  - **Builders** (`pyvelm.builders`): `field`, `section`, `card`,
+    `list_view`, `form_view`, `kanban_view`, `inherit_view`,
+    `op_set / op_replace / op_update / op_remove / op_after /
+    op_before`, `menu_group`, `menu_item`. Each returns the matching
+    TypedDict; storage shape unchanged.
+  - **Discriminated `View` union**: `ListView` / `FormView` /
+    `KanbanView` each lock `view_type` to a `Literal` and `arch` to
+    the matching arch shape. Pyright narrows from the discriminant
+    so typing `"view_type": "list"` instantly autocompletes `arch`
+    against `ArchList`.
+  - **`WidgetHint = Literal["toggle"]`** drives autocomplete on
+    every field-spec; new hints land here as the registry grows.
+  - **`TargetSegment` union** lifts the `"**"` wildcard into an
+    explicit `Literal` so the segment list autocompletes the
+    wildcard prefix.
+  - **Required-key bases** on every authoring TypedDict (`View`,
+    `ViewInherit`, `Operation`, `FieldRef`, `ArchList`, `ArchForm`,
+    `ArchSection`, `Manifest`) — missing required keys now squiggle
+    at edit time instead of failing at install.
+
 Next focus options:
   - **Documents & attachments**: `ir.attachment` model + on-disk
     storage backend + upload endpoint + form widget. Touches MIME

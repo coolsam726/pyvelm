@@ -501,8 +501,11 @@ def main():
             )
             assert resp.status_code == 200, resp.text
             saved = resp.text
-            # Display-mode row: Edit/Delete buttons, no <input>s.
-            assert "<input" not in saved
+            # Display-mode row: Edit/Delete buttons + the row-selection
+            # checkbox shipped by the Nuru shell, but no edit-mode
+            # text/number inputs.
+            assert 'type="text"' not in saved
+            assert 'type="number"' not in saved
             assert "Alicia Doe" in saved
             print("inline save returned updated display row")
 
@@ -533,7 +536,10 @@ def main():
             assert resp.status_code == 200, resp.text
             created = resp.text
             assert "Frank" in created
-            assert "<input" not in created  # display row, not edit
+            # Display row carries a row-selection checkbox + delete/edit
+            # buttons — but no edit-mode text/number inputs.
+            assert 'type="text"' not in created
+            assert 'type="number"' not in created
 
             # DELETE: empty body on success, then 404 on repeat.
             count_before = client.get("/api/records", params={"model": "res.partner"}).json()["count"]
