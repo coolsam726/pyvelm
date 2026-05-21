@@ -9,6 +9,20 @@ out of the 0.x line.
 
 ### Added
 
+- **ECB exchange-rate fetcher.** `base` ships a server action + cron
+  (`ECB rate fetcher`) that refreshes `res.currency.rate` from the
+  European Central Bank's daily feed. Seeded **inactive**: operators
+  opt in from Settings → Scheduled Actions to keep fresh installs
+  network-silent. Rebases ECB's EUR-base rates against whichever
+  currency carries `rate=1.0` (the implicit reference). Idempotent
+  per ECB publication date.
+- **Inline O2m drag-reorder.** When an embedded `widget="table"`
+  O2m points at a comodel whose list view declares `sequence`, the
+  edit table renders a drag handle and persists the new ordering
+  through the parent's save (no separate endpoint). Mirrors
+  list-view drag-reorder semantics — multiples of 10, gaps preserved
+  for future inserts.
+
 - **`pyvelm` CLI** with subcommands (`cron`, `init`, `new`). The
   legacy `pyvelm-cron` entry point keeps working as an alias.
 - **`pyvelm init <name>`** scaffolds a self-contained project

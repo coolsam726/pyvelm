@@ -86,6 +86,11 @@ def install(env):
     # mail.message rows in state="outgoing".
     _seed_mail_dispatcher(env)
 
+    # ECB exchange-rate fetcher: server action + ir.cron entry that
+    # refreshes res.currency.rate from the ECB daily feed. Seeded
+    # inactive — admins opt in from Settings → Scheduled Actions.
+    _seed_rate_fetcher(env)
+
 
 def _seed_currencies(env):
     """Idempotently seed a small list of currencies + opening rates.
@@ -184,5 +189,56 @@ def _seed_mail_dispatcher(env):
                 "interval_number": 1,
                 "interval_type": "minutes",
                 "active": True,
+            }
+        )
+
+
+def _seed_rate_fetcher(env):
+    """Idempotently install the ECB rate-fetcher cron.
+
+    Mirrors ``_seed_mail_dispatcher`` but seeds the cron with
+    ``active=False`` so a fresh install never makes outbound HTTP
+    requests until an operator opts in. Admins flip the switch in
+    Settings → Scheduled Actions when they want daily refreshes.
+
+    Both rows are looked up by name first so re-running this (from
+    either the install hook or the 0_12_to_0_13 migration) is a no-op.
+    """
+    if "ir.actions.server" not in env.registry:
+        return
+    if "ir.cron" not in env.registry:
+        return
+    if "res.currency.rate" not in env.registry:
+        return
+
+    Action = env["ir.actions.server"]
+    Cron = env["ir.cron"]
+    action_name = "ECB rate fetcher"
+    cron_name = "ECB rate fetcher"
+
+    action = Action.search([("name", "=", action_name)], limit=1)
+    if not action:
+        action = Action.create(
+            {
+                "name": action_name,
+                "model": "res.currency.rate",
+                "action_type": "code",
+                "code": "env['res.currency.rate'].fetch_from_ecb(env)\n",
+            }
+        )
+
+    if not Cron.search([("name", "=", cron_name)], limit=1):
+        Cron.create(
+            {
+                "name": cron_name,
+                "action_id": action,
+                # Daily — ECB publishes once per business day around
+                # 16:00 CET. The exact tick doesn't matter; the fetch
+                # itself is idempotent per ECB publication date.
+                "interval_number": 1,
+                "interval_type": "days",
+                # Seeded inactive: opt-in keeps fresh installs
+                # network-silent.
+                "active": False,
             }
         )

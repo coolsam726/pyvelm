@@ -274,6 +274,28 @@ effective at or before `date`, `convert` raises `ValueError`.
 on a single-record recordset (e.g. `currency` rather than the
 results of a multi-record `search`).
 
+### Refreshing rates from the ECB
+
+`base` seeds an `ECB rate fetcher` server action + `ir.cron` entry
+that calls `res.currency.rate.fetch_from_ecb(env)`. It pulls the
+European Central Bank's [daily reference rates](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml)
+(XML, no API key) and writes one `res.currency.rate` row per
+configured currency, rebased against whichever currency carries
+`rate = 1.0` (USD by default).
+
+The cron is seeded **inactive** — fresh installs never make outbound
+HTTP requests until an admin flips `active = True` in Settings →
+Scheduled Actions. Currencies not in the ECB feed are silently
+skipped. Re-running the action on the same ECB publication date is a
+no-op (same currency + same `date` is treated as already-present).
+
+For a one-off refresh without enabling the cron, call the classmethod
+directly:
+
+```python
+env["res.currency.rate"].fetch_from_ecb(env)
+```
+
 ### Per-company currency
 
 `res.company` carries a `currency_id` Many2one. The install hook
