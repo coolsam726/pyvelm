@@ -50,6 +50,7 @@ SMTP env knobs:
     PYVELM_SMTP_FROM      From-address. Required for the smtp backend.
     PYVELM_SMTP_USE_TLS   ``1`` (default) to STARTTLS, ``0`` to skip.
 """
+
 from __future__ import annotations
 
 import logging
@@ -66,6 +67,7 @@ log = logging.getLogger("pyvelm.mail")
 
 
 # ---- backend protocol --------------------------------------------------
+
 
 class MailBackend(Protocol):
     """A pluggable transport for outgoing mail.
@@ -105,11 +107,14 @@ class ConsoleBackend:
     ) -> None:
         log.info(
             "[mail console] %s → %s | %s",
-            from_addr or "<no-from>", to, subject or "(no subject)",
+            from_addr or "<no-from>",
+            to,
+            subject or "(no subject)",
         )
         if body:
-            log.info("[mail console] body: %s",
-                     body if len(body) < 200 else body[:200] + "…")
+            log.info(
+                "[mail console] body: %s", body if len(body) < 200 else body[:200] + "…"
+            )
 
 
 class DisabledBackend:
@@ -180,9 +185,7 @@ def _load_backend() -> tuple[MailBackend, str | None]:
     if kind == "smtp":
         host = os.environ.get("PYVELM_SMTP_HOST")
         if not host:
-            raise RuntimeError(
-                "PYVELM_MAIL_BACKEND=smtp requires PYVELM_SMTP_HOST"
-            )
+            raise RuntimeError("PYVELM_MAIL_BACKEND=smtp requires PYVELM_SMTP_HOST")
         return (
             SmtpBackend(
                 host=host,
@@ -200,6 +203,7 @@ def _load_backend() -> tuple[MailBackend, str | None]:
 
 # ---- model -------------------------------------------------------------
 
+
 class Message(BaseModel):
     _name = "mail.message"
 
@@ -207,7 +211,7 @@ class Message(BaseModel):
     res_id = Integer()
     author_id = Many2one("res.users", ondelete="SET NULL")
     body = Text()
-    message_type = Char(default="comment")   # comment / notification / email
+    message_type = Char(default="comment")  # comment / notification / email
     subtype = Char()
     date = _DatetimeField()
 
@@ -215,7 +219,7 @@ class Message(BaseModel):
     # purely as log entries — the dispatcher never touches them.
     recipient_email = Char()
     subject = Char()
-    state = Char(default="outgoing")         # outgoing / sent / failed
+    state = Char(default="outgoing")  # outgoing / sent / failed
     error = Text()
 
     @property
@@ -226,8 +230,9 @@ class Message(BaseModel):
     # ---- dispatcher -----------------------------------------------------
 
     @classmethod
-    def dispatch_outgoing(cls, env, *, limit: int = 50,
-                          backend: MailBackend | None = None) -> dict:
+    def dispatch_outgoing(
+        cls, env, *, limit: int = 50, backend: MailBackend | None = None
+    ) -> dict:
         """Drain the outgoing queue.
 
         Picks up to ``limit`` messages with ``state="outgoing"`` AND
@@ -253,10 +258,13 @@ class Message(BaseModel):
         env._acl_bypass = True
         try:
             Msg = env["mail.message"]
-            pending = Msg.search([
-                ("state", "=", "outgoing"),
-                ("recipient_email", "!=", None),
-            ], limit=limit)
+            pending = Msg.search(
+                [
+                    ("state", "=", "outgoing"),
+                    ("recipient_email", "!=", None),
+                ],
+                limit=limit,
+            )
             for msg in pending:
                 # An empty-string recipient slipped past the !=-None
                 # filter? Skip it — the row needs operator attention,
@@ -275,7 +283,8 @@ class Message(BaseModel):
                     failed += 1
                     log.warning(
                         "mail dispatch failed for message %s: %s",
-                        msg.id, exc,
+                        msg.id,
+                        exc,
                     )
                     with env.transaction():
                         msg.write({"state": "failed", "error": str(exc)})
@@ -373,8 +382,10 @@ class MailThread:
         self.ensure_one()
         if "mail.message" not in self.env.registry:
             return []
-        msgs = self.env["mail.message"].search([
-            ("model", "=", self._name),
-            ("res_id", "=", self.id),
-        ])
+        msgs = self.env["mail.message"].search(
+            [
+                ("model", "=", self._name),
+                ("res_id", "=", self.id),
+            ]
+        )
         return msgs.ids

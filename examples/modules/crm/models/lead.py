@@ -7,8 +7,8 @@ class Lead(BaseModel):
 
     name = Char(required=True, string="Opportunity")
     partner_id = Many2one("res.partner", ondelete="SET NULL", string="Contact")
-    stage = Char(string="Stage")          # new / qualified / proposal / won / lost
-    priority = Integer(string="Priority") # 0 low, 1 normal, 2 high
+    stage = Char(string="Stage")  # new / qualified / proposal / won / lost
+    priority = Integer(string="Priority")  # 0 low, 1 normal, 2 high
     expected_revenue = Float(string="Expected Revenue (k€)")
     probability = Integer(string="Probability %")
     salesperson = Char(string="Salesperson")

@@ -39,7 +39,7 @@ def install(env):
     user_vals = {
         "name": "Administrator",
         "login": "admin",
-        "password": "admin",   # bcrypt-hashed by the Password field
+        "password": "admin",  # bcrypt-hashed by the Password field
         "group_ids": [admin_group],
     }
     if company is not None:
@@ -60,15 +60,17 @@ def install(env):
             "res.currency.rate",
         ):
             if model in env.registry:
-                Access.create({
-                    "name": f"Admin/{model}",
-                    "model": model,
-                    "group_id": admin_group,
-                    "perm_read": True,
-                    "perm_write": True,
-                    "perm_create": True,
-                    "perm_unlink": True,
-                })
+                Access.create(
+                    {
+                        "name": f"Admin/{model}",
+                        "model": model,
+                        "group_id": admin_group,
+                        "perm_read": True,
+                        "perm_write": True,
+                        "perm_create": True,
+                        "perm_unlink": True,
+                    }
+                )
 
     # NOTE: company scoping is enforced at the model level by
     # `BaseModel.search` for any model that opts in via
@@ -117,21 +119,25 @@ def _seed_currencies(env):
         if existing:
             ccy = existing
         else:
-            ccy = Currency.create({
-                "code": code,
-                "name": name,
-                "symbol": symbol,
-                "rounding": rounding,
-                "active": True,
-            })
+            ccy = Currency.create(
+                {
+                    "code": code,
+                    "name": name,
+                    "symbol": symbol,
+                    "rounding": rounding,
+                    "active": True,
+                }
+            )
         # Only create an opening rate if the currency has none. We
         # never overwrite existing rates — operators manage them.
         if not Rate.search([("currency_id", "=", ccy.id)], limit=1):
-            Rate.create({
-                "currency_id": ccy.id,
-                "date": seeded_at,
-                "rate": rate,
-            })
+            Rate.create(
+                {
+                    "currency_id": ccy.id,
+                    "date": seeded_at,
+                    "rate": rate,
+                }
+            )
 
 
 def _seed_mail_dispatcher(env):
@@ -158,21 +164,25 @@ def _seed_mail_dispatcher(env):
 
     action = Action.search([("name", "=", action_name)], limit=1)
     if not action:
-        action = Action.create({
-            "name": action_name,
-            "model": "mail.message",
-            "action_type": "code",
-            # `env` is in scope inside server-action code.
-            "code": "env['mail.message'].dispatch_outgoing(env)\n",
-        })
+        action = Action.create(
+            {
+                "name": action_name,
+                "model": "mail.message",
+                "action_type": "code",
+                # `env` is in scope inside server-action code.
+                "code": "env['mail.message'].dispatch_outgoing(env)\n",
+            }
+        )
 
     if not Cron.search([("name", "=", cron_name)], limit=1):
-        Cron.create({
-            "name": cron_name,
-            "action_id": action,
-            # Tick once a minute — matches the cron runner's default
-            # interval so messages don't pile up.
-            "interval_number": 1,
-            "interval_type": "minutes",
-            "active": True,
-        })
+        Cron.create(
+            {
+                "name": cron_name,
+                "action_id": action,
+                # Tick once a minute — matches the cron runner's default
+                # interval so messages don't pile up.
+                "interval_number": 1,
+                "interval_type": "minutes",
+                "active": True,
+            }
+        )
