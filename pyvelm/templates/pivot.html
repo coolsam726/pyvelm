@@ -2,68 +2,61 @@
 {% block title %}{{ page_title }} — pyvelm{% endblock %}
 {% block page_title %}{{ page_title }}{% endblock %}
 
-{# Pivot view: cross-tab matrix produced by ``read_group`` and pivoted
-   server-side. Headers, row labels, cells, and totals are all rendered
-   as plain HTML — no client-side JS — so this works for users on
-   crippled browsers and shows up unchanged in PDF print exports later.
-   The view-switcher lets the user flip between list / kanban / graph
-   / pivot for the same (module, model). #}
+{# Pivot view: cross-tab matrix with a compact single-row toolbar
+   (view-switcher + search + subtitle) above the table. #}
 {% block content %}
-<div class="space-y-4">
+<div class="flex flex-col gap-3">
 
-    {% if view_switcher %}
-    {% include "_view_switcher.html" %}
-    {% endif %}
+    {# Single compact row. #}
+    <div class="flex items-center gap-3 flex-wrap text-sm">
 
-    {# Minimal search bar — same shape as graph.html so the two pages
-       share UX until the fuller chip-style bar is extracted as a
-       partial. #}
-    <form method="get" class="flex items-center gap-2"
-          aria-label="Filter pivot">
-        <div class="relative flex-1 max-w-md">
-            <svg class="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2
-                        text-body-subtle pointer-events-none"
-                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                      d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
-            </svg>
-            <input type="search" name="search" value="{{ search }}"
-                   placeholder="Search…"
-                   class="w-full pl-8 pr-3 py-1.5 text-sm rounded-md
-                          border border-default bg-neutral-primary text-body
-                          placeholder:text-body-subtle
-                          focus:outline-none focus:ring-2 focus:ring-fg-brand/40
-                          focus:border-fg-brand">
-        </div>
-        {% if filters %}
-        <input type="hidden" name="filters" value="{{ filters }}">
+        {% if view_switcher %}
+        {% include "_view_switcher.html" %}
         {% endif %}
-        <button type="submit"
-                class="px-3 py-1.5 text-sm font-medium rounded-md bg-fg-brand
-                       text-white hover:opacity-90 transition-opacity">
-            Apply
-        </button>
+
+        <form method="get" class="flex items-center gap-2 flex-1 min-w-[200px]"
+              aria-label="Filter pivot">
+            <div class="relative flex-1 max-w-sm">
+                <svg class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2
+                            text-body-subtle pointer-events-none"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
+                </svg>
+                <input type="search" name="search" value="{{ search }}"
+                       placeholder="Search…"
+                       class="w-full pl-7 pr-2 py-1 text-xs rounded-md
+                              border border-default bg-neutral-primary text-body
+                              placeholder:text-body-subtle
+                              focus:outline-none focus:ring-2 focus:ring-fg-brand/40
+                              focus:border-fg-brand">
+            </div>
+            {% if filters %}
+            <input type="hidden" name="filters" value="{{ filters }}">
+            {% endif %}
+            <button type="submit"
+                    class="px-2.5 py-1 text-xs font-medium rounded-md bg-fg-brand
+                           text-white hover:opacity-90 transition-opacity">
+                Filter
+            </button>
+        </form>
+
+        <span class="text-xs text-body-subtle whitespace-nowrap">{{ subtitle }}</span>
+
         {% if search or filters %}
         <a href="?"
-           class="px-3 py-1.5 text-sm rounded-md border border-default
-                  text-body hover:bg-neutral-secondary transition-colors">
+           class="text-xs text-body-subtle hover:text-fg-brand underline whitespace-nowrap">
             Clear
         </a>
         {% endif %}
-    </form>
+    </div>
 
-    <p class="text-xs text-body-subtle">{{ subtitle }}</p>
-
-    {# Pivot table. Sticky first column + header for big matrices.
-       Rounded outer frame matches the rest of the design language. #}
+    {# Pivot table — full width below the toolbar. #}
     <div class="border border-default rounded-lg overflow-auto bg-neutral-primary">
         <table class="min-w-full text-sm">
             <thead class="bg-neutral-secondary">
-                {# Top-level col_groupby headers — repeated per nest level. #}
                 {% for level in header_levels %}
                 <tr>
-                    {# Empty cells under the row-axis title columns —
-                       only on the first header level. #}
                     {% if loop.first %}
                     <th colspan="{{ row_axis_titles | length }}"
                         rowspan="{{ header_levels | length + 1 }}"
@@ -94,9 +87,6 @@
                     {% endif %}
                 </tr>
                 {% endfor %}
-                {# Measure-label row (only when there are col_groupbys
-                   OR more than one measure — otherwise it'd be a
-                   redundant single-cell header). #}
                 {% if header_levels or measure_count > 1 %}
                 <tr>
                     {% for m in measure_label_row %}
@@ -143,9 +133,7 @@
                         Total
                     </td>
                     {% for cell in col_totals %}
-                    <td class="px-3 py-2 text-right tabular-nums">
-                        {{ cell.display }}
-                    </td>
+                    <td class="px-3 py-2 text-right tabular-nums">{{ cell.display }}</td>
                     {% endfor %}
                 </tr>
             </tfoot>

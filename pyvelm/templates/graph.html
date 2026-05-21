@@ -3,63 +3,58 @@
 {% block page_title %}{{ page_title }}{% endblock %}
 
 {# Graph view: a single chart aggregating one measure by one groupby.
-   Chart rendering is delegated to ApexCharts (loaded in layouts/main.html);
-   the server only sends labels + values + chart-type. Free-text search
-   is applied server-side via the existing `_build_search_domain`. The
-   view-switcher chips at the top let the user jump between list /
-   kanban / graph / pivot for the same (module, model). #}
+   The toolbar (view-switcher + search + subtitle) sits in a single
+   compact row to minimize vertical space. The chart fills the
+   remaining area. #}
 {% block content %}
-<div class="space-y-4">
+<div class="flex flex-col gap-3">
 
-    {# View-switcher — same widget reused by list / kanban / pivot. #}
-    {% if view_switcher %}
-    {% include "_view_switcher.html" %}
-    {% endif %}
+    {# Single compact row: view-switcher — search — subtitle — clear. #}
+    <div class="flex items-center gap-3 flex-wrap text-sm">
 
-    {# Minimal search bar — full chip-bar refactor is deferred to a
-       later slice so we can ship pivot+graph end-to-end. Submits a
-       plain GET form which re-renders the page server-side. #}
-    <form method="get" class="flex items-center gap-2"
-          aria-label="Filter chart">
-        <div class="relative flex-1 max-w-md">
-            <svg class="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2
-                        text-body-subtle pointer-events-none"
-                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                      d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
-            </svg>
-            <input type="search" name="search" value="{{ search }}"
-                   placeholder="Search…"
-                   class="w-full pl-8 pr-3 py-1.5 text-sm rounded-md
-                          border border-default bg-neutral-primary text-body
-                          placeholder:text-body-subtle
-                          focus:outline-none focus:ring-2 focus:ring-fg-brand/40
-                          focus:border-fg-brand">
-        </div>
-        {% if filters %}
-        <input type="hidden" name="filters" value="{{ filters }}">
+        {% if view_switcher %}
+        {% include "_view_switcher.html" %}
         {% endif %}
-        <button type="submit"
-                class="px-3 py-1.5 text-sm font-medium rounded-md bg-fg-brand
-                       text-white hover:opacity-90 transition-opacity">
-            Apply
-        </button>
+
+        <form method="get" class="flex items-center gap-2 flex-1 min-w-[200px]"
+              aria-label="Filter chart">
+            <div class="relative flex-1 max-w-sm">
+                <svg class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2
+                            text-body-subtle pointer-events-none"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
+                </svg>
+                <input type="search" name="search" value="{{ search }}"
+                       placeholder="Search…"
+                       class="w-full pl-7 pr-2 py-1 text-xs rounded-md
+                              border border-default bg-neutral-primary text-body
+                              placeholder:text-body-subtle
+                              focus:outline-none focus:ring-2 focus:ring-fg-brand/40
+                              focus:border-fg-brand">
+            </div>
+            {% if filters %}
+            <input type="hidden" name="filters" value="{{ filters }}">
+            {% endif %}
+            <button type="submit"
+                    class="px-2.5 py-1 text-xs font-medium rounded-md bg-fg-brand
+                           text-white hover:opacity-90 transition-opacity">
+                Filter
+            </button>
+        </form>
+
+        <span class="text-xs text-body-subtle whitespace-nowrap">{{ subtitle }}</span>
+
         {% if search or filters %}
         <a href="?"
-           class="px-3 py-1.5 text-sm rounded-md border border-default
-                  text-body hover:bg-neutral-secondary transition-colors">
+           class="text-xs text-body-subtle hover:text-fg-brand underline whitespace-nowrap">
             Clear
         </a>
         {% endif %}
-    </form>
+    </div>
 
-    {# Subtitle (group count) tucked under the search. #}
-    <p class="text-xs text-body-subtle">{{ subtitle }}</p>
-
-    {# Chart canvas. ApexCharts mounts here on alpine:init. The Alpine
-       component `pvGraph` wires the constructor and listens for window
-       resize so the chart redraws cleanly. #}
-    <div class="bg-neutral-primary border border-default rounded-lg p-4">
+    {# Chart canvas — fills remaining vertical space. #}
+    <div class="bg-neutral-primary border border-default rounded-lg p-4 flex-1">
         {% if chart_data['values'] | length == 0 %}
         <div class="text-center py-12 text-body-subtle">
             <svg class="w-12 h-12 mx-auto mb-3 opacity-40" fill="none"
@@ -68,56 +63,34 @@
                       d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
             </svg>
             <p class="text-sm">No data to chart.</p>
-            <p class="text-xs mt-1">Adjust the search or filters above.</p>
         </div>
         {% else %}
         <div x-data='pvGraph({{ chart_data | tojson }})'
              x-init="render()"
              @resize.window.debounce.150ms="render()"
              x-ref="mount"
-             class="w-full" style="min-height: 340px;"></div>
+             class="w-full" style="min-height: 380px;"></div>
         {% endif %}
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-{# ApexCharts via CDN — switch to vendored bundle later if we want
-   offline-first. Loaded only on graph pages so list/form pages stay
-   lean. #}
 <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.50.0/dist/apexcharts.min.js" defer></script>
 <script>
     document.addEventListener('alpine:init', () => {
-        // Alpine component for graph rendering. `cfg` is the
-        // server-shaped {chart_type, labels, values, measure_label,
-        // stacked, horizontal} payload. `render()` (re)builds the
-        // chart so resize listeners can hot-swap dimensions.
         Alpine.data('pvGraph', (cfg) => ({
             cfg,
             _chart: null,
             render() {
                 if (typeof ApexCharts === 'undefined') {
-                    // Script still loading — retry once HTMX / Alpine
-                    // start to settle. ApexCharts itself isn't ready
-                    // until `defer` fires on DOMContentLoaded.
                     setTimeout(() => this.render(), 50);
                     return;
                 }
-                // Tear down a previous render before swapping options
-                // (e.g. on resize). Apex's `updateOptions` exists but
-                // a full destroy → recreate is cheaper for our small
-                // datasets and avoids stale leftover animations.
-                if (this._chart) {
-                    this._chart.destroy();
-                    this._chart = null;
-                }
-                const options = this.buildOptions();
-                this._chart = new ApexCharts(this.$refs.mount, options);
+                if (this._chart) { this._chart.destroy(); this._chart = null; }
+                this._chart = new ApexCharts(this.$refs.mount, this.buildOptions());
                 this._chart.render();
             },
-            // Read the resolved CSS theme tokens so the chart picks up
-            // light/dark colors automatically. Falls back to fixed
-            // hues when the variables aren't set.
             themeVar(name, fallback) {
                 const v = getComputedStyle(document.documentElement)
                     .getPropertyValue(name).trim();
@@ -133,12 +106,11 @@
                     brand, '#10b981', '#f59e0b', '#ef4444',
                     '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16',
                 ];
-
                 const common = {
                     chart: {
                         type: this.cfg.chart_type === 'pie' ? 'pie'
                             : this.cfg.chart_type === 'line' ? 'line' : 'bar',
-                        height: 360,
+                        height: 400,
                         background: 'transparent',
                         toolbar: { show: false },
                         animations: { speed: 250 },
@@ -153,35 +125,20 @@
                     tooltip: { theme: isDark ? 'dark' : 'light' },
                     legend: { labels: { colors: fgSubtle } },
                 };
-
                 if (this.cfg.chart_type === 'pie') {
-                    return {
-                        ...common,
-                        series: this.cfg.values,
-                        labels: this.cfg.labels,
-                        dataLabels: { enabled: true },
-                    };
+                    return { ...common, series: this.cfg.values,
+                             labels: this.cfg.labels,
+                             dataLabels: { enabled: true } };
                 }
                 return {
                     ...common,
-                    series: [{
-                        name: this.cfg.measure_label,
-                        data: this.cfg.values,
-                    }],
-                    xaxis: {
-                        categories: this.cfg.labels,
-                        labels: { style: { colors: fgSubtle } },
-                    },
-                    yaxis: {
-                        labels: { style: { colors: fgSubtle } },
-                    },
+                    series: [{ name: this.cfg.measure_label, data: this.cfg.values }],
+                    xaxis: { categories: this.cfg.labels,
+                             labels: { style: { colors: fgSubtle } } },
+                    yaxis: { labels: { style: { colors: fgSubtle } } },
                     dataLabels: { enabled: false },
-                    plotOptions: {
-                        bar: {
-                            horizontal: !!this.cfg.horizontal,
-                            borderRadius: 4,
-                        },
-                    },
+                    plotOptions: { bar: { horizontal: !!this.cfg.horizontal,
+                                          borderRadius: 4 } },
                     stroke: this.cfg.chart_type === 'line'
                         ? { curve: 'smooth', width: 2 } : { width: 0 },
                 };
