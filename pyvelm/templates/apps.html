@@ -71,7 +71,7 @@
 
         {# Match count — updated by apply(). #}
         <span class="text-xs text-body-subtle"
-              x-text="`${visibleCount} of ${{ catalog | length }} module${{ 's' if (catalog | length) != 1 else '' }}`">
+              x-text="`${visibleCount} of {{ catalog | length }} module{{ 's' if (catalog | length) != 1 else '' }}`">
         </span>
     </div>
 
