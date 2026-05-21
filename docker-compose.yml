@@ -54,6 +54,14 @@ services:
       PYVELM_DSN: "postgresql://${POSTGRES_USER:-pyvelm}:${POSTGRES_PASSWORD:-pyvelm}@db:5432/${POSTGRES_DB:-pyvelm}"
       PYVELM_MODULE_ROOTS: "/app/examples/modules:/app/examples/modules_demo"
       PYVELM_CRON_INTERVAL: ${PYVELM_CRON_INTERVAL:-60}
+      # Mail dispatcher — see .env.example for the full SMTP knob list.
+      PYVELM_MAIL_BACKEND: ${PYVELM_MAIL_BACKEND:-console}
+      PYVELM_SMTP_HOST: ${PYVELM_SMTP_HOST:-}
+      PYVELM_SMTP_PORT: ${PYVELM_SMTP_PORT:-587}
+      PYVELM_SMTP_USER: ${PYVELM_SMTP_USER:-}
+      PYVELM_SMTP_PASSWORD: ${PYVELM_SMTP_PASSWORD:-}
+      PYVELM_SMTP_FROM: ${PYVELM_SMTP_FROM:-}
+      PYVELM_SMTP_USE_TLS: ${PYVELM_SMTP_USE_TLS:-1}
     command: ["pyvelm-cron"]
     deploy:
       replicas: 1

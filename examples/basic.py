@@ -340,7 +340,7 @@ def main():
             # upgrade endpoint and assert the version row caught up.
             with pool.connection() as side_conn:
                 side_conn.execute(
-                    "UPDATE ir_module SET version = '0.7.0' WHERE name = 'base'"
+                    "UPDATE ir_module SET version = '0.8.0' WHERE name = 'base'"
                 )
             r_no_follow = TestClient(app, follow_redirects=False)
             r_no_follow.auth = ("admin", "admin")
@@ -352,7 +352,7 @@ def main():
                 row = side_conn.execute(
                     "SELECT version FROM ir_module WHERE name = 'base'"
                 ).fetchone()
-            assert row == ("0.8.0",), row
+            assert row == ("0.9.0",), row
 
             # Non-superuser is rejected — install / upgrade is admin-only
             # since it executes install_hook code and DDL.
@@ -1416,6 +1416,73 @@ def main():
                 ]).ids
                 assert msg.id in raw_ids
                 print("mail thread: message_ids query OK")
+
+                # ----- Slice 2 hardening: outgoing-mail dispatcher -----
+                # Queue an outgoing message + a doomed one, then drain
+                # the queue with a captured ConsoleBackend so we can
+                # see exactly what would have been sent.
+                from pyvelm.mail import Message as MailMessage
+                queued = wf_env["mail.message"].create({
+                    "model": "res.partner",
+                    "res_id": alice.id,
+                    "body": "Welcome to pyvelm.",
+                    "subject": "Hello",
+                    "recipient_email": "alice@example.test",
+                    "state": "outgoing",
+                })
+                doomed = wf_env["mail.message"].create({
+                    "model": "res.partner",
+                    "res_id": alice.id,
+                    "body": "This one will explode.",
+                    "subject": "Boom",
+                    "recipient_email": "boom@example.test",
+                    "state": "outgoing",
+                })
+
+                class _Capture:
+                    """Minimal backend collecting sent calls; one entry
+                    explodes so we exercise the failure branch."""
+                    def __init__(self) -> None:
+                        self.sent: list[dict] = []
+                    def send(self, *, to, subject, body, from_addr=None):
+                        if to == "boom@example.test":
+                            raise RuntimeError("server hung up")
+                        self.sent.append({"to": to, "subject": subject,
+                                          "body": body, "from_addr": from_addr})
+
+                cap = _Capture()
+                result = MailMessage.dispatch_outgoing(wf_env, backend=cap)
+                assert result == {"sent": 1, "failed": 1}, result
+                assert cap.sent == [{
+                    "to": "alice@example.test", "subject": "Hello",
+                    "body": "Welcome to pyvelm.", "from_addr": None,
+                }], cap.sent
+
+                # Re-read so the state transitions are visible. Both
+                # rows should have left the "outgoing" queue, one with
+                # error context.
+                wf_env.cache.invalidate(model_name="mail.message",
+                                         ids=[queued.id, doomed.id])
+                queued_row = wf_env["mail.message"].browse(queued.id)
+                doomed_row = wf_env["mail.message"].browse(doomed.id)
+                assert queued_row.state == "sent"
+                assert doomed_row.state == "failed"
+                assert doomed_row.error and "hung up" in doomed_row.error
+
+                # A second dispatch is a no-op — nothing's outgoing.
+                again = MailMessage.dispatch_outgoing(wf_env, backend=cap)
+                assert again == {"sent": 0, "failed": 0}, again
+                print("mail dispatcher: sent → sent, failed → failed + error captured")
+
+                # And the base/hooks seed actually landed: the cron +
+                # action exist with the expected names so the bg
+                # runner will fire dispatch_outgoing every minute.
+                cron_row = wf_env["ir.cron"].search(
+                    [("name", "=", "Mail dispatcher")], limit=1,
+                )
+                assert cron_row, "Mail dispatcher cron not seeded"
+                assert cron_row.action_id.name == "Mail dispatcher"
+                print("mail dispatcher: cron + action seeded by base hook")
 
             # ===== Stage 7: _inherit model extension =====
             # partners_pro defines PartnerPro(_inherit="res.partner")

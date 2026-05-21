@@ -933,3 +933,39 @@ to multiple cron workers will occasionally double-fire a job at its
 exact due time. `docker-compose.yml`'s `cron` service is pinned at
 `replicas: 1` for that reason. A future hardening will switch to
 `SELECT … FOR UPDATE SKIP LOCKED` and let the worker count scale.
+
+### Outgoing-mail dispatcher
+
+`mail.message` doubles as both a log table and an outgoing-mail
+queue. Rows that set `recipient_email` (and default `state="outgoing"`)
+are drained by `Message.dispatch_outgoing(env)` — a class method
+that the cron runner invokes once a minute via a seeded
+`ir.cron` named "Mail dispatcher".
+
+The dispatcher hands each row to a configurable backend:
+
+| `PYVELM_MAIL_BACKEND` | what it does |
+|-----------------------|--------------|
+| `console` (default)   | Log the would-be send to stdout. Dev / CI. |
+| `disabled`            | Silently mark every row `sent` without contacting any server. |
+| `smtp`                | Talk SMTP to `PYVELM_SMTP_HOST/PORT/USER/PASSWORD/FROM`, STARTTLS by default (`PYVELM_SMTP_USE_TLS=0` to skip). |
+
+State transitions are terminal — once a row hits `sent` or
+`failed` the dispatcher leaves it alone. `failed` rows capture the
+exception text under `error` for operator triage; restart delivery
+manually by flipping `state` back to `"outgoing"` (and the error
+column to `NULL`).
+
+Mixin sugar on `MailThread`:
+
+```python
+# A log entry, no delivery:
+partner.message_post("Updated VAT info.")
+
+# A log entry AND queued for SMTP:
+partner.notify(
+    "Welcome aboard, Alice!",
+    recipient_email="alice@example.test",
+    subject="Welcome",
+)
+```

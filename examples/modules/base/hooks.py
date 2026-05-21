@@ -3,6 +3,10 @@
 `install(env)` runs on first install only (after schema setup, before
 view sync). Seeds a default Admin group and a superuser with id=1
 plus a Public group for unauthenticated access grants.
+
+The mail-dispatcher seed (``_seed_mail_dispatcher``) is factored out
+so the 0_8_to_0_9 migration can call it for already-installed
+databases that won't re-run ``install()``.
 """
 
 
@@ -64,3 +68,51 @@ def install(env):
     # Module-level filter wins; ir.rule company scoping intentionally
     # NOT seeded. Apps that need richer per-group company logic should
     # add their own rules.
+
+    # Mail dispatcher: server action + ir.cron entry that drains
+    # mail.message rows in state="outgoing".
+    _seed_mail_dispatcher(env)
+
+
+def _seed_mail_dispatcher(env):
+    """Idempotently install the outgoing-mail dispatcher cron.
+
+    Creates ``ir.actions.server`` "Mail dispatcher" + ``ir.cron``
+    "Mail dispatcher" pointing at it. The action runs a tiny code
+    snippet that calls ``Message.dispatch_outgoing(env)``.
+
+    Both rows are looked up by name first so re-running this (from
+    either the install hook or the 0_8_to_0_9 migration) is a no-op.
+    """
+    if "ir.actions.server" not in env.registry:
+        return
+    if "ir.cron" not in env.registry:
+        return
+    if "mail.message" not in env.registry:
+        return
+
+    Action = env["ir.actions.server"]
+    Cron = env["ir.cron"]
+    action_name = "Mail dispatcher"
+    cron_name = "Mail dispatcher"
+
+    action = Action.search([("name", "=", action_name)], limit=1)
+    if not action:
+        action = Action.create({
+            "name": action_name,
+            "model": "mail.message",
+            "action_type": "code",
+            # `env` is in scope inside server-action code.
+            "code": "env['mail.message'].dispatch_outgoing(env)\n",
+        })
+
+    if not Cron.search([("name", "=", cron_name)], limit=1):
+        Cron.create({
+            "name": cron_name,
+            "action_id": action,
+            # Tick once a minute — matches the cron runner's default
+            # interval so messages don't pile up.
+            "interval_number": 1,
+            "interval_type": "minutes",
+            "active": True,
+        })
