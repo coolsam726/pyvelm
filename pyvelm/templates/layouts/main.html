@@ -264,10 +264,16 @@
                 <button @click="open = !open" aria-haspopup="true" :aria-expanded="open.toString()"
                         class="flex items-center gap-2 pl-1 pr-2 py-1 rounded-md
                                hover:bg-neutral-secondary">
+                    {% if current_user_avatar %}
+                    <img src="{{ current_user_avatar }}" alt=""
+                         class="w-7 h-7 rounded-full object-cover bg-neutral-secondary shrink-0"
+                         onerror="this.outerHTML = '<span class=&quot;w-7 h-7 rounded-full bg-fg-brand text-white text-xs font-semibold flex items-center justify-center shrink-0&quot;>{{ current_user_initial }}</span>'">
+                    {% else %}
                     <span class="w-7 h-7 rounded-full bg-fg-brand text-white text-xs font-semibold
                                  flex items-center justify-center shrink-0">
                         {{ current_user_initial }}
                     </span>
+                    {% endif %}
                     <span class="hidden sm:inline text-sm font-medium text-body max-w-[120px] truncate">
                         {{ current_user_name }}
                     </span>
@@ -937,6 +943,51 @@
                     } else {
                         console.error(e);
                     }
+                }
+            },
+        }));
+
+        // ── Image widget (Char-backed; URL or upload) ──
+        // Bound to a Char field. Stores either an external URL pasted
+        // into the text input, or the local download URL of an
+        // ir.attachment created via /api/attachment/upload. The form
+        // submits whichever value is in `url` — the column never
+        // knows whether the bytes are local or remote.
+        Alpine.data('pvImageWidget', (cfg) => ({
+            url: cfg.initial || '',
+            uploading: false,
+            error: '',
+            clear() {
+                this.url = '';
+                this.error = '';
+            },
+            async upload(file) {
+                if (!file) return;
+                this.error = '';
+                this.uploading = true;
+                const fd = new FormData();
+                fd.append('file', file);
+                try {
+                    const r = await fetch('/api/attachment/upload', {
+                        method: 'POST',
+                        body: fd,
+                        headers: {
+                            'X-CSRF-Token': (window.pvCsrf && window.pvCsrf()) || '',
+                        },
+                        credentials: 'same-origin',
+                    });
+                    if (!r.ok) throw new Error('upload failed: ' + r.status);
+                    const row = await r.json();
+                    // Point at the download endpoint. The attachment
+                    // exists standalone — it isn't linked to any
+                    // (res_model, res_id), so the URL is the only
+                    // handle to it. That's fine: the only contract
+                    // is "this URL resolves to an image".
+                    this.url = '/api/attachment/' + row.id + '/download';
+                } catch (e) {
+                    this.error = 'Upload failed: ' + (e.message || e);
+                } finally {
+                    this.uploading = false;
                 }
             },
         }));

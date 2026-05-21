@@ -29,9 +29,24 @@ VIEWS: list[View] = [
               fields=["name", "login", field("active", widget="toggle")]),
 
     form_view("user.form", "res.users",
+              # Reset password swaps the form shell with the reset-
+              # password sub-page; saving there bounces back to the
+              # user record. Method=GET so the link reads as plain
+              # navigation, and the endpoint guards on
+              # res.users.write at the ORM level.
+              header_actions=[
+                  {
+                      "label": "Reset password",
+                      "url": "/web/users/{id}/reset-password",
+                      "method": "GET",
+                  },
+              ],
               sections=[
+                  section("profile", "Profile", [
+                      field("avatar_url", widget="image"),
+                  ]),
                   section("identity", "Identity", [
-                      "name", "login", "password",
+                      "name", "login",
                       field("active", widget="toggle"),
                   ]),
                   section("groups", "Groups", ["group_ids"]),

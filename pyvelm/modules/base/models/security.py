@@ -44,7 +44,13 @@ class Password(Char):
     The stored column holds the bcrypt hash. Verification via
     `bcrypt.checkpw` against the hash is the only sanctioned read
     path — display code must not echo the stored value.
+
+    Marked ``private = True`` so bulk reads and JSON serialization
+    skip it by default; ``check_password()`` still reads the hash via
+    the descriptor because that route doesn't consult ``private``.
     """
+
+    private = True
 
     def to_sql_param(self, value):
         if value is None or value is False:
@@ -76,6 +82,11 @@ class User(BaseModel):
     group_ids = Many2many("res.groups")
     session_token = Char()
     company_id = Many2one("res.company", ondelete="SET NULL")
+    # Avatar — either an external URL or the local download path of an
+    # uploaded ``ir.attachment`` (``/api/attachment/<id>/download``).
+    # The image widget owns both modalities; the column itself stays a
+    # plain Char so anything that links a URL just works.
+    avatar_url = Char(string="Avatar")
 
     def check_password(self, plaintext: str) -> bool:
         """Verify a plaintext attempt against the stored hash."""

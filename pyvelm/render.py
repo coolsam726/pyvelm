@@ -19,6 +19,7 @@ bare strings are escaped. This is the safety contract.
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -984,6 +985,41 @@ def _edit_o2m_readonly(value, spec, field):
     deferred. For now show the display rendering so the field at
     least communicates its current value."""
     return _render_collection(value, spec, field)
+
+
+# ---- image widget (Char-backed; URL OR upload) ----
+
+
+def _render_image_widget(value, spec, readonly: bool) -> Markup:
+    """Render the image widget bound to a Char value.
+
+    The stored column is just a URL string — either external
+    (``https://…``) or a local download URL produced by
+    ``/api/attachment/upload``. The widget glues a file picker + URL
+    input to the same hidden input; the Alpine component is in
+    ``layouts/main.html``.
+    """
+    partial = _env.get_template("widgets/image.html")
+    return Markup(
+        partial.render(
+            name=spec["name"],
+            value=value or "",
+            value_json=json.dumps(value or ""),
+            readonly=readonly,
+        )
+    )
+
+
+@widget(Char, hint="image")
+@widget(Text, hint="image")
+def _display_image(value, spec, field):
+    return _render_image_widget(value, spec, readonly=True)
+
+
+@widget(Char, hint="image", mode="edit")
+@widget(Text, hint="image", mode="edit")
+def _edit_image(value, spec, field):
+    return _render_image_widget(value, spec, readonly=bool(spec.get("readonly")))
 
 
 # ---- attachment widget (field-less; addressed by res_model + res_id) ----
@@ -2329,6 +2365,33 @@ def render_password_page(
     )
 
 
+def render_admin_password_reset_page(
+    env,
+    user,
+    *,
+    current_path: str | None = None,
+    csrf_token: str = "",
+    error: str = "",
+    success: bool = False,
+) -> str:
+    """Admin-driven password reset for *another* user.
+
+    No current-password check — by construction this page is reached
+    via the ``res.users`` form's "Reset password" action, which the
+    ORM already gated on ``perm_write`` for the model. Self-service
+    (the user changing their own password with their current one)
+    still lives at ``/web/account/password``.
+    """
+    template = _env.get_template("admin_password_reset.html")
+    return template.render(
+        user=user,
+        error=error,
+        success=success,
+        csrf_token=csrf_token,
+        **layout_context(env, current_path),
+    )
+
+
 def render_login_page(
     *,
     error: str = "",
@@ -2815,6 +2878,7 @@ def layout_context(
     name = ""
     login = ""
     initial = "?"
+    avatar_url = ""
     if env.uid is not None and "res.users" in env.registry:
         prev = env._acl_bypass
         env._acl_bypass = True
@@ -2824,6 +2888,10 @@ def layout_context(
                 name = user.name or user.login or f"user#{user.id}"
                 login = user.login or ""
                 initial = (name[:1] or "?").upper()
+                # `avatar_url` is a recent addition (base 0.18.0); guard
+                # against older registries that don't carry the field.
+                if "avatar_url" in env["res.users"]._fields:
+                    avatar_url = user.avatar_url or ""
         finally:
             env._acl_bypass = prev
 
@@ -2846,6 +2914,7 @@ def layout_context(
         "current_user_name": name,
         "current_user_login": login,
         "current_user_initial": initial,
+        "current_user_avatar": avatar_url,
         "companies": companies,
         "current_company_id": env.company_id,
         "current_company_name": current_company_name,

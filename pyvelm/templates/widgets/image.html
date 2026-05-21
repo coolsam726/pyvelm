@@ -1,0 +1,75 @@
+{# Image widget — Char-backed. Accepts either an external URL or an
+   uploaded ir.attachment (the upload returns a download URL we store
+   in the same column). The Alpine component `pvImageWidget` mediates
+   between the visible preview, the file picker, and the URL input. #}
+
+{% if readonly %}
+<div class="flex items-center gap-3">
+    {% if value %}
+    <img src="{{ value }}" alt=""
+         class="w-16 h-16 rounded-full object-cover border border-default bg-neutral-secondary"
+         onerror="this.replaceWith(Object.assign(document.createElement('div'), {className: this.className + ' flex items-center justify-center text-body-subtle text-xs', textContent: 'broken'}))">
+    {% else %}
+    <div class="w-16 h-16 rounded-full border border-default bg-neutral-secondary
+                flex items-center justify-center text-body-subtle text-xs">
+        no image
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div x-data='pvImageWidget({initial: {{ value_json | safe }}})'
+     class="flex items-start gap-4">
+    <div class="shrink-0">
+        <template x-if="url">
+            <img :src="url" alt=""
+                 class="w-20 h-20 rounded-full object-cover border border-default bg-neutral-secondary">
+        </template>
+        <template x-if="!url">
+            <div class="w-20 h-20 rounded-full border border-default bg-neutral-secondary
+                        flex items-center justify-center text-body-subtle text-xs">
+                no image
+            </div>
+        </template>
+    </div>
+    <div class="flex-1 space-y-2">
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    @click="$refs.picker.click()"
+                    :disabled="uploading"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
+                           border border-default text-body rounded-md
+                           hover:bg-neutral-secondary disabled:opacity-50
+                           disabled:cursor-not-allowed transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                     viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M12 16.5V9.75m0 0l-3 3m3-3l3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775
+                             5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
+                </svg>
+                <span x-text="uploading ? 'Uploading…' : 'Upload image'"></span>
+            </button>
+            <button type="button"
+                    x-show="url"
+                    @click="clear()"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
+                           border border-default text-fg-danger rounded-md
+                           hover:bg-danger-soft transition">
+                Remove
+            </button>
+            <input type="file" x-ref="picker" accept="image/*" class="hidden"
+                   @change="upload($event.target.files[0])">
+        </div>
+        <div>
+            <label class="block text-xs text-body-subtle mb-1">…or paste a URL</label>
+            <input type="url" x-model="url" placeholder="https://example.com/avatar.png"
+                   class="w-full bg-neutral-primary border border-default rounded-md
+                          px-2 py-1 text-sm text-heading
+                          focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand">
+        </div>
+        <p x-show="error" x-text="error"
+           class="text-xs text-fg-danger"></p>
+    </div>
+    {# Hidden mirror of `url` — this is what the form submits. #}
+    <input type="hidden" name="{{ name }}" :value="url">
+</div>
+{% endif %}

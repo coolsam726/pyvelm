@@ -495,6 +495,41 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     `(res_model, res_id)` index, plus an idempotent Admin access
     grant so upgraded installs match fresh installs.
 
+  ✅ **Users polish: avatars + reset-password + private fields**
+  (base bumped to 0.18.0):
+  - `res.users` grew `avatar_url = Char()` — stored as a plain URL
+    string so the column is agnostic to whether the bytes are
+    external (`https://…`) or local (`/api/attachment/<id>/download`).
+  - New form widget `widget="image"` on `Char`/`Text` fields. The
+    Alpine component `pvImageWidget` glues a file picker (POSTing to
+    the existing `/api/attachment/upload`) to a URL input; both
+    write to the same hidden mirror of the bound field. Display mode
+    renders a circular preview with an `onerror` fallback to "broken"
+    so a dead URL doesn't snap the layout.
+  - `Field.private = True` class attribute — `Password` flips it.
+    `BaseModel.read()` drops private fields from its default
+    field set; `serialize_record()` skips them unconditionally (even
+    when the caller asks by name). Programmatic access through the
+    descriptor (`user.password` → bcrypt hash) is untouched, so
+    `check_password()` still works. Defense in depth: HTTP responses
+    can't leak the hash even if a future endpoint forgets to filter.
+  - `user.form` view: password field **removed** entirely. The form
+    grows a "Reset password" header action (`method="GET"`) that
+    navigates to `/web/users/{id}/reset-password`, a stand-alone
+    admin reset page. Two text inputs (no current-password check —
+    the route relies on `res.users.write` ACL, which only admin
+    holds, to gate the operation). On success, the affected user's
+    `session_token` is cleared so they're kicked out and must
+    re-authenticate. Self-service (`/web/account/password`) still
+    requires the current password for non-admins changing their
+    own credential.
+  - User-menu pill in `layouts/main.html` now shows `<img>` when an
+    avatar URL is set, falling back to the colored initial-circle
+    when the field is empty *or* the image fails to load.
+  - Migration `0_17_to_0_18.py` adds the `avatar_url` column with
+    `ADD COLUMN IF NOT EXISTS` so existing rows keep `NULL` (= no
+    avatar, renders as initial-circle).
+
 Next focus options:
   - **Reporting / dashboards**: new `graph` or `pivot` view type
     backed by SQL aggregation. Builds out a read-side aggregation

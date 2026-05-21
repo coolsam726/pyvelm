@@ -61,11 +61,19 @@ def serialize_record(record, fields: list[str] | None = None) -> dict[str, Any]:
 
     Many2one => [id, display_value]. One2many/Many2many => list of ids.
     Scalars pass through. `id` is always included.
+
+    Private fields (``Field.private == True``) are *always* skipped — no
+    JSON path on the framework can hand a bcrypt hash to a client, even
+    when the caller asks for the field by name. Programmatic access
+    inside the ORM (the descriptor) still reaches them.
     """
     record.ensure_one()
     model_cls = type(record)
     if fields is None:
-        fields = [f for f, fld in model_cls._fields.items() if fld.is_stored]
+        fields = [
+            f for f, fld in model_cls._fields.items()
+            if fld.is_stored and not fld.private
+        ]
     out: dict[str, Any] = {"id": record.id}
     for fname in fields:
         if fname == "id":
@@ -76,6 +84,12 @@ def serialize_record(record, fields: list[str] | None = None) -> dict[str, Any]:
                 detail=f"Unknown field {fname!r} on {model_cls._name}",
             )
         field = model_cls._fields[fname]
+        if field.private:
+            # Honor the privacy flag even when the caller asked for the
+            # field explicitly. Defense in depth — keeps Password and
+            # any future private fields out of HTTP responses by
+            # construction, not by convention.
+            continue
         value = getattr(record, fname)
         if isinstance(field, Many2one):
             if not value:
@@ -1315,6 +1329,95 @@ def create_app(
             "current_company_id": env.company_id,
             "companies": [{"id": r.id, "name": r.name} for r in recs],
         }
+
+    # ---- admin password reset (for another user) ----
+
+    @app.get("/web/users/{user_id}/reset-password", response_class=HTMLResponse)
+    def admin_password_reset_page(
+        user_id: int, request: Request, env: Environment = Depends(get_env)
+    ):
+        if env.uid is None:
+            return _login_redirect(request)
+        if "res.users" not in registry:
+            raise HTTPException(503, "User model not loaded")
+        Users = env["res.users"]
+        # ACL: rely on res.users.read — non-admins fail here with 403.
+        if not Users.search([("id", "=", user_id)]):
+            raise HTTPException(404, f"res.users({user_id}) not found")
+        user = Users.browse(user_id)
+        from .render import render_admin_password_reset_page
+
+        return HTMLResponse(
+            render_admin_password_reset_page(
+                env,
+                user,
+                current_path=str(request.url.path),
+                csrf_token=request.state.csrf_token,
+            )
+        )
+
+    @app.post("/web/users/{user_id}/reset-password", response_class=HTMLResponse)
+    async def admin_password_reset_submit(
+        user_id: int, request: Request, env: Environment = Depends(get_env)
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "res.users" not in registry:
+            raise HTTPException(503, "User model not loaded")
+        from .render import render_admin_password_reset_page
+
+        Users = env["res.users"]
+        if not Users.search([("id", "=", user_id)]):
+            raise HTTPException(404, f"res.users({user_id}) not found")
+        user = Users.browse(user_id)
+
+        form = await request.form()
+        new = form.get("new_password") or ""
+        confirm = form.get("confirm_password") or ""
+
+        def reject(msg: str) -> HTMLResponse:
+            return HTMLResponse(
+                render_admin_password_reset_page(
+                    env,
+                    user,
+                    current_path=str(request.url.path),
+                    csrf_token=request.state.csrf_token,
+                    error=msg,
+                ),
+                status_code=422,
+            )
+
+        if not new or len(new) < 6:
+            return reject("Password must be at least 6 characters.")
+        if new != confirm:
+            return reject("Password and confirmation do not match.")
+        # The write itself is what enforces "must be admin" — ACL
+        # checks ``perm_write`` on res.users, which only admin-group
+        # users hold by default. We don't pre-gate on uid==1 because
+        # delegating to ACL keeps the admin-group story extensible
+        # (e.g. a future "User Manager" sub-group).
+        with env.transaction():
+            user.write({"password": str(new)})
+        # Invalidate any active sessions the affected user has — a
+        # password reset should kick them out so they re-authenticate
+        # with the new credential. Same convention as Odoo.
+        prev = env._acl_bypass
+        env._acl_bypass = True
+        try:
+            with env.transaction():
+                user.write({"session_token": None})
+        finally:
+            env._acl_bypass = prev
+
+        return HTMLResponse(
+            render_admin_password_reset_page(
+                env,
+                user,
+                current_path=str(request.url.path),
+                csrf_token=request.state.csrf_token,
+                success=True,
+            )
+        )
 
     # ---- self-service password change ----
 

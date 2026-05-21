@@ -493,9 +493,15 @@ class BaseModel(metaclass=MetaModel):
 
     def read(self, fields: list[str] | None = None) -> list[dict[str, Any]]:
         # Default: stored fields only. Non-stored (One2many, future computes)
-        # must be accessed via the descriptor explicitly.
+        # must be accessed via the descriptor explicitly. Private fields
+        # (``Password`` and friends) are dropped from the default set so
+        # bulk reads can't accidentally leak hashes; callers wanting them
+        # must pass the field name explicitly.
         if fields is None:
-            fields = [f for f, fld in self._fields.items() if fld.is_stored]
+            fields = [
+                f for f, fld in self._fields.items()
+                if fld.is_stored and not fld.private
+            ]
         self._read([f for f in fields if self._fields[f].is_stored])
         out = []
         for rid in self._ids:

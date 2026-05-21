@@ -19,6 +19,13 @@ class Field:
     is_stored: bool = True  # False = no SQL column, value derived on demand
     compute: str | None = None  # name of compute method on the model
     depends_on: tuple[str, ...] = ()  # set by metaclass from @depends
+    # When True, the field is excluded from default `.read()` field sets
+    # and from JSON serialization. Programmatic access via the descriptor
+    # (``user.password``) still works — the flag only affects bulk-shape
+    # APIs that would otherwise hand the value to a renderer or client.
+    # Used by ``Password`` to keep bcrypt hashes from ever leaving the
+    # process.
+    private: bool = False
 
     def __init__(
         self,
