@@ -89,11 +89,11 @@ class CronJob(BaseModel):
     def run_now(self):
         """Execute this job's action immediately.
 
-        Bypasses the schedule entirely — does **not** read or update
-        ``nextcall``. Stamps ``lastcall`` so the admin UI shows the
-        run. Re-raises any exception from the action so the caller can
-        surface it; advancing schedule state is the periodic
-        ``run_due`` loop's job, not the on-demand button's.
+        Stamps ``lastcall`` and advances ``nextcall`` by the configured
+        interval — so manually triggering a job resets its schedule the
+        same way the periodic runner would. Re-raises any exception
+        from the action so the caller can surface it (the schedule
+        still advances; we don't want a flaky job to wedge the queue).
         """
         self.ensure_one()
         env = self.env
@@ -106,8 +106,13 @@ class CronJob(BaseModel):
             try:
                 action.run()
             finally:
+                now = datetime.utcnow()
+                updates: dict = {"lastcall": now}
+                delta_fn = _INTERVAL_DELTAS.get(self.interval_type or "hours")
+                if delta_fn:
+                    updates["nextcall"] = now + delta_fn(self.interval_number or 1)
                 with env.transaction():
-                    self.write({"lastcall": datetime.utcnow()})
+                    self.write(updates)
         finally:
             env._acl_bypass = prev_bypass
 
