@@ -743,7 +743,7 @@ def create_app(
         rec = _load_record(env, view, record_id)
         form = await request.form()
         cls = env.registry[view.model]
-        vals, errors = parse_form_vals(cls, form)
+        vals, errors = parse_form_vals(cls, form, env)
         if errors:
             # Inline rows don't have room for per-cell error messages;
             # surface the first problem via a 422 + HX-Trigger event so
@@ -834,7 +834,7 @@ def create_app(
         view = _load_view(env, module, name)
         cls = env.registry[view.model]
         form = await request.form()
-        vals, errors = parse_form_vals(cls, form)
+        vals, errors = parse_form_vals(cls, form, env)
         if errors:
             return _row_validation_error(view, None, env, errors)
         with env.transaction():
@@ -973,7 +973,7 @@ def create_app(
         rec = _load_record(env, view, record_id)
         form = await request.form()
         cls = env.registry[view.model]
-        vals, errors = parse_form_vals(cls, form)
+        vals, errors = parse_form_vals(cls, form, env)
         o2m_cmds, o2m_errors = harvest_o2m_commands(cls, form, env)
         body_only = request.headers.get("HX-Request") == "true"
         if errors or o2m_errors:
@@ -1051,7 +1051,7 @@ def create_app(
         view = _require_form_view(_load_view(env, module, name))
         form = await request.form()
         cls = env.registry[view.model]
-        vals, errors = parse_form_vals(cls, form)
+        vals, errors = parse_form_vals(cls, form, env)
         o2m_cmds, o2m_errors = harvest_o2m_commands(cls, form, env)
         body_only = request.headers.get("HX-Request") == "true"
         if errors or o2m_errors:

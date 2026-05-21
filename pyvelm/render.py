@@ -20,8 +20,10 @@ bare strings are escaped. This is the safety contract.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import jinja2
 from markupsafe import Markup, escape
@@ -115,13 +117,72 @@ def _render_date(value, spec, field):
     return escape(value.isoformat() if hasattr(value, "isoformat") else str(value))
 
 
+_UTC = ZoneInfo("UTC")
+
+
+def _active_tz(env) -> ZoneInfo:
+    """Resolve the active company's timezone, falling back to UTC.
+
+    Reads ``env.context['company_id']`` (the same scope used for
+    company-scoped ACL). Bad / missing values silently fall back to
+    UTC — the render layer never raises on a localization failure.
+    """
+    if env is None or "res.company" not in env.registry:
+        return _UTC
+    cid = env.company_id
+    if cid is None:
+        # No company in context: try whichever company the user belongs
+        # to. With many users this is fine — they all share their
+        # company's tz — and with the framework's single-company seed
+        # it's the obvious right answer.
+        if env.uid and "res.users" in env.registry:
+            try:
+                user = env["res.users"].browse(env.uid)
+                cid = user.company_id.id if user.company_id else None
+            except Exception:
+                cid = None
+    if cid is None:
+        return _UTC
+    try:
+        co = env["res.company"].browse(cid)
+        tz_name = (co.timezone or "").strip() or "UTC"
+        return ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, Exception):
+        return _UTC
+
+
+def _spec_env(spec):
+    """Pull the env off a widget spec. Set by `_render_cells` /
+    `_render_cells_empty` / inline-o2m so widgets that need to localize
+    or look up sibling records have access without parameter churn."""
+    env = spec.get("_env")
+    if env is not None:
+        return env
+    rec = spec.get("_record")
+    return rec.env if rec is not None else None
+
+
+def _utc_to_local(value, env) -> datetime | None:
+    """Treat a naive UTC datetime as UTC and shift to the active tz.
+
+    Aware datetimes are converted directly. Returns None for None.
+    """
+    if value is None:
+        return None
+    if not hasattr(value, "tzinfo"):
+        return value  # not a datetime — leave it for str() fallback
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=_UTC)
+    return aware.astimezone(_active_tz(env))
+
+
 @widget(Datetime)
 def _render_datetime(value, spec, field):
     if value is None:
         return Markup("")
     if hasattr(value, "strftime"):
+        local = _utc_to_local(value, _spec_env(spec)) or value
         # Minute precision is plenty for UI display.
-        return escape(value.strftime("%Y-%m-%d %H:%M"))
+        return escape(local.strftime("%Y-%m-%d %H:%M"))
     return escape(str(value))
 
 
@@ -419,7 +480,7 @@ def _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname):
     Many2one cells are enriched with the same `_search_url` /
     `_form_view_url` data the standalone form uses, so the combobox
     renders identically inside the inline table."""
-    spec = {"name": f"{oname}[{idx_token}][{sub_name}]"}
+    spec = {"name": f"{oname}[{idx_token}][{sub_name}]", "_env": env}
     field = comodel_cls._fields.get(sub_name)
     if isinstance(field, Many2one):
         spec["_comodel"] = field.comodel_name
@@ -804,8 +865,11 @@ def _edit_datetime(value, spec, field):
     val_attr = ""
     if value is not None and hasattr(value, "strftime"):
         # HTML <input type="datetime-local"> wants ISO without timezone
-        # and minute precision.
-        val_attr = escape(value.strftime("%Y-%m-%dT%H:%M"))
+        # and minute precision. The DB stores naive UTC; we shift to
+        # the active company's tz so what the user sees and types is
+        # local time. The parse side reverses the shift.
+        local = _utc_to_local(value, _spec_env(spec)) or value
+        val_attr = escape(local.strftime("%Y-%m-%dT%H:%M"))
     elif value is not None:
         val_attr = escape(str(value))
     return Markup(
@@ -995,10 +1059,10 @@ def _render_cells(record, fields_spec, mode: str) -> list[dict]:
         renderer = find_renderer(field, hint, mode=mode)
         value = getattr(record, fname)
         # Widgets that need access to sibling fields (Monetary →
-        # currency_field) read the record via this private key. Kept
-        # off the public spec contract so view authors can't depend
-        # on it.
-        spec_with_rec = {**spec, "_record": record}
+        # currency_field) or env (Datetime → active tz) read these
+        # via private keys. Kept off the public spec contract so view
+        # authors can't depend on them.
+        spec_with_rec = {**spec, "_record": record, "_env": record.env}
         cells.append({"name": fname, "html": renderer(value, spec_with_rec, field)})
     return cells
 
@@ -1022,7 +1086,8 @@ def _render_cells_empty(env, model_cls, fields_spec, mode: str) -> list[dict]:
             value = env[field.comodel_name]
         else:
             value = field.default
-        cells.append({"name": fname, "html": renderer(value, spec, field)})
+        spec_with_env = {**spec, "_env": env}
+        cells.append({"name": fname, "html": renderer(value, spec_with_env, field)})
     return cells
 
 
@@ -1125,11 +1190,16 @@ def render_new_row(view, env) -> str:
 _O2M_NESTED_KEY = re.compile(r"^([a-zA-Z_][\w]*)\[(\d+)\]\[([a-zA-Z_][\w]*)\]$")
 
 
-def _parse_scalar(field, raw):
+def _parse_scalar(field, raw, env=None):
     """Coerce a form-submitted string to its field's Python type.
 
     Returns (value, error_msg | None). Caller decides whether to
-    apply the value or stash the error against the field name."""
+    apply the value or stash the error against the field name.
+
+    ``env`` is consulted for Datetime fields to reverse the tz shift
+    applied by ``_edit_datetime`` (user types local, we store UTC).
+    Pass ``env=None`` to keep the legacy "naive = UTC" interpretation.
+    """
     if isinstance(field, Boolean):
         # The hidden-then-checkbox pair means callers always see a
         # last value; "on" → True, anything else → False.
@@ -1146,7 +1216,15 @@ def _parse_scalar(field, raw):
         if isinstance(field, Many2one):
             return (int(raw), None)
         if isinstance(field, Datetime):
-            return (field.to_sql_param(raw), None)
+            dt = field.to_sql_param(raw)
+            # User-typed datetime is in the active company's tz; shift
+            # it to UTC for storage and drop tzinfo to match the naive-
+            # UTC column convention.
+            if dt is not None and env is not None and dt.tzinfo is None:
+                tz = _active_tz(env)
+                if tz is not _UTC:
+                    dt = dt.replace(tzinfo=tz).astimezone(_UTC).replace(tzinfo=None)
+            return (dt, None)
         if isinstance(field, Date):
             return (field.to_sql_param(raw), None)
         return (raw, None)
@@ -1217,7 +1295,7 @@ def harvest_o2m_commands(model_cls, form_data, env) -> tuple[dict, dict]:
                 sub_field = co_cls._fields.get(sub_name)
                 if sub_field is None or not sub_field.is_stored:
                     continue
-                value, err = _parse_scalar(sub_field, sub_raw)
+                value, err = _parse_scalar(sub_field, sub_raw, env)
                 if err:
                     errors[f"{oname}[{idx}][{sub_name}]"] = err
                     had_error = True
@@ -1261,7 +1339,7 @@ def apply_o2m_commands(parent_record, commands_by_field):
                 Child.browse(cmd["id"]).unlink()
 
 
-def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
+def parse_form_vals(model_cls, form_data, env=None) -> tuple[dict, dict]:
     """Convert a form-data MultiDict back into `(vals, errors)`.
 
     `vals` is the ORM-ready dict suitable for `create()` / `write()`.
@@ -1335,7 +1413,14 @@ def parse_form_vals(model_cls, form_data) -> tuple[dict, dict]:
             elif isinstance(field, Datetime):
                 # HTML datetime-local sends "YYYY-MM-DDTHH:MM"; the
                 # field's to_sql_param accepts ISO 8601 either way.
-                vals[fname] = field.to_sql_param(raw)
+                # User-typed value is in the active company's tz —
+                # shift to UTC for storage (when env is available).
+                dt = field.to_sql_param(raw)
+                if dt is not None and env is not None and dt.tzinfo is None:
+                    tz = _active_tz(env)
+                    if tz is not _UTC:
+                        dt = dt.replace(tzinfo=tz).astimezone(_UTC).replace(tzinfo=None)
+                vals[fname] = dt
             elif isinstance(field, Date):
                 vals[fname] = field.to_sql_param(raw)
             else:
@@ -1435,7 +1520,7 @@ def _form_section_html(
         else:
             value = getattr(record_or_none, fname)
 
-        spec_with_rec = {**spec, "_record": record_or_none}
+        spec_with_rec = {**spec, "_record": record_or_none, "_env": env}
         # Wide cells span both grid columns. O2m tables are full-width
         # so the embedded `<table>` isn't squished into half the form.
         is_wide = isinstance(field, One2many) and spec.get("widget") == "table"

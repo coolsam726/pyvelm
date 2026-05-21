@@ -356,7 +356,7 @@ def main():
                 row = side_conn.execute(
                     "SELECT version FROM ir_module WHERE name = 'base'"
                 ).fetchone()
-            assert row == ("0.14.0",), row
+            assert row == ("0.15.0",), row
 
             # Non-superuser is rejected — install / upgrade is admin-only
             # since it executes install_hook code and DDL.

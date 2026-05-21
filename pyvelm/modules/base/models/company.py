@@ -22,3 +22,9 @@ class Company(BaseModel):
     # default to their record's company's currency. ON DELETE SET NULL
     # so deleting a currency doesn't cascade-delete the company.
     currency_id = Many2one("res.currency", ondelete="SET NULL")
+    # IANA timezone name (e.g. "Africa/Nairobi", "Europe/Paris").
+    # Datetime widgets render the active company's tz on display and
+    # parse user input as that tz before converting to naive UTC for
+    # storage. ``UTC`` is the safe default; no validation here — the
+    # render layer falls back to UTC if the value can't be resolved.
+    timezone = Char(default="UTC", string="Timezone")
