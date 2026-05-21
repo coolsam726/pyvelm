@@ -1,0 +1,135 @@
+# Cut a release. Push a `v<X.Y.Z>` tag to fire:
+#
+#   1. Build sdist + wheel.
+#   2. Verify the tag matches pyproject.version (and pyvelm.__version__).
+#   3. Publish to PyPI via OIDC trusted publishing — no API token.
+#   4. Cut a GitHub Release with the artefacts attached + auto-
+#      generated release notes pulled from the merge log since the
+#      previous tag. The maintainer can edit the body afterwards.
+#
+# One-time setup on PyPI:
+#   * Register the `pyvelm` project name.
+#   * On the project's "Manage" page, add a "trusted publisher":
+#       Owner: <your-gh-org>
+#       Repo:  pyvelm
+#       Workflow: release.yml
+#       Environment: pypi
+#     This wires GitHub Actions OIDC tokens to the project so the
+#     workflow can publish without a long-lived API token.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Lets a maintainer build artefacts off `main` for inspection
+  # without publishing (the publish job is tag-gated).
+  workflow_dispatch:
+
+permissions:
+  contents: write       # to attach artefacts to the GitHub Release
+  id-token: write       # for OIDC PyPI publishing
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+
+      - name: Verify tag matches pyproject.version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PYPROJ_VERSION=$(python -c "
+          import tomllib
+          with open('pyproject.toml','rb') as f:
+              print(tomllib.load(f)['project']['version'])
+          ")
+          PKG_VERSION=$(python -c "
+          import importlib.util, pathlib
+          spec = importlib.util.spec_from_file_location(
+              'pyvelm', pathlib.Path('pyvelm/__init__.py'),
+              submodule_search_locations=['pyvelm'],
+          )
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          print(mod.__version__)
+          ")
+          if [[ "$TAG_VERSION" != "$PYPROJ_VERSION" ]]; then
+            echo "::error::Tag v${TAG_VERSION} != pyproject.version ${PYPROJ_VERSION}"
+            exit 1
+          fi
+          if [[ "$TAG_VERSION" != "$PKG_VERSION" ]]; then
+            echo "::error::Tag v${TAG_VERSION} != pyvelm.__version__ ${PKG_VERSION}"
+            exit 1
+          fi
+          echo "OK: tag, pyproject, and __version__ all agree on ${TAG_VERSION}"
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Inspect the built artefacts
+        run: |
+          ls -la dist/
+          python -m pip install --upgrade twine
+          twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-pypi:
+    needs: build
+    # Only fires on real tag pushes — workflow_dispatch builds
+    # artefacts for inspection without publishing.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pyvelm/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        # No `password:` — OIDC trusted publishing. Configured once
+        # on the PyPI project page (see header comment).
+
+  github-release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.whl
+            dist/*.tar.gz

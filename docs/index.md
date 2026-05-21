@@ -5,6 +5,10 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
+Released to [PyPI](https://pypi.org/project/pyvelm/); the
+[changelog](https://github.com/example/pyvelm/blob/main/CHANGELOG.md)
+tracks user-visible changes.
+
 ## Quick start
 
 ```bash

@@ -1,5 +1,11 @@
 from pathlib import Path as _Path
 
+# Public version string. Keep in sync with ``[project].version`` in
+# ``pyproject.toml`` — the release workflow refuses to publish if
+# they diverge, but the check is only enforced in CI; bump both
+# together when cutting a release.
+__version__ = "0.1.0"
+
 from .depends import depends
 from .env import Environment
 from .fields import (
@@ -49,6 +55,7 @@ BUILTIN_MODULE_ROOTS: list[_Path] = [_Path(__file__).parent / "modules"]
 
 __all__ = [
     "BUILTIN_MODULE_ROOTS",
+    "__version__",
     "BaseModel",
     "Boolean",
     "Char",
