@@ -244,8 +244,9 @@ the env.
 
 - `res.currency` — `code`, `name`, `symbol`, `rounding`, `active`, and a
   `rate_ids` One2many to its history.
-- `res.currency.rate` — `currency_id` (Many2one), `name` (datetime the
+- `res.currency.rate` — `currency_id` (Many2one), `date` (datetime the
   rate becomes effective), and `rate` (units per the implicit reference).
+  A computed `name` provides a human-readable label.
 
 The install hook seeds USD / EUR / GBP / JPY with starter rates so a
 fresh database can do cross-currency math out of the box. Operators
@@ -262,7 +263,7 @@ eur_amount = USD.convert(100.0, EUR)            # uses today's rate
 back_then  = USD.convert(100.0, EUR, date=dt)   # uses the rate effective at dt
 ```
 
-`convert` resolves the latest `res.currency.rate` row whose `name <=
+`convert` resolves the latest `res.currency.rate` row whose `date <=
 date` for both the source and target currency, then computes
 `amount / from_rate * to_rate`. Both sides ride the same implicit
 reference (USD = 1.0 in the seed), so the reference cancels in the
