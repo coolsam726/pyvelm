@@ -1,71 +1,86 @@
 # Getting started
 
-This walks through bringing up a pyvelm app from a clean checkout
-to a custom module showing in the browser. Three steps:
+This walks through creating a brand-new pyvelm app, from
+`pip install` to your first custom module showing in the browser.
+Three steps:
 
-1. Boot the demo stack with Docker.
-2. Wire your own addons root next to the bundled modules.
-3. Declare a model, a view, and a sidebar entry.
+1. Install pyvelm and scaffold a project.
+2. Boot the app and explore.
+3. Add a module.
 
 You don't need to know how the framework works internally to follow
 this — the [Architecture](architecture.md) page covers concepts when
 you want them.
 
-## 1. Boot the demo
+## 1. Install + scaffold
 
-The repo ships a `docker-compose.yml` that runs Postgres, the app,
-and a background cron worker. From the project root:
+```bash
+# Install pyvelm (pipx keeps it isolated from system python).
+pipx install pyvelm
+
+# Scaffold a project. Creates ./my_erp/ with all the wiring.
+pyvelm init my_erp
+cd my_erp
+```
+
+The scaffolder drops a self-contained starter tree — a Dockerfile,
+a `docker-compose.yml`, an `app/` directory with the FastAPI boot
+script, and `deploy/` templates for systemd + nginx if you want to
+deploy bare-metal later. See [CLI → `pyvelm init`](cli.md#pyvelm-init)
+for the full tree.
+
+## 2. Boot the app
+
+Two paths, pick whichever fits your machine. Docker is the easiest
+on a clean system because it provides Postgres too.
+
+### Path A — Docker
 
 ```bash
 cp .env.example .env       # adjust passwords for non-toy use
 docker compose up --build
 ```
 
-When the build finishes, open `http://localhost:8000/login` and
-sign in as `admin` / `admin`. The bundled demo module seeds ~20
-partners and 15 CRM leads so the UI is populated.
+The compose file runs Postgres, the web app, and a dedicated cron
+worker. When the build finishes, open
+`http://localhost:8000/login` and sign in as `admin` / `admin`.
+
+### Path B — local Postgres + venv
+
+```bash
+cp .env.example .env
+# Edit .env so PYVELM_DSN points at a Postgres database you control.
+
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+python -m app.serve
+# → http://localhost:8000/login   (admin / admin)
+```
+
+### What you'll see
+
+A fresh install is empty — the bundled `base` and `admin` modules
+give you the login screen, the sidebar shell, the Apps catalog, and
+the settings pages. There's no demo data because this is your
+project, not the framework's example tree.
 
 Click around:
 
-- **Partners** in the sidebar — a list of contacts with search,
-  filter, drag-to-reorder columns, and group-by.
-- **CRM → Pipeline** — kanban board with cards per stage.
-- **Settings** — manage users, groups, companies, tags.
+- **Apps** — install / upgrade / uninstall modules. The framework's
+  `base` and `admin` are already installed.
+- **Settings** — manage users, groups, companies.
+- **Security** — model access entries, record rules.
 - **Workflows** — server actions, automation rules, cron jobs, the
   mail outbox.
-- **Apps** — install / upgrade / uninstall modules.
 
-## 2. Add your own addons root
+## 3. Add a module
 
-`examples/serve.py` shows how an app boots. It uses three discovery
-roots in order:
+`pyvelm new` scaffolds a runnable module skeleton in the project's
+`app/modules/` directory. **Coming in the next release** — for
+now, you can hand-author the module:
 
-```python
-from pyvelm import BUILTIN_MODULE_ROOTS
-
-EXAMPLE_ROOT = HERE / "modules"             # partners, partners_pro, crm
-DEMO_ROOT    = HERE / "modules_demo"        # the demo seed module
-MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [EXAMPLE_ROOT, DEMO_ROOT]
-
-loader.load_and_install(MODULE_ROOTS, env)
-app = create_app(reg, pool, module_roots=MODULE_ROOTS)
-```
-
-`BUILTIN_MODULE_ROOTS` ships inside the wheel — it's `base` (the
-primitives every app needs) plus `admin` (the UI for them). You
-prepend your own directories alongside.
-
-For your own work, point at a directory of your choice and add it
-to both calls:
-
-```python
-MY_ADDONS = HERE / "my_addons"
-MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [MY_ADDONS]
-```
-
-## 3. Declare a module
-
-Create `my_addons/tasks/__pyvelm__.py`:
+Create `app/modules/tasks/__pyvelm__.py`:
 
 ```python
 NAME: str = "tasks"
@@ -76,15 +91,15 @@ DEPENDS: list[str] = ["base"]
 DATA: list[str] = ["views/task.py"]
 ```
 
-Add an empty `my_addons/tasks/__init__.py`, then declare a model:
+Add an empty `app/modules/tasks/__init__.py`, then declare a model:
 
 ```python
-# my_addons/tasks/models/__init__.py
+# app/modules/tasks/models/__init__.py
 from . import task    # noqa: F401
 ```
 
 ```python
-# my_addons/tasks/models/task.py
+# app/modules/tasks/models/task.py
 from pyvelm import BaseModel, Boolean, Char, Many2one
 
 
@@ -100,7 +115,7 @@ class Task(BaseModel):
 Add a list + form view and a sidebar entry:
 
 ```python
-# my_addons/tasks/views/task.py
+# app/modules/tasks/views/task.py
 from pyvelm.builders import (
     field, form_view, list_view, menu_group, menu_item, section,
 )
@@ -134,10 +149,10 @@ MENUS = [
 ]
 ```
 
-Restart the app (`docker compose restart app`). The Apps page lists
-your new module under "Productivity". Click **Install**. Once the
-toast confirms, the sidebar shows a **Tasks** group with an **All
-tasks** entry inside it.
+Restart the app (`docker compose restart app` or your service
+manager). The Apps page lists your new module under "Productivity".
+Click **Install**. Once the toast confirms, the sidebar shows a
+**Tasks** group with an **All tasks** entry inside it.
 
 ## What's next
 

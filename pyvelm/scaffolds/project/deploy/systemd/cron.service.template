@@ -1,0 +1,22 @@
+# /etc/systemd/system/{{name}}-cron.service
+#
+# Companion to {{name}}.service. Runs `pyvelm cron` — the
+# background loop that fires due cron jobs and drains the outgoing-
+# mail queue. Keep this at one replica per database (the runner
+# doesn't yet use SELECT FOR UPDATE SKIP LOCKED).
+
+[Unit]
+Description={{name}} background cron + mail dispatcher
+After=network.target postgresql.service
+
+[Service]
+User=app
+Group=app
+WorkingDirectory=/opt/{{name}}
+EnvironmentFile=/opt/{{name}}/.env
+ExecStart=/opt/{{name}}/venv/bin/pyvelm cron
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,50 @@
+# {{name}}
+
+A pyvelm-based application.
+
+## Quick start (Docker)
+
+```bash
+cp .env.example .env
+docker compose up --build
+# → http://localhost:8000/login   (admin / admin)
+```
+
+## Quick start (bare metal)
+
+```bash
+cp .env.example .env
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+python -m app.serve
+# → http://localhost:8000/login
+```
+
+## Adding a module
+
+```bash
+pyvelm new my_module
+```
+
+That drops a runnable stub under `app/modules/my_module/`. Restart
+the app worker (`docker compose restart app` or your service
+manager) and click **Install** on the `/web/apps` catalog.
+
+## Production deployment
+
+The `deploy/` directory ships templates for both flavours:
+
+- **Docker** — the bundled `docker-compose.yml` runs Postgres + the
+  app + a dedicated cron worker. Suitable for a small VPS or your
+  own Kubernetes deployment.
+- **systemd + nginx** — `deploy/systemd/*.service` and
+  `deploy/nginx.conf` template a bare-metal deploy where Postgres
+  is its own service and gunicorn runs under systemd. See the
+  pyvelm docs for the step-by-step walkthrough.
+
+## Documentation
+
+See the [pyvelm docs](https://pypi.org/project/pyvelm/) for the
+framework reference: models, views, security, the Apps catalog,
+deployment, and more.

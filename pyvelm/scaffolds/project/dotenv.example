@@ -1,0 +1,25 @@
+# Copy this file to `.env` and adjust for your environment.
+PYVELM_DSN=postgresql://user:password@localhost:5432/mydb
+
+# Docker compose reads these for the bundled Postgres service.
+POSTGRES_USER=app
+POSTGRES_PASSWORD=app
+POSTGRES_DB=app
+PYVELM_PORT=8000
+
+# Web app. The /login rate limit is per-worker; set workers > 1
+# only when you have a proxy-side rate limiter in front.
+GUNICORN_WORKERS=1
+GUNICORN_FORWARDED_ALLOW_IPS=127.0.0.1
+
+# Background cron + outgoing-mail dispatcher.
+PYVELM_CRON_INTERVAL=60
+
+# Mail backend: console (default) | disabled | smtp.
+PYVELM_MAIL_BACKEND=console
+# PYVELM_SMTP_HOST=smtp.example.com
+# PYVELM_SMTP_PORT=587
+# PYVELM_SMTP_USER=
+# PYVELM_SMTP_PASSWORD=
+# PYVELM_SMTP_FROM=noreply@example.com
+# PYVELM_SMTP_USE_TLS=1

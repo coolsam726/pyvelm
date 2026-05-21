@@ -1,0 +1,9 @@
+# Marker file — `pyvelm new` walks up from cwd looking for this to
+# locate the project root and the modules directory. Keep this file
+# at the root of your repo even if it stays empty otherwise.
+
+[project]
+name = "{{name}}"
+
+[layout]
+modules_root = "app/modules"

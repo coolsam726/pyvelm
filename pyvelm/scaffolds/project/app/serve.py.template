@@ -1,0 +1,68 @@
+"""ASGI entry point for {{name}}.
+
+Loads framework + app modules, builds a FastAPI app, runs uvicorn.
+Gunicorn invokes this module via `gunicorn app.serve:app`; running
+this file directly (`python -m app.serve`) starts a single-process
+dev server.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+import psycopg
+from dotenv import load_dotenv
+from psycopg_pool import ConnectionPool
+
+from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
+from pyvelm.web import create_app
+
+load_dotenv(".env")
+
+HERE = Path(__file__).resolve().parent
+APP_MODULE_ROOT = HERE / "modules"
+
+# Framework's bundled `base` + `admin` come first; this app's
+# modules are searched next. Add more roots here when you split
+# your code across multiple repos.
+MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [APP_MODULE_ROOT]
+
+
+def _build_app():
+    dsn = os.environ.get("PYVELM_DSN")
+    if not dsn:
+        sys.exit("PYVELM_DSN is not set (copy .env.example to .env)")
+
+    # Install / upgrade modules using a one-shot autocommit
+    # connection, then hand off to the pool-backed ASGI app.
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        reg = Registry()
+        env = Environment(conn, registry=reg)
+        specs = loader.load_and_install(MODULE_ROOTS, env)
+        print("Loaded modules:", [s.name for s in specs])
+
+    pool = ConnectionPool(dsn, min_size=1, max_size=4, open=True)
+    return create_app(reg, pool, module_roots=MODULE_ROOTS)
+
+
+# Module-level `app` so gunicorn / uvicorn --reload can import it.
+app = _build_app()
+
+
+def main():
+    import uvicorn
+
+    parser = argparse.ArgumentParser(description="{{name}} dev server")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    args = parser.parse_args()
+
+    print(f"\nServing at http://{args.host}:{args.port}/login")
+    print("Default credentials: admin / admin\n")
+    uvicorn.run(app, host=args.host, port=args.port)
+
+
+if __name__ == "__main__":
+    main()

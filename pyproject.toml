@@ -49,4 +49,8 @@ pyvelm = [
     # same path it uses for example addons.
     "modules/**/*.py",
     "modules/**/__pyvelm__.py",
+    # Scaffolder templates materialised by `pyvelm init` / `pyvelm new`.
+    # The `dot*` prefix is the rename-on-copy convention — see
+    # pyvelm/scaffolder.py for the substitution rules.
+    "scaffolds/**/*",
 ]

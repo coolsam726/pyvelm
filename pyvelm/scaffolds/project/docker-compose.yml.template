@@ -1,0 +1,59 @@
+# Three services: postgres, the web app, a dedicated cron worker.
+#
+# Bring up:
+#     cp .env.example .env       # adjust passwords for non-toy use
+#     docker compose up --build
+# Then visit http://localhost:8000/login (admin / admin).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PYVELM_DSN: "postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@db:5432/${POSTGRES_DB:-app}"
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      GUNICORN_FORWARDED_ALLOW_IPS: ${GUNICORN_FORWARDED_ALLOW_IPS:-127.0.0.1}
+    ports:
+      - "${PYVELM_PORT:-8000}:8000"
+
+  cron:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PYVELM_DSN: "postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@db:5432/${POSTGRES_DB:-app}"
+      PYVELM_MODULE_ROOTS: "/app/app/modules"
+      PYVELM_CRON_INTERVAL: ${PYVELM_CRON_INTERVAL:-60}
+      PYVELM_MAIL_BACKEND: ${PYVELM_MAIL_BACKEND:-console}
+      PYVELM_SMTP_HOST: ${PYVELM_SMTP_HOST:-}
+      PYVELM_SMTP_PORT: ${PYVELM_SMTP_PORT:-587}
+      PYVELM_SMTP_USER: ${PYVELM_SMTP_USER:-}
+      PYVELM_SMTP_PASSWORD: ${PYVELM_SMTP_PASSWORD:-}
+      PYVELM_SMTP_FROM: ${PYVELM_SMTP_FROM:-}
+      PYVELM_SMTP_USE_TLS: ${PYVELM_SMTP_USE_TLS:-1}
+    command: ["pyvelm", "cron"]
+    deploy:
+      replicas: 1
+
+volumes:
+  db_data:

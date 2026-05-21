@@ -1,0 +1,23 @@
+# /etc/systemd/system/{{name}}.service
+#
+# Adjust paths to match your deploy:
+#   - WorkingDirectory       where you checked the project out
+#   - EnvironmentFile        location of your `.env`
+#   - ExecStart              path to gunicorn inside the venv
+
+[Unit]
+Description={{name}} web app
+After=network.target postgresql.service
+
+[Service]
+Type=notify
+User=app
+Group=app
+WorkingDirectory=/opt/{{name}}
+EnvironmentFile=/opt/{{name}}/.env
+ExecStart=/opt/{{name}}/venv/bin/gunicorn -c gunicorn_conf.py app.serve:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

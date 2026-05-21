@@ -154,12 +154,26 @@ def _run_cron(args: argparse.Namespace) -> None:
 # init / new subcommands (real implementations in slices 2 + 3)
 # ---------------------------------------------------------------------------
 
-def _run_init(_args: argparse.Namespace) -> None:
-    sys.exit(
-        "`pyvelm init` not yet implemented. Coming in the next release; "
-        "for now, clone the repo and copy examples/serve.py as a "
-        "starting point."
+def _run_init(args: argparse.Namespace) -> None:
+    from .scaffolder import (
+        echo_next_steps_for_init,
+        materialise,
+        valid_name,
     )
+
+    name = args.name
+    if not valid_name(name):
+        sys.exit(
+            f"Invalid project name {name!r}. Use a Python-identifier-"
+            f"shaped name: letters, digits, and underscores; starts "
+            f"with a letter."
+        )
+    target = Path.cwd() / name
+    try:
+        materialise("project", target, variables={"name": name})
+    except FileExistsError:
+        sys.exit(f"{target} already exists — pick a different name.")
+    echo_next_steps_for_init(name)
 
 
 def _run_new(_args: argparse.Namespace) -> None:
