@@ -344,7 +344,7 @@ def main():
             # upgrade endpoint and assert the version row caught up.
             with pool.connection() as side_conn:
                 side_conn.execute(
-                    "UPDATE ir_module SET version = '0.9.0' WHERE name = 'base'"
+                    "UPDATE ir_module SET version = '0.10.0' WHERE name = 'base'"
                 )
             r_no_follow = TestClient(app, follow_redirects=False)
             r_no_follow.auth = ("admin", "admin")
@@ -356,7 +356,7 @@ def main():
                 row = side_conn.execute(
                     "SELECT version FROM ir_module WHERE name = 'base'"
                 ).fetchone()
-            assert row == ("0.10.0",), row
+            assert row == ("0.11.0",), row
 
             # Non-superuser is rejected — install / upgrade is admin-only
             # since it executes install_hook code and DDL.
@@ -1614,6 +1614,12 @@ def main():
                 admin_user = s8_env["res.users"].browse(1)
                 assert admin_user.company_id, "uid=1 must have company_id set"
                 print(f"multi-company: uid=1 company_id={admin_user.company_id.id} OK")
+
+                # Slice B of Stage 11 — install + migration must give
+                # the seeded company a currency_id (USD by default).
+                assert my_company.currency_id, "company must have a currency_id"
+                assert my_company.currency_id.code == "USD", my_company.currency_id.code
+                print(f"company currency: {my_company.name!r} → {my_company.currency_id.code} OK")
 
                 # Slice B — env.company_id / with_company().
                 assert s8_env.company_id is None, "fresh env has no company scope"

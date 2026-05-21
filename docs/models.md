@@ -273,6 +273,26 @@ effective at or before `date`, `convert` raises `ValueError`.
 on a single-record recordset (e.g. `currency` rather than the
 results of a multi-record `search`).
 
+### Per-company currency
+
+`res.company` carries a `currency_id` Many2one. The install hook
+points the seeded "My Company" at USD; the `0_10_to_0_11` migration
+backfills existing companies on upgrade. Slice C's `Monetary` field
+reads this to decide which currency a record's amount lives in by
+default:
+
+```python
+class Invoice(BaseModel):
+    _name = "account.invoice"
+    _company_scoped = True
+
+    company_id  = Many2one("res.company")
+    currency_id = Many2one("res.currency")  # falls back to company.currency_id
+    amount      = Monetary(currency_field="currency_id")
+```
+
+Operators change a company's currency from **Settings → Companies**.
+
 ## Defining a custom field type
 
 The built-ins cover most cases. When you need something specific

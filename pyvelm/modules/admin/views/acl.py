@@ -82,12 +82,13 @@ VIEWS: list[View] = [
 
     # ---- res.company ----
     list_view("company.list", "res.company",
-              fields=["name", field("active", widget="toggle")]),
+              fields=["name", "currency_id", field("active", widget="toggle")]),
 
     form_view("company.form", "res.company",
               sections=[
                   section("main", "Company", [
                       "name",
+                      "currency_id",
                       field("active", widget="toggle"),
                   ]),
               ]),

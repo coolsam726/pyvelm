@@ -17,11 +17,20 @@ def install(env):
     admin_group = Group.create({"name": "Admin"})
     Group.create({"name": "Public"})
 
+    # Seed the currency list before the company so the company can be
+    # created with a non-NULL currency_id.
+    _seed_currencies(env)
+
     # Seed the default company before creating users/partners so that
     # FK constraints are satisfied.
     company = None
     if "res.company" in env.registry:
-        company = env["res.company"].create({"name": "My Company", "active": True})
+        company_vals = {"name": "My Company", "active": True}
+        if "res.currency" in env.registry:
+            usd = env["res.currency"].search([("code", "=", "USD")], limit=1)
+            if usd:
+                company_vals["currency_id"] = usd
+        company = env["res.company"].create(company_vals)
 
     # The superuser is hard-coded to uid=1 — that's what
     # `Environment.is_superuser()` checks. Postgres SERIAL hands out
@@ -74,12 +83,6 @@ def install(env):
     # Mail dispatcher: server action + ir.cron entry that drains
     # mail.message rows in state="outgoing".
     _seed_mail_dispatcher(env)
-
-    # Minimal currency list. Replace rates with real ones via the
-    # Settings → Currencies form (or scripted seed) when accuracy
-    # matters; these are starter values so a fresh install can do
-    # cross-currency math out of the box.
-    _seed_currencies(env)
 
 
 def _seed_currencies(env):

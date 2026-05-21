@@ -10,7 +10,7 @@ and thus loads res.company first).
 """
 from __future__ import annotations
 
-from pyvelm import BaseModel, Boolean, Char
+from pyvelm import BaseModel, Boolean, Char, Many2one
 
 
 class Company(BaseModel):
@@ -18,3 +18,7 @@ class Company(BaseModel):
 
     name = Char(required=True)
     active = Boolean(default=True)
+    # Each company has a "home" currency. Monetary fields (slice C)
+    # default to their record's company's currency. ON DELETE SET NULL
+    # so deleting a currency doesn't cascade-delete the company.
+    currency_id = Many2one("res.currency", ondelete="SET NULL")
