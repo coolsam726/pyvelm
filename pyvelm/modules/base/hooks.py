@@ -213,8 +213,8 @@ def _seed_rate_fetcher(env):
 
     Action = env["ir.actions.server"]
     Cron = env["ir.cron"]
-    action_name = "ECB rate fetcher"
-    cron_name = "ECB rate fetcher"
+    action_name = "Currency Rate Sync from ECB"
+    cron_name = "Currency Rate Sync from ECB"
 
     action = Action.search([("name", "=", action_name)], limit=1)
     if not action:
