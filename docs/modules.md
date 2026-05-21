@@ -1,359 +1,345 @@
-# Module reference
+# Modules
 
-This file is a tour of the package, not an API dump. For each module: what
-it's for, the public surface, and the invariants worth knowing when you read
-the code.
+A pyvelm **module** is a Python package on disk that ships some
+combination of models, views, and seed data. Modules are the unit of
+install, upgrade, and uninstall — they're how you ship your code as
+a self-contained piece other apps can depend on or extend.
 
-## `pyvelm.registry` — [pyvelm/registry.py](../pyvelm/registry.py)
-
-`Registry` is a first-class object; there is no module global. Models
-register into whichever registry is "active" (a `contextvars.ContextVar`)
-at class-creation time. The loader sets it around each module's import;
-ad-hoc users set it via `with reg.activate():`.
-
-**Public surface**
-
-- `Registry()` — a fresh, empty registry.
-- `registry.activate()` — context manager that binds this registry to the
-  active-registry contextvar for the duration of a block.
-- `registry[name]` — look up a model class by `_name`.
-- `registry.models_of(module_name)` — models contributed by a single
-  module, in registration order.
-- `registry.init_db(conn)` — run the four-pass init across every loaded
-  model. Used by tests and `reset_db`. Production code routes through
-  `loader.install`, which runs the same passes per module.
-- `registry.reset_db(conn)` — drop everything and re-init. Drops M2M
-  relation tables explicitly before model tables.
-- `active_registry()` — module-level function returning the current
-  active registry or raising if none is set.
-
-**Internal but worth knowing**
-
-- `_edge_index`, `_stored_compute_order` — populated by
-  `_build_compute_graph()`. `_edge_index` is keyed by
-  `(listen_model, listen_attr)` and stores a `HopEdge` per listening
-  point on every parsed dep path. `Environment.notify_changed` reads it.
-- `_model_module` — `{model_name: source_module_name}`, set by the
-  loader so per-module installs can scope schema work via
-  `models_of(name)`.
-
-**Invariant.** Exactly one registry is active at any moment in a given
-context. Multi-tenant runtimes that need parallel registries should use
-threading/asyncio contexts (the contextvar respects both) rather than
-swap a global.
-
-## `pyvelm.env` — [pyvelm/env.py](../pyvelm/env.py)
-
-Threads connection, user, context, registry, and cache through every
-recordset.
-
-**Public surface**
-
-- `Environment(conn, registry, uid=1, context=None)` — `registry` is
-  required (no implicit default).
-- `env[model_name]` — empty recordset of that model.
-- `env.with_context(**overrides)` — a sibling env sharing the same cache.
-- `env.cache` — `(model, id, field)`-keyed dict with `get/set/contains/invalidate`.
-- `env.transaction()` — context manager opening an atomic unit of work.
-  Outer call opens a real transaction; nested calls become savepoints.
-  Outside any transaction, the connection runs in autocommit mode.
-- `env.compute_field(record, field)` — run a compute method, flush stored
-  results to SQL.
-- `env.notify_changed(model, ids, fields)` — BFS the dependency graph
-  invalidating downstream cache entries and recomputing stored fields.
-  Delegates the actual graph walk to `HopEdge.find_source_ids` (see
-  `paths.py`), so the same code path handles M2o, O2m, and M2m
-  traversals.
-
-**Invariant.** `_in_compute` is the single flag that gates whether
-`Field.__set__` accepts writes to a computed field. Always reset in a
-`finally` block; otherwise an exception in a compute method permanently
-unlocks computes.
-
-## `pyvelm.fields` — [pyvelm/fields.py](../pyvelm/fields.py)
-
-Where the field descriptors live. The base `Field` carries cache/SQL/DDL
-contracts; subclasses customize storage and access.
-
-**Class hierarchy**
+## Shape on disk
 
 ```
-Field
-├── Char         (TEXT, with `size` for documentation only)
-│   └── Text
-├── Integer      (integer)
-├── Float        (double precision)
-├── Boolean      (boolean — native PG type)
-├── Many2one     (integer FK, exposes singleton recordset)
-├── One2many     (no column, lazy reverse query)
-└── Many2many    (no column, auto junction table, lazy junction query)
+mymodule/
+├── __init__.py          # can be empty
+├── __pyvelm__.py        # manifest (NAME, VERSION, DEPENDS, DATA, …)
+├── models/
+│   ├── __init__.py      # imports every model file
+│   └── partner.py
+├── views/
+│   ├── __init__.py
+│   └── partner.py       # exports VIEWS = [...] / VIEW_INHERITS = [...]
+└── migrations/          # optional
+    ├── __init__.py
+    └── 0_1_to_0_2.py
 ```
 
-**Per-field contracts**
+## The manifest
 
-| Hook | Called when |
-|------|---|
-| `bind(model_name, name)` | metaclass, after the class body |
-| `column_ddl()` | model `_setup_table` |
-| `column` | every SQL emitter that needs the column name |
-| `is_stored` | DDL pass, `_split_vals`, `_read` |
-| `to_sql_param(value)` | INSERT/UPDATE params + cache seeding |
-| `to_python(value)` | descriptor read |
-| `__get__` / `__set__` | descriptor protocol |
-| `resolve_spec(model_cls, registry)` | Many2many only — gives `(relation, col1, col2, this_table, target_table)` |
-
-**Invariants.**
-
-1. Reads and writes to scalar fields go through `env.cache` first; SQL only
-   when the cache misses.
-2. `to_sql_param` is the canonical normalizer: a recordset → its id, a
-   bool → bool (PG), etc. `create()` and `write()` use it for both SQL bind
-   params and cache seeding so cache and DB never disagree.
-3. `is_stored=False` means "no SQL column on this model's own table." It
-   does **not** mean "no SQL anywhere" — Many2many is non-stored but owns a
-   junction table.
-
-## `pyvelm.paths` — [pyvelm/paths.py](../pyvelm/paths.py)
-
-Shared parser for dotted references. Used by the compute-field dep graph
-and by the domain compiler.
-
-**Public surface**
-
-- `parse_path(model_cls, path, registry) -> Path` — parses a dotted
-  reference (`country_id.region_id.name`) against a model. Every non-leaf
-  token must name a relational field. Validates as it goes.
-- `Path` — `source_model`, `hops: list[Hop]`, `leaf_model`, `leaf_attr`.
-  Exposes `is_m2o_only()`, `reads()`, and `edges()`.
-- `Hop` and its three concretes: `M2oHop`, `O2mHop`, `M2mHop`. Each
-  implements `reverse_walk(env, ids)` — "given ids on the *target* model,
-  return ids on the *source* model that relate to them via this hop."
-- `HopEdge` — `listen_at: (model, attr)`, `to_source: callable`,
-  `hops_to_walk: list[Hop]`, with `find_source_ids(env, ids)` doing the
-  full walk.
-
-**Invariant.** A Path's `edges()` is the contract between the parser and
-the dep graph. Adding a new hop type means: subclass `Hop`, implement
-`reverse_walk`, and add the right `HopEdge` case in `Path.edges`. Nothing
-else needs to know about your new hop type.
-
-## `pyvelm.domain` — [pyvelm/domain.py](../pyvelm/domain.py)
-
-Translates `[(attr, op, value), ...]` into a SQL `WHERE` clause plus any
-required `LEFT JOIN`s.
-
-**Public surface**
-
-- `domain_to_sql(domain, model_cls)` — returns `(where, params, joins)`
-  where `joins` is the `LEFT JOIN ...` text (or `""`).
-
-**Behavior**
-
-- Simple attrs validated against `model_cls._fields` (or accepted if
-  `attr == "id"`).
-- Dotted attrs parsed via `paths.parse_path`. M2o-only chains emit
-  `LEFT JOIN`s with generated aliases (`_j1`, `_j2`, …); aliases are
-  memoized per chain so two leaves on the same path share JOINs.
-- Paths containing any O2m/M2m hop emit a per-leaf
-  `EXISTS (SELECT 1 ...)` subquery with aliases in their own
-  `_e<n>_<i>` namespace. Each leaf gets a fresh subquery — semantically
-  correct because two collection leaves can match different members.
-- Values coerced through `field.to_sql_param` so Many2one leaves accept
-  recordsets.
-- Operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `like`,
-  `ilike`. Native PG `ILIKE`.
-- Empty `in`/`not in` short-circuit to `FALSE`/`TRUE`.
-
-## `pyvelm.model` — [pyvelm/model.py](../pyvelm/model.py)
-
-`MetaModel` collects fields and binds compute methods; `BaseModel`
-implements the recordset protocol and the CRUD methods.
-
-**Public surface**
-
-- `BaseModel.create(vals)` — returns a singleton recordset.
-- `BaseModel.write(vals)` — applies to every id in self.
-- `BaseModel.unlink()` — DELETE, then drop cache entries for the deleted ids.
-- `BaseModel.read(fields=None)` — bulk-load fields, return dicts; non-stored
-  fields are accessed via their descriptor on per-record singletons.
-- `BaseModel.search(domain, limit=None, offset=0, order=None)`
-- `BaseModel.search_count(domain)`
-- `BaseModel.browse(ids)` — wrap ids in a recordset.
-- `BaseModel.ensure_one()` — assert singleton.
-
-**Internal but worth knowing**
-
-- `_split_vals(vals)` — separates column-vals (Many2one + scalars) from M2M
-  vals. Rejects non-stored fields except Many2many. Used by both `create`
-  and `write`.
-- `_apply_m2m(parent_ids, m2m_vals)` — DELETE then INSERT junction rows.
-  Full replacement semantics.
-- `_setup_table`, `_setup_foreign_keys`, `_setup_relation_tables`,
-  `_validate_relations` — the four init passes, one method each.
-
-**Invariant.** Every write path that mutates state ends with a
-`env.notify_changed(...)` call so the dep graph stays consistent.
-
-## `pyvelm.depends` — [pyvelm/depends.py](../pyvelm/depends.py)
-
-Tiny module. Defines `depends(*paths)` which stashes the dep tuple on the
-method as `_pyvelm_depends`. The metaclass copies it onto the matching
-field's `depends_on` attribute.
-
-Paths supported: any combination of M2o, O2m, and M2m hops at any depth.
-Parsing happens in `pyvelm.paths.parse_path`; the metaclass simply stashes
-the raw path strings on `field.depends_on`. Validation (does the field
-exist? is each non-leaf relational?) runs once at registry init.
-
-## `pyvelm.loader` — [pyvelm/loader.py](../pyvelm/loader.py)
-
-Discovers `__pyvelm__.py` manifests, resolves dependency order, imports
-each module's models under the active registry, and runs install /
-migrate inside per-module transactions. Tracks installed versions in
-the `ir_module` table.
-
-**Public surface**
-
-- `discover(roots) -> dict[name, ModuleSpec]`
-- `resolve_order(specs) -> list[ModuleSpec]` — topo sort, raises on
-  missing deps or cycles.
-- `install(specs, env)` — per-module schema setup, install hook,
-  migrations. Also rebuilds the cross-module compute graph and runs
-  relational validation once everything is loaded.
-- `load_and_install(roots, env)` — convenience wrapper that runs all
-  three.
-
-See [module-loading.md](module-loading.md) for the manifest contract
-and migration conventions.
-
-## `pyvelm.views` — [pyvelm/views.py](../pyvelm/views.py)
-
-Arch normalization + inheritance resolution. Lives next to (but
-separate from) `pyvelm.web` because it's part of the *model* layer,
-not the HTTP layer — apps that bypass the HTTP surface can still call
-`resolve_arch(view)` to get the final shape.
-
-**Public surface**
-
-- `normalize_arch(arch, view_type)` — returns a new arch with bare
-  strings in known list positions promoted to `{"name": ...}` dicts.
-  Idempotent.
-- `apply_operations(arch, operations)` — mutates `arch` with each op
-  in turn. Six op kinds: `set`, `replace`, `update`, `remove`,
-  `before`, `after`. `set` on a dict parent allows new leaf keys
-  (single-attribute additions); `update` merges a value dict into the
-  target dict (multi-attribute additions).
-- `resolve_arch(view)` — walks up to the root base view, deepcopies
-  its arch, applies every extension's operations in
-  `(priority, id)` order. Recursion-safe across deep chains.
-
-**Invariant.** The stored `ir.ui.view.arch` is always normalized; the
-authoring form is only seen by the loader. `resolve_arch` is the only
-function frontends should call to get the renderable arch.
-
-## `pyvelm.types` — [pyvelm/types.py](../pyvelm/types.py)
-
-Static-typing helpers (TypedDicts + Literals) for manifest and view
-authoring. Pure type-checking aid; no runtime behavior. Apps that
-skip IDE typing can ignore this module entirely.
-
-**Public surface**
-
-- `Manifest` — TypedDict for `__pyvelm__.py` globals (NAME, VERSION,
-  DEPENDS, DATA, optional MODELS_PACKAGE / MIGRATIONS_PACKAGE /
-  INSTALL_HOOK).
-- `View` — TypedDict for a base view declaration. Required keys:
-  name, model, view_type, arch. Optional: priority.
-- `ViewInherit` — TypedDict for an extension view (name, inherit,
-  priority, operations).
-- `Operation` — TypedDict per inheritance op. `op` is a
-  `Literal["set", "replace", "update", "remove", "before", "after"]`.
-- `Arch`, `ArchList`, `ArchForm`, `ArchSection`, `ArchKanban`,
-  `ArchKanbanCard` — per-view-type arch shapes.
-- `FieldRef` / `FieldRefLike` — a single field-spec dict
-  (`{"name", "widget", "label", "readonly"}`) or its authoring-sugar
-  string form.
-- `ViewType` / `OpKind` — `Literal` aliases for the closed sets
-  of valid view types and op kinds. Useful in third-party tooling.
-
-**Usage**
-
-In a data file, annotate the list:
+`__pyvelm__.py` is plain Python — module-level constants the loader
+reads. The minimum is two keys:
 
 ```python
-from pyvelm.types import View
+NAME: str = "partners"
+VERSION: tuple[int, ...] = (0, 1, 0)
+```
 
-VIEWS: list[View] = [
-    {"name": "partner.list", "model": "res.partner",
-     "view_type": "list", "arch": {"fields": ["name", "code"]}},
+Most modules also declare:
+
+```python
+DEPENDS: list[str] = ["base"]
+DATA: list[str] = ["views/partner.py", "views/tag.py"]
+INSTALL_HOOK: str = "partners.hooks:install"
+```
+
+Everything else is optional. `DEPENDS` is what the loader uses to
+topologically order installs; `DATA` lists Python files whose
+module-level `VIEWS`, `VIEW_INHERITS`, and `MENUS` lists feed the
+declarative-data sync; `INSTALL_HOOK` is a `pkg.mod:fn` reference
+to a function called once on first install (it gets the
+`Environment`).
+
+`pyvelm.types.Manifest` is a TypedDict that documents every
+recognised key. Annotating each global with its declared type lets
+your IDE catch typos like `DEPNEDS` at edit time. The loader
+ignores the annotations.
+
+### Catalog metadata
+
+These optional keys drive the **Apps catalog** UI (more below).
+Modules without them appear as "Uncategorised" with a blank
+summary — purely informational, no impact on install behaviour.
+
+```python
+SUMMARY: str = "Sales pipeline, leads, and opportunity tracking."
+DESCRIPTION: str = "Longer prose. Markdown-ish."
+CATEGORY: str = "Business"           # groups cards on /web/apps
+AUTHOR: str = "Your Team"
+ICON: str = "<svg ...>...</svg>"      # raw inline SVG; rendered as-is
+```
+
+## Models
+
+Each module's models live in a Python package the manifest points
+at — `models/` by default, override via `MODELS_PACKAGE`.
+
+```python
+# partners/models/__init__.py
+from . import partner          # noqa: F401
+from . import tag              # noqa: F401
+```
+
+```python
+# partners/models/partner.py
+from pyvelm import BaseModel, Char, Integer, Many2one
+
+
+class Partner(BaseModel):
+    _name = "res.partner"
+    name = Char(required=True)
+    age = Integer()
+    country_id = Many2one("res.country", ondelete="SET NULL")
+```
+
+The framework creates the table on first install and `ALTER TABLE
+ADD COLUMN`s any new field declarations on subsequent upgrades.
+See [Declaring models](models.md) for the field reference.
+
+## Data files
+
+Anything declarative — views, view extensions, sidebar menu
+entries — lives in Python files referenced by `DATA`:
+
+```python
+# partners/__pyvelm__.py
+DATA = ["views/partner.py", "views/menu.py"]
+```
+
+The loader executes each file and harvests the module-level lists:
+
+- `VIEWS` — base view declarations.
+- `VIEW_INHERITS` — patches against other modules' views.
+- `MENUS` — sidebar entries.
+
+```python
+# partners/views/partner.py
+from pyvelm.builders import list_view, form_view, section
+
+VIEWS = [
+    list_view("partner.list", "res.partner",
+              fields=["name", "code", "country_id"]),
+    form_view("partner.form", "res.partner",
+              sections=[
+                  section("identity", "Identity", ["name", "code"]),
+                  section("location", "Location", ["country_id"]),
+              ]),
 ]
 ```
 
-Pyright/Pylance will flag a misspelled key (`vie_type` instead of
-`view_type`), an invalid `view_type` literal (`"lyst"`), and missing
-required fields. Trade-off: TypedDicts are open at runtime (no
-enforcement), so the loader still does duck-typed reads.
+Files that don't define any of those lists are still imported — use
+this for side-effects like registering custom widgets via
+`@pyvelm.render.widget`.
 
-**Invariant.** The TypedDicts here mirror the loader's expected shapes.
-When the loader adds a new manifest key or arch shape, this module
-must be updated in the same commit.
+## Sidebar menus
 
-## `pyvelm.render` — [pyvelm/render.py](../pyvelm/render.py)
+A `MENUS` list contributes entries to the left-hand sidebar.
+Top-level **groups** have an `icon` and no `href`; **leaf items**
+have an `href` and a `parent` pointing at a group by its
+`"<module>.<name>"` identifier.
 
-HTMX + Jinja renderer. Owns the widget registry, the Jinja
-environment (loading templates from `pyvelm/templates/`), and the two
-list-view entry points the HTTP routes call.
+```python
+# partners/views/menu.py
+from pyvelm.builders import menu_group, menu_item
 
-**Public surface**
+MENUS = [
+    menu_group("business", "Business", icon=_ICON_GRID, sequence=50),
+    menu_item("business.partners", "Partners",
+              parent="partners.business",
+              href="/web/views/partners/partner.list",
+              sequence=10),
 
-- `widget(field_class, hint=None)` — decorator. Registers a renderer
-  for a `(field_class, hint)` pair.
-- `find_renderer(field, hint)` — MRO + hint-fallback lookup; returns
-  the default renderer if nothing matches.
-- `render_list_page(view, env, *, page, page_size)` — full HTML page
-  with header, table shell, first page of rows, and load-more button.
-- `render_list_rows(view, env, *, page, page_size)` — `<tr>` fragment
-  (plus an OOB swap for the next load-more button) for HTMX
-  `hx-swap="beforeend"`.
-- `STATIC_DIR` — `Path` to the bundled CSS / future static assets.
+    # Menus can parent under groups owned by other modules —
+    # useful when adding leaves to admin.settings or similar.
+    menu_item("business.tags", "Tags",
+              parent="admin.settings",
+              href="/web/views/partners/tag.list",
+              sequence=40),
+]
+```
 
-**Invariant.** Widgets return `markupsafe.Markup` for HTML, bare
-strings for text content. Jinja's auto-escape covers the latter
-automatically. Templates never see raw user content un-escaped.
+The framework upserts these into the `ir.ui.menu` table on every
+install pass, so re-declaring an entry overwrites the previous one.
 
-## `pyvelm.web` — [pyvelm/web.py](../pyvelm/web.py)
+## Loading a module
 
-Optional FastAPI surface. Imported on demand (not in `pyvelm/__init__`)
-so apps that don't need HTTP don't pull `fastapi` / `pydantic`.
+The loader is the entry point your app uses to bring modules online:
 
-**Public surface**
+```python
+from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
 
-- `create_app(registry, pool) -> FastAPI` — builds the app bound to a
-  loaded `Registry` and a `psycopg_pool.ConnectionPool`. Each request
-  checks out a connection from the pool, wraps it in a fresh
-  `Environment`, and returns it on exit.
-- `serialize_record(record, fields=None)` /
-  `serialize_records(records, fields=None)` — the JSON shape converter
-  used by the endpoints. Many2one becomes `[id, display_value]`,
-  collections become id lists, scalars pass through.
+reg = Registry()
+env = Environment(conn, registry=reg)
+loader.load_and_install(
+    BUILTIN_MODULE_ROOTS + ["/path/to/my/addons"],
+    env,
+)
+```
 
-**Endpoints (Slice A)**
+`load_and_install(roots, env)` runs three steps end to end:
 
-- `GET /api/views/{module}/{name}` — view record with parsed arch.
-- `GET /api/records?model=&domain=&fields=&limit=&offset=&order=` —
-  paginated row data. `domain` is a JSON-encoded list of leaves; path
-  traversal works because the ORM domain compiler is the same code.
+1. **Discover** every directory containing a `__pyvelm__.py` under
+   the given roots.
+2. **Resolve order** by topologically sorting on `DEPENDS`. Cycles
+   and missing deps raise.
+3. **Install** each module in dependency order: schema setup for
+   new modules, migrations for upgrades, and the data-file sync
+   pass either way.
 
-**Invariant.** The HTTP layer is strictly *sync inside the request
-handler*. FastAPI's async wrapper is for the I/O boundary; everything
-the ORM does runs on the request thread against a checked-out
-connection.
+Each step is callable on its own (`loader.discover`,
+`loader.resolve_order`, `loader.install`) for finer control.
 
-See [web-layer.md](web-layer.md) for the full guide.
+### `BUILTIN_MODULE_ROOTS`
 
-## `pyvelm.__init__` — [pyvelm/__init__.py](../pyvelm/__init__.py)
+The pyvelm wheel ships two modules — `base` (framework primitives)
+and `admin` (the UI for them). They live at
+`pyvelm/modules/<name>/` inside the package and are exposed as
+`pyvelm.BUILTIN_MODULE_ROOTS` — a single-entry list you prepend to
+your own discovery roots. Apps that boot the framework should
+always include it. `pyvelm-cron` prepends it automatically.
 
-Re-exports the public API: `BaseModel`, the field classes, `Environment`,
-`Registry`, the `depends` decorator, and the `loader` module. The web
-layer (`pyvelm.web`) is *not* imported here so apps that don't need it
-don't pay the FastAPI import cost.
+## Bumping versions and writing migrations
+
+When you change a model's fields (or want to seed new data), bump
+`VERSION` in the manifest:
+
+```python
+VERSION: tuple[int, ...] = (0, 2, 0)
+```
+
+Add a Python file under `migrations/` named after the transition:
+
+```
+partners/migrations/0_1_to_0_2.py
+```
+
+**The filename is load-bearing.** It must match
+`<from>_to_<to>.py` with `_`-separated version parts. The loader
+parses it and only runs scripts whose target version is greater
+than the recorded version and less than or equal to the manifest
+version.
+
+```python
+def migrate(env):
+    # 1. Schema change.
+    env.conn.execute(
+        'ALTER TABLE "res_partner" '
+        'ADD COLUMN IF NOT EXISTS "code" text'
+    )
+    # 2. Backfill via the ORM. partner.code = … goes through the
+    #    descriptor and updates env.cache, so subsequent reads
+    #    see the new value without manual invalidation.
+    Partner = env["res.partner"]
+    for partner in Partner.search([("code", "=", None)]):
+        prefix = (partner.name or "?")[:3].upper()
+        partner.code = f"{prefix}-{partner.id}"
+```
+
+The function receives a live `Environment`. Use the ORM or drop to
+raw SQL via `env.conn.execute(...)` — your choice. The migration
+runs inside the installer's per-module transaction.
+
+### Idempotency is your responsibility
+
+The loader's safety net is version-based: once `ir_module` records
+the new version, the migration won't re-run. Inside the migration:
+
+- Use `ADD COLUMN IF NOT EXISTS` so an accidental replay survives.
+- Filter the backfill (`("code", "=", None)`) so it only touches
+  rows that still need it.
+- For changes that aren't naturally idempotent (renames, type
+  changes), the version filter is the safety net.
+
+### Raw SQL and the cache
+
+A bulk `UPDATE` that bypasses the ORM is fine for performance, but
+the cache won't know about the change. Call
+`env.cache.invalidate(model_name=…, fields=[…])` afterward if any
+subsequent code in the migration reads the affected fields.
+
+??? note "Why hand-written migrations"
+    Auto-generated diffs are nice but committing to a diff engine
+    pressures the project toward SQLAlchemy Core or an
+    Alembic-equivalent — both heavier than pyvelm's current shape.
+    The intent of a hand-written migration is more useful than the
+    average generated one. When the migration count grows large
+    enough that it hurts, auto-diff goes on the table.
+
+## The Apps catalog
+
+`/web/apps` is the visual addon-management page. It walks the
+configured module roots on every load (so newly-dropped manifests
+appear without restarting the server) and joins what it finds with
+the `ir_module` table. Each module renders as a card with:
+
+- Name, summary, author, optional icon.
+- State badge — **Installed** / **Upgrade →** / **Not installed**.
+- Version line (or `installed → available` when an upgrade is
+  pending).
+- Dependency list. Names go red when a declared dep isn't
+  installed yet; the install button stays disabled.
+
+The toolbar above the cards lets you search by name/summary, filter
+by state, and group by category.
+
+### Install / upgrade / uninstall
+
+Three buttons sit on every card; the framework gates all three
+behind **uid=1 (superuser)** because they execute install hooks
+and run DDL.
+
+| Action | What happens |
+|---|---|
+| **Install** | Topologically installs the target and any uninstalled prerequisites. Models are imported into the live registry; the standard install pass runs (schema, hook, view/menu sync). |
+| **Upgrade** | Re-runs the install pass so version-gap migrations execute and data files re-sync. Note: new field declarations only take effect after a process restart — the DB schema is migrated but the in-memory model class isn't reloaded. The confirm prompt calls this out. |
+| **Uninstall** | Drops tables owned by the module, deletes its `ir.ui.view` and `ir.ui.menu` rows, removes the `ir_module` entry. All inside one transaction. |
+
+POST endpoints respond with `HX-Redirect: /web/apps` so the sidebar
+re-renders (newly-installed modules may have added menu entries).
+
+### Uninstall safety
+
+Uninstall is the one with sharp edges. Before removing anything,
+the framework runs `uninstall_preview` and returns a list of
+**blockers** if it spots a problem:
+
+- **`base` is the system module** — always blocked.
+- **Reverse dependencies** — any installed module whose manifest
+  still lists this one in `DEPENDS` blocks the uninstall. Remove
+  the dependent first.
+- **`_inherit` extensions** — modules that extend models owned by
+  another module can't be uninstalled cleanly. Their added columns
+  sit on someone else's table and the framework doesn't track
+  per-module column ownership.
+
+The UI surfaces these via the styled alert dialog instead of
+routing into the confirm flow — there's no destructive path to
+confirm.
+
+`ir.model.access` and `ir.rule` entries seeded by install hooks
+aren't tagged with the owning module, so they linger after
+uninstall. Clean them up manually if you care.
+
+## Transactions
+
+`env.transaction()` is the explicit unit-of-work boundary. The
+outer call opens a real transaction; nested calls become savepoints
+so partial work can roll back.
+
+```python
+with env.transaction():
+    alice.write({"name": "Alicia"})
+    with env.transaction():
+        carol.unlink()
+        raise RuntimeError("boom")     # rolls back only the savepoint
+    # alice's rename is still pending here
+```
+
+Outside any transaction, the connection runs in autocommit mode —
+each ORM statement persists immediately. The transaction context
+flips the connection out of autocommit for its duration.
+
+??? warning "The cache doesn't roll back"
+    `env.cache` does not undo writes on rollback. If a transaction
+    fails after you read or wrote field values, the cache holds
+    optimistic values that no longer match SQL. Drop the relevant
+    entries with `env.cache.invalidate(model_name=…, fields=[…])`
+    after a rollback if subsequent code in the same env cares about
+    absolute truth. A proper savepoint-aware cache is on the list.

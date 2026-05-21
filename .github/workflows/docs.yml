@@ -48,12 +48,10 @@ jobs:
           # `docs` extra pulls mkdocs + material + mkdocstrings[python].
           pip install -e ".[docs]"
       - name: Build site
-        # `--strict` is intentionally off: docs/modules.md links to
-        # source files via relative paths (`../pyvelm/foo.py`) that
-        # only resolve in the source tree, not the rendered site.
-        # The warnings are cosmetic; broken-link enforcement can come
-        # back once those are rewritten as GitHub URLs.
-        run: mkdocs build
+        # `--strict` makes any broken intra-site link fail the build.
+        # Cheap insurance against typos in nav entries or markdown
+        # cross-references.
+        run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site/

@@ -76,12 +76,14 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Guides:
+      - Getting started: getting-started.md
+      - Declaring models: models.md
+      - Building UIs: views.md
+      - Extending views: inheritance.md
+      - Modules: modules.md
+      - Security: security.md
+      - Deployment: deployment.md
       - Architecture: architecture.md
-      - Module loading: module-loading.md
-      - Modules reference: modules.md
-      - ACL & security: acl.md
-      - Extending fields: extending-fields.md
-      - Web layer: web-layer.md
   - API reference:
       - Overview: api/index.md
       - Recordsets & fields:

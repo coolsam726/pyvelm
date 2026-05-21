@@ -1,9 +1,9 @@
 # pyvelm
 
-Odoo-style ERP framework in Python — recordsets, declarative models,
-env-bound cache, view inheritance via dict-op patches, HTMX-driven
-UI, and a real cron + mail-dispatch story. Built on PostgreSQL
-(psycopg 3), FastAPI, and Jinja2.
+An Odoo-style ERP framework in Python. Declarative models, view
+inheritance via dict-op patches, HTMX-driven UI, real cron and
+mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
+Jinja2.
 
 ## Quick start
 
@@ -14,34 +14,52 @@ cp .env.example .env       # set PYVELM_DSN
 docker compose up --build  # → http://localhost:8000/login  (admin / admin)
 ```
 
-The bundled `demo` module seeds ~20 partners, 15 CRM leads, tags,
-sales users, and a couple of workflow records so the UI is
-populated on first boot.
+The bundled demo seeds ~20 partners, 15 CRM leads, tags, sales
+users, and a couple of workflow records so the UI is populated on
+first boot. See [Getting started](getting-started.md) for a guided
+walkthrough — install, then declare your first module.
 
-## What lives where
+## Read in this order
 
-| Surface | Where to look |
-|---|---|
-| **Concepts & design** | The [Architecture](architecture.md) overview |
-| **Defining models** | [Extending fields](extending-fields.md) + [Module loading](module-loading.md) |
-| **Building UIs** | [Web layer](web-layer.md) — views as data, inheritance, widgets, list/form/kanban |
-| **Security model** | [ACL & security](acl.md) |
-| **Module reference** | [Modules](modules.md) — every package in the framework with its public surface |
-| **API reference** | The [API](api/index.md) tab — auto-generated from docstrings |
+If you're new, read these in order:
+
+1. **[Getting started](getting-started.md)** — boot the stack, add
+   your first module.
+2. **[Declaring models](models.md)** — fields, relationships,
+   computed values, model inheritance.
+3. **[Building UIs](views.md)** — list, form, and kanban views;
+   widgets; the search bar; row reorder.
+4. **[Extending views](inheritance.md)** — patch views from another
+   module without forking them.
+5. **[Modules](modules.md)** — the manifest, data files, the
+   loader, writing migrations, the Apps catalog.
+
+Then as you need them:
+
+- **[Security](security.md)** — groups, ACL, record rules,
+  multi-company scoping, the login flow.
+- **[Deployment](deployment.md)** — Docker, gunicorn, the
+  background cron worker, sending email, CSRF / rate-limit /
+  password-change.
+- **[Architecture](architecture.md)** — design decisions behind
+  the API.
+
+The **[API reference](api/index.md)** is auto-generated from
+docstrings if you want the per-class details.
 
 ## What ships in the wheel
 
-`pyvelm` bundles two modules so a fresh `pip install` produces a
-bootable app:
+`pyvelm` bundles two modules so a fresh install produces a bootable
+app:
 
 - **`base`** — `ir.ui.view`, `res.users`, `res.groups`,
-  `ir.model.access`, `ir.rule`, `ir.actions.server`, `base.automation`,
-  `ir.cron`, `mail.message`, `res.country`, `res.region`,
-  `res.company`, `ir.ui.menu`. Plus the install hook that seeds the
-  admin group + uid=1 superuser + ACL defaults + the mail-dispatcher
-  cron.
-- **`admin`** — list / form views + sidebar menus that put a working
-  management UI in front of the base models. No new Python models.
+  `ir.model.access`, `ir.rule`, `ir.actions.server`,
+  `base.automation`, `ir.cron`, `mail.message`, `res.country`,
+  `res.region`, `res.company`, `ir.ui.menu`. Plus the install hook
+  that seeds the admin group + uid=1 superuser + ACL defaults +
+  the mail-dispatcher cron.
+- **`admin`** — list / form views + sidebar menus that put a
+  working management UI in front of the base models.
 
 Apps prepend `pyvelm.BUILTIN_MODULE_ROOTS` to their own discovery
 roots:
@@ -65,6 +83,5 @@ patterns rather than being required.
 pyvelm-cron --interval 60     # background cron + outgoing-mail dispatcher
 ```
 
-See [Web layer → Background cron runner](web-layer.md#background-cron-runner)
-for the deployment story (docker-compose ships a dedicated `cron`
-service).
+See [Deployment → Background cron runner](deployment.md#the-cron-worker)
+for the production story.

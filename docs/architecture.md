@@ -1,8 +1,9 @@
 # Architecture
 
-This document explains the design decisions that shape pyvelm, not the public
-API. For per-module details, see [modules.md](modules.md). For implementing
-new field types, see [extending-fields.md](extending-fields.md).
+This page explains the design decisions that shape pyvelm — the
+"why" behind the public API. The other guides (Models, Views,
+Modules) cover the "how". Read this when you want to know what
+the framework is doing under the hood.
 
 ## Core abstractions
 
@@ -28,12 +29,13 @@ one of two records" has no useful meaning.
 The `Environment` is the only thing recordsets carry around besides their
 ids. It bundles:
 
-- `conn` — the psycopg connection (in autocommit mode for Stage 2)
-- `uid` — the acting user id (placeholder until ACLs land in Stage 5)
-- `context` — an ad-hoc dict (multi-company, locale, etc.)
-- `registry` — the global model registry
-- `cache` — the field-value cache (see below)
-- `_in_compute` — a flag the compute-field orchestrator flips
+- `conn` — the psycopg connection.
+- `uid` — the acting user id (or `None` for anonymous).
+- `company_id` — the active company for multi-company-scoped models.
+- `context` — an ad-hoc dict for per-request state.
+- `registry` — the model registry.
+- `cache` — the field-value cache (see below).
+- `_in_compute` — a flag the compute-field orchestrator flips.
 
 Every recordset constructor takes an `Environment`. New environments share
 the same cache if forked via `with_context` — cache invalidation is
@@ -54,8 +56,8 @@ important design decision in pyvelm and it pays off in three ways:
    fresh cache. State doesn't leak between requests/test runs unless you
    deliberately share the env.
 
-The cache is a plain dict today. No LRU, no eviction. That's a deferred item
-— see CONTEXT.md.
+The cache is a plain dict today. No LRU, no eviction — the working set
+per request is bounded, so it's not yet a problem.
 
 ### Field descriptors
 
@@ -77,7 +79,7 @@ Field instances also carry their `column` (the SQL column name, defaulted to
 `name`). The two can diverge — see the `column=` kwarg on `Field.__init__` —
 but Odoo-style projects keep them equal.
 
-## Stage 5 access control
+## Access control
 
 Four models in the base module — `res.groups`, `res.users`,
 `ir.model.access`, `ir.rule` — plus a thin enforcement layer at the
@@ -90,23 +92,21 @@ ORM and HTTP boundaries.
   perm)`. The latter returns domain leaves that get AND-injected into
   the search's WHERE — that's how row-level filters happen.
 - `BaseModel.create` / `write` / `unlink` only check the perm bit; no
-  rule injection because we don't restrict writes to rows the user
+  rule injection — write paths don't restrict to rows the user
   already can see (yet).
-- The HTTP layer's `get_env` dependency reads HTTP Basic auth,
-  validates against `res.users` + bcrypt, and sets `env.uid` per
-  request. Failures raise `PermissionError`; the FastAPI exception
-  handler maps anonymous to 401 + WWW-Authenticate, authenticated to
-  403.
+- The HTTP layer's `get_env` dependency reads HTTP Basic auth or the
+  session cookie, validates against `res.users` + bcrypt, and sets
+  `env.uid` per request. Failures raise `PermissionError`; the
+  exception handler maps anonymous to 401 + `WWW-Authenticate`,
+  authenticated to 403.
 - Passwords are bcrypt-hashed on assignment via a `Password(Char)`
-  field subclass that lives in `examples/modules/base/models/security.py`.
+  field subclass.
 - Record-rule domains are stored as JSON, with `{"placeholder":
   "uid"}` dicts substituted at query time. All applicable rules
-  (global + user's group rules) are AND-ed — stricter than Odoo's
-  per-group OR semantics, chosen for simplicity.
+  (global + user's group rules) are **AND-ed** — stricter than
+  Odoo's per-group OR semantics, chosen for simplicity.
 
-See [acl.md](acl.md) for the full guide.
-
-## Stage 4 web layer & views as data
+## Web layer: views as data
 
 Views are records. `ir.ui.view` stores `(module, name, model,
 view_type, arch)`; a module declares views in its `__pyvelm__.py`
@@ -126,36 +126,30 @@ collections as id lists, scalars pass through. `display_value` reads
 `display_name` then `name` then falls back to `str(id)`. Frontends
 fetch related details with a follow-up `/api/records?model=...`.
 
-**UI stack: Tailwind via Play CDN.** The bundled HTMX renderer
-ships templates that pull `cdn.tailwindcss.com` at runtime and use
-utility classes throughout. This is the major UI-stack deviation
-from Odoo (Bootstrap). No build pipeline is required from app
-developers; production builds can replace the CDN script with a
-compiled Tailwind bundle.
+**UI stack: Tailwind v4 + Flowbite, compiled locally.** The
+bundled HTMX renderer ships templates that load
+`pyvelm/static/dist/pyvelm.css`, built by `npm run build` against
+`pyvelm/static/tailwind.css`. The dist file is checked into git so
+the framework boots without requiring `npm install` first. This is
+the major UI-stack deviation from Odoo (Bootstrap).
 
 **View inheritance** is dict-merge on the arch with addressable paths
 (no XPath, no XML). An extension view declares `inherit_id` and an
 `operations` list; the resolver walks the chain in ascending
 `priority` order and applies each level's ops to a deepcopy of the
-root arch. Six op kinds cover the full Odoo XPath-position vocabulary:
+root arch. Six op kinds cover the full Odoo XPath-position vocabulary
+(`set` / `replace` / `update` / `remove` / `before` / `after`); see
+[Extending views](inheritance.md) for the user-facing reference.
 
-- **`set`** / **`replace`** — write `value` at a target position. On a
-  dict parent, the final segment may be a new key, so single-attribute
-  additions work without a separate op.
-- **`update`** — `dict.update(value)` at the target. The Odoo
-  `position="attributes"` equivalent, terse for multi-attribute merges.
-- **`remove`** — delete the target (a list entry or a dict key).
-- **`before`** / **`after`** — insert into a list at a target index.
-
-Targets are lists of keys: strings address dict keys or by-`name`
-matches in list-of-dicts; ints address positional indices. Authoring
-sugar (`"fields": ["name", "age"]`) is normalized at load time to the
+Targets are lists of segments. Strings address dict keys or by-`name`
+matches in list-of-dicts; ints address positional indices; dict
+predicates match list entries by any attribute; `"**"` as a prefix
+finds the next segment anywhere in the tree. Authoring sugar
+(`"fields": ["name", "age"]`) is normalized at load time to the
 list-of-dicts form so inheritance always works against stable
 addresses.
 
-See [web-layer.md](web-layer.md) for the full guide.
-
-## Stage 3 module lifecycle
+## Module lifecycle
 
 A pyvelm app is a set of modules, each a Python package with a
 `__pyvelm__.py` manifest declaring `NAME`, `VERSION`, and `DEPENDS`. The
@@ -183,7 +177,7 @@ Each per-module step runs inside `env.transaction()`. The compute graph
 references (e.g. `partners.Partner.display_name` depending on
 `base.Region.name`) resolve.
 
-For the full guide, see [module-loading.md](module-loading.md).
+See [Modules](modules.md) for the user-facing guide.
 
 ## Multi-pass database init
 
@@ -371,8 +365,7 @@ visible.
 | Stale FK cache on comodel unlink | The DB sets the FK to NULL via `ON DELETE SET NULL`, but `env.cache` still holds the old int. Fix needs a reverse-FK index. Bundled with O2m caching. |
 | M2M command tuples | Replace-only writes work for everything in the example; `[(0,_,vals), (4,id)]` are an API ergonomics layer, not a capability layer. |
 | Transaction boundaries beyond autocommit | Adds a real unit-of-work concept. Right when multi-statement consistency matters, not before. |
-| Stored compute backfill on schema add | The current schema is recreated via `reset_db`. Real migrations are a Stage 3 concern. |
-| ACL, record rules, multi-company | Stage 5. The `Environment` already carries `uid`/`context`, so the integration point is in place. |
+| Stored compute backfill on schema add | The bulk-recompute step is hand-written when needed — the auto-diff story would have to ship first. |
 
 ## Why the design holds up
 
@@ -382,6 +375,7 @@ Three invariants do most of the structural work:
    computed fields, the dep graph) speaks the same coordinate.
 2. **Recordsets are tuples of ids over an env** — operations naturally
    bulk-scale; singletons are special cases enforced explicitly.
-3. **Init is multi-pass** — schema/constraint/relation/validation each runs
-   when its prerequisites are met. Adding Stage 3 module loading slots in as
-   another pass between (3) and (4).
+3. **Init is multi-pass** — schema, constraints, relations, and
+   validation each run when their prerequisites are met. Module
+   loading slots in as another pass; future additions (a new view
+   type, a new dep-graph hop kind) work the same way.

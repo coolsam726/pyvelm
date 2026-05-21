@@ -1,0 +1,328 @@
+# Declaring models
+
+A pyvelm model is a Python class. You subclass `BaseModel`, set a
+dotted `_name`, and declare fields as class attributes. The framework
+takes care of the schema (a Postgres table named `<dotted_to_snake>`),
+the SQL plumbing, and the recordset machinery.
+
+## A first model
+
+```python
+from pyvelm import BaseModel, Char, Integer, Boolean, Many2one
+
+
+class Partner(BaseModel):
+    _name = "res.partner"
+
+    name = Char(required=True, string="Name")
+    age = Integer()
+    active = Boolean(default=True)
+    country_id = Many2one("res.country", ondelete="SET NULL")
+```
+
+The class lives inside a module's `models/` package; the loader picks
+it up when the module installs. See [Modules](modules.md) for the
+packaging story.
+
+Once loaded, you operate on records through the `env`:
+
+```python
+# create
+alice = env["res.partner"].create({"name": "Alice", "age": 30})
+
+# read — field access through the descriptor
+print(alice.name, alice.age)
+
+# write
+alice.write({"age": 31})
+
+# search — returns a recordset
+adults = env["res.partner"].search([("age", ">=", 18)])
+for r in adults:
+    print(r.name)
+```
+
+Recordsets behave like Python collections — iteration, `len()`,
+`in`, slicing — and they're always tied to a specific `env`.
+
+## Built-in field types
+
+| Field | Stores | Notes |
+|---|---|---|
+| `Char(size=…, required=, default=, string=)` | `text` | Variable-length string |
+| `Text` | `text` | Like `Char` but no size hint |
+| `Integer(required=, default=)` | `integer` | |
+| `Float(required=, default=)` | `double precision` | |
+| `Boolean(default=)` | `boolean` | |
+| `Many2one(comodel, ondelete=)` | `integer` (FK) | Relationship to one record |
+| `One2many(comodel, inverse_name=)` | — | Reverse side of a Many2one |
+| `Many2many(comodel, relation=)` | junction table | Symmetric many-to-many |
+
+Common kwargs across all field types:
+
+- `string` — human label used in views (defaults to the attribute
+  name title-cased).
+- `required` — declared NOT NULL in the schema; also drives the red
+  `*` in form views and server-side validation.
+- `default` — value applied on create when the caller doesn't set
+  the field. Accepts a literal or a callable.
+- `column` — overrides the SQL column name (rarely needed).
+- `compute` + `store` — see [Computed fields](#computed-fields).
+
+## Relationships
+
+### Many2one
+
+Pointer to a single record:
+
+```python
+class Partner(BaseModel):
+    _name = "res.partner"
+    country_id = Many2one("res.country", ondelete="SET NULL")
+```
+
+The column is an integer FK. `ondelete` matches the SQL options
+(`"CASCADE"`, `"SET NULL"`, `"RESTRICT"`).
+
+Reading the field returns a recordset:
+
+```python
+alice.country_id              # → res.country recordset (one or empty)
+alice.country_id.name         # → "France"
+alice.country_id = france     # assign a recordset
+alice.write({"country_id": france.id})   # or an id
+```
+
+Dotted-path traversal works in search domains too:
+
+```python
+env["res.partner"].search([
+    ("country_id.region_id.name", "=", "Europe"),
+])
+```
+
+The compiler LEFT JOINs the necessary tables — no per-record query.
+
+### One2many
+
+The reverse side of a Many2one. No column of its own; just a
+declaration that lets you walk the relationship in the other
+direction:
+
+```python
+class Partner(BaseModel):
+    _name = "res.partner"
+    parent_id = Many2one("res.partner", ondelete="SET NULL")
+    child_ids = One2many("res.partner", inverse_name="parent_id")
+```
+
+Read `alice.child_ids` to get the recordset of partners whose
+`parent_id` is `alice`. Write through the inverse: setting
+`child.parent_id = alice` is the canonical way to add a child.
+
+### Many2many
+
+A symmetric relationship backed by a junction table:
+
+```python
+class Partner(BaseModel):
+    _name = "res.partner"
+    tag_ids = Many2many("res.tag")
+```
+
+The framework auto-generates a junction table named
+`<model1>_<model2>_rel` with two FK columns. Reading returns a
+recordset; writing replaces the set:
+
+```python
+alice.tag_ids = vip + wholesale            # replace
+alice.write({"tag_ids": [vip.id, wholesale.id]})   # by ids
+```
+
+(Incremental add/remove via the Odoo `[(4, id)]` tuple syntax is
+not yet shipped; replace-only for now.)
+
+## Computed fields
+
+A field becomes "computed" when you point it at a method via
+`compute=`:
+
+```python
+class Partner(BaseModel):
+    _name = "res.partner"
+    name = Char()
+    age = Integer()
+    display_name = Char(compute="_compute_display_name")
+
+    @depends("name", "age")
+    def _compute_display_name(self):
+        for r in self:
+            r.display_name = f"{r.name} ({r.age})" if r.age else r.name
+```
+
+The `@depends` decorator declares which fields the compute reads.
+The framework invalidates `display_name` whenever any of them
+changes (across recordsets, across writes, across cache layers).
+
+Two flavors:
+
+- **Read-time compute** (default): the value is recalculated on
+  access; not stored. Cheap, no migration when you add one. Fine
+  for display strings, simple formatting.
+- **Stored compute** (`store=True`): the value persists to a SQL
+  column. Cache invalidation triggers a recompute + UPDATE on the
+  next read. Use this when the field appears in `domain` clauses or
+  needs to participate in indexes.
+
+Dotted-path dependencies work — the same compiler that powers
+domain traversal walks back through relations:
+
+```python
+@depends("country_id.region_id.name")
+def _compute_region_label(self):
+    for r in self:
+        r.region_label = (
+            r.country_id.region_id.name if r.country_id else ""
+        )
+```
+
+A change to `Europe.name` invalidates `region_label` on every
+partner in a European country, two hops back.
+
+## Extending an existing model
+
+`_inherit` lets a downstream module add fields, override methods,
+or replace compute implementations on a model someone else owns.
+No new table — the existing one gets `ALTER TABLE ADD COLUMN`.
+
+```python
+# partners_pro/models/partner.py
+from pyvelm import BaseModel, Char, depends
+
+
+class PartnerPro(BaseModel):
+    _inherit = "res.partner"
+
+    vip_note = Char()
+
+    @depends("name", "vip_note")
+    def _compute_display_name(self):
+        # Override the base implementation but still chain to it
+        # via super() so other modules can stack their own logic.
+        super()._compute_display_name()
+        for r in self:
+            if r.vip_note:
+                r.display_name = "★ " + r.display_name
+```
+
+The metaclass replaces the registry entry with a proper Python
+subclass, so `super()` works through the MRO the way you'd expect.
+Multiple modules can stack `_inherit` on the same target — each
+one becomes another link in the chain.
+
+## Multi-company scoping
+
+Setting `_company_scoped = True` on a model adds an implicit
+`company_id` filter to every search:
+
+```python
+class Partner(BaseModel):
+    _name = "res.partner"
+    _company_scoped = True
+
+    company_id = Many2one("res.company", ondelete="SET NULL")
+```
+
+When `env.company_id` is set, queries are restricted to records
+matching that id. Useful for tenant-style isolation. The
+`pyvelm_company` cookie + the company switcher in the topbar drive
+the env.
+
+## Defining a custom field type
+
+The built-ins cover most cases. When you need something specific
+(a `Date`, a `Json`, a Decimal with explicit precision, a validated
+`Email`), subclass `Field` or one of the existing concrete types.
+
+A `Field` answers five questions:
+
+| Question | Hook |
+|---|---|
+| What's my SQL column type? | `sql_type` class attr, or override `column_ddl()` |
+| Do I have a SQL column at all? | `is_stored` |
+| What's my SQL column name? | `column` (defaulted from `name`) |
+| How do I normalize for binding / cache? | `to_sql_param(value)` |
+| How do I shape values for Python consumers? | `to_python(value)` |
+
+### Example: a `Date` field
+
+```python
+from datetime import date
+from pyvelm.fields import Field
+
+
+class Date(Field):
+    sql_type = "date"
+    python_type = date
+
+    def to_python(self, value):
+        if value is None:
+            return None
+        if isinstance(value, date):
+            return value
+        # psycopg returns date objects; accept ISO strings for
+        # callers that round-trip JSON.
+        return date.fromisoformat(value)
+
+    def to_sql_param(self, value):
+        if value is None or value is False:
+            return None
+        if isinstance(value, date):
+            return value
+        if isinstance(value, str):
+            return date.fromisoformat(value)
+        raise TypeError(
+            f"Date {self.name!r}: cannot bind {type(value).__name__}")
+```
+
+That's the whole field. `Field.__init__` already accepts the
+common kwargs (`required`, `default`, `column`, `compute`, `store`).
+
+### Example: a validated `Email`
+
+When you want input-side validation without changing the SQL shape,
+subclass an existing concrete type and override `to_sql_param`:
+
+```python
+import re
+from pyvelm.fields import Char
+
+_EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
+class Email(Char):
+    def to_sql_param(self, value):
+        if value is None or value is False:
+            return None
+        if not isinstance(value, str) or not _EMAIL_RE.match(value):
+            raise ValueError(f"{self.name!r}: invalid email: {value!r}")
+        return value
+```
+
+Every `Char` kwarg keeps working; the validation runs on every
+create/write (and on cache seed, so the cache can never hold a
+malformed value).
+
+??? note "The cache rule"
+    The value in `env.cache` is what `_read` would put there if it
+    re-read from the database. `create` and `write` enforce this
+    by caching the output of `to_sql_param`, not the user's input.
+    If you ever add a write path that bypasses those (don't), apply
+    the same normalization.
+
+### Relational fields
+
+Relational types need more than `to_sql_param` / `to_python` — they
+also override `__get__` and `__set__` to return recordsets and
+accept polymorphic shapes (int, recordset, None, iterables). See
+`pyvelm/fields.py` for the three reference implementations.
