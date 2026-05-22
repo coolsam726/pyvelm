@@ -1348,16 +1348,10 @@ def main():
 
             # Partner child_ids: inline table on edit (auto when comodel
             # has a list view; partners declares widget="table" too).
-            with pool.connection() as p_conn:
-                from pyvelm import Environment as _EnvP
-                p_env = _EnvP(p_conn, registry=reg, uid=1)
-                parent = p_env["res.partner"].search(
-                    [("name", "=", "Alice")], limit=1,
-                )
-                assert parent, "Alice must be seeded"
-                alice_id = parent.id
+            # Reuse `alice` from the HTTP block above — name is "Alice X"
+            # by now, not the original "Alice".
             r_p = client.get(
-                f"/web/views/partners/partner.form/record/{alice_id}/edit"
+                f"/web/views/partners/partner.form/record/{alice['id']}/edit"
             )
             assert r_p.status_code == 200, r_p.text
             assert "data-pv-o2m-root" in r_p.text, (
