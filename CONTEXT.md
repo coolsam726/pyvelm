@@ -1,7 +1,9 @@
-# Project context — pyvelm v0.2.6
+# Project context — pyvelm v0.2.7
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.2.7 (released 2026-05-23)** — Domain `__or__` + collection paths; comodel
+unlink M2O cache invalidation. See [v0.2.7 release summary](#v027-release-summary).
 **v0.2.6 (released 2026-05-22)** — Vellum ORM veneer (slices A–D), O2M/M2M
 request cache, docs + smoke example. See [v0.2.6 release summary](#v026-release-summary).
 **v0.2.5 (released 2026-05-22)** — Artisan console, generators, dev/prod
@@ -678,6 +680,28 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ---
 
+## v0.2.7 release summary
+
+**Released:** 2026-05-23
+**Package version:** `0.2.7` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this patch
+
+| Area | Highlights |
+|---|---|
+| **Domains** | `__or__` sub-leaves with `tag_ids.name`-style paths use `EXISTS` |
+| **Cache** | `_m2o_referrers_index` — unlink comodel clears referring M2O + O2M |
+| **Tests** | `pyvelm/tests/test_domain.py` |
+
+### Next focus options (post-v0.2.7)
+
+  - **Universal-quantifier domains** — `NOT EXISTS` / `all=True` for collections.
+  - **Symmetric M2M cache** — invalidate inverse field when junction changes.
+  - **Vellum Slice E** — migration DSL (deferred).
+
+---
+
 ## v0.2.6 release summary
 
 **Released:** 2026-05-22
@@ -694,8 +718,9 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ### Next focus options (post-v0.2.6)
 
+  - **Universal-quantifier domains** — `NOT EXISTS` / `all=True` for collections.
   - **Vellum Slice E** — migration DSL (deferred in design doc).
-  - **Related paths** — One2many/Many2many hops.
+  - **Symmetric M2M cache** — invalidate inverse field when junction changes.
 
 ---
 

@@ -11,6 +11,29 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.2.7] — 2026-05-23
+
+Domain hardening: comodel-unlink M2O cache invalidation, `__or__` + collection
+paths, architecture doc update. Base module remains `0.18.0`.
+See [docs/releases/v0.2.7.md](docs/releases/v0.2.7.md).
+
+### Added
+
+- **`_m2o_referrers_index`** — comodel unlink clears stale Many2one cache on
+  referring rows (`ON DELETE SET NULL` / `CASCADE`).
+- **`pyvelm/tests/test_domain.py`** — domain SQL compile tests + comodel-unlink
+  cache integration test.
+
+### Fixed
+
+- **`__or__` domains** — collection paths (`tag_ids.name`, …) in OR groups
+  compile via `EXISTS` instead of raising `NotImplementedError`.
+
+### Changed
+
+- **`docs/architecture.md`** — deferred table reflects O2M/M2M cache and
+  comodel-unlink invalidation shipped in v0.2.6+.
+
 ## [0.2.6] — 2026-05-22
 
 Optional Vellum ORM veneer, O2M/M2M request cache, user docs and smoke

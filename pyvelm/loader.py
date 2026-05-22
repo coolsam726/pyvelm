@@ -618,6 +618,7 @@ def install(specs: list[ModuleSpec], env: Environment) -> None:
 
     # Build cross-model indexes once everything's loaded.
     env.registry._build_o2m_inverse_index()
+    env.registry._build_m2o_referrers_index()
     env.registry._build_compute_graph()
     for cls in env.registry._models.values():
         cls._validate_relations(env.registry)

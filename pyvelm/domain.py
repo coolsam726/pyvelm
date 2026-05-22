@@ -1,10 +1,10 @@
 """Domain → SQL compiler.
 
 A domain is `[(attr, op, value), ...]`, implicitly AND-ed. Attrs may be
-dotted (`country_id.code`); the path is parsed against the model and, for
-Many2one-only chains, emitted as `LEFT JOIN`s. Paths involving One2many or
-Many2many in domains are not supported yet (they need `EXISTS` subquery
-generation, which is the natural follow-up to this slice).
+dotted (`country_id.code`, `tag_ids.name`); the path is parsed against the
+model. Pure Many2one chains compile to memoized `LEFT JOIN`s. Paths with at
+least one One2many or Many2many hop compile to per-leaf `EXISTS` subqueries
+(existential semantics on collections).
 
 Public surface:
     domain_to_sql(domain, model_cls) -> (where, params, joins)
@@ -251,6 +251,13 @@ def domain_to_sql(
         if attr == "__or__":
             sub_clauses: list[str] = []
             for s_attr, s_op, s_val in (value or []):
+                if "." in s_attr:
+                    path = parse_path(model_cls, s_attr, registry)
+                    if not path.is_m2o_only():
+                        s_clause, s_ps = _emit_exists(path, s_op, s_val)
+                        sub_clauses.append(s_clause)
+                        params.extend(s_ps)
+                        continue
                 s_col, s_field = _leaf_ref(s_attr)
                 if s_op == "ilike":
                     sub_clauses.append(f"{s_col} ILIKE %s")

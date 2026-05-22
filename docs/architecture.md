@@ -360,9 +360,7 @@ visible.
 |-----|---|
 | LRU / eviction on `env.cache` | Single env per request, ids are bounded by the working set. Premature optimization until proven a problem. |
 | Universal-quantifier domains on collections | Today's `("tag_ids.name", "!=", "VIP")` reads as "has at least one non-VIP tag." There is no "every tag is non-VIP" form yet; needs `NOT EXISTS` semantics or an explicit `all=True` operator. |
-| O2m/M2m caching | Re-querying each access is correct; perf gap is acceptable. Adding cache requires writing back through the dep graph on inverse-FK changes. |
-| Old-value invalidation on O2m/M2m | When a child moves from parent A to parent B, only B's compute is invalidated — we don't snapshot the old FK value before write. Needs read-before-write in the model. |
-| Stale FK cache on comodel unlink | The DB sets the FK to NULL via `ON DELETE SET NULL`, but `env.cache` still holds the old int. Fix needs a reverse-FK index. Bundled with O2m caching. |
+| O2m/M2m caching (full dep graph) | Request-scoped tuple cache on `env.cache` is implemented; invalidation on inverse FK / M2M writes and comodel unlink. Remaining gap: symmetric M2M side, raw SQL junction edits. |
 | M2M command tuples | Replace-only writes work for everything in the example; `[(0,_,vals), (4,id)]` are an API ergonomics layer, not a capability layer. |
 | Transaction boundaries beyond autocommit | Adds a real unit-of-work concept. Right when multi-statement consistency matters, not before. |
 | Stored compute backfill on schema add | The bulk-recompute step is hand-written when needed — the auto-diff story would have to ship first. |

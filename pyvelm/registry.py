@@ -47,6 +47,10 @@ class Registry:
         self._o2m_inverse_index: dict[
             tuple[str, str], list[tuple[str, str]]
         ] = {}
+        # comodel -> [(referring_model, many2one_field, ondelete), ...]
+        self._m2o_referrers_index: dict[
+            str, list[tuple[str, str, str]]
+        ] = {}
 
     @contextlib.contextmanager
     def activate(self):
@@ -104,6 +108,7 @@ class Registry:
         for cls in self._models.values():
             cls._validate_relations(self)
         self._build_o2m_inverse_index()
+        self._build_m2o_referrers_index()
         self._build_compute_graph()
 
     def _build_o2m_inverse_index(self) -> None:
@@ -118,6 +123,18 @@ class Registry:
                     self._o2m_inverse_index.setdefault(key, []).append(
                         (cls._name, fname)
                     )
+
+    def _build_m2o_referrers_index(self) -> None:
+        """Map comodels to Many2one fields that must invalidate on comodel unlink."""
+        from .fields import Many2one
+
+        self._m2o_referrers_index.clear()
+        for cls in self._models.values():
+            for fname, field in cls._fields.items():
+                if isinstance(field, Many2one):
+                    self._m2o_referrers_index.setdefault(
+                        field.comodel_name, []
+                    ).append((cls._name, fname, field.ondelete))
 
     def _build_compute_graph(self) -> None:
         """Parse @depends paths into the dep graph; detect cycles; topo-sort."""

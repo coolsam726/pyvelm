@@ -440,6 +440,36 @@ class BaseModel(metaclass=MetaModel):
                     fields=[field_name],
                 )
 
+    def _invalidate_m2o_referrers(self) -> None:
+        """Drop stale Many2one (and related O2M) cache on rows pointing at us."""
+        referrers = self.env.registry._m2o_referrers_index.get(self._name, [])
+        if not referrers or not self._ids:
+            return
+        deleted = list(self._ids)
+        placeholders = ",".join(["%s"] * len(deleted))
+        for ref_model, ref_fname, ondelete in referrers:
+            ref_cls = self.env.registry[ref_model]
+            col = ref_cls._fields[ref_fname].column
+            rows = self.env.conn.execute(
+                f'SELECT "id" FROM "{ref_cls._table}" '
+                f'WHERE "{col}" IN ({placeholders})',
+                deleted,
+            ).fetchall()
+            ref_ids = [int(r[0]) for r in rows]
+            if not ref_ids:
+                continue
+            rs = self.env[ref_model].browse(ref_ids)
+            if ondelete == "SET NULL":
+                before = rs._snapshot_many2one_columns([ref_fname])
+                for rid in ref_ids:
+                    self.env.cache.set(ref_model, rid, ref_fname, None)
+                rs._invalidate_relational_caches(
+                    {ref_fname: None}, {}, before_m2o=before
+                )
+            elif ondelete == "CASCADE":
+                rs._invalidate_before_unlink()
+                self.env.cache.invalidate(model_name=ref_model, ids=ref_ids)
+
     def _invalidate_before_unlink(self) -> None:
         """Invalidate O2M/M2M caches that will change when these rows disappear."""
         from .fields import Many2many, Many2one
@@ -603,6 +633,7 @@ class BaseModel(metaclass=MetaModel):
             return
         self.env.check_access(self._name, "unlink")
         self._invalidate_before_unlink()
+        self._invalidate_m2o_referrers()
         # Fire on_unlink automation rules before the records are deleted.
         from .automation import AutomationEngine
         AutomationEngine.fire(self.env, self._name, "on_unlink", self)
