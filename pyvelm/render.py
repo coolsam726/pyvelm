@@ -298,8 +298,16 @@ def _render_m2o(value, spec, field):
     )
 
 
+def _o2m_use_table(spec: dict) -> bool:
+    """Whether this O2m field should render as an inline table.
+
+    Explicit ``widget="table"`` always wins; otherwise we auto-pick
+    the table when the comodel has a list view (``_list_view_url`` is
+    set by :func:`_enrich_specs_for_edit`)."""
+    return spec.get("widget") == "table" or bool(spec.get("_list_view_url"))
+
+
 @widget(Many2many)
-@widget(One2many)
 def _render_collection(value, spec, field):
     if not value:
         return Markup('<span class="text-gray-300">&mdash;</span>')
@@ -320,6 +328,14 @@ def _render_collection(value, spec, field):
     if total > 3:
         parts.append(f'<span class="{more_cls}">+{total - 3}</span>')
     return Markup(f'<span class="inline-flex gap-1 flex-wrap">{"".join(parts)}</span>')
+
+
+@widget(One2many)
+def _render_o2m_field(value, spec, field):
+    """Display-mode O2m: inline table when a list view exists, else chips."""
+    if _o2m_use_table(spec):
+        return _render_o2m_table(value, spec, field)
+    return _render_collection(value, spec, field)
 
 
 def _resolve_o2m_table_fields(env, comodel_name, list_view_url):
@@ -515,6 +531,9 @@ def _render_o2m_edit_row(
     oname,
     fields_spec,
     sequence_field: str | None = None,
+    *,
+    forced_op: str | None = None,
+    errors: dict | None = None,
 ):
     """Render one editable `<tr>` of an inline-o2m table.
 
@@ -525,7 +544,8 @@ def _render_o2m_edit_row(
     cells and a hidden input carries the row's current sequence value
     (drag-drop JS rewrites it in multiples of 10 on reorder)."""
     is_new = rec_or_none is None
-    op_value = "create" if is_new else "update"
+    op_value = forced_op or ("create" if is_new else "update")
+    is_deleted = op_value == "delete"
     prefix = f"{oname}[{idx_token}]"
 
     # Hidden id (only for existing rows) + op marker.
@@ -570,8 +590,17 @@ def _render_o2m_edit_row(
             )
         else:
             value = getattr(rec_or_none, sub_name)
+        err_key = f"{oname}[{idx_token}][{sub_name}]"
+        cell_err = (errors or {}).get(err_key)
+        err_cls = (
+            " ring-2 ring-fg-danger/50 rounded-lg" if cell_err else ""
+        )
+        err_title = (
+            f' title="{escape(cell_err)}"' if cell_err else ""
+        )
         td_cells.append(
-            f'<td class="px-3 py-2 align-top">{renderer(value, spec, sub_field)}</td>'
+            f'<td class="px-3 py-2 align-top{err_cls}"{err_title}>'
+            f"{renderer(value, spec, sub_field)}</td>"
         )
 
     # Trailing cell: delete button.
@@ -599,9 +628,14 @@ def _render_o2m_edit_row(
             'd="M3.75 9h16.5m-16.5 6.75h16.5"/></svg></td>'
         )
 
-    tr_attrs = ' draggable="true"' if sequence_field else ""
+    tr_attrs = ' draggable="true"' if sequence_field and not is_deleted else ""
+    del_cls = (
+        ' class="align-top opacity-40 line-through pointer-events-none"'
+        if is_deleted
+        else ' class="align-top"'
+    )
     return (
-        f'<tr data-pv-o2m-row class="align-top"{tr_attrs}>'
+        f'<tr data-pv-o2m-row{del_cls}{tr_attrs}>'
         f'<td class="hidden">{hidden_html}</td>'
         f'{drag_handle}{"".join(td_cells)}{delete_btn}</tr>'
     )
@@ -630,6 +664,8 @@ def _edit_o2m_table(value, spec, field):
     co_cls = env.registry[comodel]
     fields_spec = _resolve_o2m_table_fields(env, comodel, spec.get("_list_view_url"))
     sequence_field = _resolve_o2m_sequence(env, comodel, spec.get("_list_view_url"))
+    cell_errors = spec.get("_o2m_errors") or {}
+    form_playback = spec.get("_form_playback")
 
     # Column headers + one leading drag column (when sequenced) + one
     # trailing column for the delete button. The sequence field itself
@@ -650,17 +686,43 @@ def _edit_o2m_table(value, spec, field):
     header_cells.append('<th class="px-3 py-2 w-8"></th>')
     col_count = len(header_cells)
 
-    # Existing rows — sort by sequence_field when drag-reorder is on
-    # so the rendered order matches the persisted one.
-    existing = list(value)
-    if sequence_field:
-        existing.sort(key=lambda r: (getattr(r, sequence_field) or 0, r.id))
-    body_rows = [
-        _render_o2m_edit_row(
-            env, co_cls, rec, idx, oname, fields_spec, sequence_field
-        )
-        for idx, rec in enumerate(existing)
-    ]
+    # Existing rows — after a failed save, replay the posted form so
+    # the user doesn't lose edits; otherwise read from the recordset.
+    if form_playback is not None:
+        playback = _o2m_playback_rows(form_playback, oname, co_cls, env)
+        body_rows = [
+            _render_o2m_edit_row(
+                env,
+                co_cls,
+                row_view,
+                idx,
+                oname,
+                fields_spec,
+                sequence_field,
+                forced_op=op,
+                errors=cell_errors,
+            )
+            for idx, row_view, op in playback
+        ]
+        next_idx = max((idx for idx, _, _ in playback), default=-1) + 1
+    else:
+        existing = list(value)
+        if sequence_field:
+            existing.sort(key=lambda r: (getattr(r, sequence_field) or 0, r.id))
+        body_rows = [
+            _render_o2m_edit_row(
+                env,
+                co_cls,
+                rec,
+                idx,
+                oname,
+                fields_spec,
+                sequence_field,
+                errors=cell_errors,
+            )
+            for idx, rec in enumerate(existing)
+        ]
+        next_idx = len(existing)
     empty_html = ""
     if not body_rows:
         empty_html = (
@@ -678,6 +740,7 @@ def _edit_o2m_table(value, spec, field):
         oname,
         fields_spec,
         sequence_field,
+        errors=cell_errors,
     )
 
     add_btn = (
@@ -692,7 +755,6 @@ def _edit_o2m_table(value, spec, field):
         "Add row</button></div>"
     )
 
-    next_idx = len(existing)
     drag_enabled = "true" if sequence_field else "false"
     js = (
         "<script>(function(){\n"
@@ -994,10 +1056,10 @@ def _edit_m2m(value, spec, field):
 
 
 @widget(One2many, mode="edit")
-def _edit_o2m_readonly(value, spec, field):
-    """O2m editing requires inline child-record creation/management;
-    deferred. For now show the display rendering so the field at
-    least communicates its current value."""
+def _edit_o2m_field(value, spec, field):
+    """Edit-mode O2m: inline table when a list view exists, else chips."""
+    if _o2m_use_table(spec):
+        return _edit_o2m_table(value, spec, field)
     return _render_collection(value, spec, field)
 
 
@@ -1290,6 +1352,100 @@ def render_new_row(view, env) -> str:
 _O2M_NESTED_KEY = re.compile(r"^([a-zA-Z_][\w]*)\[(\d+)\]\[([a-zA-Z_][\w]*)\]$")
 
 
+class _O2mRowView:
+    """Lightweight row for re-rendering inline-O2m after a failed save.
+
+    Holds the user's submitted cell values so validation errors don't
+    wipe what they typed. Many2one cells are browsed on access."""
+
+    __slots__ = ("id", "_env", "_co_name", "_vals")
+
+    def __init__(
+        self,
+        env,
+        co_name: str,
+        *,
+        id: int | None = None,
+        vals: dict | None = None,
+    ):
+        self._env = env
+        self._co_name = co_name
+        self.id = id
+        self._vals = vals or {}
+
+    def __getattr__(self, name: str):
+        if name in self._vals:
+            return self._vals[name]
+        if self.id is not None:
+            return getattr(self._env[self._co_name].browse(self.id), name)
+        raise AttributeError(name)
+
+
+def _o2m_bucket_form(form_data, oname: str) -> dict[int, dict[str, str]]:
+    """Group flat form keys ``oname[idx][sub]`` into ``{idx: {sub: val}}``."""
+    by_idx: dict[int, dict[str, str]] = {}
+    keys = list(form_data.keys()) if hasattr(form_data, "keys") else list(form_data)
+    for key in keys:
+        m = _O2M_NESTED_KEY.match(key)
+        if not m or m.group(1) != oname:
+            continue
+        by_idx.setdefault(int(m.group(2)), {})[m.group(3)] = form_data[key]
+    return by_idx
+
+
+def _o2m_row_view_from_raw(env, co_cls, raw: dict) -> _O2mRowView:
+    """Turn one indexed form bucket into an :class:`_O2mRowView`."""
+    raw = dict(raw)
+    op = raw.pop("_op", "update")
+    rid_raw = raw.pop("id", None)
+    rid: int | None = None
+    if op != "create" and rid_raw not in (None, ""):
+        try:
+            rid = int(rid_raw)
+        except (TypeError, ValueError):
+            rid = None
+    vals: dict = {}
+    for sub_name, sub_raw in raw.items():
+        sub_field = co_cls._fields.get(sub_name)
+        if sub_field is None:
+            continue
+        if isinstance(sub_field, Many2one):
+            if sub_raw in ("", None):
+                vals[sub_name] = env[sub_field.comodel_name]
+            else:
+                try:
+                    vals[sub_name] = env[sub_field.comodel_name].browse(int(sub_raw))
+                except (TypeError, ValueError):
+                    vals[sub_name] = env[sub_field.comodel_name]
+        elif isinstance(sub_field, Boolean):
+            vals[sub_name] = sub_raw in ("on", "true", "1", True)
+        elif isinstance(sub_field, Integer):
+            try:
+                vals[sub_name] = int(sub_raw) if sub_raw not in ("", None) else None
+            except (TypeError, ValueError):
+                vals[sub_name] = sub_raw
+        elif isinstance(sub_field, Float):
+            try:
+                vals[sub_name] = float(sub_raw) if sub_raw not in ("", None) else None
+            except (TypeError, ValueError):
+                vals[sub_name] = sub_raw
+        else:
+            vals[sub_name] = sub_raw if sub_raw not in ("",) else None
+    return _O2mRowView(env, co_cls._name, id=rid if op != "create" else None, vals=vals)
+
+
+def _o2m_playback_rows(form_data, oname: str, co_cls, env) -> list[tuple[int, _O2mRowView, str]]:
+    """Rebuild inline-O2m rows from posted form data (failed-save playback).
+
+    Returns ``(form_index, row_view, op)`` tuples sorted by index.
+    Rows marked ``delete`` are included so the UI can strike them out."""
+    out: list[tuple[int, _O2mRowView, str]] = []
+    for idx, raw in sorted(_o2m_bucket_form(form_data, oname).items()):
+        op = raw.get("_op", "update")
+        out.append((idx, _o2m_row_view_from_raw(env, co_cls, raw), op))
+    return out
+
+
 def _parse_scalar(field, raw, env=None):
     """Coerce a form-submitted string to its field's Python type.
 
@@ -1553,6 +1709,7 @@ def _form_section_html(
     errors: dict | None = None,
     submitted: dict | None = None,
     prefill: dict | None = None,
+    form_playback=None,
 ) -> list[dict]:
     """Build the per-field HTML for one section.
 
@@ -1636,16 +1793,29 @@ def _form_section_html(
         else:
             value = getattr(record_or_none, fname)
 
-        spec_with_rec = {**spec, "_record": record_or_none, "_env": env}
+        spec_with_rec = {
+            **spec,
+            "_record": record_or_none,
+            "_env": env,
+            "_o2m_errors": errors,
+            "_form_playback": form_playback,
+        }
         # Wide cells span both grid columns. O2m tables are full-width
         # so the embedded `<table>` isn't squished into half the form.
-        is_wide = isinstance(field, One2many) and spec.get("widget") == "table"
+        is_wide = isinstance(field, One2many) and _o2m_use_table(spec)
+        field_error = errors.get(fname)
+        if field_error is None and isinstance(field, One2many):
+            prefix = f"{fname}["
+            for ek, msg in errors.items():
+                if ek.startswith(prefix):
+                    field_error = msg
+                    break
         cells.append(
             {
                 "name": fname,
                 "label": label,
                 "required": getattr(field, "required", False),
-                "error": errors.get(fname),
+                "error": field_error,
                 "wide": is_wide,
                 "html": renderer(value, spec_with_rec, field),
             }
@@ -1661,6 +1831,7 @@ def _form_sections(
     errors: dict | None = None,
     submitted: dict | None = None,
     prefill: dict | None = None,
+    form_playback=None,
 ) -> list[dict]:
     from .views import resolve_arch
 
@@ -1682,6 +1853,7 @@ def _form_sections(
                     errors=errors,
                     submitted=submitted,
                     prefill=prefill,
+                    form_playback=form_playback,
                 ),
             }
         )
@@ -1742,6 +1914,7 @@ def render_form_page(
     submitted: dict | None = None,
     form_error: str | None = None,
     prefill: dict | None = None,
+    form_playback=None,
 ) -> str:
     """Render the form HTML.
 
@@ -1764,6 +1937,7 @@ def render_form_page(
         errors=errors,
         submitted=submitted,
         prefill=prefill,
+        form_playback=form_playback,
     )
     title = _record_title(record_or_none, view.model, mode)
     template_name = "form_body.html" if body_only else "form.html"

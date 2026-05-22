@@ -1346,6 +1346,26 @@ def main():
                 assert not deleted, "delete-via-parent-form did not unlink"
             print("o2m inline edit: create + update + delete commit via parent save OK")
 
+            # Partner child_ids: inline table on edit (auto when comodel
+            # has a list view; partners declares widget="table" too).
+            with pool.connection() as p_conn:
+                from pyvelm import Environment as _EnvP
+                p_env = _EnvP(p_conn, registry=reg, uid=1)
+                parent = p_env["res.partner"].search(
+                    [("name", "=", "Alice")], limit=1,
+                )
+                assert parent, "Alice must be seeded"
+                alice_id = parent.id
+            r_p = client.get(
+                f"/web/views/partners/partner.form/record/{alice_id}/edit"
+            )
+            assert r_p.status_code == 200, r_p.text
+            assert "data-pv-o2m-root" in r_p.text, (
+                "partner child_ids should render inline-o2m table on edit"
+            )
+            assert "data-pv-o2m-add" in r_p.text
+            print("o2m inline edit: partner child_ids table on edit OK")
+
             # Admin can create a group via the JSON API (ACL grant is active).
             r = client.post(
                 "/api/records",

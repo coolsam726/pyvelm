@@ -23,7 +23,11 @@ VIEWS: list[View] = [
             section("identity", "Identity", ["name", "code"]),
             section("profile", "Profile",
                     ["age", "country_id", "company_id", "parent_id", "active"]),
-            section("relations", "Relations", ["tag_ids", "child_ids"]),
+            section(
+                "relations",
+                "Relations",
+                ["tag_ids", field("child_ids", widget="table")],
+            ),
         ],
     ),
 

@@ -150,9 +150,17 @@ posts an empty marker so the server knows the value was emptied (vs.
 
 ### One2many inline table
 
-A One2many field declared with `widget="table"` renders the child
-records as a full-width table inside the parent's form section
-instead of the default chip cluster:
+A One2many field renders as a full-width **inline table** when either:
+
+- you declare `widget="table"` on the field, or
+- the comodel has a list view (auto-detected — no extra config needed)
+
+Otherwise it falls back to the chip cluster. In **edit** / **new** mode the
+table is fully editable: add rows, edit cells in place, delete rows, and
+(optionally) drag-reorder when the comodel list view sets `sequence`.
+Changes commit with the parent form's Save — no per-row round trips.
+
+Explicit `widget="table"` example:
 
 ```python
 form_view("currency.form", "res.currency",
@@ -164,10 +172,12 @@ form_view("currency.form", "res.currency",
 ```
 
 The table uses the comodel's list view fields (or every stored scalar
-if no list view is installed). Each row is clickable and routes to
-the comodel's form view at `/web/views/<module>/<view>/record/<id>`.
-An "Add" link below the table opens the comodel's form-new endpoint
-with the inverse foreign key prefilled from the parent record:
+if no list view is installed). In **display** mode, rows open the
+comodel form in the draggable dialog; in **edit** mode, use **Add row**
+for inline creation. You can still open a child in the dialog via the
+M2o "Create and edit" affordance inside a cell.
+
+Display-mode "Add" (dialog path) prefills the inverse FK:
 
 ```
 /web/views/<module>/<view>/new?<inverse_name>=<parent_id>

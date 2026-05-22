@@ -693,8 +693,8 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     layered on the mail dispatcher.
   - **S3 / minio storage backend**: drop-in replacement for
     `LocalStorageBackend`.
-  - **O2m editing widget**: currently only M2m has a chip editor;
-    O2m editing still requires the draggable dialog path.
+  - **O2m polish**: shared list-style Filter By on inline tables;
+    optional per-row "open full form" without dialog-only editing.
   - **Multi-measure stacked bar charts**: `read_group` already
     supports multiple measures — the graph renderer needs a
     multi-series ApexCharts config.
