@@ -1,7 +1,9 @@
-# Project context — pyvelm v0.2.5
+# Project context — pyvelm v0.2.6
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.2.6 (released 2026-05-22)** — Vellum ORM veneer (slices A–D), O2M/M2M
+request cache, docs + smoke example. See [v0.2.6 release summary](#v026-release-summary).
 **v0.2.5 (released 2026-05-22)** — Artisan console, generators, dev/prod
 runtime, reload registry fix. See [v0.2.5 release summary](#v025-release-summary).
 **v0.2.4 (released 2026-05-22)** — Menus builder, CLI module discovery,
@@ -676,6 +678,27 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ---
 
+## v0.2.6 release summary
+
+**Released:** 2026-05-22
+**Package version:** `0.2.6` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this patch
+
+| Area | Highlights |
+|---|---|
+| **Vellum** | `env.query`, scopes, events, fillable/guarded, soft deletes, eager load |
+| **Core** | O2M/M2M id tuples on `env.cache`; invalidation on inverse writes |
+| **Docs** | [docs/vellum.md](docs/vellum.md); `examples/vellum_smoke.py` |
+
+### Next focus options (post-v0.2.6)
+
+  - **Vellum Slice E** — migration DSL (deferred in design doc).
+  - **Related paths** — One2many/Many2many hops.
+
+---
+
 ## v0.2.5 release summary
 
 **Released:** 2026-05-22
@@ -694,7 +717,7 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 ### Next focus options (post-v0.2.5)
 
   - **Related paths** — One2many/Many2many hops.
-  - **Vellum ORM veneer (Phase 1)** — `docs/vellum-design.md`.
+  - ~~**Vellum ORM veneer (Phase 1)**~~ — shipped in v0.2.6.
 
 ---
 

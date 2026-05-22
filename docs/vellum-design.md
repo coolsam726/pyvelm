@@ -1,6 +1,9 @@
 # Vellum — design doc
 
-**Status:** proposal. No code yet. Review before any implementation.
+**Status:** Slices A–D implemented (Vellum feature-complete; Slice E migration
+DSL deferred). **User guide:** [vellum.md](vellum.md). Inheritance:
+``class Model(Vellum, BaseModel)``; add ``SoftDeletes`` last:
+``class Post(Vellum, BaseModel, SoftDeletes)``.
 **Module name:** `vellum`
 **Location:** `pyvelm/modules/vellum/` (bundled, opt-in per model)
 **Depends on:** `base`
@@ -90,7 +93,7 @@ from pyvelm import BaseModel, Char, Integer, Many2one
 from pyvelm.vellum import Vellum, scope
 
 
-class Post(BaseModel, Vellum):
+class Post(Vellum, BaseModel):
     _name = "blog.post"
 
     title = Char(required=True)
@@ -110,24 +113,46 @@ class Post(BaseModel, Vellum):
 
 The `Vellum` mixin's `__init_subclass__` does the wiring (collects
 `@scope` methods, weaves accessors/mutators, registers event hooks).
-**The mixin must come after `BaseModel`** so method resolution lets
-Vellum overrides shadow `BaseModel.create / write / unlink` for events
-and mass-assignment.
+**List `Vellum` before `BaseModel`** in the inheritance tuple so Python
+MRO picks Vellum's ``create`` / ``write`` / ``unlink`` overrides for
+events and mutators.
 
 Models that don't inherit `Vellum` are unaffected — they keep working
 through the regular pyvelm idiom.
+
+### 5.1 Which class to call `query` on? (`env.query`)
+
+Models are often extended with `_inherit` in other modules. The loader
+**replaces** `registry["blog.post"]` with a merged class; importing
+`Post` from `blog.models.post` may be a stale Python object after
+extensions load.
+
+**Runtime rule:** use the technical name on the environment:
+
+```python
+posts = env.query("blog.post").where("views", ">", 100).get()
+```
+
+`Environment.query(model_name)` resolves `registry[model_name]` (the
+same class as `env[model_name].__class__`) and returns a `QueryBuilder`.
+Works for any registered model; collection helpers (`pluck`, in-memory
+`where`, …) still require the `Vellum` mixin on that model.
+
+`Post.query(env)` remains valid in the module that defines `_name`
+(tests, scripts with a fixed module set).
 
 ## 6. Slice A — QueryBuilder + collections
 
 ### 6.1 QueryBuilder API
 
-`Model.query(env)` returns a `QueryBuilder` bound to that env. Builders
-are immutable — every chainable returns a fresh builder, so they're
-safe to share and compose.
+`env.query("blog.post")` (preferred) or `Post.query(env)` returns a
+`QueryBuilder` bound to that env. Builders are immutable — every
+chainable returns a fresh builder, so they're safe to share and compose.
 
 ```python
-# Build
-qb = Post.query(env)                        # QueryBuilder
+# Build (prefer env.query when _inherit is in play)
+qb = env.query("blog.post")                 # QueryBuilder
+qb = Post.query(env)                        # same, if Post is the registry class
 qb = qb.where("author_id", env.uid)
 qb = qb.where("views", ">", 100)
 qb = qb.where_in("status", ["draft", "review"])
@@ -227,7 +252,7 @@ Laravel Eloquent's killer feature: relations are methods, and the method
 returns a relation object that is itself queryable.
 
 ```python
-class Post(BaseModel, Vellum):
+class Post(Vellum, BaseModel):
     _name = "blog.post"
     author_id = Many2one("res.users", required=True)
 
@@ -260,7 +285,7 @@ co-model by id; `HasMany` filters the co-model by the inverse column;
 relational field and a relation method on the same name:
 
 ```python
-class Post(BaseModel, Vellum):
+class Post(Vellum, BaseModel):
     comments = One2many("blog.comment", "post_id")   # field
 
     def comments(self):                              # SHADOWS the field
@@ -373,7 +398,7 @@ like a real field but isn't.
 chainable on the builder.
 
 ```python
-class Post(BaseModel, Vellum):
+class Post(Vellum, BaseModel):
     @scope
     def published(qb):
         return qb.where_not_null("published_at")
@@ -393,7 +418,7 @@ unknown attributes through `_scopes`.
 ### 8.2 Accessors and mutators
 
 ```python
-class User(BaseModel, Vellum):
+class User(Vellum, BaseModel):
     _name = "res.users"
     name = Char()
 
@@ -420,7 +445,7 @@ runtime.
 ### 8.3 Events
 
 ```python
-class Post(BaseModel, Vellum):
+class Post(Vellum, BaseModel):
     @on("creating")
     def _slugify(self):
         if not self.slug:
@@ -468,7 +493,7 @@ hook, not a replacement.
 ### 9.1 Mass assignment
 
 ```python
-class Post(BaseModel, Vellum):
+class Post(Vellum, BaseModel):
     _fillable = ["title", "body", "author_id"]
     # OR:
     # _guarded = ["id", "created_at", "internal_flag"]
@@ -490,7 +515,7 @@ post = Post.query(env).create({"title": "Hi", "internal_flag": True})
 ### 9.2 Soft deletes
 
 ```python
-class Post(BaseModel, Vellum, SoftDeletes):
+class Post(Vellum, BaseModel, SoftDeletes):
     _name = "blog.post"
     _soft_delete_column = "deleted_at"   # default
 

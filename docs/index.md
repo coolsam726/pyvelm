@@ -31,11 +31,13 @@ If you're new, read these in order:
    your first module.
 2. **[Declaring models](models.md)** — fields, relationships,
    computed values, model inheritance.
-3. **[Building UIs](views.md)** — list, form, and kanban views;
+3. **[Vellum](vellum.md)** — optional Eloquent-style queries and
+   ergonomics (`env.query`, scopes, soft deletes).
+4. **[Building UIs](views.md)** — list, form, and kanban views;
    widgets; the search bar; row reorder.
-4. **[Extending views](inheritance.md)** — patch views from another
+5. **[Extending views](inheritance.md)** — patch views from another
    module without forking them.
-5. **[Modules](modules.md)** — the manifest, data files, the
+6. **[Modules](modules.md)** — the manifest, data files, the
    loader, writing migrations, the Apps catalog.
 
 Then as you need them:
@@ -64,6 +66,9 @@ app:
   the mail-dispatcher cron.
 - **`admin`** — list / form views + sidebar menus that put a
   working management UI in front of the base models.
+- **`console`** — Artisan-style `pyvelm make:*` generators.
+- **`vellum`** — marker module; import **`pyvelm.vellum`** in your
+  models for the optional query-builder veneer (see [Vellum](vellum.md)).
 
 Apps prepend `pyvelm.BUILTIN_MODULE_ROOTS` to their own discovery
 roots:

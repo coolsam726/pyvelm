@@ -42,6 +42,9 @@ for r in adults:
     print(r.name)
 ```
 
+For optional Eloquent-style queries (`env.query`, scopes, eager load,
+soft deletes), see **[Vellum](vellum.md)**.
+
 Recordsets behave like Python collections — iteration, `len()`,
 `in`, slicing — and they're always tied to a specific `env`.
 

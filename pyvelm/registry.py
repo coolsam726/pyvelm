@@ -43,6 +43,10 @@ class Registry:
             tuple[str, str], list[tuple[str, str, "HopEdge"]]
         ] = {}
         self._stored_compute_order: dict[str, list[str]] = {}
+        # (comodel, inverse_many2one_field) -> [(parent_model, one2many_field), ...]
+        self._o2m_inverse_index: dict[
+            tuple[str, str], list[tuple[str, str]]
+        ] = {}
 
     @contextlib.contextmanager
     def activate(self):
@@ -99,7 +103,21 @@ class Registry:
             cls._setup_relation_tables(conn, self, created_rels)
         for cls in self._models.values():
             cls._validate_relations(self)
+        self._build_o2m_inverse_index()
         self._build_compute_graph()
+
+    def _build_o2m_inverse_index(self) -> None:
+        """Map Many2one inverses to the One2many fields that must invalidate."""
+        from .fields import One2many
+
+        self._o2m_inverse_index.clear()
+        for cls in self._models.values():
+            for fname, field in cls._fields.items():
+                if isinstance(field, One2many):
+                    key = (field.comodel_name, field.inverse_name)
+                    self._o2m_inverse_index.setdefault(key, []).append(
+                        (cls._name, fname)
+                    )
 
     def _build_compute_graph(self) -> None:
         """Parse @depends paths into the dep graph; detect cycles; topo-sort."""

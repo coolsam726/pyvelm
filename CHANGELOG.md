@@ -11,6 +11,22 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.2.6] — 2026-05-22
+
+Optional Vellum ORM veneer, O2M/M2M request cache, user docs and smoke
+example. Base module remains `0.18.0`.
+See [docs/releases/v0.2.6.md](docs/releases/v0.2.6.md).
+
+### Added
+
+- **Vellum** — optional ORM veneer (`pyvelm.vellum`): `env.query`,
+  `@scope`, `@on`, `_fillable` / `_guarded`, `SoftDeletes`, `with_()`,
+  `with_count()`, relation helpers. See [docs/vellum.md](docs/vellum.md).
+- **O2M/M2M request cache** — `One2many` / `Many2many` read through
+  `env.cache` when prefetched or previously loaded.
+- **`examples/vellum_smoke.py`** — end-to-end Vellum check against
+  `examples/modules/vellum_demo`.
+
 ## [0.2.5] — 2026-05-22
 
 Artisan console, code generators, dev/production runtime, reload fix.

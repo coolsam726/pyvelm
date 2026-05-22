@@ -616,8 +616,8 @@ def install(specs: list[ModuleSpec], env: Environment) -> None:
             _sync_view_inherits(spec, env)
             _sync_menus(spec, env)
 
-    # Build the compute graph once everything's loaded — depends paths
-    # may cross module boundaries.
+    # Build cross-model indexes once everything's loaded.
+    env.registry._build_o2m_inverse_index()
     env.registry._build_compute_graph()
     for cls in env.registry._models.values():
         cls._validate_relations(env.registry)

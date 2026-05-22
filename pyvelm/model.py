@@ -361,6 +361,111 @@ class BaseModel(metaclass=MetaModel):
             for fname, value in related_vals.items():
                 setattr(rec, fname, value)
 
+    def _snapshot_many2one_columns(
+        self, field_names: list[str]
+    ) -> dict[str, dict[int, Any]]:
+        """Read current FK values for *field_names* on ``self._ids`` (cache or SQL)."""
+        from .fields import Many2one
+
+        out: dict[str, dict[int, Any]] = {}
+        if not self._ids:
+            return out
+        for fname in field_names:
+            field = self._fields.get(fname)
+            if not isinstance(field, Many2one):
+                continue
+            per_rid: dict[int, Any] = {}
+            missing: list[int] = []
+            for rid in self._ids:
+                if self.env.cache.contains(self._name, rid, fname):
+                    per_rid[rid] = self.env.cache.get(self._name, rid, fname)
+                else:
+                    missing.append(rid)
+            if missing:
+                col = field.column
+                placeholders = ",".join(["%s"] * len(missing))
+                rows = self.env.conn.execute(
+                    f'SELECT "id", "{col}" FROM "{self._table}" '
+                    f'WHERE "id" IN ({placeholders})',
+                    missing,
+                ).fetchall()
+                for rid, raw in rows:
+                    per_rid[rid] = raw
+            out[fname] = per_rid
+        return out
+
+    def _invalidate_relational_caches(
+        self,
+        column_vals: dict[str, Any],
+        m2m_vals: dict[str, Any],
+        *,
+        before_m2o: dict[str, dict[int, Any]] | None = None,
+    ) -> None:
+        """Drop cached One2many/Many2many tuples affected by this mutation."""
+        from collections import defaultdict
+
+        from .fields import Many2one
+
+        inv_index = self.env.registry._o2m_inverse_index
+        to_clear: dict[tuple[str, str], set[int]] = defaultdict(set)
+
+        if before_m2o:
+            for fname, old_map in before_m2o.items():
+                for parent_model, o2m_fname in inv_index.get(
+                    (self._name, fname), []
+                ):
+                    for old_pid in old_map.values():
+                        if old_pid is not None:
+                            to_clear[(parent_model, o2m_fname)].add(int(old_pid))
+
+        if column_vals:
+            for fname, new_val in column_vals.items():
+                field = self._fields.get(fname)
+                if isinstance(field, Many2one):
+                    new_pid = field.to_sql_param(new_val)
+                    for parent_model, o2m_fname in inv_index.get(
+                        (self._name, fname), []
+                    ):
+                        if new_pid is not None:
+                            to_clear[(parent_model, o2m_fname)].add(int(new_pid))
+
+        for fname in m2m_vals:
+            to_clear[(self._name, fname)].update(self._ids)
+
+        for (parent_model, field_name), parent_ids in to_clear.items():
+            if parent_ids:
+                self.env.cache.invalidate(
+                    model_name=parent_model,
+                    ids=list(parent_ids),
+                    fields=[field_name],
+                )
+
+    def _invalidate_before_unlink(self) -> None:
+        """Invalidate O2M/M2M caches that will change when these rows disappear."""
+        from .fields import Many2many, Many2one
+
+        inv_index = self.env.registry._o2m_inverse_index
+        m2o_fields = [
+            fname
+            for fname, field in self._fields.items()
+            if isinstance(field, Many2one) and (self._name, fname) in inv_index
+        ]
+        if m2o_fields:
+            snap = self._snapshot_many2one_columns(m2o_fields)
+            self._invalidate_relational_caches({}, {}, before_m2o=snap)
+        m2m_fields = [
+            fname
+            for fname, field in self._fields.items()
+            if isinstance(field, Many2many)
+        ]
+        if m2m_fields and self._ids:
+            for fname in m2m_fields:
+                self.env.cache.invalidate(
+                    model_name=self._name,
+                    ids=list(self._ids),
+                    fields=[fname],
+                )
+
     def _apply_m2m(self, parent_ids: list[int], m2m_vals: dict[str, Any]) -> None:
         """Replace junction-table rows for each (field, parent_id) pair."""
         for fname, value in m2m_vals.items():
@@ -430,6 +535,7 @@ class BaseModel(metaclass=MetaModel):
         new_record = self.__class__(self.env, (new_id,))
         if m2m_vals:
             new_record._apply_m2m([new_id], m2m_vals)
+        self._invalidate_relational_caches(column_vals, m2m_vals)
         if related_vals:
             new_record._apply_related_vals(related_vals)
         # Initial-populate stored compute fields in topo order. Non-stored
@@ -454,6 +560,15 @@ class BaseModel(metaclass=MetaModel):
             return
         self.env.check_access(self._name, "write")
         column_vals, m2m_vals, related_vals = self._split_vals(vals)
+        inv_index = self.env.registry._o2m_inverse_index
+        m2o_to_snap = [
+            fname
+            for fname in column_vals
+            if (self._name, fname) in inv_index
+        ]
+        before_m2o = (
+            self._snapshot_many2one_columns(m2o_to_snap) if m2o_to_snap else None
+        )
         if related_vals:
             self._apply_related_vals(related_vals)
         if column_vals:
@@ -473,6 +588,9 @@ class BaseModel(metaclass=MetaModel):
                     )
         if m2m_vals:
             self._apply_m2m(list(self._ids), m2m_vals)
+        self._invalidate_relational_caches(
+            column_vals, m2m_vals, before_m2o=before_m2o
+        )
         changed = list(column_vals) + list(m2m_vals)
         if changed:
             self.env.notify_changed(self._name, list(self._ids), changed)
@@ -484,6 +602,7 @@ class BaseModel(metaclass=MetaModel):
         if not self._ids:
             return
         self.env.check_access(self._name, "unlink")
+        self._invalidate_before_unlink()
         # Fire on_unlink automation rules before the records are deleted.
         from .automation import AutomationEngine
         AutomationEngine.fire(self.env, self._name, "on_unlink", self)

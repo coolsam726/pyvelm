@@ -78,6 +78,7 @@ nav:
   - Guides:
       - Getting started: getting-started.md
       - Declaring models: models.md
+      - Vellum (optional ORM): vellum.md
       - Building UIs: views.md
       - Extending views: inheritance.md
       - Modules: modules.md

@@ -484,12 +484,28 @@ class Many2one(Field):
         return comodel_cls(record.env, (raw,))
 
 
+def _collection_ids_from_cache(cache, model_name: str, rid: int, field_name: str):
+    """Return a tuple of ids if this O2M/M2M field is cached, else ``None``."""
+    if not cache.contains(model_name, rid, field_name):
+        return None
+    cached = cache.get(model_name, rid, field_name)
+    if not isinstance(cached, tuple):
+        return None
+    return cached
+
+
+def _store_collection_cache(
+    cache, model_name: str, rid: int, field_name: str, ids: tuple[int, ...]
+) -> None:
+    cache.set(model_name, rid, field_name, ids)
+
+
 class One2many(Field):
     """Inverse of a Many2one. Not stored; resolves by querying the comodel.
 
-    No SQL column, no DDL, no cache (Stage 2). Each access runs
-    `SELECT id FROM <comodel> WHERE <inverse_column> = <parent_id>`.
-    Aggressive caching needs an invalidation graph (deferred per CONTEXT.md).
+    Reads consult ``env.cache`` when a ``tuple`` of child ids is present
+    (populated by a prior read or eager prefetch). Otherwise queries SQL
+    and stores the result in the cache for the rest of the request.
     """
 
     is_stored = False
@@ -534,13 +550,21 @@ class One2many(Field):
             return comodel_cls(record.env, ())
         record.ensure_one()
         rid = record._ids[0]
+        cache = record.env.cache
+        cached_ids = _collection_ids_from_cache(
+            cache, record._name, rid, self.name
+        )
+        if cached_ids is not None:
+            return comodel_cls(record.env, cached_ids)
         inverse = comodel_cls._fields[self.inverse_name]
         sql = (
             f'SELECT "id" FROM "{comodel_cls._table}" '
             f'WHERE "{inverse.column}" = %s ORDER BY "id"'
         )
         rows = record.env.conn.execute(sql, [rid]).fetchall()
-        return comodel_cls(record.env, tuple(r[0] for r in rows))
+        child_ids = tuple(r[0] for r in rows)
+        _store_collection_cache(cache, record._name, rid, self.name, child_ids)
+        return comodel_cls(record.env, child_ids)
 
     def __set__(self, record, value) -> None:
         raise NotImplementedError(
@@ -557,8 +581,8 @@ class Many2many(Field):
     only one CREATE TABLE is emitted. Self-referential M2M must supply
     `relation`, `column1`, `column2` explicitly.
 
-    Reads re-query the junction (no cache yet, like One2many). Writes
-    via create/write are full replacements: DELETE then INSERT.
+    Reads use the same tuple-of-ids cache convention as :class:`One2many`.
+    Writes via create/write are full replacements: DELETE then INSERT.
     """
 
     is_stored = False  # no column on the owning table
@@ -632,6 +656,12 @@ class Many2many(Field):
             return comodel_cls(record.env, ())
         record.ensure_one()
         rid = record._ids[0]
+        cache = record.env.cache
+        cached_ids = _collection_ids_from_cache(
+            cache, record._name, rid, self.name
+        )
+        if cached_ids is not None:
+            return comodel_cls(record.env, cached_ids)
         relation, col1, col2, _, _ = self.resolve_spec(
             type(record), record.env.registry
         )
@@ -640,7 +670,9 @@ class Many2many(Field):
             f'ORDER BY "{col2}"'
         )
         rows = record.env.conn.execute(sql, [rid]).fetchall()
-        return comodel_cls(record.env, tuple(r[0] for r in rows))
+        target_ids = tuple(r[0] for r in rows)
+        _store_collection_cache(cache, record._name, rid, self.name, target_ids)
+        return comodel_cls(record.env, target_ids)
 
     def __set__(self, record, value) -> None:
         if not record._ids:

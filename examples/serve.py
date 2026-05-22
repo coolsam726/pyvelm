@@ -9,6 +9,12 @@ Requires PYVELM_DSN (copy .env.example to .env). Default mode is
 ``development``; Docker / gunicorn use ``production``.
 
 Open http://localhost:8000/login — admin / admin.
+
+Vellum smoke test (same module roots, no full DB wipe)::
+
+    python examples/vellum_smoke.py
+
+See docs/vellum.md in the repo for the user guide.
 """
 from __future__ import annotations
 

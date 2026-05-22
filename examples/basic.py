@@ -1938,6 +1938,9 @@ def _drop_known_tables(conn):
         "ir_actions_server",
         "res_company",
         "crm_lead",
+        "vellum_demo_comment",
+        "vellum_demo_note",
+        "vellum_demo_soft_note",
         "ir_module",
     ]
     for t in tables:
