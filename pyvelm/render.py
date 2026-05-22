@@ -375,6 +375,25 @@ def _render_o2m_field(value, spec, field):
     return _render_collection(value, spec, field)
 
 
+def _filter_o2m_table_fields(env, comodel_name, fields_spec: list) -> list:
+    """Drop relational columns that don't work in a compact inline row.
+
+    Many2many chip editors and nested One2many tables need full form
+    width — including them here breaks layout and save parsing."""
+    cls = env.registry[comodel_name]
+    out: list = []
+    for fs in fields_spec:
+        spec = fs if isinstance(fs, dict) else {"name": fs}
+        fname = spec.get("name")
+        if not fname:
+            continue
+        f = cls._fields.get(fname)
+        if f is None or isinstance(f, (Many2many, One2many)):
+            continue
+        out.append(spec)
+    return out
+
+
 def _resolve_o2m_table_fields(env, comodel_name, list_view_url):
     """Pick the field list for the inline-o2m table.
 
@@ -398,14 +417,21 @@ def _resolve_o2m_table_fields(env, comodel_name, list_view_url):
             from .views import resolve_arch
 
             arch = resolve_arch(match)
-            return list(arch.get("fields", []))
+            return _filter_o2m_table_fields(
+                env, comodel_name, list(arch.get("fields", []))
+            )
     # Fallback: every stored scalar on the comodel.
     cls = env.registry[comodel_name]
-    return [
-        {"name": fname}
-        for fname, f in cls._fields.items()
-        if getattr(f, "is_stored", True) and not isinstance(f, (One2many, Many2many))
-    ]
+    return _filter_o2m_table_fields(
+        env,
+        comodel_name,
+        [
+            {"name": fname}
+            for fname, f in cls._fields.items()
+            if getattr(f, "is_stored", True)
+            and not isinstance(f, (One2many, Many2many))
+        ],
+    )
 
 
 def _resolve_o2m_sequence(env, comodel_name, list_view_url) -> str | None:
@@ -620,13 +646,14 @@ def _render_o2m_edit_row(
         spec = _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname)
         renderer = find_renderer(sub_field, fs.get("widget"), mode="edit")
         if is_new:
-            value = (
+            raw = (
                 env[sub_field.comodel_name]
                 if isinstance(sub_field, Many2one)
                 else sub_field.default
             )
         else:
-            value = getattr(rec_or_none, sub_name)
+            raw = getattr(rec_or_none, sub_name)
+        value = _value_for_widget(env, sub_field, raw)
         err_key = f"{oname}[{idx_token}][{sub_name}]"
         cell_err = (errors or {}).get(err_key)
         err_cls = (
@@ -635,9 +662,12 @@ def _render_o2m_edit_row(
         err_title = (
             f' title="{escape(cell_err)}"' if cell_err else ""
         )
+        cell_html = str(renderer(value, spec, sub_field))
+        if not td_cells:
+            cell_html = hidden_html + cell_html
         td_cells.append(
             f'<td class="px-3 py-2 align-top{err_cls}"{err_title}>'
-            f"{renderer(value, spec, sub_field)}</td>"
+            f"{cell_html}</td>"
         )
 
     # Trailing cell: delete button.
@@ -671,9 +701,12 @@ def _render_o2m_edit_row(
         if is_deleted
         else ' class="align-top"'
     )
+    if not td_cells:
+        td_cells.append(
+            f'<td class="px-3 py-2 align-top">{hidden_html}</td>'
+        )
     return (
         f'<tr data-pv-o2m-row{del_cls}{tr_attrs}>'
-        f'<td class="hidden">{hidden_html}</td>'
         f'{drag_handle}{"".join(td_cells)}{delete_btn}</tr>'
     )
 
@@ -1087,6 +1120,44 @@ def _edit_m2o(value, spec, field):
     )
 
 
+def _value_for_widget(env, field: Field, value):
+    """Normalize ORM / form-playback values before handing to widgets."""
+    if isinstance(field, Many2one):
+        Model = env[field.comodel_name]
+        if value is None or value is False or value == "":
+            return Model
+        if hasattr(value, "_fields"):
+            # Empty recordset is falsy for widgets; never touch `.id`
+            # on it — that property calls ensure_one().
+            return value if len(value) else Model
+        try:
+            return Model.browse(int(value))
+        except (TypeError, ValueError):
+            return Model
+    if isinstance(field, Many2many):
+        Model = env[field.comodel_name]
+        if value is None or value is False or value == "":
+            return Model
+        if hasattr(value, "_fields"):
+            return value if len(value) else Model
+        ids: list[int] = []
+        if isinstance(value, (list, tuple)):
+            for v in value:
+                if v in ("", None):
+                    continue
+                try:
+                    ids.append(int(v))
+                except (TypeError, ValueError):
+                    pass
+        else:
+            try:
+                ids.append(int(value))
+            except (TypeError, ValueError):
+                return Model
+        return Model.browse(ids) if ids else Model
+    return value
+
+
 @widget(Many2many, mode="edit")
 def _edit_m2m(value, spec, field):
     """Chip-editor for Many2many fields.
@@ -1100,8 +1171,14 @@ def _edit_m2m(value, spec, field):
     """
     from .web import _display_value
 
+    env = spec.get("_env") or (value.env if hasattr(value, "env") else None)
+    if env is None:
+        return Markup("")
+    records = _value_for_widget(env, field, value)
     initial = (
-        [{"id": rec.id, "label": _display_value(rec)} for rec in value] if value else []
+        [{"id": rec.id, "label": _display_value(rec)} for rec in records]
+        if records
+        else []
     )
     partial = _env.get_template("widgets/m2m_input.html")
     return Markup(
@@ -1449,15 +1526,31 @@ class _O2mRowView:
         raise AttributeError(name)
 
 
-def _o2m_bucket_form(form_data, oname: str) -> dict[int, dict[str, str]]:
-    """Group flat form keys ``oname[idx][sub]`` into ``{idx: {sub: val}}``."""
-    by_idx: dict[int, dict[str, str]] = {}
+def _o2m_bucket_form(
+    form_data, oname: str, co_cls
+) -> dict[int, dict[str, Any]]:
+    """Group flat form keys ``oname[idx][sub]`` into ``{idx: {sub: val}}``.
+
+    Many2many sub-fields use ``getlist`` so every chip id is kept."""
+    by_idx: dict[int, dict[str, Any]] = {}
     keys = list(form_data.keys()) if hasattr(form_data, "keys") else list(form_data)
     for key in keys:
         m = _O2M_NESTED_KEY.match(key)
         if not m or m.group(1) != oname:
             continue
-        by_idx.setdefault(int(m.group(2)), {})[m.group(3)] = form_data[key]
+        idx = int(m.group(2))
+        sub = m.group(3)
+        sub_field = co_cls._fields.get(sub)
+        bucket = by_idx.setdefault(idx, {})
+        if isinstance(sub_field, Many2many):
+            posted = (
+                form_data.getlist(key)
+                if hasattr(form_data, "getlist")
+                else [form_data[key]]
+            )
+            bucket[sub] = [v for v in posted if v not in ("", None)]
+        else:
+            bucket[sub] = form_data[key]
     return by_idx
 
 
@@ -1497,6 +1590,21 @@ def _o2m_row_view_from_raw(env, co_cls, raw: dict) -> _O2mRowView:
                 vals[sub_name] = float(sub_raw) if sub_raw not in ("", None) else None
             except (TypeError, ValueError):
                 vals[sub_name] = sub_raw
+        elif isinstance(sub_field, Many2many):
+            ids: list[int] = []
+            raw_list = sub_raw if isinstance(sub_raw, list) else [sub_raw]
+            for v in raw_list:
+                if v in ("", None):
+                    continue
+                try:
+                    ids.append(int(v))
+                except (TypeError, ValueError):
+                    pass
+            vals[sub_name] = (
+                env[sub_field.comodel_name].browse(ids)
+                if ids
+                else env[sub_field.comodel_name]
+            )
         else:
             vals[sub_name] = sub_raw if sub_raw not in ("",) else None
     return _O2mRowView(env, co_cls._name, id=rid if op != "create" else None, vals=vals)
@@ -1508,7 +1616,7 @@ def _o2m_playback_rows(form_data, oname: str, co_cls, env) -> list[tuple[int, _O
     Returns ``(form_index, row_view, op)`` tuples sorted by index.
     Rows marked ``delete`` are included so the UI can strike them out."""
     out: list[tuple[int, _O2mRowView, str]] = []
-    for idx, raw in sorted(_o2m_bucket_form(form_data, oname).items()):
+    for idx, raw in sorted(_o2m_bucket_form(form_data, oname, co_cls).items()):
         op = raw.get("_op", "update")
         out.append((idx, _o2m_row_view_from_raw(env, co_cls, raw), op))
     return out
@@ -1583,16 +1691,18 @@ def harvest_o2m_commands(model_cls, form_data, env) -> tuple[dict, dict]:
     ``parse_form_vals`` keeps doing its own thing for scalar fields."""
     by_field: dict[str, dict[int, dict]] = {}
     keys = list(form_data.keys()) if hasattr(form_data, "keys") else list(form_data)
+    o2m_names: set[str] = set()
     for key in keys:
         m = _O2M_NESTED_KEY.match(key)
         if not m:
             continue
-        oname, idx, sub = m.group(1), int(m.group(2)), m.group(3)
-        ofield = model_cls._fields.get(oname)
-        if not isinstance(ofield, One2many):
-            continue
-        bucket = by_field.setdefault(oname, {}).setdefault(idx, {})
-        bucket[sub] = form_data[key]
+        oname = m.group(1)
+        if isinstance(model_cls._fields.get(oname), One2many):
+            o2m_names.add(oname)
+    for oname in o2m_names:
+        ofield = model_cls._fields[oname]
+        co_cls = env.registry[ofield.comodel_name]
+        by_field[oname] = _o2m_bucket_form(form_data, oname, co_cls)
 
     commands_by_field: dict[str, list] = {}
     errors: dict[str, str] = {}
