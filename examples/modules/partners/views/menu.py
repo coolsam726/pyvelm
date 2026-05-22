@@ -1,6 +1,6 @@
 """Sidebar entries owned by the partners module."""
 
-from pyvelm.builders import menu_group, menu_item
+from pyvelm.builders import Menus
 from pyvelm.types import Menu
 
 _ICON_GRID = (
@@ -14,32 +14,24 @@ _ICON_GRID = (
     '2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>'
 )
 
+m = Menus("partners")
 
 MENUS: list[Menu] = [
-    menu_group("business", "Business Logic", icon=_ICON_GRID, sequence=50),
-    menu_item(
-        "business.partners",
-        "Partners",
-        parent="partners.business",
-        href="/web/views/partners/partner.list",
-        sequence=10,
-    ),
-    menu_item(
+    m.group("business", "Business Logic", icon=_ICON_GRID, sequence=50),
+    m.item("business.partners", "Partners", parent="business", view="partner.list", sequence=10),
+    m.item(
         "business.partner_board",
-        label="Partner Board",
-        parent="partners.business",
-        href="/web/views/partners/partner.kanban",
+        "Partner Board",
+        parent="business",
+        view="partner.kanban",
         sequence=20,
     ),
-    # Tags settings entry: lives here (not admin) because partners owns
-    # res.tag. Hangs off admin.settings — admin still owns the group;
-    # partners just contributes a leaf entry to it. Cross-module menu
-    # parenting is supported by the ir.ui.menu sync layer.
-    menu_item(
+    # Tags: partners owns res.tag; leaf hangs under admin's Settings group.
+    m.item(
         "business.tags",
-        label="Tags",
-        parent="admin.settings",
-        href="/web/views/partners/tag.list",
+        "Tags",
+        parent=("admin", "settings"),
+        view="tag.list",
         sequence=40,
     ),
 ]

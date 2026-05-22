@@ -50,14 +50,17 @@ Quick-start
 
 **Menus**::
 
-    from pyvelm.builders import menu_group, menu_item
+    from pyvelm.builders import Menus
+
+    m = Menus("partners")  # same string as NAME in __pyvelm__.py
 
     MENUS = [
-        menu_group("business", "Business", icon=_ICON_GRID, sequence=50),
-        menu_item("business.partners", "Partners",
-                  parent="partners.business",
-                  href="/web/views/partners/partner.list",
-                  sequence=10),
+        m.group("business", "Business", icon=_ICON_GRID, sequence=50),
+        m.item("business.partners", "Partners",
+               parent="business", view="partner.list", sequence=10),
+        # Cross-module parent (admin owns the group):
+        m.item("business.tags", "Tags",
+               parent=("admin", "settings"), view="tag.list", sequence=40),
     ]
 """
 from __future__ import annotations
@@ -106,8 +109,11 @@ __all__ = [
     "op_set",
     "op_update",
     # menu helpers
+    "Menus",
     "menu_group",
     "menu_item",
+    "menu_ref",
+    "view_href",
 ]
 
 
@@ -579,6 +585,135 @@ def op_before(target: list[TargetSegment], value: Any) -> Operation:
 # Menu helpers
 # ---------------------------------------------------------------------------
 
+def view_href(module: str, view: str) -> str:
+    """URL for a registered list/form/kanban/graph/pivot view.
+
+    ``module`` is the installing module's ``NAME`` (from ``__pyvelm__.py``),
+    ``view`` is the view's ``name`` (e.g. ``"partner.list"``).
+    """
+    return f"/web/views/{module}/{view}"
+
+
+def menu_ref(module: str, name: str) -> str:
+    """Fully qualified menu key ``"<module>.<name>"`` for ``parent=``."""
+    return f"{module}.{name}"
+
+
+def _resolve_menu_parent(
+    parent: str | tuple[str, str],
+    *,
+    menu_module: str,
+) -> str:
+    if isinstance(parent, tuple):
+        return menu_ref(parent[0], parent[1])
+    if "." in parent:
+        return parent
+    return menu_ref(menu_module, parent)
+
+
+def _resolve_menu_href(
+    *,
+    href: str | None,
+    view: str | None,
+    view_module: str | None,
+    menu_module: str | None,
+) -> str:
+    if href is not None and view is not None:
+        raise ValueError("menu item: pass href= or view=, not both")
+    if href is not None:
+        return href
+    if view is None:
+        raise ValueError("menu item: href= or view= is required")
+    mod = view_module or menu_module
+    if not mod:
+        raise ValueError(
+            "menu item: view= requires view_module= or menu_module= "
+            "(or use Menus(module).item(...))"
+        )
+    return view_href(mod, view)
+
+
+class Menus:
+    """Fluent builder for a module's ``MENUS`` list.
+
+    Resolves **parent** from a short group name (``"business"`` →
+    ``"<this-module>.business"``) or a ``(module, name)`` tuple for
+    cross-module groups. Resolves **view** to ``/web/views/<module>/<view>``.
+
+    Args:
+        module: Installing module name — the ``NAME`` in ``__pyvelm__.py``.
+    """
+
+    def __init__(self, module: str) -> None:
+        self.module = module
+
+    def ref(self, name: str) -> str:
+        """This module's menu key (for documentation / debugging)."""
+        return menu_ref(self.module, name)
+
+    def parent(
+        self,
+        name: str,
+        *,
+        module: str | None = None,
+    ) -> str:
+        """Parent reference for ``parent=`` on :func:`item`."""
+        return menu_ref(module or self.module, name)
+
+    def view(self, name: str, *, module: str | None = None) -> str:
+        """View URL in this module (or another with ``module=``)."""
+        return view_href(module or self.module, name)
+
+    def group(
+        self,
+        name: str,
+        label: str,
+        *,
+        icon: str | None = None,
+        sequence: int = 10,
+    ) -> Menu:
+        return menu_group(name, label, icon=icon, sequence=sequence)
+
+    def item(
+        self,
+        name: str,
+        label: str,
+        *,
+        href: str | None = None,
+        view: str | None = None,
+        view_module: str | None = None,
+        parent: str | tuple[str, str] | None = None,
+        icon: str | None = None,
+        sequence: int = 10,
+    ) -> Menu:
+        """Leaf sidebar entry.
+
+        Pass ``view="partner.list"`` (same ``name`` as in ``VIEWS``) instead
+        of a full ``href``. Pass ``parent="business"`` for a group in this
+        module, or ``parent=("admin", "settings")`` for another module's group.
+        Use ``href=`` for non-view routes (e.g. ``"/web/apps"``).
+        """
+        resolved_href = _resolve_menu_href(
+            href=href,
+            view=view,
+            view_module=view_module,
+            menu_module=self.module,
+        )
+        resolved_parent = (
+            _resolve_menu_parent(parent, menu_module=self.module)
+            if parent is not None
+            else None
+        )
+        return menu_item(
+            name,
+            label,
+            href=resolved_href,
+            parent=resolved_parent,
+            icon=icon,
+            sequence=sequence,
+        )
+
+
 def menu_group(
     name: str,
     label: str,
@@ -608,41 +743,55 @@ def menu_item(
     name: str,
     label: str,
     *,
-    href: str,
-    parent: str | None = None,
+    href: str | None = None,
+    view: str | None = None,
+    menu_module: str | None = None,
+    view_module: str | None = None,
+    parent: str | tuple[str, str] | None = None,
     icon: str | None = None,
     sequence: int = 10,
 ) -> Menu:
-    """Declare a leaf sidebar entry (navigates to ``href``).
+    """Declare a leaf sidebar entry.
+
+    Prefer :class:`Menus` for ergonomic ``parent`` / ``view`` resolution.
+    Low-level callers may pass full ``href`` and ``parent="module.group"``,
+    or use ``view=`` + ``menu_module=`` with a short ``parent=`` name.
 
     Args:
-        name:     Unique name within the module (e.g. ``"business.partners"``).
-        label:    Display text in the sidebar.
-        href:     URL this entry navigates to.
-        parent:   ``"<module>.<group_name>"`` of the owning group.
-                  Omit (or pass ``None``) for root-level standalone items
-                  (e.g. Dashboard, Apps).
-        icon:     SVG string — only needed for root-level standalone items
-                  that have no group parent.
-        sequence: Ordering among siblings (lower = higher up).
-
-    Example::
-
-        # Leaf inside a group:
-        menu_item("business.partners", "Partners",
-                  parent="partners.business",
-                  href="/web/views/partners/partner.list",
-                  sequence=10)
-
-        # Root-level standalone item (no parent):
-        menu_item("dashboard", "Dashboard",
-                  href="/web/admin",
-                  icon=_ICON_HOME,
-                  sequence=10)
+        name:         Unique name within the module (e.g. ``"business.partners"``).
+        label:        Display text in the sidebar.
+        href:         URL (required unless ``view=`` is set).
+        view:         View ``name``; builds ``/web/views/<module>/<view>``.
+        menu_module:  Installing module — required for short ``parent=`` names.
+        view_module:  Module that owns the view (defaults to ``menu_module``).
+        parent:       Group key — full ``"module.name"``, short ``"business"``
+                      (needs ``menu_module=``), or ``("admin", "settings")``.
+        icon:         SVG for root-level standalone items (Dashboard, Apps).
+        sequence:     Ordering among siblings (lower = higher up).
     """
-    result: Menu = {"name": name, "label": label, "href": href, "sequence": sequence}
+    resolved_href = _resolve_menu_href(
+        href=href,
+        view=view,
+        view_module=view_module,
+        menu_module=menu_module,
+    )
+    result: Menu = {"name": name, "label": label, "href": resolved_href, "sequence": sequence}
     if parent is not None:
-        result["parent"] = parent
+        if (
+            menu_module is None
+            and isinstance(parent, str)
+            and "." not in parent
+        ):
+            raise ValueError(
+                f"Menu parent {parent!r} is a short name; pass menu_module= "
+                "or use Menus(module).item(...)"
+            )
+        if isinstance(parent, tuple):
+            result["parent"] = menu_ref(parent[0], parent[1])
+        elif isinstance(parent, str) and "." in parent:
+            result["parent"] = parent
+        else:
+            result["parent"] = menu_ref(menu_module, parent)  # type: ignore[arg-type]
     if icon is not None:
         result["icon"] = icon
     return result

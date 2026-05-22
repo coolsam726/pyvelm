@@ -11,6 +11,26 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.2.4] — 2026-05-22
+
+Menus builder, CLI module discovery, sidebar icon fix. Base module
+remains `0.18.0`. See [docs/releases/v0.2.4.md](docs/releases/v0.2.4.md).
+
+### Added
+
+- **`Menus(module)`** builder — `parent="business"` and
+  `view="partner.list"` resolve to `module.business` and
+  `/web/views/<module>/<view>`; cross-module parents via
+  `parent=("admin", "settings")`.
+- **`view_href`**, **`menu_ref`** helpers for low-level menu declarations.
+- **CLI** (`cron`, `db`) auto-detects `modules_root` from `pyvelm.toml`
+  (same as `pyvelm new` / scaffold `serve.py`).
+
+### Fixed
+
+- Sidebar no longer renders the literal text **None** when a menu group
+  has no icon.
+
 ## [0.2.3] — 2026-05-22
 
 Odoo-style **related fields** and model-level **readonly** on all field

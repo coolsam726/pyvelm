@@ -1,7 +1,9 @@
-# Project context — pyvelm v0.2.3
+# Project context — pyvelm v0.2.4
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.2.4 (released 2026-05-22)** — Menus builder, CLI module discovery,
+sidebar icon fix. See [v0.2.4 release summary](#v024-release-summary).
 **v0.2.3 (released 2026-05-22)** — related fields + model-level readonly.
 See [v0.2.3 release summary](#v023-release-summary).
 **v0.2.2** — Docker scaffold bind-mount for `app/modules`
@@ -100,8 +102,9 @@ For the design rationale and the deferred-items rationale, see
         `list_view`, `form_view`, `kanban_view` (with `section`,
         `field`, `card` sub-helpers), `inherit_view` + six `op_*`
         helpers (`op_remove`, `op_set`, `op_update` with **kwargs,
-        `op_after`, `op_before`, `op_replace`), `menu_group` and
-        `menu_item`. Every function returns the matching TypedDict
+        `op_after`, `op_before`, `op_replace`), `Menus` (sidebar:
+        short `parent` / `view` names), `menu_group` and `menu_item`.
+        Every function returns the matching TypedDict
         so the loader needs no changes. `pyvelm.types` updated to
         discriminated union views (`ListView`/`FormView`/`KanbanView`
         with Literal `view_type` discriminants) so Pyright narrows
@@ -399,7 +402,7 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
   - **Builders** (`pyvelm.builders`): `field`, `section`, `card`,
     `list_view`, `form_view`, `kanban_view`, `inherit_view`,
     `op_set / op_replace / op_update / op_remove / op_after /
-    op_before`, `menu_group`, `menu_item`. Each returns the matching
+    op_before`, `Menus`, `menu_group`, `menu_item`. Each returns the matching
     TypedDict; storage shape unchanged.
   - **Discriminated `View` union**: `ListView` / `FormView` /
     `KanbanView` each lock `view_type` to a `Literal` and `arch` to
@@ -666,6 +669,28 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     * `render_pivot_page` injects `groupable_fields`,
       `measurable_fields`, and the current `init_row/col_groupby` +
       `init_measures` for toolbar state initialisation.
+
+---
+
+## v0.2.4 release summary
+
+**Released:** 2026-05-22
+**Package version:** `0.2.4` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this patch
+
+| Area | Highlights |
+|---|---|
+| **Menus** | `Menus(module)` — short `parent` + `view` names; `view_href` / `menu_ref` |
+| **CLI** | `cron` / `db` auto-detect `modules_root` from `pyvelm.toml` |
+| **Sidebar** | No literal `None` when group has no icon |
+
+### Next focus options (post-v0.2.4)
+
+  - **Related paths** — One2many/Many2many hops.
+  - **Vellum ORM veneer (Phase 1)** — `docs/vellum-design.md`.
+  - **Stage 6 Slice 3** — message subtypes + followers.
 
 ---
 

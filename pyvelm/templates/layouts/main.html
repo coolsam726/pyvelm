@@ -155,7 +155,9 @@
                     <summary class="nav-item group/summary flex items-center gap-2.5 px-3 py-2
                                     rounded-md text-sm cursor-pointer select-none
                                     [&::-webkit-details-marker]:hidden marker:hidden">
+                        {% if nav.icon %}
                         <span class="shrink-0 w-4 h-4">{{ nav.icon | safe }}</span>
+                        {% endif %}
                         <span class="flex-1 truncate">{{ nav.label }}</span>
                         <svg class="w-3 h-3 text-body-subtle transition-transform group-open:rotate-180"
                              fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
@@ -183,7 +185,9 @@
                    class="nav-item flex items-center gap-2.5 px-3 py-2 rounded-md text-sm
                           {% if nav.active %}nav-active{% endif %}"
                    @click="sidebarOpen = false">
+                    {% if nav.icon %}
                     <span class="shrink-0 w-4 h-4">{{ nav.icon | safe }}</span>
+                    {% endif %}
                     {{ nav.label }}
                 </a>
             {% endif %}

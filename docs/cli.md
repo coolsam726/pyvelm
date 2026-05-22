@@ -135,7 +135,7 @@ tasks/
 ├── views/
 │   ├── __init__.py
 │   ├── tasks.py           # `list_view` + `form_view`
-│   └── menu.py            # `menu_group` + `menu_item`
+│   └── menu.py            # `Menus` builder (view + parent names)
 └── migrations/
     └── __init__.py        # add `0_1_to_0_2.py` here when you bump
 ```

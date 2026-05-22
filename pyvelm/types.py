@@ -374,13 +374,17 @@ class Menu(_MenuRequired, total=False):
     """One entry in a module's ``MENUS`` list.
 
     Top-level groups have an ``icon`` (SVG string) and no ``parent`` or
-    ``href``. Leaf items have a ``parent`` (``"<module>.<name>"``) and
-    an ``href``, and no ``icon``.
+    ``href``. Leaf items have a ``parent`` (``"<module>.<group_name>"``,
+    e.g. ``"partners.business"`` for group ``business`` in module
+    ``partners``) and an ``href`` (typically ``/web/views/<module>/<view>``).
+
+    Prefer :class:`~pyvelm.builders.Menus` so ``parent`` and ``href`` are
+    derived from short group names and view names.
     """
 
     icon: str
     href: str
-    parent: str
+    parent: str  # fully qualified: "<module>.<menu_name>"
     sequence: int
 
 

@@ -1,6 +1,6 @@
 """Sidebar entries owned by the crm module."""
 
-from pyvelm.builders import menu_group, menu_item
+from pyvelm.builders import Menus
 from pyvelm.types import Menu
 
 _ICON_CRM = (
@@ -14,15 +14,12 @@ _ICON_CRM = (
     '01-1.125-1.125V4.125z"/></svg>'
 )
 
+m = Menus("crm")
 
 MENUS: list[Menu] = [
-    menu_group("crm", "CRM", icon=_ICON_CRM, sequence=30),
-    menu_item("crm.pipeline", "Pipeline",  parent="crm.crm",
-              href="/web/views/crm/lead.kanban", sequence=10),
-    menu_item("crm.leads",    "All Leads", parent="crm.crm",
-              href="/web/views/crm/lead.list",   sequence=20),
-    menu_item("crm.revenue",  "Revenue",   parent="crm.crm",
-              href="/web/views/crm/lead.graph",  sequence=30),
-    menu_item("crm.pivot",    "Pipeline pivot", parent="crm.crm",
-              href="/web/views/crm/lead.pivot",  sequence=40),
+    m.group("crm", "CRM", icon=_ICON_CRM, sequence=30),
+    m.item("crm.pipeline", "Pipeline", parent="crm", view="lead.kanban", sequence=10),
+    m.item("crm.leads", "All Leads", parent="crm", view="lead.list", sequence=20),
+    m.item("crm.revenue", "Revenue", parent="crm", view="lead.graph", sequence=30),
+    m.item("crm.pivot", "Pipeline pivot", parent="crm", view="lead.pivot", sequence=40),
 ]

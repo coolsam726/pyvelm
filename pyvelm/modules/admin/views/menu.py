@@ -4,7 +4,7 @@ Defines the Settings / Security / Workflows groups and the leaf
 entries that link to admin-managed model lists.
 """
 
-from pyvelm.builders import menu_group, menu_item
+from pyvelm.builders import Menus
 from pyvelm.types import Menu
 
 _ICON_SETTINGS = (
@@ -27,37 +27,22 @@ _ICON_WORKFLOW = (
     'd="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></svg>'
 )
 
+m = Menus("admin")
 
 MENUS: list[Menu] = [
-    # ----- Settings -----
-    menu_group("settings", "Settings", icon=_ICON_SETTINGS, sequence=80),
-    menu_item("settings.users",     "Users",     parent="admin.settings",
-              href="/web/views/admin/user.list",    sequence=10),
-    menu_item("settings.groups",    "Groups",    parent="admin.settings",
-              href="/web/views/admin/group.list",   sequence=20),
-    menu_item("settings.companies", "Companies", parent="admin.settings",
-              href="/web/views/admin/company.list", sequence=30),
-    menu_item("settings.currencies", "Currencies", parent="admin.settings",
-              href="/web/views/admin/currency.list", sequence=35),
-    # Note: the Tags entry now ships with the `partners` module since
-    # res.tag lives there. Admin no longer references model-specific
-    # views it can't own.
+    m.group("settings", "Settings", icon=_ICON_SETTINGS, sequence=80),
+    m.item("settings.users", "Users", parent="settings", view="user.list", sequence=10),
+    m.item("settings.groups", "Groups", parent="settings", view="group.list", sequence=20),
+    m.item("settings.companies", "Companies", parent="settings", view="company.list", sequence=30),
+    m.item("settings.currencies", "Currencies", parent="settings", view="currency.list", sequence=35),
 
-    # ----- Security -----
-    menu_group("security", "Security", icon=_ICON_SHIELD, sequence=90),
-    menu_item("security.access", "Model access",  parent="admin.security",
-              href="/web/views/admin/access.list", sequence=10),
-    menu_item("security.rules",  "Record rules",  parent="admin.security",
-              href="/web/views/admin/rule.list",   sequence=20),
+    m.group("security", "Security", icon=_ICON_SHIELD, sequence=90),
+    m.item("security.access", "Model access", parent="security", view="access.list", sequence=10),
+    m.item("security.rules", "Record rules", parent="security", view="rule.list", sequence=20),
 
-    # ----- Workflows -----
-    menu_group("workflows", "Workflows", icon=_ICON_WORKFLOW, sequence=100),
-    menu_item("workflows.actions",    "Server actions", parent="admin.workflows",
-              href="/web/views/admin/action.list",     sequence=10),
-    menu_item("workflows.automation", "Automation",     parent="admin.workflows",
-              href="/web/views/admin/automation.list", sequence=20),
-    menu_item("workflows.cron",       "Cron jobs",      parent="admin.workflows",
-              href="/web/views/admin/cron.list",       sequence=30),
-    menu_item("workflows.messages",   "Messages",       parent="admin.workflows",
-              href="/web/views/admin/message.list",    sequence=40),
+    m.group("workflows", "Workflows", icon=_ICON_WORKFLOW, sequence=100),
+    m.item("workflows.actions", "Server actions", parent="workflows", view="action.list", sequence=10),
+    m.item("workflows.automation", "Automation", parent="workflows", view="automation.list", sequence=20),
+    m.item("workflows.cron", "Cron jobs", parent="workflows", view="cron.list", sequence=30),
+    m.item("workflows.messages", "Messages", parent="workflows", view="message.list", sequence=40),
 ]

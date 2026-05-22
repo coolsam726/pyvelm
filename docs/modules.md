@@ -131,29 +131,42 @@ this for side-effects like registering custom widgets via
 ## Sidebar menus
 
 A `MENUS` list contributes entries to the left-hand sidebar.
-Top-level **groups** have an `icon` and no `href`; **leaf items**
-have an `href` and a `parent` pointing at a group by its
-`"<module>.<name>"` identifier.
+Top-level **groups** have an optional `icon` and no `href`; **leaf items**
+link to a view (or other URL) and sit under a **parent** group.
+
+Use the **`Menus`** builder so you only pass names you already know from
+`VIEWS` and `menu_group` — not hand-built `/web/views/...` paths or
+`"<module>.<group>"` strings:
 
 ```python
-# partners/views/menu.py
-from pyvelm.builders import menu_group, menu_item
+# partners/views/menu.py  —  NAME in __pyvelm__.py is "partners"
+from pyvelm.builders import Menus
+
+m = Menus("partners")
 
 MENUS = [
-    menu_group("business", "Business", icon=_ICON_GRID, sequence=50),
-    menu_item("business.partners", "Partners",
-              parent="partners.business",
-              href="/web/views/partners/partner.list",
-              sequence=10),
+    m.group("business", "Business", icon=_ICON_GRID, sequence=50),
+    # parent="business"  →  partners.business
+    # view="partner.list"  →  /web/views/partners/partner.list
+    m.item("business.partners", "Partners",
+           parent="business", view="partner.list", sequence=10),
 
-    # Menus can parent under groups owned by other modules —
-    # useful when adding leaves to admin.settings or similar.
-    menu_item("business.tags", "Tags",
-              parent="admin.settings",
-              href="/web/views/partners/tag.list",
-              sequence=40),
+    # Cross-module parent: admin owns the Settings group
+    m.item("business.tags", "Tags",
+           parent=("admin", "settings"), view="tag.list", sequence=40),
 ]
 ```
+
+| What you write | What gets stored |
+|----------------|------------------|
+| `m.group("business", …)` | Menu `name` = `business` in module `partners` |
+| `parent="business"` | `parent` = `partners.business` |
+| `parent=("admin", "settings")` | `parent` = `admin.settings` |
+| `view="partner.list"` | `href` = `/web/views/partners/partner.list` |
+| `href="/web/apps"` | Use for non-view routes (Dashboard, Apps) |
+
+Low-level `menu_group` / `menu_item` still work with full `href` and
+`parent="partners.business"` if you prefer raw dicts.
 
 The framework upserts these into the `ir.ui.menu` table on every
 install pass, so re-declaring an entry overwrites the previous one.

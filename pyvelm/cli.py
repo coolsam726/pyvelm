@@ -16,8 +16,9 @@ Configuration is env-driven (CLI flags override). Most apps set
 these in their ``.env``:
 
     PYVELM_DSN              Postgres DSN. Required for ``cron``/``db``.
-    PYVELM_MODULE_ROOTS     Colon-separated module directories.
-                            ``cron``/``db`` default to PYVELM_MODULE_ROOTS.
+    PYVELM_MODULE_ROOTS     Extra colon-separated module directories.
+                            ``cron``/``db`` also auto-detect ``modules_root``
+                            from ``pyvelm.toml`` in cwd or a parent.
     PYVELM_CRON_INTERVAL    Seconds between cron ticks. Default 60.
 """
 from __future__ import annotations
@@ -43,6 +44,40 @@ log = logging.getLogger("pyvelm.cron")
 
 def _parse_roots(value: str) -> list[Path]:
     return [Path(p) for p in (value or "").split(":") if p]
+
+
+def _default_module_roots() -> list[Path]:
+    """Discovery roots for CLI commands — mirrors ``app/serve.py``.
+
+    Order: bundled ``base``/``admin``, then ``pyvelm.toml``'s
+    ``modules_root`` (walk up from cwd), then ``PYVELM_MODULE_ROOTS``.
+    """
+    from . import BUILTIN_MODULE_ROOTS
+    from .scaffolder import find_modules_root
+
+    roots: list[Path] = list(BUILTIN_MODULE_ROOTS)
+    seen = {str(r.resolve()) for r in roots}
+    app_root = find_modules_root()
+    if app_root is not None and app_root.is_dir():
+        key = str(app_root.resolve())
+        if key not in seen:
+            roots.append(app_root)
+            seen.add(key)
+    for part in _parse_roots(os.environ.get("PYVELM_MODULE_ROOTS", "")):
+        key = str(part.resolve())
+        if part.is_dir() and key not in seen:
+            roots.append(part)
+            seen.add(key)
+    return roots
+
+
+def _resolve_module_roots(args: argparse.Namespace) -> list[Path]:
+    """Merge explicit ``--roots`` with builtins, or use defaults."""
+    from . import BUILTIN_MODULE_ROOTS
+
+    if getattr(args, "roots", None):
+        return list(BUILTIN_MODULE_ROOTS) + list(args.roots)
+    return _default_module_roots()
 
 
 # ---------------------------------------------------------------------------
@@ -115,12 +150,11 @@ def _add_cron_args(parser: argparse.ArgumentParser) -> None:
         help="Seconds between ticks (default: PYVELM_CRON_INTERVAL or 60).",
     )
     parser.add_argument(
-        "--roots", nargs="*",
-        default=_parse_roots(os.environ.get("PYVELM_MODULE_ROOTS", "")),
+        "--roots", nargs="*", default=None,
         help=(
-            "One or more module-discovery roots. Defaults to the colon-"
-            "separated PYVELM_MODULE_ROOTS env var. The framework's "
-            "BUILTIN_MODULE_ROOTS are always prepended automatically."
+            "Extra module-discovery roots (in addition to builtins). "
+            "When omitted, uses pyvelm.toml modules_root (walk up from "
+            "cwd) plus PYVELM_MODULE_ROOTS."
         ),
     )
 
@@ -133,8 +167,7 @@ def _run_cron(args: argparse.Namespace) -> None:
     # Framework-bundled modules always come first — the loader install
     # order matters (deps before dependants) and built-ins are
     # depended on by app modules. Caller-supplied roots are appended.
-    from . import BUILTIN_MODULE_ROOTS
-    all_roots = list(BUILTIN_MODULE_ROOTS) + [Path(p) for p in args.roots]
+    all_roots = _resolve_module_roots(args)
 
     logging.basicConfig(
         level=logging.INFO,
@@ -251,9 +284,8 @@ def _add_db_subcommand(subs) -> None:
     )
     diff_p.add_argument("module", help="Module name (e.g. 'base').")
     diff_p.add_argument(
-        "--roots", nargs="*",
-        default=_parse_roots(os.environ.get("PYVELM_MODULE_ROOTS", "")),
-        help="Module-discovery roots (defaults to PYVELM_MODULE_ROOTS).",
+        "--roots", nargs="*", default=None,
+        help="Extra module roots (default: pyvelm.toml + PYVELM_MODULE_ROOTS).",
     )
     diff_p.set_defaults(func=_run_db_diff)
 
@@ -266,9 +298,8 @@ def _add_db_subcommand(subs) -> None:
     )
     auto_p.add_argument("module", help="Module name.")
     auto_p.add_argument(
-        "--roots", nargs="*",
-        default=_parse_roots(os.environ.get("PYVELM_MODULE_ROOTS", "")),
-        help="Module-discovery roots (defaults to PYVELM_MODULE_ROOTS).",
+        "--roots", nargs="*", default=None,
+        help="Extra module roots (default: pyvelm.toml + PYVELM_MODULE_ROOTS).",
     )
     auto_p.add_argument(
         "--version", dest="target_version", default=None,
@@ -293,12 +324,12 @@ def _build_db_env_and_spec(args):
     """
     import psycopg
 
-    from . import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
+    from . import Environment, Registry, loader
 
     dsn = os.environ.get("PYVELM_DSN")
     if not dsn:
         sys.exit("PYVELM_DSN not set")
-    roots = list(BUILTIN_MODULE_ROOTS) + [Path(p) for p in args.roots]
+    roots = _resolve_module_roots(args)
     specs = loader.discover(roots)
     if args.module not in specs:
         sys.exit(
