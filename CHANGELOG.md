@@ -11,6 +11,44 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.2.1] — 2026-05-22
+
+Patch release focused on inline One2many editing and form UX polish.
+Base module remains `0.18.0`. See [docs/releases/v0.2.1.md](docs/releases/v0.2.1.md).
+
+### Added
+
+- **Inline O2m tables** auto-enable when the comodel has a list view
+  (or when `widget="table"` is set); existing rows render as editable
+  `<tr>` cells, with an Odoo-style **Add a line** footer row.
+- **O2m validation playback** on failed save (422): per-cell errors
+  and posted values are replayed so inline edits are not lost.
+- **Many2many chip editor** gains create/open/edit links (parity with
+  the Many2one combobox).
+- **`scripts/test_o2m_addrow.py`** — Playwright end-to-end check that
+  Add row inserts a full table row (not a vertical field stack).
+
+### Fixed
+
+- **O2m Add row** clones `template.content` instead of `innerHTML` —
+  nested Alpine `<template>` tags inside M2O cells had been truncating
+  the row and stacking fields vertically.
+- Inline O2m column layout (hidden inputs in first `<td>`; exclude
+  Many2many/One2many from compact inline columns).
+- Many2one empty recordset handling in inline cells (no `ensure_one`
+  on falsy recordsets).
+- **Add row** button moved inside `data-pv-o2m-root` on edit forms.
+- **`examples/seed.py`** prepends `BUILTIN_MODULE_ROOTS` so bundled
+  `base` is discovered on fresh installs.
+- Partner O2m smoke test uses stable record id after rename.
+
+### Changed
+
+- **Default field labels** for relational fields: `company_id` →
+  Company, `tag_ids` → Tags, `child_ids` → Children (explicit
+  `string=` on the field still wins).
+- Inline O2m / form edit CSS polish.
+
 ## [0.2.0] — 2026-05-22
 
 Second public release. Base module `0.18.0`. See [docs/releases/v0.2.0.md](docs/releases/v0.2.0.md) for the full announcement.

@@ -1,9 +1,11 @@
-# Project context — pyvelm v0.2.0
+# Project context — pyvelm v0.2.1
 
 Building an Odoo-style ERP framework in Python.
 
-**v0.2.0 (released 2026-05-22)** — the second public release.
-See the [v0.2.0 release summary](#v020-release-summary) below.
+**v0.2.1 (released 2026-05-22)** — patch: inline O2m editing, M2m polish,
+relational field labels. See [v0.2.1 release summary](#v021-release-summary).
+**v0.2.0** — graph/pivot, attachments, security hardening
+([summary](#v020-release-summary)).
 
 For the design rationale and the deferred-items rationale, see
 [docs/architecture.md](docs/architecture.md).
@@ -663,6 +665,32 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ---
 
+## v0.2.1 release summary
+
+**Released:** 2026-05-22
+**Package version:** `0.2.1` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this patch
+
+| Area | Highlights |
+|---|---|
+| **Inline O2m** | Auto `widget="table"` when comodel has a list view; Add a line / Add row; per-cell 422 playback; drag-reorder via `sequence` |
+| **Fix** | Add row clones `template.content` (nested Alpine `<template>` broke `innerHTML`) |
+| **M2m** | Chip editor: create / open / edit like M2o |
+| **Labels** | `company_id` → Company, `tag_ids` → Tags, etc. (`Field._default_string`) |
+| **Dev** | `scripts/test_o2m_addrow.py` Playwright smoke for Add row DOM |
+
+### Next focus options (post-v0.2.1)
+
+  - **Vellum ORM veneer (Phase 1)** — design doc at `docs/vellum-design.md`.
+  - **Stage 6 Slice 3** — message subtypes + followers on mail dispatcher.
+  - **S3 / minio storage backend** for `ir.attachment`.
+  - **O2m inline tables** — Filter By / search bar (list-view parity).
+  - **Multi-measure stacked bar charts** in graph view.
+
+---
+
 ## v0.2.0 release summary
 
 **Released:** 2026-05-22
@@ -683,21 +711,6 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 | **Workflows** | Server actions, automated actions, cron scheduler, mail threads, outgoing-mail dispatcher |
 | **Users** | Avatar upload/URL, profile picture in nav, password field hidden framework-wide |
 | **DevX** | TypedDict view shapes, builder helpers, `pyvelm db` CLI, deployment Dockerfile + docker-compose |
-
-### Next focus options (post-v0.2.0)
-
-  - **Vellum ORM veneer (Phase 1)**: chainable query builder +
-    method-based relationships + scopes (design doc at
-    `docs/vellum-design.md`).
-  - **Stage 6 Slice 3**: message subtypes + followers/subscriptions
-    layered on the mail dispatcher.
-  - **S3 / minio storage backend**: drop-in replacement for
-    `LocalStorageBackend`.
-  - **O2m polish**: shared list-style Filter By on inline tables;
-    optional per-row "open full form" without dialog-only editing.
-  - **Multi-measure stacked bar charts**: `read_group` already
-    supports multiple measures — the graph renderer needs a
-    multi-series ApexCharts config.
 
 ### Still deferred
 
