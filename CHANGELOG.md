@@ -9,6 +9,19 @@ out of the 0.x line.
 
 ### Added
 
+- *(nothing yet)*
+
+## [0.2.0] — 2026-05-22
+
+Second public release. Base module `0.18.0`. See [docs/releases/v0.2.0.md](docs/releases/v0.2.0.md) for the full announcement.
+
+### Added
+
+- **Graph & pivot views** with `read_group()` aggregation, ApexCharts graph renderer, cross-tab pivot table, view switcher, and live JSON APIs (`/api/graph/data`, `/api/pivot/data`, `/api/view-fields`) for interactive toolbars (chart type, groupby, measures, swap axes).
+- **Draggable form dialog** (`pvFormDialog` / `PvDialog.open`) for M2o “Create and edit” and O2m row create/edit without leaving the parent form.
+- **`ir.attachment`** + pluggable storage (local / database), upload/download/delete APIs, `widget="attachment"`.
+- **User polish:** `avatar_url`, `widget="image"`, `Field.private`, admin password reset page, session-token rotation on self-service password change.
+- **`pyvelm db diff`** / **`pyvelm db autogen`** for additive schema migration generation.
 - **ECB exchange-rate fetcher.** `base` ships a server action + cron
   (`ECB rate fetcher`) that refreshes `res.currency.rate` from the
   European Central Bank's daily feed. Seeded **inactive**: operators
