@@ -1,13 +1,9 @@
-# Project context
+# Project context — pyvelm v0.2.0
 
-Building an Odoo-style ERP framework in Python. **Stage 4 first slice
-is complete**: views are data (`ir.ui.view` records, upserted from
-module manifests' `VIEWS` key), and a FastAPI app exposes generic
-read-only endpoints over them with JSON serialization of recordsets.
-Built on top of Stage 3 (module loader, transactional install/upgrade,
-hand-written migrations) and Stage 2 (ORM with all four field types,
-dotted-path `@depends`, M2o LEFT-JOIN + O2m/M2m EXISTS domain
-traversal) — all on PostgreSQL via psycopg 3.
+Building an Odoo-style ERP framework in Python.
+
+**v0.2.0 (released 2026-05-22)** — the second public release.
+See the [v0.2.0 release summary](#v020-release-summary) below.
 
 For the design rationale and the deferred-items rationale, see
 [docs/architecture.md](docs/architecture.md).
@@ -631,27 +627,84 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     priority, measures = __count + expected_revenue:sum). Menu
     items wired under "CRM" so the demo data shows up immediately.
 
-Still deferred on graph/pivot: rich chip-style search bar shared
-between list / graph / pivot (currently each has its own minimal
-GET form), multi-measure bar charts with proper stacking, label
-formatting via field widgets (e.g. Monetary chart values rendered
-with the company currency), client-side resort / pivot pivot-axis
-swapping.
+  ✅ **Interactive graph & pivot toolbars** (v0.2.0):
+  - Three new JSON API endpoints in `pyvelm.web`:
+    * `GET /api/graph/data?model&groupby&measure&chart&search` →
+      `{labels, values, measure_label, chart_type, groupby, measure}`
+    * `GET /api/pivot/data?model&row_groupby&col_groupby&measures&search` →
+      full cross-tab JSON `{body_rows, header_levels, col_totals, …}`
+    * `GET /api/view-fields?model` → `{groupable, measurable}` field
+      metadata for toolbar dropdowns (all models)
+  - `graph.html` rewritten as Alpine `pvGraphToolbar` component:
+    * **Bar / Line / Area / Pie** toggle buttons — switches chart type
+      client-side with no server round-trip.
+    * **Group by** dropdown — every Char / Integer / M2O / Date /
+      Datetime field; Date/Datetime expand to `:day` / `:week` /
+      `:month` / `:quarter` / `:year` truncation variants.
+    * **Measure** dropdown — Count + every Integer/Float as `sum`
+      and `avg` aggregates.
+    * Free-text search re-fetches from `/api/graph/data` on submit.
+    * `render_graph_page` now injects `groupable_fields` +
+      `measurable_fields` into the template for server-side hydration
+      (chart visible immediately on first load).
+  - `pivot.html` rewritten as Alpine `pvPivotToolbar` component:
+    * **Row groupby chips** — add via dropdown, click × to remove.
+    * **Column groupby chips** — same.
+    * **Measure chips** — multi-select; at least one always kept.
+    * **Swap axes button** — flips rows ↔ cols in one click.
+    * Free-text search triggers re-fetch via `/api/pivot/data`.
+    * `_buildTable()` turns the JSON response into a complete HTML
+      table string assigned to `x-html` — no page reload.
+    * Server-rendered table shown on first load; client table takes
+      over after the first toolbar interaction.
+    * `render_pivot_page` injects `groupable_fields`,
+      `measurable_fields`, and the current `init_row/col_groupby` +
+      `init_measures` for toolbar state initialisation.
 
-Next focus options:
+---
+
+## v0.2.0 release summary
+
+**Released:** 2026-05-22
+**Package version:** `0.2.0` (pyproject.toml)
+**Base module version:** `0.18.0`
+
+### What's in the box
+
+| Area | Highlights |
+|---|---|
+| **ORM** | Recordsets, all field types, computed fields (`@depends`), `_inherit` model extension, `read_group` aggregation |
+| **Module system** | Manifests, dep resolution, transactional install/upgrade, hand-written migrations, `db diff` / `db autogen` CLI |
+| **UI** | List, form, kanban, **graph**, **pivot** views; draggable dialog; M2o combobox; M2m chip editor; inline validation; drag-reorder; autosave |
+| **Graph/Pivot** | ApexCharts-backed graph view (Bar/Line/Area/Pie toggle); cross-tab pivot view; both fully interactive — groupby, measure, and chart-type selectable without page reload |
+| **API** | FastAPI generic CRUD + view endpoints; `/api/graph/data`, `/api/pivot/data`, `/api/view-fields` |
+| **Auth** | Session cookies, CSRF tokens, login rate limiting, self-service password change with session-token rotation, admin password reset, `Field.private` |
+| **Files** | `ir.attachment`, local + DB storage backends, drag-and-drop upload widget |
+| **Workflows** | Server actions, automated actions, cron scheduler, mail threads, outgoing-mail dispatcher |
+| **Users** | Avatar upload/URL, profile picture in nav, password field hidden framework-wide |
+| **DevX** | TypedDict view shapes, builder helpers, `pyvelm db` CLI, deployment Dockerfile + docker-compose |
+
+### Next focus options (post-v0.2.0)
+
+  - **Vellum ORM veneer (Phase 1)**: chainable query builder +
+    method-based relationships + scopes (design doc at
+    `docs/vellum-design.md`).
   - **Stage 6 Slice 3**: message subtypes + followers/subscriptions
-    layered on the dispatcher.
-  - **S3 / minio storage backend**: drop into `pyvelm.storage`
-    alongside `LocalStorageBackend` for remote blob storage.
-  - **Vellum ORM veneer (Phase 1)**: kick off the design doc — start
-    with the chainable query builder + method-based relationships
-    + scopes.
+    layered on the mail dispatcher.
+  - **S3 / minio storage backend**: drop-in replacement for
+    `LocalStorageBackend`.
+  - **O2m editing widget**: currently only M2m has a chip editor;
+    O2m editing still requires the draggable dialog path.
+  - **Multi-measure stacked bar charts**: `read_group` already
+    supports multiple measures — the graph renderer needs a
+    multi-series ApexCharts config.
 
-Still deferred: cache snapshot on transaction rollback, O2m/M2m
-caching + old-value snapshotting, m2o result caching beyond
-in-flight requests, O2m editing widget (only M2m has one),
-shared-store rate limiter for multi-worker deployments,
-nested/stacked dialogs (current dialog is single-instance — a
-second `PvDialog.open()` replaces the body rather than stacking),
-one-shot "run migrations once before workers start" entrypoint.
-None pressing.
+### Still deferred
+
+Cache snapshot on transaction rollback, O2m/M2m caching +
+old-value snapshotting, m2o result caching beyond in-flight
+requests, shared-store rate limiter for multi-worker deployments,
+nested/stacked dialogs (current dialog is single-instance),
+one-shot "run migrations once before workers start" entrypoint,
+label formatting via field widgets on chart axes (e.g. Monetary
+with company currency symbol). None pressing.
