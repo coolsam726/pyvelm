@@ -2,143 +2,433 @@
 {% block title %}{{ page_title }} — pyvelm{% endblock %}
 {% block page_title %}{{ page_title }}{% endblock %}
 
-{# Pivot view: cross-tab matrix with a compact single-row toolbar
-   (view-switcher + search + subtitle) above the table. #}
-{% block content %}
-<div class="flex flex-col gap-3">
+{#
+  Pivot view — interactive cross-tab table with Alpine pvPivotToolbar.
 
-    {# Single compact row. #}
-    <div class="flex items-center gap-3 flex-wrap text-sm">
+  Controls:
+    - Row groupby  : multi-select chips (add from dropdown → click chip to remove)
+    - Column groupby: same
+    - Measures     : multi-select chips
+    - Swap axes    : flip row/col groupby with one button
+    - Search       : free-text filter
+    - View-switcher: jump to list / kanban / graph / pivot for same model
+
+  On every control change the component calls /api/pivot/data and rewrites
+  `tableHtml` by turning the JSON response into a DOM table — avoids full-page
+  reload while keeping the interactivity at zero extra dependencies.
+#}
+{% block content %}
+<div x-data='pvPivotToolbar({{ {
+    "model":          view.model,
+    "initRowGroupby": init_row_groupby,
+    "initColGroupby": init_col_groupby,
+    "initMeasures":   init_measures,
+    "search":         search,
+    "filters":        filters,
+    "groupable":      groupable_fields,
+    "measurable":     measurable_fields,
+} | tojson }})'
+     class="flex flex-col gap-3">
+
+    {# ── Toolbar row ── #}
+    <div class="flex items-center gap-2 flex-wrap">
 
         {% if view_switcher %}
         {% include "_view_switcher.html" %}
         {% endif %}
 
-        <form method="get" class="flex items-center gap-2 flex-1 min-w-[200px]"
-              aria-label="Filter pivot">
-            <div class="relative flex-1 max-w-sm">
-                <svg class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2
-                            text-body-subtle pointer-events-none"
+        <div class="w-px h-5 bg-default mx-1 hidden sm:block"></div>
+
+        {# Row groupby #}
+        <div class="flex items-center gap-1 text-xs">
+            <span class="text-body-subtle whitespace-nowrap">Rows</span>
+            <div class="flex flex-wrap items-center gap-1">
+                <template x-for="(spec, i) in rowGroupby" :key="i">
+                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full
+                                 bg-brand-soft text-fg-brand text-xs font-medium">
+                        <span x-text="labelFor(spec)"></span>
+                        <button @click="removeRowGroupby(i)" type="button"
+                                class="ml-0.5 hover:opacity-70 focus:outline-none" title="Remove">×</button>
+                    </span>
+                </template>
+                <select @change="addRowGroupby($event.target.value); $event.target.value = ''"
+                        class="text-xs rounded border border-default bg-neutral-primary text-body
+                               py-0.5 pl-1.5 pr-5 focus:outline-none focus:ring-2 focus:ring-fg-brand/40">
+                    <option value="">+ Add…</option>
+                    <template x-for="f in groupable" :key="f.value">
+                        <option :value="f.value" x-text="f.label"></option>
+                    </template>
+                </select>
+            </div>
+        </div>
+
+        <div class="w-px h-5 bg-default mx-0.5 hidden sm:block"></div>
+
+        {# Swap button #}
+        <button @click="swapAxes()" type="button"
+                title="Swap rows and columns"
+                class="p-1.5 rounded border border-default text-body-subtle
+                       hover:bg-neutral-secondary focus:outline-none focus:ring-2 focus:ring-fg-brand/40">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/>
+            </svg>
+        </button>
+
+        <div class="w-px h-5 bg-default mx-0.5 hidden sm:block"></div>
+
+        {# Col groupby #}
+        <div class="flex items-center gap-1 text-xs">
+            <span class="text-body-subtle whitespace-nowrap">Cols</span>
+            <div class="flex flex-wrap items-center gap-1">
+                <template x-for="(spec, i) in colGroupby" :key="i">
+                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full
+                                 bg-neutral-secondary border border-default text-body text-xs font-medium">
+                        <span x-text="labelFor(spec)"></span>
+                        <button @click="removeColGroupby(i)" type="button"
+                                class="ml-0.5 hover:opacity-70 focus:outline-none" title="Remove">×</button>
+                    </span>
+                </template>
+                <select @change="addColGroupby($event.target.value); $event.target.value = ''"
+                        class="text-xs rounded border border-default bg-neutral-primary text-body
+                               py-0.5 pl-1.5 pr-5 focus:outline-none focus:ring-2 focus:ring-fg-brand/40">
+                    <option value="">+ Add…</option>
+                    <template x-for="f in groupable" :key="f.value">
+                        <option :value="f.value" x-text="f.label"></option>
+                    </template>
+                </select>
+            </div>
+        </div>
+
+        <div class="w-px h-5 bg-default mx-0.5 hidden sm:block"></div>
+
+        {# Measures #}
+        <div class="flex items-center gap-1 text-xs">
+            <span class="text-body-subtle whitespace-nowrap">Measures</span>
+            <div class="flex flex-wrap items-center gap-1">
+                <template x-for="(spec, i) in measures" :key="i">
+                    <span class="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full
+                                 bg-neutral-secondary border border-default text-body text-xs font-medium">
+                        <span x-text="measureLabelFor(spec)"></span>
+                        <button @click="removeMeasure(i)" type="button" x-show="measures.length > 1"
+                                class="ml-0.5 hover:opacity-70 focus:outline-none" title="Remove">×</button>
+                    </span>
+                </template>
+                <select @change="addMeasure($event.target.value); $event.target.value = ''"
+                        class="text-xs rounded border border-default bg-neutral-primary text-body
+                               py-0.5 pl-1.5 pr-5 focus:outline-none focus:ring-2 focus:ring-fg-brand/40">
+                    <option value="">+ Add…</option>
+                    <template x-for="f in measurable" :key="f.value">
+                        <option :value="f.value" x-text="f.label"></option>
+                    </template>
+                </select>
+            </div>
+        </div>
+
+        {# Search #}
+        <form @submit.prevent="fetchData()" class="flex items-center gap-1 flex-1 min-w-[130px]">
+            <div class="relative flex-1 max-w-xs">
+                <svg class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-body-subtle pointer-events-none"
                      fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round"
                           d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
                 </svg>
-                <input type="search" name="search" value="{{ search }}"
+                <input type="search" x-model="searchText"
                        placeholder="Search…"
-                       class="w-full pl-7 pr-2 py-1 text-xs rounded-md
-                              border border-default bg-neutral-primary text-body
-                              placeholder:text-body-subtle
-                              focus:outline-none focus:ring-2 focus:ring-fg-brand/40
-                              focus:border-fg-brand">
+                       class="w-full pl-7 pr-2 py-1 text-xs rounded border border-default
+                              bg-neutral-primary text-body placeholder:text-body-subtle
+                              focus:outline-none focus:ring-2 focus:ring-fg-brand/40">
             </div>
-            {% if filters %}
-            <input type="hidden" name="filters" value="{{ filters }}">
-            {% endif %}
-            <button type="submit"
-                    class="px-2.5 py-1 text-xs font-medium rounded-md bg-fg-brand
-                           text-white hover:opacity-90 transition-opacity">
-                Filter
-            </button>
         </form>
 
-        <span class="text-xs text-body-subtle whitespace-nowrap">{{ subtitle }}</span>
-
-        {% if search or filters %}
-        <a href="?"
-           class="text-xs text-body-subtle hover:text-fg-brand underline whitespace-nowrap">
-            Clear
-        </a>
-        {% endif %}
+        {# Spinner + subtitle #}
+        <span x-show="loading" x-cloak>
+            <svg class="w-4 h-4 animate-spin text-body-subtle" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+        </span>
+        <span x-show="!loading" x-text="subtitle"
+              class="text-xs text-body-subtle whitespace-nowrap ml-auto"></span>
     </div>
 
-    {# Pivot table — full width below the toolbar. #}
+    {# ── Pivot table area ── #}
     <div class="border border-default rounded-lg overflow-auto bg-neutral-primary">
-        <table class="min-w-full text-sm">
-            <thead class="bg-neutral-secondary">
-                {% for level in header_levels %}
-                <tr>
-                    {% if loop.first %}
-                    <th colspan="{{ row_axis_titles | length }}"
-                        rowspan="{{ header_levels | length + 1 }}"
-                        class="sticky left-0 z-10 bg-neutral-secondary
-                               border-b border-r border-default
-                               px-3 py-2 text-left text-2xs font-semibold
-                               uppercase tracking-wider text-body-subtle">
-                        {{ row_axis_titles | join(' / ') }}
-                    </th>
+        {# Server-rendered initial table #}
+        <div x-show="!hasFetched" x-ref="serverTable">
+            <table class="min-w-full text-sm">
+                <thead class="bg-neutral-secondary">
+                    {% for level in header_levels %}
+                    <tr>
+                        {% if loop.first %}
+                        <th colspan="{{ row_axis_titles | length }}"
+                            rowspan="{{ header_levels | length + 1 }}"
+                            class="sticky left-0 z-10 bg-neutral-secondary
+                                   border-b border-r border-default
+                                   px-3 py-2 text-left text-2xs font-semibold
+                                   uppercase tracking-wider text-body-subtle">
+                            {{ row_axis_titles | join(' / ') }}
+                        </th>
+                        {% endif %}
+                        {% for h in level %}
+                        <th colspan="{{ h.colspan }}"
+                            class="border-b border-default px-3 py-2 text-center
+                                   text-2xs font-semibold uppercase tracking-wider
+                                   text-body-subtle">
+                            {{ h.label }}
+                        </th>
+                        {% endfor %}
+                        {% if loop.first %}
+                        <th colspan="{{ grand_header.colspan }}"
+                            rowspan="{{ header_levels | length + 1 }}"
+                            class="border-b border-l border-default
+                                   px-3 py-2 text-center
+                                   text-2xs font-semibold uppercase tracking-wider
+                                   text-fg-brand bg-brand-soft">
+                            {{ grand_header.label }}
+                        </th>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                    {% if header_levels or measure_count > 1 %}
+                    <tr>
+                        {% for m in measure_label_row %}
+                        <th class="border-b border-default px-3 py-1.5 text-right
+                                   text-2xs font-medium text-body-subtle">
+                            {{ m.label }}
+                        </th>
+                        {% endfor %}
+                    </tr>
                     {% endif %}
-                    {% for h in level %}
-                    <th colspan="{{ h.colspan }}"
-                        class="border-b border-default px-3 py-2 text-center
-                               text-2xs font-semibold uppercase tracking-wider
-                               text-body-subtle">
-                        {{ h.label }}
-                    </th>
+                </thead>
+                <tbody class="divide-y divide-default">
+                    {% for row in body_rows %}
+                    <tr class="hover:bg-neutral-secondary/40 transition-colors">
+                        {% for label in row.labels %}
+                        <td class="px-3 py-2 text-sm font-medium text-heading
+                                   {% if loop.first %}sticky left-0 bg-neutral-primary z-[1]{% endif %}">
+                            {{ label }}
+                        </td>
+                        {% endfor %}
+                        {% for cell in row.cells %}
+                        <td class="px-3 py-2 text-right tabular-nums
+                                   {% if cell.is_total %}font-semibold text-fg-brand bg-brand-soft/40{% endif %}">
+                            {{ cell.display }}
+                        </td>
+                        {% endfor %}
+                    </tr>
                     {% endfor %}
-                    {% if loop.first %}
-                    <th colspan="{{ grand_header.colspan }}"
-                        rowspan="{{ header_levels | length + 1 }}"
-                        class="border-b border-l border-default
-                               px-3 py-2 text-center
-                               text-2xs font-semibold uppercase tracking-wider
-                               text-fg-brand bg-brand-soft">
-                        {{ grand_header.label }}
-                    </th>
+                    {% if body_rows | length == 0 %}
+                    <tr>
+                        <td colspan="{{ row_axis_titles | length + measure_count + (col_combos_count * measure_count) }}"
+                            class="px-3 py-8 text-center text-sm text-body-subtle">
+                            No data to pivot. Adjust the controls above.
+                        </td>
+                    </tr>
                     {% endif %}
-                </tr>
-                {% endfor %}
-                {% if header_levels or measure_count > 1 %}
-                <tr>
-                    {% for m in measure_label_row %}
-                    <th class="border-b border-default px-3 py-1.5 text-right
-                               text-2xs font-medium text-body-subtle">
-                        {{ m.label }}
-                    </th>
-                    {% endfor %}
-                </tr>
+                </tbody>
+                {% if body_rows | length > 0 %}
+                <tfoot>
+                    <tr class="bg-neutral-secondary font-semibold text-fg-brand">
+                        <td colspan="{{ row_axis_titles | length }}"
+                            class="sticky left-0 z-[1] bg-neutral-secondary
+                                   px-3 py-2 text-2xs uppercase tracking-wider">
+                            Total
+                        </td>
+                        {% for cell in col_totals %}
+                        <td class="px-3 py-2 text-right tabular-nums">{{ cell.display }}</td>
+                        {% endfor %}
+                    </tr>
+                </tfoot>
                 {% endif %}
-            </thead>
-            <tbody class="divide-y divide-default">
-                {% for row in body_rows %}
-                <tr class="hover:bg-neutral-secondary/40 transition-colors">
-                    {% for label in row.labels %}
-                    <td class="px-3 py-2 text-sm font-medium text-heading
-                               {% if loop.first %}sticky left-0 bg-neutral-primary z-[1]{% endif %}">
-                        {{ label }}
-                    </td>
-                    {% endfor %}
-                    {% for cell in row.cells %}
-                    <td class="px-3 py-2 text-right tabular-nums
-                               {% if cell.is_total %}font-semibold text-fg-brand bg-brand-soft/40{% endif %}">
-                        {{ cell.display }}
-                    </td>
-                    {% endfor %}
-                </tr>
-                {% endfor %}
-                {% if body_rows | length == 0 %}
-                <tr>
-                    <td colspan="{{ row_axis_titles | length + measure_count + (col_combos_count * measure_count) }}"
-                        class="px-3 py-8 text-center text-sm text-body-subtle">
-                        No data to pivot. Adjust the search or filters above.
-                    </td>
-                </tr>
-                {% endif %}
-            </tbody>
-            {% if body_rows | length > 0 %}
-            <tfoot>
-                <tr class="bg-neutral-secondary font-semibold text-fg-brand">
-                    <td colspan="{{ row_axis_titles | length }}"
-                        class="sticky left-0 z-[1] bg-neutral-secondary
-                               px-3 py-2 text-2xs uppercase tracking-wider">
-                        Total
-                    </td>
-                    {% for cell in col_totals %}
-                    <td class="px-3 py-2 text-right tabular-nums">{{ cell.display }}</td>
-                    {% endfor %}
-                </tr>
-            </tfoot>
-            {% endif %}
-        </table>
+            </table>
+        </div>
+
+        {# Client-rendered table after first fetch #}
+        <div x-show="hasFetched" x-ref="dynamicTable" x-html="tableHtml"></div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('pvPivotToolbar', (cfg) => ({
+        model:       cfg.model,
+        rowGroupby:  cfg.initRowGroupby ? cfg.initRowGroupby.split(',').filter(Boolean) : [],
+        colGroupby:  cfg.initColGroupby ? cfg.initColGroupby.split(',').filter(Boolean) : [],
+        measures:    cfg.initMeasures   ? cfg.initMeasures.split(',').filter(Boolean)   : ['__count'],
+        groupable:   cfg.groupable  || [],
+        measurable:  cfg.measurable || [],
+        searchText:  cfg.search  || '',
+        filters:     cfg.filters || '',
+        loading:     false,
+        hasFetched:  false,
+        tableHtml:   '',
+
+        get subtitle() {
+            return ''; // updated after fetch
+        },
+
+        labelFor(spec) {
+            const f = this.groupable.find(x => x.value === spec);
+            return f ? f.label : spec;
+        },
+        measureLabelFor(spec) {
+            const f = this.measurable.find(x => x.value === spec);
+            return f ? f.label : spec;
+        },
+
+        addRowGroupby(v) { if (v && !this.rowGroupby.includes(v)) { this.rowGroupby.push(v); this.fetchData(); } },
+        removeRowGroupby(i) { this.rowGroupby.splice(i, 1); this.fetchData(); },
+        addColGroupby(v) { if (v && !this.colGroupby.includes(v)) { this.colGroupby.push(v); this.fetchData(); } },
+        removeColGroupby(i) { this.colGroupby.splice(i, 1); this.fetchData(); },
+        addMeasure(v) { if (v && !this.measures.includes(v)) { this.measures.push(v); this.fetchData(); } },
+        removeMeasure(i) { if (this.measures.length > 1) { this.measures.splice(i, 1); this.fetchData(); } },
+
+        swapAxes() {
+            [this.rowGroupby, this.colGroupby] = [[...this.colGroupby], [...this.rowGroupby]];
+            this.fetchData();
+        },
+
+        async fetchData() {
+            this.loading = true;
+            try {
+                const p = new URLSearchParams({
+                    model:       this.model,
+                    row_groupby: this.rowGroupby.join(','),
+                    col_groupby: this.colGroupby.join(','),
+                    measures:    this.measures.join(','),
+                    search:      this.searchText,
+                    filters:     this.filters,
+                });
+                const r = await fetch('/api/pivot/data?' + p, { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('pivot fetch failed');
+                const d = await r.json();
+                this.tableHtml = this._buildTable(d);
+                this.hasFetched = true;
+            } catch (e) {
+                if (window.pvAlert) pvAlert('Could not load pivot data.', { variant: 'warning' });
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        _cell(display, isTotal, sticky = false) {
+            const base = 'px-3 py-2 text-right tabular-nums';
+            const tot  = isTotal ? ' font-semibold text-fg-brand bg-brand-soft/40' : '';
+            const stk  = sticky  ? ' sticky left-0 bg-neutral-primary z-[1]' : '';
+            return `<td class="${base}${tot}${stk}">${display}</td>`;
+        },
+
+        _buildTable(d) {
+            // Build the dynamic HTML table string from the JSON response.
+            const mcount = d.measure_count;
+            const rspec  = d.row_specs;
+            const rowLabelCount = rspec.length || 1;
+            let html = '<table class="min-w-full text-sm">';
+
+            // --- thead ---
+            html += '<thead class="bg-neutral-secondary">';
+
+            const headerLevelCount = (d.header_levels || []).length;
+            const rowspan = headerLevelCount + 1;
+
+            if (d.header_levels && d.header_levels.length) {
+                d.header_levels.forEach((level, li) => {
+                    html += '<tr>';
+                    if (li === 0) {
+                        // row-axis header cell + total header
+                        html += `<th colspan="${rowLabelCount}" rowspan="${rowspan}"
+                            class="sticky left-0 z-10 bg-neutral-secondary border-b border-r border-default
+                                   px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wider text-body-subtle">
+                            ${rspec.map(s => this.labelFor(s)).join(' / ')}
+                        </th>`;
+                    }
+                    level.forEach(h => {
+                        html += `<th colspan="${h.colspan}"
+                            class="border-b border-default px-3 py-2 text-center text-2xs
+                                   font-semibold uppercase tracking-wider text-body-subtle">
+                            ${h.label}
+                        </th>`;
+                    });
+                    if (li === 0) {
+                        html += `<th colspan="${d.grand_header.colspan}" rowspan="${rowspan}"
+                            class="border-b border-l border-default px-3 py-2 text-center text-2xs
+                                   font-semibold uppercase tracking-wider text-fg-brand bg-brand-soft">
+                            ${d.grand_header.label}
+                        </th>`;
+                    }
+                    html += '</tr>';
+                });
+            } else {
+                // No col groupby — still emit the row-axis header.
+                html += '<tr>';
+                html += `<th colspan="${rowLabelCount}" rowspan="${rowspan}"
+                    class="sticky left-0 z-10 bg-neutral-secondary border-b border-r border-default
+                           px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wider text-body-subtle">
+                    ${rspec.map(s => this.labelFor(s)).join(' / ')}
+                </th>`;
+                html += `<th colspan="${mcount}"
+                    class="border-b border-l border-default px-3 py-2 text-center text-2xs
+                           font-semibold uppercase tracking-wider text-fg-brand bg-brand-soft">
+                    ${d.grand_header.label}
+                </th>`;
+                html += '</tr>';
+            }
+
+            // Measure label row
+            html += '<tr>';
+            (d.measure_label_row || []).forEach(m => {
+                html += `<th class="border-b border-default px-3 py-1.5 text-right
+                                    text-2xs font-medium text-body-subtle">${m.label}</th>`;
+            });
+            html += '</tr>';
+
+            html += '</thead>';
+
+            // --- tbody ---
+            html += '<tbody class="divide-y divide-default">';
+            if (d.body_rows.length === 0) {
+                const span = rowLabelCount + mcount + (d.col_combos_count * mcount);
+                html += `<tr><td colspan="${span}"
+                    class="px-3 py-8 text-center text-sm text-body-subtle">
+                    No data to pivot. Adjust the controls above.
+                </td></tr>`;
+            } else {
+                d.body_rows.forEach(row => {
+                    html += '<tr class="hover:bg-neutral-secondary/40 transition-colors">';
+                    row.labels.forEach((lbl, li) => {
+                        const stkClass = li === 0 ? ' sticky left-0 bg-neutral-primary z-[1]' : '';
+                        html += `<td class="px-3 py-2 text-sm font-medium text-heading${stkClass}">${lbl}</td>`;
+                    });
+                    row.cells.forEach(cell => {
+                        const tot = cell.is_total ? ' font-semibold text-fg-brand bg-brand-soft/40' : '';
+                        html += `<td class="px-3 py-2 text-right tabular-nums${tot}">${cell.display}</td>`;
+                    });
+                    html += '</tr>';
+                });
+            }
+            html += '</tbody>';
+
+            // --- tfoot ---
+            if (d.body_rows.length > 0) {
+                html += '<tfoot>';
+                html += `<tr class="bg-neutral-secondary font-semibold text-fg-brand">
+                    <td colspan="${rowLabelCount}"
+                        class="sticky left-0 z-[1] bg-neutral-secondary
+                               px-3 py-2 text-2xs uppercase tracking-wider">Total</td>`;
+                (d.col_totals || []).forEach(cell => {
+                    html += `<td class="px-3 py-2 text-right tabular-nums">${cell.display}</td>`;
+                });
+                html += '</tr></tfoot>';
+            }
+
+            html += '</table>';
+            return html;
+        },
+    }));
+});
+</script>
 {% endblock %}

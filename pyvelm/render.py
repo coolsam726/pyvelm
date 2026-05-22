@@ -2113,7 +2113,44 @@ def render_graph_page(
         "measure_label": measure_label,
         "stacked": bool(arch.get("stacked")),
         "horizontal": bool(arch.get("horizontal")),
+        # current selections (for toolbar initialisation)
+        "groupby": groupby_spec,
+        "measure": measure_spec,
     }
+
+    # Build field lists for toolbar dropdowns.
+    from .fields import Boolean, Date, Datetime, Float, Integer, Many2one
+
+    groupable_fields: list[dict] = []
+    measurable_fields: list[dict] = [{"value": "__count", "label": "Count"}]
+    for fname, field in model_cls._fields.items():
+        if not field.is_stored or field.private:
+            continue
+        label = field.string or fname
+        ft = type(field).__name__
+        if isinstance(field, (Many2one, Date, Datetime)):
+            groupable_fields.append({"value": fname, "label": label, "type": ft})
+            if isinstance(field, (Date, Datetime)):
+                for trunc in ("day", "week", "month", "quarter", "year"):
+                    groupable_fields.append({
+                        "value": f"{fname}:{trunc}",
+                        "label": f"{label} ({trunc})",
+                        "type": ft,
+                    })
+        elif not isinstance(field, (Float, Boolean)):
+            groupable_fields.append({"value": fname, "label": label, "type": ft})
+        if isinstance(field, (Integer, Float)):
+            measurable_fields.append({
+                "value": f"{fname}:sum",
+                "label": f"{label} (sum)",
+                "type": ft,
+            })
+            measurable_fields.append({
+                "value": f"{fname}:avg",
+                "label": f"{label} (avg)",
+                "type": ft,
+            })
+
     template = _env.get_template("graph.html")
     return template.render(
         view=view,
@@ -2123,6 +2160,8 @@ def render_graph_page(
         page_title=page_title,
         subtitle=f"{len(rows)} group{'s' if len(rows) != 1 else ''}",
         view_switcher=_other_views_for_model(env, view),
+        groupable_fields=groupable_fields,
+        measurable_fields=measurable_fields,
         **layout_context(env, current_path),
     )
 
@@ -2409,6 +2448,40 @@ def render_pivot_page(
         row_axis_titles.append(label)
 
     page_title = _view_title(view, arch)
+
+    # Build field lists for toolbar dropdowns (same logic as render_graph_page).
+    from .fields import Boolean, Date, Datetime, Float, Integer, Many2one
+
+    groupable_fields: list[dict] = []
+    measurable_fields: list[dict] = [{"value": "__count", "label": "Count"}]
+    for fname, field in model_cls._fields.items():
+        if not field.is_stored or field.private:
+            continue
+        label = field.string or fname
+        ft = type(field).__name__
+        if isinstance(field, (Many2one, Date, Datetime)):
+            groupable_fields.append({"value": fname, "label": label, "type": ft})
+            if isinstance(field, (Date, Datetime)):
+                for trunc in ("day", "week", "month", "quarter", "year"):
+                    groupable_fields.append({
+                        "value": f"{fname}:{trunc}",
+                        "label": f"{label} ({trunc})",
+                        "type": ft,
+                    })
+        elif not isinstance(field, (Float, Boolean)):
+            groupable_fields.append({"value": fname, "label": label, "type": ft})
+        if isinstance(field, (Integer, Float)):
+            measurable_fields.append({
+                "value": f"{fname}:sum",
+                "label": f"{label} (sum)",
+                "type": ft,
+            })
+            measurable_fields.append({
+                "value": f"{fname}:avg",
+                "label": f"{label} (avg)",
+                "type": ft,
+            })
+
     template = _env.get_template("pivot.html")
     return template.render(
         view=view,
@@ -2428,6 +2501,11 @@ def render_pivot_page(
             f" × {max(1, len(col_combos))} column{'s' if len(col_combos) != 1 else ''}"
         ),
         view_switcher=_other_views_for_model(env, view),
+        groupable_fields=groupable_fields,
+        measurable_fields=measurable_fields,
+        init_row_groupby=",".join(row_specs),
+        init_col_groupby=",".join(col_specs),
+        init_measures=",".join(measure_specs),
         **layout_context(env, current_path),
     )
 

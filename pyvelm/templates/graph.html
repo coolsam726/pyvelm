@@ -2,75 +2,131 @@
 {% block title %}{{ page_title }} — pyvelm{% endblock %}
 {% block page_title %}{{ page_title }}{% endblock %}
 
-{# Graph view: a single chart aggregating one measure by one groupby.
-   The toolbar (view-switcher + search + subtitle) sits in a single
-   compact row to minimize vertical space. The chart fills the
-   remaining area. #}
 {% block content %}
-<div class="flex flex-col gap-3">
+{#
+  Graph view — interactive chart with toolbar controls:
+    - Chart type   : Bar / Line / Area / Pie buttons
+    - Group by     : dropdown from the model's groupable fields
+    - Measure      : dropdown from the model's numeric fields (+ Count)
+    - Search       : free-text filter applied server-side
+    - View-switcher: jumps to list / kanban / graph / pivot for the same model
 
-    {# Single compact row: view-switcher — search — subtitle — clear. #}
-    <div class="flex items-center gap-3 flex-wrap text-sm">
+  Controls are wired to the Alpine `pvGraphToolbar` component which
+  fetches /api/graph/data on every change and updates ApexCharts
+  without a full page reload.  The initial data + field lists are
+  server-rendered into the page as JSON so the chart is visible
+  immediately on load.
+#}
+<div x-data='pvGraphToolbar({{ {
+    "model":         view.model,
+    "initGroupby":   chart_data.groupby,
+    "initMeasure":   chart_data.measure,
+    "initChart":     chart_data.chart_type,
+    "initLabels":    chart_data.labels,
+    "initValues":    chart_data.values,
+    "initMeasureLabel": chart_data.measure_label,
+    "groupable":     groupable_fields,
+    "measurable":    measurable_fields,
+    "search":        search,
+    "filters":       filters,
+} | tojson }})'
+     class="flex flex-col gap-3">
+
+    {# ── Toolbar row ── #}
+    <div class="flex items-center gap-2 flex-wrap">
 
         {% if view_switcher %}
         {% include "_view_switcher.html" %}
         {% endif %}
 
-        <form method="get" class="flex items-center gap-2 flex-1 min-w-[200px]"
-              aria-label="Filter chart">
-            <div class="relative flex-1 max-w-sm">
-                <svg class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2
-                            text-body-subtle pointer-events-none"
+        {# Separator #}
+        <div class="w-px h-5 bg-default mx-1 hidden sm:block"></div>
+
+        {# Chart-type buttons #}
+        <div class="inline-flex rounded-md border border-default overflow-hidden text-xs">
+            <template x-for="ct in chartTypes" :key="ct.value">
+                <button type="button"
+                        @click="setChartType(ct.value)"
+                        :title="ct.label"
+                        :class="chartType === ct.value
+                            ? 'bg-brand-soft text-fg-brand font-semibold'
+                            : 'text-body hover:bg-neutral-secondary'"
+                        class="px-2.5 py-1 transition-colors border-r border-default last:border-r-0
+                               inline-flex items-center gap-1">
+                    <span x-html="ct.icon"></span>
+                    <span x-text="ct.label"></span>
+                </button>
+            </template>
+        </div>
+
+        {# Group By selector #}
+        <div class="flex items-center gap-1 text-xs">
+            <span class="text-body-subtle whitespace-nowrap">Group by</span>
+            <select x-model="groupby"
+                    @change="fetchData()"
+                    class="text-xs rounded border border-default bg-neutral-primary text-body
+                           py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand/40">
+                <template x-for="f in groupable" :key="f.value">
+                    <option :value="f.value" x-text="f.label"></option>
+                </template>
+            </select>
+        </div>
+
+        {# Measure selector #}
+        <div class="flex items-center gap-1 text-xs">
+            <span class="text-body-subtle whitespace-nowrap">Measure</span>
+            <select x-model="measure"
+                    @change="fetchData()"
+                    class="text-xs rounded border border-default bg-neutral-primary text-body
+                           py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand/40">
+                <template x-for="f in measurable" :key="f.value">
+                    <option :value="f.value" x-text="f.label"></option>
+                </template>
+            </select>
+        </div>
+
+        {# Search #}
+        <form @submit.prevent="fetchData()" class="flex items-center gap-1 flex-1 min-w-[140px]">
+            <div class="relative flex-1 max-w-xs">
+                <svg class="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-body-subtle pointer-events-none"
                      fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round"
                           d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
                 </svg>
-                <input type="search" name="search" value="{{ search }}"
+                <input type="search" x-model="searchText"
                        placeholder="Search…"
-                       class="w-full pl-7 pr-2 py-1 text-xs rounded-md
-                              border border-default bg-neutral-primary text-body
-                              placeholder:text-body-subtle
-                              focus:outline-none focus:ring-2 focus:ring-fg-brand/40
-                              focus:border-fg-brand">
+                       class="w-full pl-7 pr-2 py-1 text-xs rounded border border-default
+                              bg-neutral-primary text-body placeholder:text-body-subtle
+                              focus:outline-none focus:ring-2 focus:ring-fg-brand/40">
             </div>
-            {% if filters %}
-            <input type="hidden" name="filters" value="{{ filters }}">
-            {% endif %}
-            <button type="submit"
-                    class="px-2.5 py-1 text-xs font-medium rounded-md bg-fg-brand
-                           text-white hover:opacity-90 transition-opacity">
-                Filter
-            </button>
         </form>
 
-        <span class="text-xs text-body-subtle whitespace-nowrap">{{ subtitle }}</span>
-
-        {% if search or filters %}
-        <a href="?"
-           class="text-xs text-body-subtle hover:text-fg-brand underline whitespace-nowrap">
-            Clear
-        </a>
-        {% endif %}
+        {# Loading spinner + subtitle #}
+        <span x-show="loading" x-cloak class="text-body-subtle">
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+        </span>
+        <span x-show="!loading" x-text="subtitle"
+              class="text-xs text-body-subtle whitespace-nowrap ml-auto"></span>
     </div>
 
-    {# Chart canvas — fills remaining vertical space. #}
-    <div class="bg-neutral-primary border border-default rounded-lg p-4 flex-1">
-        {% if chart_data['values'] | length == 0 %}
-        <div class="text-center py-12 text-body-subtle">
-            <svg class="w-12 h-12 mx-auto mb-3 opacity-40" fill="none"
-                 stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                      d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
-            </svg>
-            <p class="text-sm">No data to chart.</p>
-        </div>
-        {% else %}
-        <div x-data='pvGraph({{ chart_data | tojson }})'
-             x-init="render()"
-             @resize.window.debounce.150ms="render()"
-             x-ref="mount"
-             class="w-full" style="min-height: 380px;"></div>
-        {% endif %}
+    {# ── Chart area ── #}
+    <div class="bg-neutral-primary border border-default rounded-lg p-4">
+        <template x-if="values.length === 0 && !loading">
+            <div class="text-center py-14 text-body-subtle">
+                <svg class="w-12 h-12 mx-auto mb-3 opacity-40" fill="none"
+                     stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+                </svg>
+                <p class="text-sm">No data matches. Adjust search or controls.</p>
+            </div>
+        </template>
+        <div x-show="values.length > 0 || loading"
+             x-ref="mount" class="w-full" style="min-height: 380px;"></div>
     </div>
 </div>
 {% endblock %}
@@ -78,72 +134,134 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.50.0/dist/apexcharts.min.js" defer></script>
 <script>
-    document.addEventListener('alpine:init', () => {
-        Alpine.data('pvGraph', (cfg) => ({
-            cfg,
-            _chart: null,
-            render() {
-                if (typeof ApexCharts === 'undefined') {
-                    setTimeout(() => this.render(), 50);
-                    return;
-                }
-                if (this._chart) { this._chart.destroy(); this._chart = null; }
-                this._chart = new ApexCharts(this.$refs.mount, this.buildOptions());
-                this._chart.render();
-            },
-            themeVar(name, fallback) {
-                const v = getComputedStyle(document.documentElement)
-                    .getPropertyValue(name).trim();
-                return v || fallback;
-            },
-            buildOptions() {
-                const isDark = document.documentElement.classList.contains('dark');
-                const fg = this.themeVar('--color-body', isDark ? '#e5e7eb' : '#1f2937');
-                const fgSubtle = this.themeVar('--color-body-subtle',
-                                               isDark ? '#9ca3af' : '#6b7280');
-                const brand = this.themeVar('--color-fg-brand', '#2563eb');
-                const palette = [
-                    brand, '#10b981', '#f59e0b', '#ef4444',
-                    '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16',
-                ];
-                const common = {
-                    chart: {
-                        type: this.cfg.chart_type === 'pie' ? 'pie'
-                            : this.cfg.chart_type === 'line' ? 'line' : 'bar',
-                        height: 400,
-                        background: 'transparent',
-                        toolbar: { show: false },
-                        animations: { speed: 250 },
-                        foreColor: fg,
-                    },
-                    theme: { mode: isDark ? 'dark' : 'light' },
-                    colors: palette,
-                    grid: {
-                        borderColor: this.themeVar('--color-border-default',
-                                                   isDark ? '#374151' : '#e5e7eb'),
-                    },
-                    tooltip: { theme: isDark ? 'dark' : 'light' },
-                    legend: { labels: { colors: fgSubtle } },
-                };
-                if (this.cfg.chart_type === 'pie') {
-                    return { ...common, series: this.cfg.values,
-                             labels: this.cfg.labels,
-                             dataLabels: { enabled: true } };
-                }
-                return {
-                    ...common,
-                    series: [{ name: this.cfg.measure_label, data: this.cfg.values }],
-                    xaxis: { categories: this.cfg.labels,
-                             labels: { style: { colors: fgSubtle } } },
+document.addEventListener('alpine:init', () => {
+    Alpine.data('pvGraphToolbar', (cfg) => ({
+        model:        cfg.model,
+        groupby:      cfg.initGroupby,
+        measure:      cfg.initMeasure,
+        chartType:    cfg.initChart || 'bar',
+        groupable:    cfg.groupable  || [],
+        measurable:   cfg.measurable || [],
+        searchText:   cfg.search || '',
+        labels:       cfg.initLabels  || [],
+        values:       cfg.initValues  || [],
+        measureLabel: cfg.initMeasureLabel || '',
+        loading:      false,
+        _chart:       null,
+
+        chartTypes: [
+            { value: 'bar',  label: 'Bar',
+              icon: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>' },
+            { value: 'line', label: 'Line',
+              icon: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l5-5 4 4 5-5 4 4"/></svg>' },
+            { value: 'area', label: 'Area',
+              icon: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2 17l5-8 4 5 3-3 4 4 4-6"/><path stroke-linecap="round" stroke-linejoin="round" d="M2 17h20" stroke-dasharray="2"/></svg>' },
+            { value: 'pie',  label: 'Pie',
+              icon: '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6.5a6 6 0 11-6 6h6V6.5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6a6 6 0 016 6"/></svg>' },
+        ],
+
+        get subtitle() {
+            return this.labels.length
+                ? `${this.labels.length} group${this.labels.length !== 1 ? 's' : ''}`
+                : '';
+        },
+
+        init() {
+            this.$nextTick(() => this.renderChart());
+            window.addEventListener('resize', this._onResize = () => this.renderChart());
+        },
+        destroy() {
+            window.removeEventListener('resize', this._onResize);
+            if (this._chart) { this._chart.destroy(); this._chart = null; }
+        },
+
+        setChartType(ct) {
+            this.chartType = ct;
+            this.renderChart();
+        },
+
+        async fetchData() {
+            this.loading = true;
+            try {
+                const p = new URLSearchParams({
+                    model: this.model,
+                    groupby: this.groupby,
+                    measure: this.measure,
+                    chart: this.chartType,
+                    search: this.searchText,
+                });
+                const r = await fetch('/api/graph/data?' + p, { credentials: 'same-origin' });
+                if (!r.ok) throw new Error('fetch failed');
+                const d = await r.json();
+                this.labels = d.labels;
+                this.values = d.values;
+                this.measureLabel = d.measure_label;
+            } catch (e) {
+                if (window.pvAlert) pvAlert('Could not load chart data.', { variant: 'warning' });
+            } finally {
+                this.loading = false;
+                await this.$nextTick();
+                this.renderChart();
+            }
+        },
+
+        themeVar(n, fb) {
+            const v = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+            return v || fb;
+        },
+
+        renderChart() {
+            if (typeof ApexCharts === 'undefined') { setTimeout(() => this.renderChart(), 60); return; }
+            const el = this.$refs.mount;
+            if (!el) return;
+            if (this._chart) { this._chart.destroy(); this._chart = null; }
+            if (!this.values.length) return;
+
+            const isDark = document.documentElement.classList.contains('dark');
+            const fg       = this.themeVar('--color-body',         isDark ? '#e5e7eb' : '#1f2937');
+            const fgSubtle = this.themeVar('--color-body-subtle',  isDark ? '#9ca3af' : '#6b7280');
+            const brand    = this.themeVar('--color-fg-brand',     '#2563eb');
+            const gridClr  = this.themeVar('--color-border-default', isDark ? '#374151' : '#e5e7eb');
+            const palette  = [brand,'#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16'];
+
+            const apexType = this.chartType === 'pie' ? 'pie'
+                : this.chartType === 'line' ? 'line'
+                : this.chartType === 'area' ? 'area'
+                : 'bar';
+
+            const base = {
+                chart: { type: apexType, height: 400, background: 'transparent',
+                          toolbar: { show: false }, animations: { speed: 220 }, foreColor: fg },
+                theme: { mode: isDark ? 'dark' : 'light' },
+                colors: palette,
+                grid: { borderColor: gridClr },
+                tooltip: { theme: isDark ? 'dark' : 'light' },
+                legend: { labels: { colors: fgSubtle } },
+            };
+
+            let opts;
+            if (apexType === 'pie') {
+                opts = { ...base,
+                    series: this.values, labels: this.labels,
+                    dataLabels: { enabled: true } };
+            } else {
+                opts = { ...base,
+                    series: [{ name: this.measureLabel, data: this.values }],
+                    xaxis: { categories: this.labels, labels: { style: { colors: fgSubtle } } },
                     yaxis: { labels: { style: { colors: fgSubtle } } },
                     dataLabels: { enabled: false },
-                    plotOptions: { bar: { horizontal: !!this.cfg.horizontal,
-                                          borderRadius: 4 } },
-                    stroke: this.cfg.chart_type === 'line'
+                    plotOptions: { bar: { horizontal: false, borderRadius: 4 } },
+                    fill: apexType === 'area' ? { type: 'gradient',
+                        gradient: { shadeIntensity: 1, opacityFrom: 0.55, opacityTo: 0.05 } }
+                        : {},
+                    stroke: (apexType === 'line' || apexType === 'area')
                         ? { curve: 'smooth', width: 2 } : { width: 0 },
                 };
-            },
-        }));
-    });
+            }
+            this._chart = new ApexCharts(el, opts);
+            this._chart.render();
+        },
+    }));
+});
 </script>
 {% endblock %}

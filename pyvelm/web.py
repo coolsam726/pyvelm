@@ -1183,6 +1183,265 @@ def create_app(
             )
         )
 
+    # ---- graph / pivot interactive data endpoints ----
+    #
+    # Both return plain JSON so the Alpine toolbar components can
+    # re-fetch on every control change without a full-page reload.
+    # Auth mirrors /api/records — authenticated session required.
+
+    @app.get("/api/graph/data")
+    def api_graph_data(
+        model: str = Query(...),
+        groupby: str = Query(...),
+        measure: str = Query(default="__count"),
+        chart: str = Query(default="bar"),
+        search: str = Query(default=""),
+        filters: str = Query(default=""),
+        env: Environment = Depends(get_env),
+    ):
+        """Return aggregated JSON for one groupby + one measure."""
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if model not in registry:
+            raise HTTPException(status_code=400, detail=f"Unknown model {model!r}")
+        from .render import _build_search_domain, _format_group_label, _parse_filters
+
+        model_cls = registry[model]
+        Model = env[model]
+        pseudo_spec = [{"name": n} for n, f in model_cls._fields.items() if f.is_stored]
+        domain: list = []
+        if search:
+            domain.extend(_build_search_domain(model_cls, pseudo_spec, search))
+        if filters:
+            domain.extend(_parse_filters(model_cls, pseudo_spec, filters))
+
+        rows = Model.read_group(domain, groupby=[groupby], measures=[measure])
+
+        gfname, gtrunc = (groupby.split(":", 1) if ":" in groupby else (groupby, None))
+        label_key = f"{groupby}__label"
+        labels: list[str] = []
+        values: list[float] = []
+        for r in rows:
+            raw = r.get(groupby)
+            lbl = (str(r[label_key]) if (label_key in r and r[label_key] is not None)
+                   else _format_group_label(raw, gfname, gtrunc, model_cls))
+            labels.append(lbl)
+            try:
+                values.append(float(r.get(measure, 0) or 0))
+            except (TypeError, ValueError):
+                values.append(0.0)
+
+        if measure == "__count":
+            measure_label = "Count"
+        else:
+            mfname = measure.split(":", 1)[0]
+            mf = model_cls._fields.get(mfname)
+            base = (mf.string or mfname) if mf else mfname
+            agg = measure.split(":", 1)[1] if ":" in measure else "sum"
+            measure_label = f"{base} ({agg})"
+
+        return {
+            "labels": labels,
+            "values": values,
+            "measure_label": measure_label,
+            "chart_type": chart,
+            "groupby": groupby,
+            "measure": measure,
+        }
+
+    @app.get("/api/pivot/data")
+    def api_pivot_data(
+        model: str = Query(...),
+        row_groupby: str = Query(default=""),
+        col_groupby: str = Query(default=""),
+        measures: str = Query(default="__count"),
+        search: str = Query(default=""),
+        filters: str = Query(default=""),
+        env: Environment = Depends(get_env),
+    ):
+        """Return cross-tabulated JSON for row_groupby × col_groupby × measures."""
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if model not in registry:
+            raise HTTPException(status_code=400, detail=f"Unknown model {model!r}")
+        from .render import (
+            _build_search_domain,
+            _format_pivot_cell,
+            _measure_label as _ml,
+            _parse_filters,
+            _pivot_axis_labels,
+        )
+        from itertools import product as _ip
+
+        model_cls = registry[model]
+        Model = env[model]
+        pseudo_spec = [{"name": n} for n, f in model_cls._fields.items() if f.is_stored]
+        domain: list = []
+        if search:
+            domain.extend(_build_search_domain(model_cls, pseudo_spec, search))
+        if filters:
+            domain.extend(_parse_filters(model_cls, pseudo_spec, filters))
+
+        row_specs = [s for s in row_groupby.split(",") if s] if row_groupby else []
+        col_specs = [s for s in col_groupby.split(",") if s] if col_groupby else []
+        meas_list = [s for s in measures.split(",") if s] if measures else ["__count"]
+
+        flat = Model.read_group(domain, groupby=row_specs + col_specs, measures=meas_list)
+
+        row_axes = _pivot_axis_labels(flat, row_specs, model_cls)
+        col_axes = _pivot_axis_labels(flat, col_specs, model_cls)
+
+        cell_index: dict = {}
+        for r in flat:
+            rk = tuple(r.get(s) for s in row_specs)
+            ck = tuple(r.get(s) for s in col_specs)
+            cell_index[(rk, ck)] = {m: r.get(m) for m in meas_list}
+
+        row_combos = (list(_ip(*[[e["value"] for e in a] for a in row_axes]))
+                      if row_axes else [()])
+        col_combos = (list(_ip(*[[e["value"] for e in a] for a in col_axes]))
+                      if col_axes else [()])
+
+        # Header levels for col groupbys
+        header_levels: list[list[dict]] = []
+        for li, level in enumerate(col_axes):
+            below = col_axes[li + 1:]
+            span_per = max(1, len(level))
+            for b in below:
+                span_per *= max(1, len(b))
+            header_levels.append([
+                {"label": e["label"], "colspan": span_per * len(meas_list)}
+                for e in level
+            ])
+
+        measure_label_row = [
+            {"label": _ml(m, model_cls), "colspan": 1}
+            for _ in col_combos for m in meas_list
+        ]
+
+        body_rows: list[dict] = []
+        for rc in row_combos:
+            row_labels: list[str] = []
+            for li2, kv in enumerate(rc):
+                row_labels.append(
+                    next((e["label"] for e in row_axes[li2] if e["value"] == kv),
+                         str(kv))
+                )
+            cells: list[dict] = []
+            rt: dict = {m: 0 for m in meas_list}
+            for cc in col_combos:
+                mac = cell_index.get((rc, cc))
+                for m in meas_list:
+                    v = mac.get(m) if mac else None
+                    cells.append({"display": _format_pivot_cell(v, m), "is_total": False})
+                    if v is not None:
+                        try:
+                            rt[m] += float(v)
+                        except (TypeError, ValueError):
+                            pass
+            for m in meas_list:
+                cells.append({"display": _format_pivot_cell(rt[m], m), "is_total": True})
+            body_rows.append({"labels": row_labels, "cells": cells})
+
+        col_totals: list[dict] = []
+        gg: dict = {m: 0 for m in meas_list}
+        for cc in col_combos:
+            for m in meas_list:
+                run = 0.0
+                for rc in row_combos:
+                    mac = cell_index.get((rc, cc))
+                    if mac is None:
+                        continue
+                    v = mac.get(m)
+                    if v is None:
+                        continue
+                    try:
+                        run += float(v)
+                    except (TypeError, ValueError):
+                        pass
+                col_totals.append({"display": _format_pivot_cell(run, m), "is_total": True})
+                gg[m] += run
+        for m in meas_list:
+            col_totals.append({"display": _format_pivot_cell(gg[m], m), "is_total": True})
+
+        row_axis_titles: list[str] = []
+        for spec in row_specs:
+            fname = spec.split(":", 1)[0]
+            f = model_cls._fields.get(fname)
+            t = (f.string or fname) if f else fname
+            if ":" in spec:
+                t += f" ({spec.split(':',1)[1]})"
+            row_axis_titles.append(t)
+
+        return {
+            "header_levels": header_levels,
+            "measure_label_row": measure_label_row,
+            "grand_header": {"label": "Total", "colspan": len(meas_list)},
+            "body_rows": body_rows,
+            "col_totals": col_totals,
+            "row_axis_titles": row_axis_titles,
+            "measure_count": len(meas_list),
+            "col_combos_count": len(col_combos),
+            "row_specs": row_specs,
+            "col_specs": col_specs,
+            "measures": meas_list,
+        }
+
+    @app.get("/api/view-fields")
+    def api_view_fields(
+        model: str = Query(...),
+        env: Environment = Depends(get_env),
+    ):
+        """Return field metadata used by graph/pivot toolbars to populate
+        their groupby / measure dropdowns."""
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if model not in registry:
+            raise HTTPException(status_code=400, detail=f"Unknown model {model!r}")
+        from .fields import Boolean, Date, Datetime, Float, Integer, Many2one
+
+        model_cls = registry[model]
+        groupable: list[dict] = []
+        measurable: list[dict] = []
+
+        # Count is always available as a measure.
+        measurable.append({"value": "__count", "label": "Count"})
+
+        for fname, field in model_cls._fields.items():
+            if not field.is_stored or field.private:
+                continue
+            label = field.string or fname
+            ft = type(field).__name__
+
+            # Groupable: Char, Integer, Boolean, Many2one, Date, Datetime
+            if isinstance(field, (Many2one, Date, Datetime)):
+                groupable.append({"value": fname, "label": label, "type": ft})
+                if isinstance(field, (Date, Datetime)):
+                    for trunc in ("day", "week", "month", "quarter", "year"):
+                        groupable.append({
+                            "value": f"{fname}:{trunc}",
+                            "label": f"{label} ({trunc})",
+                            "type": ft,
+                        })
+            elif not isinstance(field, (Float, Boolean)):
+                # Char, Integer and others are groupable as-is
+                groupable.append({"value": fname, "label": label, "type": ft})
+
+            # Measurable: numeric fields only
+            if isinstance(field, (Integer, Float)):
+                measurable.append({
+                    "value": f"{fname}:sum",
+                    "label": f"{label} (sum)",
+                    "type": ft,
+                })
+                measurable.append({
+                    "value": f"{fname}:avg",
+                    "label": f"{label} (avg)",
+                    "type": ft,
+                })
+
+        return {"groupable": groupable, "measurable": measurable}
+
     # ---- admin dashboard ----
 
     @app.get("/web/admin", response_class=HTMLResponse)
