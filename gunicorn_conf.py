@@ -49,4 +49,6 @@ forwarded_allow_ips = os.environ.get("GUNICORN_FORWARDED_ALLOW_IPS", "127.0.0.1"
 # Tee the stdout/stderr logs to docker.
 accesslog = os.environ.get("GUNICORN_ACCESSLOG", "-")
 errorlog = os.environ.get("GUNICORN_ERRORLOG", "-")
-loglevel = os.environ.get("GUNICORN_LOGLEVEL", "info")
+_pyvelm_env = (os.environ.get("PYVELM_ENV") or "production").strip().lower()
+_default_level = "info" if _pyvelm_env in ("production", "prod") else "debug"
+loglevel = os.environ.get("GUNICORN_LOGLEVEL", _default_level)

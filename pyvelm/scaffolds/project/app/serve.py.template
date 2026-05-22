@@ -1,9 +1,14 @@
 """ASGI entry point for {{name}}.
 
-Loads framework + app modules, builds a FastAPI app, runs uvicorn.
-Gunicorn invokes this module via `gunicorn app.serve:app`; running
-this file directly (`python -m app.serve`) starts a single-process
-dev server.
+Gunicorn (production)::
+
+    gunicorn -c gunicorn_conf.py app.serve:app
+
+Development server::
+
+    python -m app.serve
+    python -m app.serve --reload
+    PYVELM_ENV=production python -m app.serve --host 0.0.0.0
 """
 from __future__ import annotations
 
@@ -17,6 +22,8 @@ from dotenv import load_dotenv
 from psycopg_pool import ConnectionPool
 
 from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
+from pyvelm.runtime import DEVELOPMENT, PRODUCTION
+from pyvelm.server import apply_runtime_env, default_serve_env, run_dev_server
 from pyvelm.web import create_app
 
 load_dotenv(".env")
@@ -53,13 +60,13 @@ def _collect_module_roots() -> list:
 MODULE_ROOTS = _collect_module_roots()
 
 
-def _build_app():
+def _build_app(*, runtime_env: str | None = None):
     dsn = os.environ.get("PYVELM_DSN")
     if not dsn:
         sys.exit("PYVELM_DSN is not set (copy .env.example to .env)")
 
-    # Install / upgrade modules using a one-shot autocommit
-    # connection, then hand off to the pool-backed ASGI app.
+    env_mode = apply_runtime_env(runtime_env)
+
     with psycopg.connect(dsn, autocommit=True) as conn:
         reg = Registry()
         env = Environment(conn, registry=reg)
@@ -67,24 +74,53 @@ def _build_app():
         print("Loaded modules:", [s.name for s in specs])
 
     pool = ConnectionPool(dsn, min_size=1, max_size=4, open=True)
-    return create_app(reg, pool, module_roots=MODULE_ROOTS)
+    return create_app(
+        reg, pool, module_roots=MODULE_ROOTS, runtime_env=env_mode,
+    )
 
 
-# Module-level `app` so gunicorn / uvicorn --reload can import it.
-app = _build_app()
+# Built at import time for gunicorn / uvicorn without --reload.
+app = _build_app(runtime_env=default_serve_env(from_cli=False))
 
 
 def main():
-    import uvicorn
-
-    parser = argparse.ArgumentParser(description="{{name}} dev server")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser = argparse.ArgumentParser(description="{{name}} ASGI server")
+    parser.add_argument("--host", default=os.environ.get("PYVELM_HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PYVELM_PORT", "8000")))
+    parser.add_argument(
+        "--env",
+        choices=[DEVELOPMENT, PRODUCTION, "dev", "prod"],
+        default=None,
+        help="Runtime mode (default: development). Also set PYVELM_ENV.",
+    )
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Auto-reload on code changes (development only)",
+    )
     args = parser.parse_args()
 
-    print(f"\nServing at http://{args.host}:{args.port}/login")
-    print("Default credentials: admin / admin\n")
-    uvicorn.run(app, host=args.host, port=args.port)
+    env_mode = apply_runtime_env(args.env or DEVELOPMENT)
+
+    if args.reload:
+        project_root = str(HERE.parent.parent)
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        run_dev_server(
+            app="app.serve:app",
+            host=args.host,
+            port=args.port,
+            runtime_env=env_mode,
+            reload=True,
+            reload_dirs=[str(HERE.parent), str(HERE)],
+        )
+    else:
+        run_dev_server(
+            app=_build_app(runtime_env=env_mode),
+            host=args.host,
+            port=args.port,
+            runtime_env=env_mode,
+        )
 
 
 if __name__ == "__main__":

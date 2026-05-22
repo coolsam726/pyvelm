@@ -7,16 +7,10 @@ DESCRIPTION: str = ""
 CATEGORY: str = "Apps"
 AUTHOR: str = ""
 
-# Modules this one depends on. `base` is the framework's primitives
-# (res.users, ir.ui.view, etc.) — every module needs it.
 DEPENDS: list[str] = ["base"]
 
-# Declarative data files. The loader executes each of these and
-# harvests their module-level VIEWS / VIEW_INHERITS / MENUS lists.
-DATA: list[str] = [
-    "views/{{name}}.py",
-    "views/menu.py",
-]
+# Declarative data (views, menus). Add paths when you run make:view / make:menu.
+DATA: list[str] = []
 
-# Optional install hook, runs once on first install.
-INSTALL_HOOK: str = "{{name}}.hooks:install"
+# Optional install hook — runs once on first install.
+# INSTALL_HOOK: str = "{{name}}.hooks:install"

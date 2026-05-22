@@ -60,6 +60,7 @@ class ModuleSpec:
     views: list[dict[str, Any]] = dc_field(default_factory=list)
     view_inherits: list[dict[str, Any]] = dc_field(default_factory=list)
     menus: list[dict[str, Any]] = dc_field(default_factory=list)
+    command_refs: list[str] = dc_field(default_factory=list)
     # Filled by the loader during the import pass.
     loaded: bool = False
 
@@ -104,6 +105,7 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
     install_dotted = getattr(mod, "INSTALL_HOOK", None)
     install_hook = _import_attr(install_dotted) if install_dotted else None
     data = list(getattr(mod, "DATA", []))
+    command_refs = list(getattr(mod, "COMMANDS", []))
 
     return ModuleSpec(
         name=name,
@@ -120,6 +122,7 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
         category=getattr(mod, "CATEGORY", ""),
         author=getattr(mod, "AUTHOR", ""),
         icon=getattr(mod, "ICON", ""),
+        command_refs=command_refs,
     )
 
 
@@ -176,9 +179,65 @@ def resolve_order(specs: dict[str, ModuleSpec]) -> list[ModuleSpec]:
     return order
 
 
+def _has_models_package(spec: ModuleSpec) -> bool:
+    """True when the module ships a ``models/`` package to import."""
+    if spec.package_path is not None:
+        return (spec.package_path / "models").is_dir()
+    try:
+        return importlib.util.find_spec(spec.models_package) is not None
+    except (ModuleNotFoundError, ValueError):
+        return False
+
+
+def _sync_models_from_package(
+    spec: ModuleSpec,
+    registry: Registry,
+    before_models: dict[str, type],
+) -> None:
+    """Register model classes from an imported models package.
+
+    On a fresh import, metaclass hooks usually register classes already.
+    When Python has cached the package (uvicorn ``--reload``, tests, or a
+    second ``Registry`` in-process), class bodies do not re-run and we must
+    scan ``sys.modules`` and attach classes to this registry explicitly.
+    """
+    from .model import BaseModel
+
+    prefix = spec.models_package + "."
+    mod_names = [spec.models_package] + [
+        k for k in sys.modules if k.startswith(prefix)
+    ]
+    seen: set[type] = set()
+    for mod_name in mod_names:
+        mod = sys.modules.get(mod_name)
+        if mod is None:
+            continue
+        for attr in vars(mod).values():
+            if not isinstance(attr, type) or attr in seen:
+                continue
+            if not issubclass(attr, BaseModel):
+                continue
+            name = getattr(attr, "_name", None)
+            if not name:
+                continue
+            seen.add(attr)
+            registry._models[name] = attr
+
+    for model_name, cls in registry._models.items():
+        if model_name not in before_models:
+            registry._model_module[model_name] = spec.name
+        elif cls is not before_models[model_name]:
+            registry._model_extensions.setdefault(spec.name, []).append(
+                model_name
+            )
+
+
 def _load_models(spec: ModuleSpec, registry: Registry) -> None:
     """Import a module's models package under the active registry, tagging
     every newly-registered model with the module name.
+
+    Modules without a ``models/`` directory (e.g. the bundled ``console``
+    CLI-only addon) are skipped.
 
     New models (not in registry before the import) are tagged with this
     module as their owner.  Existing models whose registry class changed
@@ -186,18 +245,13 @@ def _load_models(spec: ModuleSpec, registry: Registry) -> None:
     `registry._model_extensions` so `_setup_module_schema` can add their
     new columns.
     """
+    if not _has_models_package(spec):
+        spec.loaded = True
+        return
     with registry.activate():
         before_models: dict[str, type] = dict(registry._models)
         importlib.import_module(spec.models_package)
-        for model_name, cls in registry._models.items():
-            if model_name not in before_models:
-                # Brand-new model defined by this module.
-                registry._model_module[model_name] = spec.name
-            elif cls is not before_models[model_name]:
-                # Existing model extended via _inherit by this module.
-                registry._model_extensions.setdefault(spec.name, []).append(
-                    model_name
-                )
+        _sync_models_from_package(spec, registry, before_models)
     spec.loaded = True
 
 
@@ -578,3 +632,82 @@ def load_and_install(roots: list[Path | str], env: Environment) -> list[ModuleSp
         _load_models(spec, env.registry)
     install(ordered, env)
     return ordered
+
+
+# ---------------------------------------------------------------------------
+# Console command discovery (Artisan-style)
+# ---------------------------------------------------------------------------
+
+
+def _iter_command_classes(mod: Any) -> list[type]:
+    """Yield Command subclasses declared in an imported module."""
+    from .console import Command
+
+    found: list[type] = []
+    for attr in vars(mod).values():
+        if (
+            isinstance(attr, type)
+            and issubclass(attr, Command)
+            and attr is not Command
+            and not getattr(attr, "__abstractmethods__", None)
+        ):
+            found.append(attr)
+    return found
+
+
+def _load_commands_from_package(spec: ModuleSpec) -> list[type]:
+    """Import ``<package>.commands`` or scan ``commands/*.py`` on disk."""
+    classes: list[type] = []
+    pkg_name = f"{spec.package}.commands"
+    try:
+        mod = importlib.import_module(pkg_name)
+        classes.extend(_iter_command_classes(mod))
+    except ModuleNotFoundError:
+        pass
+    if spec.package_path is None:
+        return classes
+    cmd_dir = spec.package_path / "commands"
+    if not cmd_dir.is_dir():
+        return classes
+    seen = {c.__module__ + "." + c.__name__ for c in classes}
+    for path in sorted(cmd_dir.glob("*.py")):
+        if path.name.startswith("_"):
+            continue
+        mod_name = f"_pyvelm_cmd_{spec.name}_{path.stem}"
+        spec_obj = importlib.util.spec_from_file_location(mod_name, path)
+        if spec_obj is None or spec_obj.loader is None:
+            continue
+        mod = importlib.util.module_from_spec(spec_obj)
+        spec_obj.loader.exec_module(mod)
+        for cls in _iter_command_classes(mod):
+            key = cls.__module__ + "." + cls.__name__
+            if key not in seen:
+                seen.add(key)
+                classes.append(cls)
+    return classes
+
+
+def discover_commands(
+    roots: list[Path | str],
+    registry: Any | None = None,
+) -> Any:
+    """Discover and register console commands from all modules under ``roots``.
+
+    Returns a :class:`~pyvelm.console.CommandRegistry`. Does not require a
+    database connection unless a command sets ``requires_db=True``.
+    """
+    from .console import CommandRegistry
+
+    if registry is None:
+        registry = CommandRegistry()
+    specs = discover(roots)
+    ordered = resolve_order(specs)
+    for spec in ordered:
+        for ref in spec.command_refs:
+            cls = _import_attr(ref)
+            if not isinstance(cls, type):
+                raise TypeError(f"COMMANDS entry {ref!r} must be a Command class")
+            registry.register(cls())
+        for cls in _load_commands_from_package(spec):
+            registry.register(cls())
+    return registry

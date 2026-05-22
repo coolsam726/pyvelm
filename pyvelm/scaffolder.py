@@ -126,11 +126,13 @@ Next steps:
   2. Visit /web/apps in the browser.
   3. Find "{module_name}" in the catalog and click Install.
 
-Customise the module:
-  - models/{module_name}.py      Define your business model.
-  - views/{module_name}.py       List + form views.
-  - views/menu.py                Sidebar entry.
-  - hooks.py                     One-time install hook.
+Add models, views, and menus with generators:
+  pyvelm make:model {module_name}.product --module={module_name}
+  pyvelm make:view {module_name}.product --module={module_name}
+  pyvelm make:menu --view=product.list --module={module_name}
+  pyvelm db autogen {module_name} --with-views
+
+Optional: pyvelm make:command {module_name}:hello --module={module_name}
 """.rstrip()
     print(msg, file=sys.stderr)
 

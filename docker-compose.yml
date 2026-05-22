@@ -33,6 +33,7 @@ services:
         condition: service_healthy
     environment:
       PYVELM_DSN: "postgresql://${POSTGRES_USER:-pyvelm}:${POSTGRES_PASSWORD:-pyvelm}@db:5432/${POSTGRES_DB:-pyvelm}"
+      PYVELM_ENV: ${PYVELM_ENV:-production}
       # Per-worker rate-limit is in-memory; set workers > 1 only
       # when you've also configured a proxy-side rate limiter.
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}

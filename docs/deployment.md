@@ -24,16 +24,29 @@ The `Dockerfile` has two stages:
    `gunicorn` + `uvicorn[standard]`, copies the source, copies the
    built CSS from stage 1, and runs as a non-root `pyvelm` user.
 
-The container's `CMD` is `gunicorn -c gunicorn_conf.py examples.serve:app`.
-The default `gunicorn_conf.py` uses `UvicornWorker` and `2 × CPU + 1`
-workers; tune via env vars:
+The container's `CMD` is `gunicorn -c gunicorn_conf.py app.serve:app` (or
+`examples.serve:app` in this repo). Set **`PYVELM_ENV=production`** in
+compose (the default) so API docs are hidden and session cookies get the
+`Secure` flag.
 
 | variable | default | what it does |
 |---|---|---|
+| `PYVELM_ENV` | `production` in Docker; `development` for `python -m app.serve` | Runtime mode — docs, cookies, log level |
 | `GUNICORN_BIND` | `0.0.0.0:8000` | Address gunicorn binds to |
 | `GUNICORN_WORKERS` | `2 × CPU + 1` | Number of worker processes |
 | `GUNICORN_TIMEOUT` | `30` | Per-request timeout (seconds) |
 | `GUNICORN_FORWARDED_ALLOW_IPS` | `127.0.0.1` | IP / CIDR of trusted proxy for `X-Forwarded-*` |
+
+### Development inside Docker
+
+Scaffolded projects ship `docker-compose.dev.yml`. Merge it for hot reload:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+That sets `PYVELM_ENV=development` and runs `python -m app.serve --reload`
+instead of gunicorn.
 
 ## Scaling out
 

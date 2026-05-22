@@ -7,6 +7,8 @@ A single ``pyvelm`` command dispatches subcommands:
     pyvelm new <module>        Drop a runnable module skeleton into a project.
     pyvelm db diff <module>    Print the schema delta for a module.
     pyvelm db autogen <module> Write an additive migration file.
+    pyvelm list                List Artisan-style module commands.
+    pyvelm make:module …       Scaffold a module (see docs/console.md).
 
 The legacy ``pyvelm-cron`` entry point keeps working — it's a thin
 alias for ``pyvelm cron`` so existing docker-compose files and
@@ -312,6 +314,13 @@ def _add_db_subcommand(subs) -> None:
         "--dry-run", action="store_true",
         help="Print the would-be file contents instead of writing.",
     )
+    auto_p.add_argument(
+        "--with-views", action="store_true",
+        help=(
+            "For each model changed by the migration, create list+form "
+            "views when none exist yet (views/<model>.py + DATA entry)."
+        ),
+    )
     auto_p.set_defaults(func=_run_db_autogen)
 
 
@@ -368,10 +377,24 @@ def _run_db_diff(args: argparse.Namespace) -> None:
 
 def _run_db_autogen(args: argparse.Namespace) -> None:
     from . import db_autogen
+    from . import scaffold_generators
 
     env, spec, conn = _build_db_env_and_spec(args)
     try:
         diff = db_autogen.compute_diff(env, args.module)
+        if getattr(args, "with_views", False) and not diff.is_empty:
+            affected = scaffold_generators.models_affected_by_diff(
+                env, args.module, diff,
+            )
+            created = scaffold_generators.ensure_views_for_models(
+                spec,
+                affected,
+                registry=env.registry,
+            )
+            for path in created:
+                print(f"Created view: {path}")
+            if not created and affected:
+                print("All affected models already have list views.")
     finally:
         conn.close()
     cur_version = tuple(spec.version)
@@ -408,17 +431,102 @@ def _run_db_autogen(args: argparse.Namespace) -> None:
         print("(Migration body is a no-op — review whether you really need it.)")
 
 
+# ---------------------------------------------------------------------------
+# Artisan-style module commands (pyvelm make:module, etc.)
+# ---------------------------------------------------------------------------
+
+_BUILTIN_SUBCOMMANDS = frozenset({"cron", "db", "init", "new", "list", "help"})
+
+
+def bootstrap_command_env(ctx) -> None:
+    """Load registry + DB env for commands with ``requires_db=True``."""
+    import psycopg
+
+    from .env import Environment
+    from .registry import Registry
+
+    dsn = os.environ.get("PYVELM_DSN")
+    if not dsn:
+        sys.exit("PYVELM_DSN not set (required for this command)")
+    specs = loader.discover(ctx.roots)
+    ordered = loader.resolve_order(specs)
+    registry = Registry()
+    for spec in ordered:
+        loader._load_models(spec, registry)
+    conn = psycopg.connect(dsn, autocommit=True)
+    ctx.registry = registry
+    ctx.env = Environment(conn, registry=registry)
+
+
+def _command_registry(roots: list[Path] | None = None):
+    roots = roots or _default_module_roots()
+    return loader.discover_commands(roots)
+
+
+def _run_command_list(_args: argparse.Namespace | None = None) -> None:
+    reg = _command_registry()
+    print("Available commands:")
+    reg.print_list()
+
+
+def _run_command_help(args: argparse.Namespace) -> None:
+    from .console import parse_signature, _build_argparse
+
+    reg = _command_registry()
+    name = args.command_name
+    cmd = reg.get(name)
+    if cmd is None:
+        sys.exit(f"Unknown command {name!r}. Run `pyvelm list` to see commands.")
+    _build_argparse(cmd).print_help()
+
+
+def _try_dispatch_module_command(argv: list[str]) -> bool:
+    """Run ``pyvelm make:foo ...`` if registered. Returns True if handled."""
+    if not argv:
+        return False
+    name = argv[0]
+    if name in _BUILTIN_SUBCOMMANDS:
+        return False
+    reg = _command_registry()
+    if name not in reg.names():
+        return False
+    from .console import CommandContext
+
+    ctx = CommandContext(roots=_default_module_roots())
+    try:
+        code = reg.run(name, argv[1:], ctx=ctx)
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        sys.exit(str(exc))
+    sys.exit(code)
+    return True  # pragma: no cover
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pyvelm",
         description=(
-            "pyvelm command-line tool. Subcommands: `cron` (background "
-            "worker), `init` (scaffold a project), `new` (scaffold a "
-            "module), `db` (schema utilities)."
+            "pyvelm command-line tool. Built-ins: cron, init, new, db, "
+            "list, help. Module commands: pyvelm make:module, etc. "
+            "(see `pyvelm list`)."
         ),
     )
-    subs = parser.add_subparsers(dest="command", required=True, metavar="<command>")
+    subs = parser.add_subparsers(dest="command", required=False, metavar="<command>")
     _add_db_subcommand(subs)
+
+    lst = subs.add_parser(
+        "list",
+        help="List Artisan-style commands from installed modules.",
+    )
+    lst.set_defaults(func=_run_command_list)
+
+    hlp = subs.add_parser(
+        "help",
+        help="Show help for a module command (e.g. pyvelm help make:module).",
+    )
+    hlp.add_argument("command_name", help="Command name (e.g. make:module).")
+    hlp.set_defaults(func=_run_command_help)
 
     cron = subs.add_parser(
         "cron",
@@ -464,8 +572,20 @@ def _build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     """``pyvelm`` entry point — subcommand dispatch."""
     load_dotenv(".env")
+    argv = sys.argv[1:]
+    if argv and _try_dispatch_module_command(argv):
+        return
     parser = _build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.command is None:
+        parser.print_help()
+        print("\nModule commands (run `pyvelm list` for full list):")
+        reg = _command_registry()
+        for cmd in reg.all()[:8]:
+            print(f"  {cmd.name:<20} {cmd.description or ''}")
+        if len(reg.all()) > 8:
+            print(f"  … and {len(reg.all()) - 8} more")
+        sys.exit(0)
     args.func(args)
 
 

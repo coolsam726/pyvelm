@@ -1,1 +1,1 @@
-from . import {{name}}    # noqa: F401
+"""Models package for the {{name}} module."""

@@ -413,6 +413,7 @@ class Manifest(_ManifestRequired, total=False):
     MODELS_PACKAGE: str
     MIGRATIONS_PACKAGE: str
     INSTALL_HOOK: str            # dotted reference, e.g. "pkg.mod:fn"
+    COMMANDS: list[str]         # dotted Command classes, e.g. "pkg.cmd:MyCommand"
     # Apps catalog metadata — purely informational, drives /web/apps.
     SUMMARY: str
     DESCRIPTION: str

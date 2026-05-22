@@ -1,0 +1,10 @@
+"""Sidebar entries for the {{module}} module."""
+
+from pyvelm.builders import Menus
+
+m = Menus("{{module}}")
+
+MENUS = [
+    m.group("{{group}}", "{{group_label}}", sequence={{sequence}}),
+    m.item("{{item_name}}", "{{item_label}}", parent="{{group}}", view="{{view_name}}", sequence=10),
+]

@@ -2,13 +2,24 @@
 
 A pyvelm-based application.
 
-## Quick start (Docker)
+## Quick start (Docker, production mode)
 
 ```bash
 cp .env.example .env
 docker compose up --build
 # → http://localhost:8000/login   (admin / admin)
 ```
+
+Uses gunicorn with ``PYVELM_ENV=production`` (no ``/docs``, Secure cookies).
+
+## Quick start (Docker, development + reload)
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+Runs ``python -m app.serve --reload`` with ``PYVELM_ENV=development``.
 
 ## Quick start (bare metal)
 
@@ -17,8 +28,9 @@ cp .env.example .env
 python3 -m venv venv
 source venv/bin/activate
 pip install -e .
-python -m app.serve
+python -m app.serve --reload
 # → http://localhost:8000/login
+# → http://localhost:8000/docs   (development only)
 ```
 
 ## Adding a module

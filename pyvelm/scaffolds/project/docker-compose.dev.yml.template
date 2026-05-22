@@ -1,0 +1,19 @@
+# Development overrides — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Runs uvicorn with reload instead of gunicorn. Bind-mounts the app
+# package so Python changes apply without rebuilding the image.
+
+services:
+  app:
+    environment:
+      PYVELM_ENV: development
+    command:
+      [
+        "python", "-m", "app.serve",
+        "--host", "0.0.0.0",
+        "--port", "8000",
+        "--reload",
+      ]
+    volumes:
+      - ./app:/app/app:ro

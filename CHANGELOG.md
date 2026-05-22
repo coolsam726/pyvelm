@@ -11,6 +11,29 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.2.5] — 2026-05-22
+
+Artisan console, code generators, dev/production runtime, reload fix.
+Base module remains `0.18.0`.
+See [docs/releases/v0.2.5.md](docs/releases/v0.2.5.md).
+
+### Added
+
+- **Artisan-style CLI** (`console` module): `pyvelm make:module`,
+  `make:model`, `make:view`, `make:menu`, `make:command`; `pyvelm list`.
+- **Minimal module scaffold** — empty shell; use generators instead of
+  bundled sample models/views/menus.
+- **`pyvelm db autogen --with-views`** — create list+form views for models
+  touched by the migration when none exist yet.
+- **`PYVELM_ENV`** (`development` | `production`) — API docs, cookie
+  `Secure` flags, log level; `docker-compose.dev.yml` for reload in Docker.
+
+### Fixed
+
+- **Model registry on uvicorn `--reload`** — re-register models when Python
+  has cached `*.models` packages (fixes “User model not loaded” on login).
+- **`console` module** — CLI-only addons skip missing `models/` import.
+
 ## [0.2.4] — 2026-05-22
 
 Menus builder, CLI module discovery, sidebar icon fix. Base module

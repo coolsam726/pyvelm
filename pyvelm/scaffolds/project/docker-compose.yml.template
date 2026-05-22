@@ -29,6 +29,7 @@ services:
         condition: service_healthy
     environment:
       PYVELM_DSN: "postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@db:5432/${POSTGRES_DB:-app}"
+      PYVELM_ENV: ${PYVELM_ENV:-production}
       # Module discovery for /web/apps (install/upgrade) and startup
       # load_and_install. Must match the volume mount below.
       PYVELM_MODULE_ROOTS: "/app/app/modules"

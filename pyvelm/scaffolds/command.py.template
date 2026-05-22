@@ -1,0 +1,14 @@
+"""``pyvelm {{command_name}}``."""
+
+from pyvelm.console import Command
+
+
+class {{class_name}}(Command):
+    name = "{{command_name}}"
+    description = "{{description}}"
+    signature = "{{command_name}}"
+    # requires_db = True  # uncomment if the command needs PYVELM_DSN
+
+    def handle(self) -> int:
+        self.info("Not implemented yet.")
+        return 0

@@ -13,9 +13,27 @@ Subcommands:
 | [`pyvelm cron`](#pyvelm-cron) | Run the background cron + mail-dispatcher worker. |
 | [`pyvelm init <name>`](#pyvelm-init) | Scaffold a new pyvelm project. |
 | [`pyvelm new <module>`](#pyvelm-new) | Drop a runnable module skeleton into a project. |
+| [`pyvelm list`](#artisan-style-commands) | List module commands (`make:module`, your own, …). |
+| [`pyvelm make:…`](#artisan-style-commands) | Run an Artisan-style command — see [Console commands](console.md). |
 
-`pyvelm --help` shows the current list; `pyvelm <subcommand> --help`
-shows the flags for each one.
+`pyvelm --help` shows built-ins; `pyvelm list` shows module commands;
+`pyvelm <name> --help` shows a command's signature.
+
+## Artisan-style commands
+
+Modules can register custom commands (generators, importers, maintenance
+tasks) like Laravel Artisan. The bundled **`console`** module provides
+`make:module` and `make:command`; your addons add more under
+`commands/*.py`.
+
+```bash
+pyvelm list
+pyvelm make:module inventory
+pyvelm make:command inventory:import
+pyvelm inventory:import --file=data.csv
+```
+
+Full guide: **[Console commands](console.md)**.
 
 ## `pyvelm cron`
 
@@ -122,32 +140,34 @@ pyvelm new tasks
 # → ./app/modules/tasks/  is created
 ```
 
-The generated tree:
+The generated tree (empty shell — no models, views, or menus):
 
 ```
 tasks/
 ├── __init__.py
-├── __pyvelm__.py          # NAME=tasks, VERSION=(0,1,0), DEPENDS=["base"]
-├── hooks.py               # def install(env): … sample access grants
+├── __pyvelm__.py          # NAME=tasks, DATA=[] (fill via generators)
+├── hooks.py               # optional install(env) stub
 ├── models/
-│   ├── __init__.py
-│   └── tasks.py           # `class Entry(BaseModel)` stub
+│   └── __init__.py
 ├── views/
-│   ├── __init__.py
-│   ├── tasks.py           # `list_view` + `form_view`
-│   └── menu.py            # `Menus` builder (view + parent names)
+│   └── __init__.py
+├── commands/              # Artisan commands (pyvelm make:command)
 └── migrations/
-    └── __init__.py        # add `0_1_to_0_2.py` here when you bump
+    └── __init__.py
 ```
 
-The model is named `Entry` and lives at `<module>.entry` — change
-it to something domain-specific once you start customising.
+Add code with generators (same as `pyvelm make:module`):
 
-After `pyvelm new` you typically:
+```bash
+pyvelm make:model tasks.todo --module=tasks
+pyvelm make:view tasks.todo --module=tasks
+pyvelm make:menu --view=todo.list --module=tasks
+```
 
-1. Edit the generated files to model your domain.
-2. Restart the app (`docker compose restart app` or your service
-   manager).
+After scaffolding you typically:
+
+1. Run `pyvelm db autogen tasks` (or `--with-views` to auto-create views).
+2. Restart the app (`docker compose restart app`).
 3. Open `/web/apps`, find the new module, click **Install**.
 
 ### Where the module lands

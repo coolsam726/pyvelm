@@ -1,4 +1,9 @@
 # Copy this file to `.env` and adjust for your environment.
+
+# development — API docs, no Secure cookies (fine on http://localhost)
+# production  — hide /docs, Secure session cookies (use behind HTTPS)
+PYVELM_ENV=development
+
 PYVELM_DSN=postgresql://user:password@localhost:5432/mydb
 
 # Docker compose reads these for the bundled Postgres service.

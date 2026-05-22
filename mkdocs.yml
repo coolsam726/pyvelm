@@ -84,6 +84,7 @@ nav:
       - Security: security.md
       - Deployment: deployment.md
       - CLI reference: cli.md
+      - Console commands: console.md
       - Architecture: architecture.md
   - API reference:
       - Overview: api/index.md

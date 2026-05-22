@@ -120,7 +120,11 @@ def _parse_domain(domain_json: str) -> list:
 
 
 def create_app(
-    registry: Registry, pool: Any, module_roots: list | None = None
+    registry: Registry,
+    pool: Any,
+    module_roots: list | None = None,
+    *,
+    runtime_env: str | None = None,
 ) -> FastAPI:
     """Build the FastAPI app bound to a loaded registry and a Postgres
     connection pool. Each request checks out a connection, makes an
@@ -132,13 +136,39 @@ def create_app(
     Optional — if omitted, the catalog page reports "no roots configured"
     instead of crashing.
 
+    ``runtime_env`` (or ``PYVELM_ENV``) selects development vs production:
+    API docs, cookie ``Secure`` flags, etc. See :mod:`pyvelm.runtime`.
+
     `pool` is typed `Any` because `psycopg_pool.ConnectionPool` is generic
     over the connection class and propagating that here adds friction
     without buying meaningful type safety — every method we call on it
     is on the runtime type."""
+    from .runtime import cookie_options, get_runtime_env, is_development
 
-    app = FastAPI(title="pyvelm")
+    env_mode = get_runtime_env(runtime_env)
+    dev = is_development(env_mode)
+    auth_cookie = cookie_options(env=env_mode)
+
+    app = FastAPI(
+        title="pyvelm",
+        docs_url="/docs" if dev else None,
+        redoc_url="/redoc" if dev else None,
+        openapi_url="/openapi.json" if dev else None,
+    )
     app.state.module_roots = list(module_roots or [])
+    app.state.pyvelm_env = env_mode
+    app.state.auth_cookie_options = auth_cookie
+    app.state.registry = registry
+
+    _REQUIRED_MODELS = ("res.users", "ir.ui.view")
+    missing = [m for m in _REQUIRED_MODELS if m not in registry]
+    if missing:
+        raise RuntimeError(
+            f"Registry is missing required models: {missing}. "
+            "Call loader.load_and_install(BUILTIN_MODULE_ROOTS + [...], env) "
+            "before create_app(). If you use uvicorn --reload, upgrade pyvelm "
+            "or restart without reload once to verify."
+        )
 
     # ── CSRF: double-submit cookie ──
     # We mint a random `pyvelm_csrf` cookie on the first GET that
@@ -1628,9 +1658,7 @@ def create_app(
                 response.set_cookie(
                     _COMPANY_COOKIE,
                     str(cid),
-                    httponly=True,
-                    samesite="lax",
-                    path="/",
+                    **auth_cookie,
                 )
             else:
                 response.delete_cookie(_COMPANY_COOKIE, path="/")
@@ -1823,13 +1851,7 @@ def create_app(
                 success=True,
             )
         )
-        response.set_cookie(
-            _SESSION_COOKIE,
-            new_token,
-            httponly=True,
-            samesite="lax",
-            path="/",
-        )
+        response.set_cookie(_SESSION_COOKIE, new_token, **auth_cookie)
         return response
 
     # ---- login / logout ----
@@ -1934,13 +1956,7 @@ def create_app(
                 env._acl_bypass = False
 
         response = RedirectResponse(next_url, status_code=303)
-        response.set_cookie(
-            _SESSION_COOKIE,
-            token,
-            httponly=True,
-            samesite="lax",
-            path="/",
-        )
+        response.set_cookie(_SESSION_COOKIE, token, **auth_cookie)
         # Default the active company to the user's home company. Without
         # this, a freshly-logged-in user lands on /web/admin with no
         # scope selected and the multi-company filter is invisible until
@@ -1950,9 +1966,7 @@ def create_app(
             response.set_cookie(
                 _COMPANY_COOKIE,
                 str(home_company_id),
-                httponly=True,
-                samesite="lax",
-                path="/",
+                **auth_cookie,
             )
         else:
             response.delete_cookie(_COMPANY_COOKIE, path="/")

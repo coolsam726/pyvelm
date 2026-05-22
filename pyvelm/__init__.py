@@ -4,7 +4,7 @@ from pathlib import Path as _Path
 # ``pyproject.toml`` — the release workflow refuses to publish if
 # they diverge, but the check is only enforced in CI; bump both
 # together when cutting a release.
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 
 from .depends import depends
 from .env import Environment
@@ -52,7 +52,8 @@ from .registry import Registry
 #
 # ``pyvelm-cron`` prepends these automatically so the CLI sees the
 # framework modules even if the operator only set PYVELM_MODULE_ROOTS
-# to their app's addons.
+# to their app's addons. The ``console`` module ships Artisan-style
+# generators (``make:module``, ``make:command``).
 BUILTIN_MODULE_ROOTS: list[_Path] = [_Path(__file__).parent / "modules"]
 
 

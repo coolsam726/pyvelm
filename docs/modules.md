@@ -16,11 +16,17 @@ mymodule/
 │   └── partner.py
 ├── views/
 │   ├── __init__.py
-│   └── partner.py       # exports VIEWS = [...] / VIEW_INHERITS = [...]
+│   ├── partner.py       # exports VIEWS = [...]
+│   └── menu.py          # optional MENUS = [...]
+├── commands/            # optional Artisan CLI commands
 └── migrations/          # optional
     ├── __init__.py
     └── 0_1_to_0_2.py
 ```
+
+`pyvelm make:module` / `pyvelm new` create an **empty** shell (`DATA = []`).
+Use `make:model`, `make:view`, and `make:menu` to add each layer — see
+[Console commands](console.md).
 
 ## The manifest
 

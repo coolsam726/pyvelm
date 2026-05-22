@@ -1,0 +1,9 @@
+"""Model ``{{model}}``."""
+
+from pyvelm import BaseModel, Char
+
+
+class {{class_name}}(BaseModel):
+    _name = "{{model}}"
+
+    name = Char(required=True)

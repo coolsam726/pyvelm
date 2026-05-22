@@ -54,9 +54,16 @@ cp .env.example .env
 python3 -m venv venv
 source venv/bin/activate
 pip install -e .
-python -m app.serve
+python -m app.serve --reload
 # → http://localhost:8000/login   (admin / admin)
+# → http://localhost:8000/docs     (development mode only)
 ```
+
+`python -m app.serve` defaults to **development** (`PYVELM_ENV=development`):
+OpenAPI docs at `/docs`, debug logging, no `Secure` cookies (works on plain HTTP).
+
+For **production** locally: `PYVELM_ENV=production python -m app.serve --host 0.0.0.0`
+or use gunicorn as in [Deployment](deployment.md).
 
 ### What you'll see
 

@@ -1,7 +1,9 @@
-# Project context — pyvelm v0.2.4
+# Project context — pyvelm v0.2.5
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.2.5 (released 2026-05-22)** — Artisan console, generators, dev/prod
+runtime, reload registry fix. See [v0.2.5 release summary](#v025-release-summary).
 **v0.2.4 (released 2026-05-22)** — Menus builder, CLI module discovery,
 sidebar icon fix. See [v0.2.4 release summary](#v024-release-summary).
 **v0.2.3 (released 2026-05-22)** — related fields + model-level readonly.
@@ -103,7 +105,9 @@ For the design rationale and the deferred-items rationale, see
         `field`, `card` sub-helpers), `inherit_view` + six `op_*`
         helpers (`op_remove`, `op_set`, `op_update` with **kwargs,
         `op_after`, `op_before`, `op_replace`), `Menus` (sidebar:
-        short `parent` / `view` names), `menu_group` and `menu_item`.
+        short `parent` / `view` names), `menu_group` and `menu_item`,
+        `Command` (Artisan-style CLI — `make:model` / `make:view` /
+        `make:menu`; see `docs/console.md`).
         Every function returns the matching TypedDict
         so the loader needs no changes. `pyvelm.types` updated to
         discriminated union views (`ListView`/`FormView`/`KanbanView`
@@ -669,6 +673,28 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     * `render_pivot_page` injects `groupable_fields`,
       `measurable_fields`, and the current `init_row/col_groupby` +
       `init_measures` for toolbar state initialisation.
+
+---
+
+## v0.2.5 release summary
+
+**Released:** 2026-05-22
+**Package version:** `0.2.5` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this patch
+
+| Area | Highlights |
+|---|---|
+| **Console** | `make:module` / `model` / `view` / `menu` / `command`; `pyvelm list` |
+| **Autogen** | `db autogen --with-views` |
+| **Runtime** | `PYVELM_ENV=development\|production`; `docker-compose.dev.yml` |
+| **Reload** | Registry re-sync fixes “User model not loaded” |
+
+### Next focus options (post-v0.2.5)
+
+  - **Related paths** — One2many/Many2many hops.
+  - **Vellum ORM veneer (Phase 1)** — `docs/vellum-design.md`.
 
 ---
 
