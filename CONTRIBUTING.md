@@ -48,22 +48,32 @@ Steps:
    a new versioned heading. Note any breaking changes prominently.
 2. **Bump the version in both Python files** (`pyproject.toml` and
    `pyvelm/__init__.py`).
-3. **Commit + tag.**
+3. **Commit + annotated tag** (message = CHANGELOG section):
 
    ```bash
-   git commit -am "Release v0.2.0"
-   git tag v0.2.0
-   git push && git push --tags
+   git commit -am "Release v0.2.9"
+   ./scripts/tag_release.sh 0.2.9
+   git push && git push origin v0.2.9
    ```
+
+   `tag_release.sh` copies the `## [0.2.9]` block from `CHANGELOG.md`
+   verbatim (including `### Added` / `### Fixed` headings). GitHub Release
+   bodies use the same text via CI (`scripts/extract_changelog.py`).
 
 4. **Watch the release workflow.** The tag push fires three jobs in
    sequence:
    - `build` — sdist + wheel + `twine check`.
    - `publish-pypi` — uploads to PyPI via OIDC trusted publishing.
      No API token; configure once on the PyPI project page.
-   - `github-release` — drafts a GitHub Release with the wheel +
-     sdist attached and auto-generated release notes from the
-     merge log since the previous tag.
+   - `github-release` — publishes a GitHub Release with the wheel +
+     sdist attached and **release notes from CHANGELOG.md** (not the
+     auto-generated commit list).
+
+   To fix an existing release body after the fact:
+
+   ```bash
+   ./scripts/github_release.sh 0.2.8
+   ```
 5. **Sanity-check** by installing from PyPI in a fresh venv:
 
    ```bash

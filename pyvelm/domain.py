@@ -16,6 +16,10 @@ Public surface:
 
 Operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `like`, `ilike`.
 Empty `in`/`not in` short-circuit to `FALSE`/`TRUE`.
+
+Collection paths (O2m/M2m) accept an optional fourth element — a dict with
+``{"all": True}`` — for universal quantification: every member must satisfy
+the condition (implemented as ``NOT EXISTS`` over members that fail it).
 """
 from __future__ import annotations
 
@@ -24,6 +28,24 @@ from typing import Any, Iterable
 from .paths import M2mHop, M2oHop, O2mHop, parse_path
 
 _SIMPLE_OPS = {"=", "!=", "<", "<=", ">", ">="}
+# For {"all": True} on collection paths: emit NOT EXISTS(member fails op).
+_ALL_FAIL_OPS = {"=": "!=", "!=": "=", "in": "not in", "not in": "in"}
+
+
+def _parse_leaf(leaf) -> tuple[str, str, Any, bool]:
+    """Return (attr, op, value, universal)."""
+    if not isinstance(leaf, (list, tuple)) or len(leaf) not in (3, 4):
+        raise ValueError(f"Invalid domain leaf: {leaf!r}")
+    attr, op, value = leaf[0], leaf[1], leaf[2]
+    universal = False
+    if len(leaf) == 4:
+        opts = leaf[3]
+        if not isinstance(opts, dict):
+            raise ValueError(
+                f"Domain leaf 4th element must be a dict, got {type(opts).__name__}"
+            )
+        universal = bool(opts.get("all"))
+    return attr, op, value, universal
 
 
 def _resolve_simple(model_cls, attr: str):
@@ -101,11 +123,21 @@ def domain_to_sql(
             )
         return leaf_field
 
-    def _emit_exists(path, op: str, value):
+    def _emit_exists(path, op: str, value, *, universal: bool = False):
         """Emit `EXISTS (...)` for a path containing at least one O2m/M2m
         hop. Each call generates a fresh subquery — consecutive collection
         leaves can match different members, which is the intuitive read.
+
+        With ``universal=True``, emit ``NOT EXISTS`` over members that
+        *fail* the condition (every member must satisfy ``op``/``value``).
         """
+        if universal and op not in _ALL_FAIL_OPS and op not in ("like", "ilike"):
+            raise ValueError(
+                f"Operator {op!r} does not support {{'all': True}} on collection paths"
+            )
+        leaf_op = op
+        if universal and op in _ALL_FAIL_OPS:
+            leaf_op = _ALL_FAIL_OPS[op]
         join_counter[0] += 1
         suffix = join_counter[0]
         froms: list[str] = []
@@ -181,45 +213,52 @@ def domain_to_sql(
 
         # Build the leaf condition using the same operator dispatch as the
         # outer compiler, but writing directly into inner_clauses/params.
-        if op in _SIMPLE_OPS:
+        if leaf_op in _SIMPLE_OPS:
             v = _coerce(leaf_field, value)
-            if v is None and op == "=":
+            if v is None and leaf_op == "=":
                 inner_clauses.append(f"{leaf_ref} IS NULL")
-            elif v is None and op == "!=":
+            elif v is None and leaf_op == "!=":
                 inner_clauses.append(f"{leaf_ref} IS NOT NULL")
             else:
-                inner_clauses.append(f"{leaf_ref} {op} %s")
+                inner_clauses.append(f"{leaf_ref} {leaf_op} %s")
                 inner_params.append(v)
-        elif op == "in":
+        elif leaf_op == "in":
             values = [_coerce(leaf_field, v) for v in value]
             if not values:
-                return "FALSE", []
+                return ("TRUE", []) if universal else ("FALSE", [])
             placeholders = ",".join(["%s"] * len(values))
             inner_clauses.append(f"{leaf_ref} IN ({placeholders})")
             inner_params.extend(values)
-        elif op == "not in":
+        elif leaf_op == "not in":
             values = [_coerce(leaf_field, v) for v in value]
             if not values:
-                inner_clauses.append("TRUE")
-            else:
-                placeholders = ",".join(["%s"] * len(values))
-                inner_clauses.append(f"{leaf_ref} NOT IN ({placeholders})")
-                inner_params.extend(values)
-        elif op == "like":
+                return ("TRUE", []) if universal else ("TRUE", [])
+            placeholders = ",".join(["%s"] * len(values))
+            inner_clauses.append(f"{leaf_ref} NOT IN ({placeholders})")
+            inner_params.extend(values)
+        elif universal and op == "like":
+            inner_clauses.append(f"{leaf_ref} NOT LIKE %s")
+            inner_params.append(value)
+        elif universal and op == "ilike":
+            inner_clauses.append(f"{leaf_ref} NOT ILIKE %s")
+            inner_params.append(value)
+        elif leaf_op == "like":
             inner_clauses.append(f"{leaf_ref} LIKE %s")
             inner_params.append(value)
-        elif op == "ilike":
+        elif leaf_op == "ilike":
             inner_clauses.append(f"{leaf_ref} ILIKE %s")
             inner_params.append(value)
         else:
-            raise ValueError(f"Unknown operator: {op!r}")
+            raise ValueError(f"Unknown operator: {leaf_op!r}")
 
         sql_body = " ".join(froms)
-        clause = (
+        exists_sql = (
             f"EXISTS (SELECT 1 FROM {sql_body} "
             f'WHERE {" AND ".join(inner_clauses)})'
         )
-        return clause, inner_params
+        if universal:
+            return f"NOT ({exists_sql})", inner_params
+        return exists_sql, inner_params
 
     def _leaf_ref(attr: str):
         """Return (qualified_column_sql, field_or_None) for `attr`. Parses
@@ -242,19 +281,24 @@ def domain_to_sql(
         return f'{leaf_alias}."{leaf_field.column}"', leaf_field
 
     for leaf in domain:
-        if not (isinstance(leaf, (list, tuple)) and len(leaf) == 3):
-            raise ValueError(f"Invalid domain leaf: {leaf!r}")
-        attr, op, value = leaf
+        attr, op, value, universal = _parse_leaf(leaf)
 
-        # Special __or__ operator: value is a list of (attr, op, val) triples
+        # Special __or__ operator: value is a list of (attr, op, val) leaves
         # that should be OR-ed together. Useful for multi-field text search.
         if attr == "__or__":
             sub_clauses: list[str] = []
-            for s_attr, s_op, s_val in (value or []):
+            for sub_leaf in value or []:
+                s_attr, s_op, s_val, s_all = _parse_leaf(sub_leaf)
+                if s_all and "." not in s_attr:
+                    raise ValueError(
+                        f"{{'all': True}} only applies to collection paths, got {s_attr!r}"
+                    )
                 if "." in s_attr:
                     path = parse_path(model_cls, s_attr, registry)
                     if not path.is_m2o_only():
-                        s_clause, s_ps = _emit_exists(path, s_op, s_val)
+                        s_clause, s_ps = _emit_exists(
+                            path, s_op, s_val, universal=s_all
+                        )
                         sub_clauses.append(s_clause)
                         params.extend(s_ps)
                         continue
@@ -281,10 +325,14 @@ def domain_to_sql(
         # Paths containing any O2m/M2m hop go through an EXISTS subquery.
         # Pure-M2o paths stay in the LEFT JOIN path so multiple leaves
         # on the same chain share a single join.
+        if universal and "." not in attr:
+            raise ValueError(
+                f"{{'all': True}} only applies to collection paths, got {attr!r}"
+            )
         if "." in attr:
             path = parse_path(model_cls, attr, registry)
             if not path.is_m2o_only():
-                clause, ps = _emit_exists(path, op, value)
+                clause, ps = _emit_exists(path, op, value, universal=universal)
                 clauses.append(clause)
                 params.extend(ps)
                 continue

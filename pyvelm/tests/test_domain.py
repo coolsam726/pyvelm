@@ -70,6 +70,25 @@ class DomainCompileTests(unittest.TestCase):
         self.assertEqual(joins, "")
         self.assertEqual(params, ["VIP"])
 
+    def test_all_quantifier_wraps_not_exists(self):
+        reg, Partner = _mini_registry()
+        where, params, _joins = domain_to_sql(
+            [("tag_ids.name", "!=", "VIP", {"all": True})],
+            Partner,
+            reg,
+        )
+        self.assertIn("NOT (EXISTS", where)
+        self.assertEqual(params, ["VIP"])
+
+    def test_all_on_simple_field_raises(self):
+        reg, Partner = _mini_registry()
+        with self.assertRaises(ValueError):
+            domain_to_sql(
+                [("name", "=", "x", {"all": True})],
+                Partner,
+                reg,
+            )
+
     def test_or_subleaf_m2m_uses_exists(self):
         reg, Partner = _mini_registry()
         where, params, joins = domain_to_sql(

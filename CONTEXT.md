@@ -1,7 +1,9 @@
-# Project context — pyvelm v0.2.8
+# Project context — pyvelm v0.2.9
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.2.9 (released 2026-05-23)** — Domain `{"all": True}`; GitHub releases from
+CHANGELOG. See [v0.2.9 release summary](#v029-release-summary).
 **v0.2.8 (released 2026-05-23)** — Symmetric M2M cache; docs home refresh.
 See [v0.2.8 release summary](#v028-release-summary).
 **v0.2.7 (released 2026-05-23)** — Domain `__or__` + collection paths; comodel
@@ -682,6 +684,26 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ---
 
+## v0.2.9 release summary
+
+**Released:** 2026-05-23
+**Package version:** `0.2.9` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this patch
+
+| Area | Highlights |
+|---|---|
+| **Domains** | `("tag_ids.name", op, val, {"all": True})` universal quantifier |
+| **Release** | CI + scripts publish CHANGELOG section to GitHub Releases |
+
+### Next focus options (post-v0.2.9)
+
+  - **Vellum Slice E** — migration DSL (deferred).
+  - **Domain** — comparison ops with `all` on collections.
+
+---
+
 ## v0.2.8 release summary
 
 **Released:** 2026-05-23
@@ -697,7 +719,7 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ### Next focus options (post-v0.2.8)
 
-  - **Universal-quantifier domains** — `NOT EXISTS` / `all=True` for collections.
+  - ~~**Universal-quantifier domains**~~ — shipped in v0.2.9 (`{"all": True}`).
   - **Vellum Slice E** — migration DSL (deferred).
 
 ---

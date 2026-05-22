@@ -11,6 +11,25 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.2.9] — 2026-05-23
+
+Universal-quantifier collection domains and CHANGELOG-driven GitHub
+release bodies. Base module remains `0.18.0`.
+See [docs/releases/v0.2.9.md](docs/releases/v0.2.9.md).
+
+### Added
+
+- **Domain `{"all": True}`** — fourth leaf element on O2m/M2m paths;
+  e.g. `("tag_ids.name", "!=", "VIP", {"all": True})` means every tag
+  is non-VIP (`NOT EXISTS` over failing members).
+- **`scripts/extract_changelog.py`**, **`scripts/tag_release.sh`**, **`scripts/github_release.sh`** — release notes from CHANGELOG.
+
+### Changed
+
+- **GitHub release workflow** — `body_path` from CHANGELOG instead of
+  auto-generated commit list (`generate_release_notes: false`).
+- **`CONTRIBUTING.md`** — documented tag + GitHub release process.
+
 ## [0.2.8] — 2026-05-23
 
 Symmetric Many2many cache invalidation and docs home page refresh.

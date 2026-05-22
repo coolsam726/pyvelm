@@ -5,12 +5,13 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.2.8](releases/v0.2.8.md) (2026-05-23) — symmetric
-Many2many cache invalidation. See [releases](releases/v0.2.8.md) and the
+**Latest release:** [v0.2.9](releases/v0.2.9.md) (2026-05-23) — universal
+collection domains (`{"all": True}`) and CHANGELOG-driven GitHub releases.
+See [releases](releases/v0.2.9.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.2.8
+pip install pyvelm==0.2.9
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -52,6 +53,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.2.9](releases/v0.2.9.md) | `{"all": True}` on `tag_ids.*` domains; GitHub release notes from CHANGELOG |
 | [v0.2.8](releases/v0.2.8.md) | Symmetric M2M cache — `partner.tag_ids` write clears stale `tag.partner_ids` |
 | [v0.2.7](releases/v0.2.7.md) | `__or__` domains with `tag_ids.name`-style paths; M2O cache cleared when a comodel is unlinked |
 | [v0.2.6](releases/v0.2.6.md) | **[Vellum](vellum.md)** — optional Eloquent-style ORM (`env.query`, scopes, soft deletes); O2M/M2M request cache |

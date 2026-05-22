@@ -238,10 +238,17 @@ one body would silently mean "has a single tag that is both EU and
 Asia," which is rarely what anyone wants.
 
 Negated operators in collection paths (`!=`, `not in`) keep their natural
-read: "has at least one member whose value doesn't match." There is no
-`every-member-matches` form yet; use the inverse-side query (e.g.
-`Tag.search([...])` and walk back through `partner_ids`) when you need
-universal quantification.
+existential read: "has at least one member whose value doesn't match."
+
+**Universal quantification** — add a fourth leaf element `{"all": True}` on
+collection paths only:
+
+```python
+# every tag is non-VIP (including partners with no tags)
+Partner.search([("tag_ids.name", "!=", "VIP", {"all": True})])
+```
+
+Implemented as `NOT EXISTS` over members that fail the condition.
 
 ## Computed fields with `@depends`
 
@@ -359,7 +366,7 @@ visible.
 | Gap | Why deferred |
 |-----|---|
 | LRU / eviction on `env.cache` | Single env per request, ids are bounded by the working set. Premature optimization until proven a problem. |
-| Universal-quantifier domains on collections | Today's `("tag_ids.name", "!=", "VIP")` reads as "has at least one non-VIP tag." There is no "every tag is non-VIP" form yet; needs `NOT EXISTS` semantics or an explicit `all=True` operator. |
+| Universal-quantifier edge cases | `("tag_ids.name", "!=", "VIP", {"all": True})` means every tag is non-VIP (vacuously true when there are no tags). Comparison ops (`<`, `>`) on collections with `all` are not supported yet. |
 | O2m/M2m caching (full dep graph) | Tuple cache + invalidation on inverse FK / M2M writes, comodel unlink, and symmetric M2M fields sharing a junction table. Remaining gap: raw SQL junction edits. |
 | M2M command tuples | Replace-only writes work for everything in the example; `[(0,_,vals), (4,id)]` are an API ergonomics layer, not a capability layer. |
 | Transaction boundaries beyond autocommit | Adds a real unit-of-work concept. Right when multi-statement consistency matters, not before. |

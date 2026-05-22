@@ -3,9 +3,8 @@
 #   1. Build sdist + wheel.
 #   2. Verify the tag matches pyproject.version (and pyvelm.__version__).
 #   3. Publish to PyPI via OIDC trusted publishing — no API token.
-#   4. Cut a GitHub Release with the artefacts attached + auto-
-#      generated release notes pulled from the merge log since the
-#      previous tag. The maintainer can edit the body afterwards.
+#   4. Cut a GitHub Release with the artefacts attached and the
+#      release body taken from CHANGELOG.md (same text as the tag).
 #
 # One-time setup on PyPI:
 #   * Register the `pyvelm` project name.
@@ -126,10 +125,17 @@ jobs:
         with:
           name: dist
           path: dist
+      - name: Extract release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          python3 scripts/extract_changelog.py "$VERSION" > release-notes.md
+          head -5 release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          generate_release_notes: false
+          body_path: release-notes.md
           files: |
             dist/*.whl
             dist/*.tar.gz
