@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 from .domain import domain_to_sql
-from .fields import Field, Many2one
+from .fields import Field, Many2one, finalize_related_field
 from .registry import active_registry
 
 
@@ -34,6 +34,8 @@ class MetaModel(type):
             fields["company_id"] = co_field
 
         cls._fields = fields
+        for f in fields.values():
+            finalize_related_field(cls, f)
 
         # Defer table name and registry binding to subclasses with _name.
         if _name_val:
@@ -103,6 +105,8 @@ class MetaModel(type):
                 attr_value.bind(existing._name, attr_name)
                 merged[attr_name] = attr_value
         cls._fields = merged
+        for f in merged.values():
+            finalize_related_field(cls, f)
 
         # Update model_name on all fields (some may have been rebound from
         # the parent with the wrong model_name if the parent was itself an
@@ -296,6 +300,8 @@ class BaseModel(metaclass=MetaModel):
         for f in cls._fields.values():
             if not isinstance(f, Many2one):
                 continue
+            if f.related or not f.is_stored or not f.column:
+                continue
             if f.comodel_name not in registry:
                 raise ValueError(
                     f"{cls._name}.{f.name} references unknown model {f.comodel_name!r}"
@@ -313,26 +319,47 @@ class BaseModel(metaclass=MetaModel):
 
     # ------ CRUD ------
 
-    def _split_vals(self, vals: dict[str, Any]) -> tuple[dict, dict]:
-        """Split vals into (column_vals, m2m_vals). Validates names."""
+    def _split_vals(self, vals: dict[str, Any]) -> tuple[dict, dict, dict]:
+        """Split vals into (column_vals, m2m_vals, related_vals)."""
         from .fields import Many2many
 
         column_vals: dict[str, Any] = {}
         m2m_vals: dict[str, Any] = {}
+        related_vals: dict[str, Any] = {}
         for fname, value in vals.items():
             if fname not in self._fields:
                 raise ValueError(f"Unknown field {fname!r} on {self._name}")
             field = self._fields[fname]
-            if isinstance(field, Many2many):
+            if field.readonly:
+                raise ValueError(
+                    f"{self._name}.{fname} is readonly and cannot be written."
+                )
+            if field.related:
+                related_vals[fname] = value
+            elif isinstance(field, Many2many):
                 m2m_vals[fname] = value
             elif field.is_stored:
                 column_vals[fname] = value
+            elif field.compute:
+                raise ValueError(
+                    f"{self._name}.{fname} is computed; "
+                    f"assign through its dependencies instead."
+                )
             else:
                 raise ValueError(
                     f"{self._name}.{fname} is not stored; "
                     f"cannot be written directly"
                 )
-        return column_vals, m2m_vals
+        return column_vals, m2m_vals, related_vals
+
+    def _apply_related_vals(self, related_vals: dict[str, Any]) -> None:
+        """Write related fields by delegating to the leaf on each record."""
+        if not related_vals or not self._ids:
+            return
+        for rid in self._ids:
+            rec = self.__class__(self.env, (rid,))
+            for fname, value in related_vals.items():
+                setattr(rec, fname, value)
 
     def _apply_m2m(self, parent_ids: list[int], m2m_vals: dict[str, Any]) -> None:
         """Replace junction-table rows for each (field, parent_id) pair."""
@@ -359,7 +386,7 @@ class BaseModel(metaclass=MetaModel):
 
     def create(self, vals: dict[str, Any]) -> "BaseModel":
         self.env.check_access(self._name, "create")
-        column_vals, m2m_vals = self._split_vals(vals)
+        column_vals, m2m_vals, related_vals = self._split_vals(vals)
         # Auto-inject company_id from env for company-scoped models when
         # the caller hasn't provided one explicitly.
         if (
@@ -403,6 +430,8 @@ class BaseModel(metaclass=MetaModel):
         new_record = self.__class__(self.env, (new_id,))
         if m2m_vals:
             new_record._apply_m2m([new_id], m2m_vals)
+        if related_vals:
+            new_record._apply_related_vals(related_vals)
         # Initial-populate stored compute fields in topo order. Non-stored
         # are lazy (next read triggers them).
         stored_order = self.env.registry._stored_compute_order.get(self._name, [])
@@ -424,7 +453,9 @@ class BaseModel(metaclass=MetaModel):
         if not self._ids:
             return
         self.env.check_access(self._name, "write")
-        column_vals, m2m_vals = self._split_vals(vals)
+        column_vals, m2m_vals, related_vals = self._split_vals(vals)
+        if related_vals:
+            self._apply_related_vals(related_vals)
         if column_vals:
             assigns = ", ".join(f'"{self._fields[f].column}" = %s' for f in column_vals)
             params = [self._fields[f].to_sql_param(v) for f, v in column_vals.items()]

@@ -74,6 +74,8 @@ class Field:
         column: str | None = None,
         compute: str | None = None,
         store: bool | None = None,
+        related: str | None = None,
+        readonly: bool = False,
     ) -> None:
         self.string = string
         self.required = required
@@ -83,19 +85,26 @@ class Field:
         self._column_override = column
         self.column: str | None = None
         self.compute = compute
+        self.related = related
+        self.readonly = bool(readonly)
         # Computed fields are non-stored unless `store=True` is explicit.
         # When `compute` is None, fall back to the class-level `is_stored`
         # (True for scalars, False for One2many/Many2many).
         if compute is not None:
             self.is_stored = bool(store)
         self.depends_on = ()
+        self._related_path = None
 
     def bind(self, model_name: str, name: str) -> None:
         self.model_name = model_name
         self.name = name
         if self.string is None:
             self.string = self._default_string(name)
-        self.column = self._column_override or self._default_column(name)
+        if self.related:
+            self.is_stored = False
+            self.column = None
+        else:
+            self.column = self._column_override or self._default_column(name)
 
     def _default_string(self, name: str) -> str:
         return _title_words(name)
@@ -119,6 +128,8 @@ class Field:
     def __get__(self, record, owner):
         if record is None:
             return self
+        if self.related:
+            return self._get_related(record)
         if not record._ids:
             return self.default_value()
         record.ensure_one()
@@ -136,6 +147,13 @@ class Field:
     def __set__(self, record, value) -> None:
         if not record._ids:
             return
+        if self.readonly:
+            raise ValueError(
+                f"{record._name}.{self.name} is readonly and cannot be written."
+            )
+        if self.related:
+            self._set_related(record, value)
+            return
         if self.compute:
             if not getattr(record.env, "_in_compute", False):
                 raise ValueError(
@@ -150,6 +168,87 @@ class Field:
                 )
             return
         record.write({self.name: value})
+
+    def _get_related(self, record):
+        """Read through ``self.related`` (e.g. ``company_id.currency_id``)."""
+        if not record._ids:
+            return self._related_empty(record)
+        record.ensure_one()
+        rid = record._ids[0]
+        cache = record.env.cache
+        if cache.contains(record._name, rid, self.name):
+            cached = cache.get(record._name, rid, self.name)
+            return self._related_from_cache(record, cached)
+        value = self._read_related_value(record)
+        cache.set(record._name, rid, self.name, self._related_cache_value(value))
+        return value
+
+    def _set_related(self, record, value) -> None:
+        """Write through ``self.related`` onto the leaf field."""
+        tokens = self.related.split(".")
+        for rid in record._ids:
+            rec = record.__class__(record.env, (rid,))
+            target = rec
+            for attr in tokens[:-1]:
+                target = getattr(target, attr)
+                if hasattr(target, "_ids") and not target._ids:
+                    raise ValueError(
+                        f"Cannot set {record._name}.{self.name}: "
+                        f"no related record at {attr!r}"
+                    )
+                if hasattr(target, "_ids"):
+                    target.ensure_one()
+            leaf = tokens[-1]
+            leaf_field = type(target)._fields[leaf]
+            if leaf_field.readonly:
+                raise ValueError(
+                    f"Cannot set {record._name}.{self.name}: "
+                    f"leaf field {target._name}.{leaf} is readonly"
+                )
+            setattr(target, leaf, value)
+            record.env.cache.invalidate(
+                model_name=record._name, ids=[rid], fields=[self.name]
+            )
+
+    def _read_related_value(self, record):
+        tokens = self.related.split(".")
+        target = record
+        for attr in tokens[:-1]:
+            target = getattr(target, attr)
+            if hasattr(target, "_ids") and not target._ids:
+                return self._related_empty(record)
+            if hasattr(target, "_ids"):
+                target.ensure_one()
+        return getattr(target, tokens[-1])
+
+    def _related_empty(self, record):
+        if isinstance(self, Many2one):
+            return record.env.registry[self.comodel_name](record.env, ())
+        if isinstance(self, One2many):
+            return record.env.registry[self.comodel_name](record.env, ())
+        if isinstance(self, Many2many):
+            return record.env.registry[self.comodel_name](record.env, ())
+        return self.default_value()
+
+    def _related_cache_value(self, value):
+        """Normalize a related value for the source model's cache slot."""
+        if isinstance(self, Many2one):
+            if value is None or value is False:
+                return None
+            if hasattr(value, "_ids"):
+                return value._ids[0] if value._ids else None
+            return int(value)
+        if isinstance(self, (One2many, Many2many)):
+            return None
+        if hasattr(value, "_ids"):
+            return None
+        return self.to_sql_param(value)
+
+    def _related_from_cache(self, record, cached):
+        if isinstance(self, Many2one):
+            Model = record.env.registry[self.comodel_name]
+            return Model(record.env, ()) if cached is None else Model(record.env, (cached,))
+        return self.to_python(cached)
 
 
 class Char(Field):
@@ -166,6 +265,8 @@ class Char(Field):
         store=None,
         size: int | None = None,
         choices: list | None = None,
+        related: str | None = None,
+        readonly: bool = False,
     ):
         super().__init__(
             string=string,
@@ -174,6 +275,8 @@ class Char(Field):
             column=column,
             compute=compute,
             store=store,
+            related=related,
+            readonly=readonly,
         )
         self.size = size
         # `choices` constrains the value to a small enumeration. Items
@@ -330,8 +433,17 @@ class Many2one(Field):
         required: bool = False,
         ondelete: str = "SET NULL",
         column: str | None = None,
+        related: str | None = None,
+        readonly: bool = False,
     ) -> None:
-        super().__init__(string=string, required=required, default=None, column=column)
+        super().__init__(
+            string=string,
+            required=required,
+            default=None,
+            column=column,
+            related=related,
+            readonly=readonly,
+        )
         self.comodel_name = comodel_name
         self.ondelete = ondelete.upper()
 
@@ -356,6 +468,8 @@ class Many2one(Field):
     def __get__(self, record, owner):
         if record is None:
             return self
+        if self.related:
+            return super().__get__(record, owner)
         comodel_cls = record.env.registry[self.comodel_name]
         if not record._ids:
             return comodel_cls(record.env, ())
@@ -385,8 +499,16 @@ class One2many(Field):
         comodel_name: str,
         inverse_name: str,
         string: str | None = None,
+        related: str | None = None,
+        readonly: bool = False,
     ) -> None:
-        super().__init__(string=string, required=False, default=None)
+        super().__init__(
+            string=string,
+            required=False,
+            default=None,
+            related=related,
+            readonly=readonly,
+        )
         self.comodel_name = comodel_name
         self.inverse_name = inverse_name
 
@@ -448,8 +570,16 @@ class Many2many(Field):
         relation: str | None = None,
         column1: str | None = None,
         column2: str | None = None,
+        related: str | None = None,
+        readonly: bool = False,
     ) -> None:
-        super().__init__(string=string, required=False, default=None)
+        super().__init__(
+            string=string,
+            required=False,
+            default=None,
+            related=related,
+            readonly=readonly,
+        )
         self.comodel_name = comodel_name
         self._relation_override = relation
         self._column1_override = column1
@@ -541,3 +671,55 @@ class Many2many(Field):
             else:
                 out.append(int(v))
         return out
+
+
+def finalize_related_field(model_cls, field: Field) -> None:
+    """Validate and wire a ``related=`` field after ``bind()``.
+
+    Related fields mirror a dotted path (``company_id.currency_id``):
+    non-stored, no SQL column, cache-invalidated when the path changes.
+    Writes propagate to the leaf field on the related record.
+    """
+    from .paths import parse_path
+    from .registry import active_registry
+
+    if not field.related:
+        return
+    if field.compute:
+        raise ValueError(
+            f"{model_cls._name}.{field.name}: cannot combine related and compute"
+        )
+    reg = active_registry()
+    path = parse_path(model_cls, field.related, reg)
+    if not path.is_m2o_only():
+        raise ValueError(
+            f"{model_cls._name}.{field.name}: related path {field.related!r} "
+            "must use only Many2one hops (One2many/Many2many not supported yet)"
+        )
+    field.depends_on = (field.related,)
+    field.is_stored = False
+    field.column = None
+    field._related_path = path
+    leaf_cls = reg[path.leaf_model]
+    leaf_field = leaf_cls._fields[path.leaf_attr]
+    if not isinstance(field, type(leaf_field)) and not isinstance(
+        leaf_field, type(field)
+    ):
+        raise ValueError(
+            f"{model_cls._name}.{field.name}: related leaf "
+            f"{path.leaf_model}.{path.leaf_attr} is {type(leaf_field).__name__}, "
+            f"expected {type(field).__name__}"
+        )
+    if isinstance(field, Many2one) and isinstance(leaf_field, Many2one):
+        if field.comodel_name != leaf_field.comodel_name:
+            raise ValueError(
+                f"{model_cls._name}.{field.name}: comodel {field.comodel_name!r} "
+                f"does not match related leaf comodel {leaf_field.comodel_name!r}"
+            )
+
+
+def spec_readonly(spec: dict, field: Field) -> bool:
+    """View-level ``readonly`` on the spec wins; else the field flag."""
+    if spec.get("readonly") is not None:
+        return bool(spec["readonly"])
+    return bool(getattr(field, "readonly", False))

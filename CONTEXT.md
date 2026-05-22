@@ -1,10 +1,11 @@
-# Project context — pyvelm v0.2.2
+# Project context — pyvelm v0.2.3
 
 Building an Odoo-style ERP framework in Python.
 
-**v0.2.2 (released 2026-05-22)** — Docker scaffold: bind-mount
-`app/modules`, `PYVELM_MODULE_ROOTS` on app service.
-See [v0.2.2 release summary](#v022-release-summary).
+**v0.2.3 (released 2026-05-22)** — related fields + model-level readonly.
+See [v0.2.3 release summary](#v023-release-summary).
+**v0.2.2** — Docker scaffold bind-mount for `app/modules`
+([summary](#v022-release-summary)).
 **v0.2.1** — inline O2m, M2m polish, field labels
 ([summary](#v021-release-summary)).
 **v0.2.0** — graph/pivot, attachments, security
@@ -668,6 +669,29 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ---
 
+## v0.2.3 release summary
+
+**Released:** 2026-05-22
+**Package version:** `0.2.3` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this patch
+
+| Area | Highlights |
+|---|---|
+| **Related** | `related="company_id.currency_id"` — read/write through M2O paths |
+| **Readonly** | `readonly=True` on any field; blocks write + form edit |
+| **Example** | `partners_pro` adds `company_currency_id` on `res.partner` |
+
+### Next focus options (post-v0.2.3)
+
+  - **Related paths** — One2many/Many2many hops.
+  - **Vellum ORM veneer (Phase 1)** — `docs/vellum-design.md`.
+  - **Stage 6 Slice 3** — message subtypes + followers.
+  - **S3 / minio** attachment backend.
+
+---
+
 ## v0.2.2 release summary
 
 **Released:** 2026-05-22
@@ -681,14 +705,6 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 | **Docker scaffold** | `./app/modules` bind-mount on `app` + `cron`; `PYVELM_MODULE_ROOTS` on web service |
 | **serve.py** | `_collect_module_roots()` reads `PYVELM_MODULE_ROOTS` |
 | **Docs** | README clarifies `app/modules/` + restart / Apps install |
-
-### Next focus options (post-v0.2.2)
-
-  - **Vellum ORM veneer (Phase 1)** — `docs/vellum-design.md`.
-  - **Stage 6 Slice 3** — message subtypes + followers.
-  - **S3 / minio** attachment backend.
-  - **O2m inline tables** — Filter By / search bar.
-  - **Multi-measure stacked bar charts**.
 
 ---
 

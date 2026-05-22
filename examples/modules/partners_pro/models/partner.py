@@ -4,7 +4,7 @@ Demonstrates Stage 7 _inherit:
   - adds a `vip_note` Char field to the base partner model
   - overrides `_compute_display_name` to prefix VIP partners
 """
-from pyvelm import BaseModel, Char, depends
+from pyvelm import BaseModel, Char, Many2one, depends
 
 
 class PartnerPro(BaseModel):
@@ -13,6 +13,12 @@ class PartnerPro(BaseModel):
     _inherit = "res.partner"
 
     vip_note = Char(string="VIP Note")
+    # Related field: mirrors the partner's company currency (Odoo-style).
+    company_currency_id = Many2one(
+        "res.currency",
+        related="company_id.currency_id",
+        string="Currency",
+    )
 
     # Override the compute method so VIP partners show a prefix.
     # super() chains back to the original Partner._compute_display_name.

@@ -1754,6 +1754,39 @@ def main():
                 assert partner_rec.vip_note == "Top tier", partner_rec.vip_note
                 print("_inherit: vip_note write/read OK")
 
+                # Related Many2one: company_currency_id mirrors company_id.currency_id.
+                assert "company_currency_id" in extended_cls._fields
+                cc_field = extended_cls._fields["company_currency_id"]
+                assert cc_field.related == "company_id.currency_id"
+                assert not cc_field.is_stored
+                partner_rec.ensure_one()
+                Company = s7_env["res.company"]
+                Currency = s7_env["res.currency"]
+                usd = Currency.search([("code", "=", "USD")], limit=1)
+                with s7_env.transaction():
+                    test_co = Company.create(
+                        {"name": "Related Test Co", "currency_id": usd}
+                    )
+                with s7_env.transaction():
+                    partner_rec.write({"company_id": test_co})
+                s7_env.cache.invalidate(model_name="res.partner", ids=[partner_rec.id])
+                assert partner_rec.company_currency_id == test_co.currency_id
+                print("related: company_currency_id reads through company_id OK")
+                eur = Currency.search([("code", "=", "EUR")], limit=1)
+                if not eur:
+                    eur = Currency.create({"name": "Euro", "code": "EUR"})
+                with s7_env.transaction():
+                    partner_rec.write({"company_currency_id": eur})
+                s7_env.cache.invalidate(
+                    model_name="res.company", ids=[test_co.id]
+                )
+                s7_env.cache.invalidate(model_name="res.partner", ids=[partner_rec.id])
+                assert Company.browse(test_co.id).currency_id == eur
+                print("related: write on company_currency_id updates company OK")
+                from pyvelm.fields import Char as _Char
+                assert extended_cls._fields["vip_note"].readonly is False
+                print("readonly: field declaration accepts readonly flag OK")
+
                 # display_name should carry the ★ prefix for VIP partners.
                 s7_env.cache.invalidate(model_name="res.partner", ids=[partner_rec.id])
                 dn = partner_rec.display_name
@@ -1786,9 +1819,10 @@ def main():
 
                 # Slice A — res.company model seeded by install hook.
                 assert "res.company" in reg, "res.company not in registry"
-                companies = s8_env["res.company"].search([])
-                assert companies, "install hook must seed at least one company"
-                my_company = list(companies)[0]
+                my_company = s8_env["res.company"].search(
+                    [("name", "=", "My Company")], limit=1
+                )
+                assert my_company, "install hook must seed My Company"
                 print(f"_inherit: res.company seeded: {my_company.name!r} (id={my_company.id})")
 
                 # uid=1 (superuser) has company_id set from the install hook.

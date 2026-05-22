@@ -11,6 +11,28 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.2.3] — 2026-05-22
+
+Odoo-style **related fields** and model-level **readonly** on all field
+types. Base module remains `0.18.0`.
+See [docs/releases/v0.2.3.md](docs/releases/v0.2.3.md).
+
+### Added
+
+- **`related="company_id.currency_id"`** on any field type — non-stored
+  mirror of a dotted path; reads and writes propagate to the leaf field.
+  Many2one-hop paths only for now; cache invalidation via the dependency
+  graph.
+- **`readonly=True`** on field declarations — blocks `write()` and
+  disables form widgets unless the view overrides with
+  `field(..., readonly=False)`.
+- Example: `res.partner.company_currency_id` in `partners_pro`.
+
+### Changed
+
+- Forms merge model `readonly` into field specs when the view does not
+  override it (`spec_readonly`).
+
 ## [0.2.2] — 2026-05-22
 
 Patch release for `pyvelm init` Docker workflow. Base module remains

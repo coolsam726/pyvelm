@@ -42,6 +42,7 @@ from .fields import (
     Monetary,
     One2many,
     Text,
+    spec_readonly,
 )
 
 
@@ -1364,6 +1365,8 @@ def _enrich_specs_for_edit(env, model_cls, fields_spec) -> list[dict]:
             spec_copy["_form_view_url"] = (
                 f"/web/views/{form_lookup[0]}/{form_lookup[1]}" if form_lookup else None
             )
+        if field is not None and field.readonly and "readonly" not in spec_copy:
+            spec_copy["readonly"] = True
         out.append(spec_copy)
     return out
 
@@ -1384,7 +1387,8 @@ def _render_cells(record, fields_spec, mode: str) -> list[dict]:
         # currency_field) or env (Datetime → active tz) read these
         # via private keys. Kept off the public spec contract so view
         # authors can't depend on them.
-        spec_with_rec = {**spec, "_record": record, "_env": record.env}
+        ro = spec_readonly(spec, field)
+        spec_with_rec = {**spec, "_record": record, "_env": record.env, "readonly": ro}
         cells.append({"name": fname, "html": renderer(value, spec_with_rec, field)})
     return cells
 
@@ -1945,6 +1949,7 @@ def _form_section_html(
         field = model_cls._fields[fname]
         label = spec.get("label") or field.string or fname
         hint = spec.get("widget")
+        ro = spec_readonly(spec, field)
         renderer = find_renderer(field, hint, mode=mode)
 
         if fname in submitted:
@@ -1992,6 +1997,7 @@ def _form_section_html(
             "_env": env,
             "_o2m_errors": errors,
             "_form_playback": form_playback,
+            "readonly": ro,
         }
         # Wide cells span both grid columns. O2m tables are full-width
         # so the embedded `<table>` isn't squished into half the form.
@@ -2008,6 +2014,7 @@ def _form_section_html(
                 "name": fname,
                 "label": label,
                 "required": getattr(field, "required", False),
+                "readonly": ro,
                 "error": field_error,
                 "wide": is_wide,
                 "html": renderer(value, spec_with_rec, field),

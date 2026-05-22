@@ -114,7 +114,7 @@ class Registry:
 
         for cls in self._models.values():
             for fname, field in cls._fields.items():
-                if not field.compute:
+                if not field.compute and not field.related:
                     continue
                 reads: list[tuple[str, str]] = []
                 for path_str in field.depends_on:
@@ -124,7 +124,8 @@ class Registry:
                             (cls._name, fname, edge)
                         )
                     reads.extend(path.reads())
-                read_edges[(cls._name, fname)] = reads
+                if field.compute:
+                    read_edges[(cls._name, fname)] = reads
 
         # Cycle detection over the read graph restricted to compute fields.
         compute_nodes = set(read_edges.keys())

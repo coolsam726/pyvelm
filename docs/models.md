@@ -142,6 +142,26 @@ alice.write({"tag_ids": [vip.id, wholesale.id]})   # by ids
 (Incremental add/remove via the Odoo `[(4, id)]` tuple syntax is
 not yet shipped; replace-only for now.)
 
+## Related fields
+
+Mirror a value from a dotted path (Odoo-style `related=`). The field
+is not stored and reads/writes through the path:
+
+```python
+company_currency_id = Many2one(
+    "res.currency",
+    related="company_id.currency_id",
+)
+```
+
+Paths must use Many2one hops only (e.g. `company_id.currency_id`). The
+related field type must match the leaf. Writes update the leaf record.
+
+## Field `readonly`
+
+Pass `readonly=True` on any field declaration to block `write()` and
+form edits (unless the view overrides with `field(..., readonly=False)`).
+
 ## Computed fields
 
 A field becomes "computed" when you point it at a method via
