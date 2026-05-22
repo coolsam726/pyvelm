@@ -4,6 +4,45 @@ from datetime import date as _date, datetime as _datetime
 from typing import Any
 
 
+def _title_words(snake: str) -> str:
+    """``country`` → ``Country``, ``partner_code`` → ``Partner Code``."""
+    return " ".join(part.capitalize() for part in snake.split("_") if part)
+
+
+_IRREGULAR_PLURALS = {
+    "child": "children",
+    "person": "people",
+    "man": "men",
+    "woman": "women",
+}
+
+
+def _pluralize_word(word: str) -> str:
+    """Light English plural for auto labels (``tag`` → ``Tags``)."""
+    if not word:
+        return word
+    lower = word.lower()
+    if lower in _IRREGULAR_PLURALS:
+        repl = _IRREGULAR_PLURALS[lower]
+        return repl.capitalize() if word[0].isupper() else repl
+    if lower.endswith("s"):
+        return word
+    if lower.endswith("y") and len(lower) > 1 and lower[-2] not in "aeiou":
+        return word[:-1] + "ies"
+    if lower.endswith(("ch", "sh", "x")):
+        return word + "es"
+    return word + "s"
+
+
+def _pluralize_label(label: str) -> str:
+    """Pluralize the last word of a multi-word label."""
+    if not label:
+        return label
+    words = label.split()
+    words[-1] = _pluralize_word(words[-1])
+    return " ".join(words)
+
+
 class Field:
     """Descriptor that routes attribute access through env.cache.
 
@@ -55,8 +94,11 @@ class Field:
         self.model_name = model_name
         self.name = name
         if self.string is None:
-            self.string = name.replace("_", " ").capitalize()
+            self.string = self._default_string(name)
         self.column = self._column_override or self._default_column(name)
+
+    def _default_string(self, name: str) -> str:
+        return _title_words(name)
 
     def _default_column(self, name: str) -> str:
         return name
@@ -293,6 +335,11 @@ class Many2one(Field):
         self.comodel_name = comodel_name
         self.ondelete = ondelete.upper()
 
+    def _default_string(self, name: str) -> str:
+        if name.endswith("_id") and len(name) > 3:
+            return _title_words(name[:-3])
+        return super()._default_string(name)
+
     def to_sql_param(self, value):
         if value is None or value is False:
             return None
@@ -342,6 +389,11 @@ class One2many(Field):
         super().__init__(string=string, required=False, default=None)
         self.comodel_name = comodel_name
         self.inverse_name = inverse_name
+
+    def _default_string(self, name: str) -> str:
+        if name.endswith("_ids") and len(name) > 4:
+            return _pluralize_label(_title_words(name[:-4]))
+        return super()._default_string(name)
 
     def column_ddl(self) -> str:
         raise RuntimeError("One2many has no column")
@@ -402,6 +454,11 @@ class Many2many(Field):
         self._relation_override = relation
         self._column1_override = column1
         self._column2_override = column2
+
+    def _default_string(self, name: str) -> str:
+        if name.endswith("_ids") and len(name) > 4:
+            return _pluralize_label(_title_words(name[:-4]))
+        return super()._default_string(name)
 
     def resolve_spec(self, model_cls, registry) -> tuple[str, str, str, str, str]:
         """Return (relation, col1, col2, this_table, target_table)."""
