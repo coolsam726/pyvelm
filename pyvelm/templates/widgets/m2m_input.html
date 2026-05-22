@@ -1,9 +1,10 @@
-{# Many2many chip editor — multi-select sibling of the m2o combobox.
+{# Many2many chip editor — multi-select with create / open / edit.
 
    Expected variables:
        name            field attribute name (form input name)
        comodel         comodel model name (e.g. "res.tag")
        search_url      "/api/m2o/search?model=res.tag"
+       form_view_url   "/web/views/partners/tag.form" or None
        initial         list of {"id": int, "label": str} for currently linked
                        records (one per record in the M2m)
        readonly        bool
@@ -13,48 +14,63 @@
         "name": name,
         "comodel": comodel,
         "searchUrl": search_url,
+        "formViewUrl": form_view_url,
         "initial": initial,
         "readonly": readonly,
      }) | tojson }})'
      @click.outside="open = false"
      @keydown.escape.prevent.stop="open = false">
 
-    {# Empty hidden input ensures the form always submits a value for
-       this field even when nothing is selected — that's how the server
-       distinguishes "user cleared everything" from "field not present
-       in this form". Concrete selections are emitted below. #}
     <input type="hidden" :name="name" value="">
 
     <div class="flex flex-wrap items-center gap-1 px-2 py-1.5 rounded-lg
                 bg-neutral-primary border border-default
                 focus-within:border-fg-brand focus-within:ring-2 focus-within:ring-fg-brand/40">
 
-        {# Selected chips. #}
+        {# Selected chips — open link + edit in dialog when available. #}
         <template x-for="item in selected" :key="item.id">
-            <span class="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded
-                         bg-brand-soft text-fg-brand text-xs font-medium">
-                <span x-text="item.label" class="max-w-[200px] truncate"></span>
-                <input type="hidden" :name="name" :value="item.id">
+            <span class="inline-flex items-center gap-0.5 pl-2 pr-1 py-0.5 rounded
+                         bg-brand-soft text-fg-brand text-xs font-medium max-w-[240px]">
+                <a x-show="formViewUrl"
+                   :href="formViewUrl + '/record/' + item.id"
+                   x-text="item.label"
+                   class="truncate hover:underline"
+                   @click.stop></a>
+                <span x-show="!formViewUrl" x-text="item.label" class="truncate"></span>
+                <button type="button"
+                        x-show="!readonly && formViewUrl"
+                        @click.stop="editRecord(item)"
+                        title="Edit"
+                        class="p-0.5 rounded hover:bg-fg-brand/20 transition-colors shrink-0">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor"
+                         viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>
+                    </svg>
+                </button>
                 <button type="button"
                         x-show="!readonly"
                         @click.stop="remove(item.id)"
                         aria-label="Remove"
-                        class="ml-0.5 p-0.5 rounded hover:bg-fg-brand/20 transition-colors">
+                        class="p-0.5 rounded hover:bg-fg-brand/20 transition-colors shrink-0">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor"
                          viewBox="0 0 24 24" stroke-width="3">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                 </button>
+                <input type="hidden" :name="name" :value="item.id">
             </span>
         </template>
 
-        {# Inline search input. Click → focus → /api/m2o/search dropdown. #}
         <input type="text"
                x-ref="input"
                x-model="query"
                :readonly="readonly"
                @focus="onFocus()"
                @input.debounce.200ms="searchNow()"
+               @keydown.arrow-down.prevent="moveCursor(1)"
+               @keydown.arrow-up.prevent="moveCursor(-1)"
+               @keydown.enter.prevent="onEnter()"
                :placeholder="selected.length ? '' : 'Add…'"
                autocomplete="off"
                class="flex-1 min-w-[80px] bg-transparent border-0 p-0
@@ -62,7 +78,6 @@
                       focus:outline-none focus:ring-0">
     </div>
 
-    {# Dropdown of search hits. Filters out already-selected ids. #}
     <div x-show="open" x-cloak x-transition.opacity.duration.100ms
          class="relative">
         <div class="absolute left-0 right-0 top-1 z-30
@@ -71,17 +86,50 @@
             <template x-if="loading">
                 <div class="px-3 py-2 text-xs text-body-subtle">Searching…</div>
             </template>
-            <template x-if="!loading && filteredResults().length === 0">
+            <template x-if="!loading && filteredResults().length === 0 && !createCandidate && !canCreateAndEdit">
                 <div class="px-3 py-2 text-xs text-body-subtle">No matches.</div>
             </template>
-            <template x-for="opt in filteredResults()" :key="opt.id">
-                <button type="button"
+            <ul role="listbox">
+                <template x-for="(opt, i) in filteredResults()" :key="opt.id">
+                    <li role="option"
                         @click="add(opt)"
-                        class="w-full text-left px-3 py-1.5 text-body
-                               hover:bg-neutral-secondary truncate">
-                    <span x-text="opt.label"></span>
-                </button>
-            </template>
+                        @mousemove="cursor = i"
+                        :class="i === cursor
+                                ? 'bg-brand-softer text-fg-brand'
+                                : 'text-body hover:bg-neutral-secondary'"
+                        class="px-3 py-1.5 cursor-pointer truncate">
+                        <span x-text="opt.label"></span>
+                    </li>
+                </template>
+                <template x-if="createCandidate">
+                    <li role="option"
+                        @click="createFromQuery()"
+                        @mousemove="cursor = filteredResults().length"
+                        :class="cursor === filteredResults().length
+                                ? 'bg-success-soft text-fg-success-strong'
+                                : 'text-fg-success hover:bg-neutral-secondary'"
+                        class="px-3 py-1.5 cursor-pointer border-t border-default flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+                        </svg>
+                        <span>Create "<span x-text="query"></span>"</span>
+                    </li>
+                </template>
+                <template x-if="canCreateAndEdit">
+                    <li role="option"
+                        @click="createAndEdit()"
+                        class="px-3 py-1.5 cursor-pointer border-t border-default text-body
+                               hover:bg-neutral-secondary flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>
+                        </svg>
+                        Create and edit…
+                    </li>
+                </template>
+            </ul>
         </div>
     </div>
 </div>

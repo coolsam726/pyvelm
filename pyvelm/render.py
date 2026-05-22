@@ -307,20 +307,57 @@ def _o2m_use_table(spec: dict) -> bool:
     return spec.get("widget") == "table" or bool(spec.get("_list_view_url"))
 
 
+def _render_m2m_chips(value, spec, field, *, max_visible: int = 3) -> Markup:
+    """Render Many2many values as chips, optionally linked to form views."""
+    if not value:
+        return Markup('<span class="text-body-subtle/60">&mdash;</span>')
+    from .web import _display_value
+
+    form_url = spec.get("_form_view_url")
+    chip_cls = (
+        "inline-flex items-center gap-1 bg-brand-soft text-fg-brand "
+        "px-2 py-0.5 rounded-full text-xs font-medium"
+    )
+    link_cls = chip_cls + " hover:underline"
+    more_cls = (
+        "inline-flex items-center bg-neutral-secondary border border-dashed "
+        "border-default text-body-subtle px-2 py-0.5 rounded-full text-xs"
+    )
+    parts: list[str] = []
+    recs = list(value)
+    for rec in recs[:max_visible]:
+        label = escape(_display_value(rec))
+        if form_url:
+            href = f"{form_url}/record/{rec.id}"
+            parts.append(
+                f'<a href="{escape(href)}" class="{link_cls}">{label}</a>'
+            )
+        else:
+            parts.append(f'<span class="{chip_cls}">{label}</span>')
+    if len(recs) > max_visible:
+        parts.append(f'<span class="{more_cls}">+{len(recs) - max_visible}</span>')
+    return Markup(f'<span class="inline-flex gap-1 flex-wrap">{"".join(parts)}</span>')
+
+
 @widget(Many2many)
+def _render_m2m_display(value, spec, field):
+    return _render_m2m_chips(value, spec, field)
+
+
+@widget(One2many)
 def _render_collection(value, spec, field):
     if not value:
-        return Markup('<span class="text-gray-300">&mdash;</span>')
+        return Markup('<span class="text-body-subtle/60">&mdash;</span>')
     from .web import _display_value
 
     parts: list[str] = []
     chip_cls = (
-        "inline-flex items-center bg-gray-100 text-gray-700 "
+        "inline-flex items-center bg-neutral-secondary text-body "
         "px-2 py-0.5 rounded-full text-xs"
     )
     more_cls = (
-        "inline-flex items-center bg-white border border-dashed "
-        "border-gray-300 text-gray-500 px-2 py-0.5 rounded-full text-xs"
+        "inline-flex items-center bg-neutral-secondary border border-dashed "
+        "border-default text-body-subtle px-2 py-0.5 rounded-full text-xs"
     )
     for rec in list(value)[:3]:
         parts.append(f'<span class="{chip_cls}">{escape(_display_value(rec))}</span>')
@@ -743,16 +780,19 @@ def _edit_o2m_table(value, spec, field):
         errors=cell_errors,
     )
 
-    add_btn = (
-        '<div class="mt-2 flex justify-end">'
-        '<button type="button" data-pv-o2m-add '
-        'class="inline-flex items-center gap-1 text-xs font-medium '
-        'text-fg-brand hover:underline">'
-        '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '
-        'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
-        '<path stroke-linecap="round" stroke-linejoin="round" '
-        'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
-        "Add row</button></div>"
+    # Odoo-style "Add a line" footer row — click anywhere on it to
+    # append a new editable row (same handler as the Add row button).
+    add_line_row = (
+        f'<tr data-pv-o2m-add-row tabindex="0" role="button" '
+        f'class="cursor-pointer hover:bg-brand-soft/30 transition-colors">'
+        f'<td colspan="{col_count}" class="px-3 py-2.5 text-center text-xs '
+        f'text-fg-brand font-medium">'
+        f'<span class="inline-flex items-center gap-1">'
+        f'<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '
+        f'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+        f'<path stroke-linecap="round" stroke-linejoin="round" '
+        f'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
+        f"Add a line</span></td></tr>"
     )
 
     drag_enabled = "true" if sequence_field else "false"
@@ -761,8 +801,8 @@ def _edit_o2m_table(value, spec, field):
         "var root=document.currentScript.parentElement;\n"
         'var tbody=root.querySelector("tbody");\n'
         'var tmpl=root.querySelector("template[data-pv-o2m-template]");\n'
-        'var addBtn=root.querySelector("[data-pv-o2m-add]");\n'
-        "var nextIdx=parseInt(root.dataset.pvO2mNext,10);\n"
+        'var addLineRow=root.querySelector("[data-pv-o2m-add-row]");\n'
+        "var nextIdx=parseInt(root.dataset.pvO2mNext,10)||0;\n"
         f"var dragOn={drag_enabled};\n"
         "function renumber(){\n"
         "  if(!dragOn) return;\n"
@@ -773,15 +813,25 @@ def _edit_o2m_table(value, spec, field):
         "    if(seq) seq.value=String((i+1)*10);\n"
         "  });\n"
         "}\n"
-        'addBtn.addEventListener("click",function(){\n'
+        "function addRow(){\n"
+        "  if(!tmpl) return;\n"
         "  var html=tmpl.innerHTML.replace(/__IDX__/g,String(nextIdx++));\n"
+        "  root.dataset.pvO2mNext=String(nextIdx);\n"
         "  var frag=document.createRange().createContextualFragment(html);\n"
         '  var emptyRow=tbody.querySelector("[data-pv-o2m-empty]");\n'
         "  if(emptyRow) emptyRow.remove();\n"
-        "  tbody.appendChild(frag);\n"
+        "  if(addLineRow) tbody.insertBefore(frag, addLineRow);\n"
+        "  else tbody.appendChild(frag);\n"
         "  renumber();\n"
-        "});\n"
+        "  var first=frag.querySelector('input:not([type=hidden]),select,textarea');\n"
+        "  if(first) first.focus();\n"
+        "}\n"
         'root.addEventListener("click",function(e){\n'
+        '  if(e.target.closest("[data-pv-o2m-add]")||e.target.closest("[data-pv-o2m-add-row]")){\n'
+        "    e.preventDefault();\n"
+        "    addRow();\n"
+        "    return;\n"
+        "  }\n"
         '  var btn=e.target.closest("[data-pv-o2m-delete]");\n'
         "  if(!btn||!root.contains(btn)) return;\n"
         '  var tr=btn.closest("tr");\n'
@@ -832,9 +882,20 @@ def _edit_o2m_table(value, spec, field):
         f'<thead class="bg-neutral-secondary"><tr>{"".join(header_cells)}</tr></thead>'
         f'<tbody class="divide-y divide-default">'
         f'{"".join(body_rows) or empty_html}'
+        f"{add_line_row}"
         f"</tbody></table>"
         f"<template data-pv-o2m-template>{template_row}</template>"
-        f"{js}</div>{add_btn}"
+        f'<div class="px-3 py-1.5 border-t border-default bg-neutral-secondary/50 '
+        f'flex justify-end">'
+        f'<button type="button" data-pv-o2m-add '
+        f'class="inline-flex items-center gap-1 text-xs font-medium '
+        f'text-fg-brand hover:underline">'
+        f'<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '
+        f'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+        f'<path stroke-linecap="round" stroke-linejoin="round" '
+        f'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
+        f"Add row</button></div>"
+        f"{js}</div>"
     )
 
 
@@ -1049,6 +1110,7 @@ def _edit_m2m(value, spec, field):
             comodel=spec.get("_comodel") or field.comodel_name,
             search_url=spec.get("_search_url")
             or f"/api/m2o/search?model={field.comodel_name}",
+            form_view_url=spec.get("_form_view_url"),
             initial=initial,
             readonly=bool(spec.get("readonly")),
         )
@@ -1193,6 +1255,12 @@ def _enrich_specs_for_edit(env, model_cls, fields_spec) -> list[dict]:
             # candidate records (it's just ILIKE-on-name).
             spec_copy["_comodel"] = field.comodel_name
             spec_copy["_search_url"] = f"/api/m2o/search?model={field.comodel_name}"
+            form_lookup = _form_view_for_model(env, field.comodel_name)
+            spec_copy["_form_view_url"] = (
+                f"/web/views/{form_lookup[0]}/{form_lookup[1]}"
+                if form_lookup
+                else None
+            )
         elif isinstance(field, One2many):
             spec_copy["_comodel"] = field.comodel_name
             spec_copy["_inverse_name"] = field.inverse_name

@@ -1085,13 +1085,28 @@
             name: cfg.name,
             comodel: cfg.comodel,
             searchUrl: cfg.searchUrl,
+            formViewUrl: cfg.formViewUrl || null,
             readonly: !!cfg.readonly,
             selected: Array.isArray(cfg.initial) ? cfg.initial.slice() : [],
             query: '',
             results: [],
+            cursor: 0,
             open: false,
             loading: false,
             _abort: null,
+            get exactMatch() {
+                const q = this.query.trim().toLowerCase();
+                if (!q) return null;
+                return this.results.find(r => r.label.toLowerCase() === q) || null;
+            },
+            get createCandidate() {
+                if (this.readonly) return false;
+                const q = this.query.trim();
+                return q.length > 0 && !this.exactMatch;
+            },
+            get canCreateAndEdit() {
+                return !this.readonly && !!this.formViewUrl;
+            },
             async searchNow() {
                 if (this.readonly) return;
                 if (this._abort) this._abort.abort();
@@ -1107,6 +1122,7 @@
                     if (!r.ok) throw new Error('fetch failed');
                     const data = await r.json();
                     this.results = data.results || [];
+                    this.cursor = 0;
                     this.open = true;
                 } catch (e) {
                     if (e.name !== 'AbortError') {
@@ -1119,18 +1135,35 @@
             },
             onFocus() {
                 if (this.readonly) return;
-                if (!this.results.length) this.searchNow();
-                else this.open = true;
+                this.open = true;
+                this.searchNow();
             },
             filteredResults() {
-                // Hide already-selected ids so a record can't be
-                // added twice. The server's M2m write is set-valued
-                // either way; this keeps the UI honest.
                 const taken = new Set(this.selected.map(s => s.id));
                 return this.results.filter(r => !taken.has(r.id));
             },
+            moveCursor(delta) {
+                if (!this.open) { this.open = true; return; }
+                const opts = this.filteredResults();
+                const extra = (this.createCandidate ? 1 : 0) + (this.canCreateAndEdit ? 1 : 0);
+                const max = opts.length + extra - 1;
+                if (max < 0) return;
+                this.cursor = Math.max(0, Math.min(max, this.cursor + delta));
+            },
+            onEnter() {
+                if (!this.open) return;
+                const opts = this.filteredResults();
+                if (this.cursor < opts.length) {
+                    this.add(opts[this.cursor]);
+                } else if (this.createCandidate && this.cursor === opts.length) {
+                    this.createFromQuery();
+                } else if (this.canCreateAndEdit) {
+                    this.createAndEdit();
+                }
+            },
             add(item) {
                 if (this.readonly) return;
+                if (this.selected.some(s => s.id === item.id)) return;
                 this.selected.push(item);
                 this.query = '';
                 this.results = [];
@@ -1140,6 +1173,84 @@
             remove(id) {
                 if (this.readonly) return;
                 this.selected = this.selected.filter(s => s.id !== id);
+            },
+            async createFromQuery() {
+                const name = this.query.trim();
+                if (!name) return;
+                try {
+                    const r = await fetch('/api/m2o/quick-create', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                        },
+                        body: JSON.stringify({ model: this.comodel, name }),
+                    });
+                    if (r.status === 400) {
+                        if (this.formViewUrl) {
+                            this.createAndEdit();
+                            return;
+                        }
+                        const body = await r.json();
+                        pvAlert(body.detail || 'Cannot create this record inline.',
+                                { variant: 'warning', title: 'Create blocked' });
+                        return;
+                    }
+                    if (!r.ok) throw new Error('create failed');
+                    const item = await r.json();
+                    this.add(item);
+                } catch (e) {
+                    pvAlert('Unable to create record.',
+                            { variant: 'danger', title: 'Error' });
+                }
+            },
+            createAndEdit() {
+                if (!this.formViewUrl) return;
+                this.open = false;
+                const q = (this.query || '').trim();
+                const url = this.formViewUrl + '/new'
+                    + (q ? '?name=' + encodeURIComponent(q) : '');
+                const title = q ? `New "${q}"` : 'Create new';
+                if (!window.PvDialog) {
+                    window.location.href = url;
+                    return;
+                }
+                window.PvDialog.open({
+                    url,
+                    title,
+                    onResult: (result) => {
+                        if (result && result.id) {
+                            this.add({
+                                id: result.id,
+                                label: result.label || String(result.id),
+                            });
+                        }
+                    },
+                });
+            },
+            editRecord(item) {
+                if (!this.formViewUrl || this.readonly) return;
+                const url = this.formViewUrl + '/record/' + item.id;
+                if (!window.PvDialog) {
+                    window.location.href = url;
+                    return;
+                }
+                window.PvDialog.open({
+                    url,
+                    title: item.label,
+                    onResult: (result) => {
+                        if (result && result.id) {
+                            const idx = this.selected.findIndex(s => s.id === item.id);
+                            if (idx >= 0) {
+                                this.selected[idx] = {
+                                    id: result.id,
+                                    label: result.label || String(result.id),
+                                };
+                            }
+                        }
+                    },
+                });
             },
         }));
 
