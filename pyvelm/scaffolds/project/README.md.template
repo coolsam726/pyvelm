@@ -27,9 +27,25 @@ python -m app.serve
 pyvelm new my_module
 ```
 
-That drops a runnable stub under `app/modules/my_module/`. Restart
-the app worker (`docker compose restart app` or your service
-manager) and click **Install** on the `/web/apps` catalog.
+That drops a runnable stub under **`app/modules/my_module/`** (not
+directly under `app/`). Each module is a folder with a
+`__pyvelm__.py` manifest at its root.
+
+**Docker:** the bundled `docker-compose.yml` bind-mounts
+`./app/modules` into the container, so you do **not** need
+`docker compose build` after every `pyvelm new` — only a restart:
+
+```bash
+pyvelm new my_module
+docker compose restart app
+```
+
+Then open **Apps** (`/web/apps`), find your module, and click
+**Install**. Sidebar menus appear after install (see
+`app/modules/my_module/views/menu.py`).
+
+If you removed the volume mount for a production image, rebuild
+instead: `docker compose up --build -d`.
 
 ## Production deployment
 

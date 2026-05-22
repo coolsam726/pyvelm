@@ -11,6 +11,25 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.2.2] — 2026-05-22
+
+Patch release for `pyvelm init` Docker workflow. Base module remains
+`0.18.0`. See [docs/releases/v0.2.2.md](docs/releases/v0.2.2.md).
+
+### Fixed
+
+- **Scaffold `docker-compose.yml`**: bind-mount `./app/modules` on the
+  `app` and `cron` services so new addons from `pyvelm new` appear
+  after `docker compose restart app` (no image rebuild required).
+- **`app` service** now sets `PYVELM_MODULE_ROOTS` (was only on cron).
+
+### Changed
+
+- **`app/serve.py` scaffold**: `_collect_module_roots()` merges
+  `PYVELM_MODULE_ROOTS` with the default `app/modules/` path.
+- **README** (project scaffold): documents `app/modules/` layout and
+  the Docker restart / Apps install flow.
+
 ## [0.2.1] — 2026-05-22
 
 Patch release focused on inline One2many editing and form UX polish.

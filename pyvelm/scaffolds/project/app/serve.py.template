@@ -24,10 +24,33 @@ load_dotenv(".env")
 HERE = Path(__file__).resolve().parent
 APP_MODULE_ROOT = HERE / "modules"
 
-# Framework's bundled `base` + `admin` come first; this app's
-# modules are searched next. Add more roots here when you split
-# your code across multiple repos.
-MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [APP_MODULE_ROOT]
+
+def _collect_module_roots() -> list:
+    """Framework builtins + this app's ``app/modules/`` + optional
+    ``PYVELM_MODULE_ROOTS`` (colon-separated, used by Docker cron)."""
+    roots: list = list(BUILTIN_MODULE_ROOTS)
+    seen = {str(Path(r).resolve()) for r in roots}
+    for candidate in (APP_MODULE_ROOT,):
+        if candidate.is_dir():
+            key = str(candidate.resolve())
+            if key not in seen:
+                roots.append(candidate)
+                seen.add(key)
+    extra = os.environ.get("PYVELM_MODULE_ROOTS", "")
+    for part in extra.split(":"):
+        part = part.strip()
+        if not part:
+            continue
+        p = Path(part)
+        if p.is_dir():
+            key = str(p.resolve())
+            if key not in seen:
+                roots.append(p)
+                seen.add(key)
+    return roots
+
+
+MODULE_ROOTS = _collect_module_roots()
 
 
 def _build_app():

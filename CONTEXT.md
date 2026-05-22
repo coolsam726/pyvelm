@@ -1,10 +1,13 @@
-# Project context — pyvelm v0.2.1
+# Project context — pyvelm v0.2.2
 
 Building an Odoo-style ERP framework in Python.
 
-**v0.2.1 (released 2026-05-22)** — patch: inline O2m editing, M2m polish,
-relational field labels. See [v0.2.1 release summary](#v021-release-summary).
-**v0.2.0** — graph/pivot, attachments, security hardening
+**v0.2.2 (released 2026-05-22)** — Docker scaffold: bind-mount
+`app/modules`, `PYVELM_MODULE_ROOTS` on app service.
+See [v0.2.2 release summary](#v022-release-summary).
+**v0.2.1** — inline O2m, M2m polish, field labels
+([summary](#v021-release-summary)).
+**v0.2.0** — graph/pivot, attachments, security
 ([summary](#v020-release-summary)).
 
 For the design rationale and the deferred-items rationale, see
@@ -665,6 +668,30 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ---
 
+## v0.2.2 release summary
+
+**Released:** 2026-05-22
+**Package version:** `0.2.2` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this patch
+
+| Area | Highlights |
+|---|---|
+| **Docker scaffold** | `./app/modules` bind-mount on `app` + `cron`; `PYVELM_MODULE_ROOTS` on web service |
+| **serve.py** | `_collect_module_roots()` reads `PYVELM_MODULE_ROOTS` |
+| **Docs** | README clarifies `app/modules/` + restart / Apps install |
+
+### Next focus options (post-v0.2.2)
+
+  - **Vellum ORM veneer (Phase 1)** — `docs/vellum-design.md`.
+  - **Stage 6 Slice 3** — message subtypes + followers.
+  - **S3 / minio** attachment backend.
+  - **O2m inline tables** — Filter By / search bar.
+  - **Multi-measure stacked bar charts**.
+
+---
+
 ## v0.2.1 release summary
 
 **Released:** 2026-05-22
@@ -680,14 +707,6 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 | **M2m** | Chip editor: create / open / edit like M2o |
 | **Labels** | `company_id` → Company, `tag_ids` → Tags, etc. (`Field._default_string`) |
 | **Dev** | `scripts/test_o2m_addrow.py` Playwright smoke for Add row DOM |
-
-### Next focus options (post-v0.2.1)
-
-  - **Vellum ORM veneer (Phase 1)** — design doc at `docs/vellum-design.md`.
-  - **Stage 6 Slice 3** — message subtypes + followers on mail dispatcher.
-  - **S3 / minio storage backend** for `ir.attachment`.
-  - **O2m inline tables** — Filter By / search bar (list-view parity).
-  - **Multi-measure stacked bar charts** in graph view.
 
 ---
 
