@@ -47,14 +47,16 @@ def main():
     if not dsn:
         sys.exit("PYVELM_DSN is not set")
 
-    from pyvelm import Environment, Registry, loader
+    from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
 
-    MODULES_ROOT = HERE / "modules"
+    # `base` + `admin` ship in the wheel; example addons live under
+    # examples/modules (crm depends on base).
+    MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [HERE / "modules"]
 
     with psycopg.connect(dsn, autocommit=True) as conn:
         reg = Registry()
         env = Environment(conn, registry=reg)
-        loader.load_and_install([MODULES_ROOT], env)
+        loader.load_and_install(MODULE_ROOTS, env)
 
         Partner = env["res.partner"]
         Country = env["res.country"]
