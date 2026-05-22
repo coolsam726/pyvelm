@@ -120,5 +120,35 @@ class DomainCacheTests(unittest.TestCase):
         self.assertFalse(p.country_id)
 
 
+@unittest.skipUnless(DSN and _psycopg, "PYVELM_DSN / psycopg not available")
+class M2mSymmetricCacheTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from pathlib import Path
+
+        cls.conn = _psycopg.connect(DSN, autocommit=True)
+        cls.reg = Registry()
+        cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
+        roots = BUILTIN_MODULE_ROOTS + [
+            Path(__file__).resolve().parents[2] / "examples" / "modules"
+        ]
+        loader.load_and_install(roots, cls.env)
+        cls.Partner = cls.env["res.partner"]
+        cls.Tag = cls.env["res.tag"]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.conn.close()
+
+    def test_partner_tag_write_clears_tag_partner_ids_cache(self):
+        tag = self.Tag.create({"name": "SymCache"})
+        partner = self.Partner.create({"name": "SymPartner", "tag_ids": [tag]})
+        t = self.Tag.browse(tag.id)
+        self.assertIn(partner, t.partner_ids)
+        partner.write({"tag_ids": []})
+        t2 = self.Tag.browse(tag.id)
+        self.assertEqual(len(t2.partner_ids), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -51,6 +51,10 @@ class Registry:
         self._m2o_referrers_index: dict[
             str, list[tuple[str, str, str]]
         ] = {}
+        # junction table -> [(model, field, col_self, col_peer), ...]
+        self._m2m_relation_index: dict[
+            str, list[tuple[str, str, str, str]]
+        ] = {}
 
     @contextlib.contextmanager
     def activate(self):
@@ -109,6 +113,7 @@ class Registry:
             cls._validate_relations(self)
         self._build_o2m_inverse_index()
         self._build_m2o_referrers_index()
+        self._build_m2m_relation_index()
         self._build_compute_graph()
 
     def _build_o2m_inverse_index(self) -> None:
@@ -135,6 +140,20 @@ class Registry:
                     self._m2o_referrers_index.setdefault(
                         field.comodel_name, []
                     ).append((cls._name, fname, field.ondelete))
+
+    def _build_m2m_relation_index(self) -> None:
+        """Map junction tables to every Many2many field that uses them."""
+        from .fields import Many2many
+
+        self._m2m_relation_index.clear()
+        for cls in self._models.values():
+            for fname, field in cls._fields.items():
+                if not isinstance(field, Many2many):
+                    continue
+                relation, col1, col2, _, _ = field.resolve_spec(cls, self)
+                self._m2m_relation_index.setdefault(relation, []).append(
+                    (cls._name, fname, col1, col2)
+                )
 
     def _build_compute_graph(self) -> None:
         """Parse @depends paths into the dep graph; detect cycles; topo-sort."""

@@ -1,7 +1,9 @@
-# Project context — pyvelm v0.2.7
+# Project context — pyvelm v0.2.8
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.2.8 (released 2026-05-23)** — Symmetric M2M cache; docs home refresh.
+See [v0.2.8 release summary](#v028-release-summary).
 **v0.2.7 (released 2026-05-23)** — Domain `__or__` + collection paths; comodel
 unlink M2O cache invalidation. See [v0.2.7 release summary](#v027-release-summary).
 **v0.2.6 (released 2026-05-22)** — Vellum ORM veneer (slices A–D), O2M/M2M
@@ -680,6 +682,26 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ---
 
+## v0.2.8 release summary
+
+**Released:** 2026-05-23
+**Package version:** `0.2.8` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this patch
+
+| Area | Highlights |
+|---|---|
+| **M2M cache** | `_m2m_relation_index` — `tag_ids` ↔ `partner_ids` stay in sync |
+| **Docs** | [docs/index.md](docs/index.md) home page updated |
+
+### Next focus options (post-v0.2.8)
+
+  - **Universal-quantifier domains** — `NOT EXISTS` / `all=True` for collections.
+  - **Vellum Slice E** — migration DSL (deferred).
+
+---
+
 ## v0.2.7 release summary
 
 **Released:** 2026-05-23
@@ -696,8 +718,8 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ### Next focus options (post-v0.2.7)
 
+  - ~~**Symmetric M2M cache**~~ — shipped in v0.2.8.
   - **Universal-quantifier domains** — `NOT EXISTS` / `all=True` for collections.
-  - **Symmetric M2M cache** — invalidate inverse field when junction changes.
   - **Vellum Slice E** — migration DSL (deferred).
 
 ---
@@ -719,8 +741,8 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 ### Next focus options (post-v0.2.6)
 
   - **Universal-quantifier domains** — `NOT EXISTS` / `all=True` for collections.
+  - ~~**Symmetric M2M cache**~~ — shipped in v0.2.8.
   - **Vellum Slice E** — migration DSL (deferred in design doc).
-  - **Symmetric M2M cache** — invalidate inverse field when junction changes.
 
 ---
 

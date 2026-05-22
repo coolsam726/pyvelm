@@ -5,23 +5,59 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-Released to [PyPI](https://pypi.org/project/pyvelm/); the
-[changelog](https://github.com/example/pyvelm/blob/main/CHANGELOG.md)
-tracks user-visible changes.
+**Latest release:** [v0.2.8](releases/v0.2.8.md) (2026-05-23) — symmetric
+Many2many cache invalidation. See [releases](releases/v0.2.8.md) and the
+[changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
+
+```bash
+pip install pyvelm==0.2.8
+```
+
+Published on [PyPI](https://pypi.org/project/pyvelm/).
 
 ## Quick start
 
+**From PyPI** (scaffold a new app):
+
 ```bash
-git clone https://github.com/example/pyvelm
-cd pyvelm
-cp .env.example .env       # set PYVELM_DSN
-docker compose up --build  # → http://localhost:8000/login  (admin / admin)
+pipx install pyvelm
+pyvelm init my_erp
+cd my_erp
+cp .env.example .env
+docker compose up --build   # → http://localhost:8000/login  (admin / admin)
 ```
 
-The bundled demo seeds ~20 partners, 15 CRM leads, tags, sales
-users, and a couple of workflow records so the UI is populated on
-first boot. See [Getting started](getting-started.md) for a guided
-walkthrough — install, then declare your first module.
+**From source** (this repo):
+
+```bash
+git clone https://github.com/coolsam726/pyvelm.git
+cd pyvelm
+cp .env.example .env       # set PYVELM_DSN
+pip install -e .
+docker compose up --build
+```
+
+The bundled demo seeds partners, CRM leads, tags, sales users, and
+workflow records so the UI is populated on first boot. See
+[Getting started](getting-started.md) for a guided walkthrough.
+
+**Optional checks** (repo examples, same module roots as `examples/serve.py`):
+
+```bash
+python examples/basic.py
+python examples/vellum_smoke.py
+```
+
+## What's new
+
+| Version | Highlights |
+|---------|------------|
+| [v0.2.8](releases/v0.2.8.md) | Symmetric M2M cache — `partner.tag_ids` write clears stale `tag.partner_ids` |
+| [v0.2.7](releases/v0.2.7.md) | `__or__` domains with `tag_ids.name`-style paths; M2O cache cleared when a comodel is unlinked |
+| [v0.2.6](releases/v0.2.6.md) | **[Vellum](vellum.md)** — optional Eloquent-style ORM (`env.query`, scopes, soft deletes); O2M/M2M request cache |
+| [v0.2.5](releases/v0.2.5.md) | Artisan `pyvelm make:*` generators; `PYVELM_ENV` dev/production; reload registry fix |
+
+Older notes: [v0.2.4](releases/v0.2.4.md) … [v0.2.0](releases/v0.2.0.md).
 
 ## Read in this order
 
@@ -30,7 +66,7 @@ If you're new, read these in order:
 1. **[Getting started](getting-started.md)** — boot the stack, add
    your first module.
 2. **[Declaring models](models.md)** — fields, relationships,
-   computed values, model inheritance.
+   computed values, model inheritance, dotted search domains.
 3. **[Vellum](vellum.md)** — optional Eloquent-style queries and
    ergonomics (`env.query`, scopes, soft deletes).
 4. **[Building UIs](views.md)** — list, form, and kanban views;
@@ -47,16 +83,18 @@ Then as you need them:
 - **[Deployment](deployment.md)** — Docker, gunicorn, the
   background cron worker, sending email, CSRF / rate-limit /
   password-change.
+- **[Console commands](console.md)** — `pyvelm make:module`, `make:model`,
+  `db autogen`, and related generators.
 - **[Architecture](architecture.md)** — design decisions behind
-  the API.
+  the API (cache, domains, deferred items).
 
 The **[API reference](api/index.md)** is auto-generated from
 docstrings if you want the per-class details.
 
 ## What ships in the wheel
 
-`pyvelm` bundles two modules so a fresh install produces a bootable
-app:
+`pyvelm` bundles modules under `pyvelm/modules/` so a fresh install
+produces a bootable app:
 
 - **`base`** — `ir.ui.view`, `res.users`, `res.groups`,
   `ir.model.access`, `ir.rule`, `ir.actions.server`,
@@ -66,7 +104,8 @@ app:
   the mail-dispatcher cron.
 - **`admin`** — list / form views + sidebar menus that put a
   working management UI in front of the base models.
-- **`console`** — Artisan-style `pyvelm make:*` generators.
+- **`console`** — Artisan-style `pyvelm make:*` generators (see
+  [Console commands](console.md)).
 - **`vellum`** — marker module; import **`pyvelm.vellum`** in your
   models for the optional query-builder veneer (see [Vellum](vellum.md)).
 
@@ -82,15 +121,18 @@ loader.load_and_install(
 )
 ```
 
-The illustrative addons (`partners`, `partners_pro`, `crm`, `demo`)
-live under `examples/` in the repo and are opt-in — they show
-patterns rather than being required.
+The illustrative addons (`partners`, `partners_pro`, `crm`, `demo`,
+`vellum_demo`) live under `examples/` in the repo and are opt-in —
+they show patterns rather than being required.
 
 ## CLI
 
 ```bash
-pyvelm-cron --interval 60     # background cron + outgoing-mail dispatcher
+pyvelm init my_erp              # scaffold a project
+pyvelm make:module inventory     # empty module shell
+pyvelm db autogen my_module      # schema migration from models
+pyvelm-cron --interval 60        # background cron + mail dispatcher
 ```
 
-See [Deployment → Background cron runner](deployment.md#the-cron-worker)
-for the production story.
+See [CLI reference](cli.md), [Console commands](console.md), and
+[Deployment → Background cron runner](deployment.md#the-cron-worker).

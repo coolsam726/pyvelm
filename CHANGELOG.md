@@ -11,6 +11,21 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.2.8] — 2026-05-23
+
+Symmetric Many2many cache invalidation and docs home page refresh.
+Base module remains `0.18.0`.
+See [docs/releases/v0.2.8.md](docs/releases/v0.2.8.md).
+
+### Added
+
+- **`_m2m_relation_index`** — writing or unlinking one side of a Many2many
+  invalidates the symmetric field on the comodel (e.g. `tag_ids` ↔ `partner_ids`).
+
+### Changed
+
+- **`docs/index.md`** — Home page: current release, PyPI quick start, what's new table.
+
 ## [0.2.7] — 2026-05-23
 
 Domain hardening: comodel-unlink M2O cache invalidation, `__or__` + collection

@@ -394,6 +394,49 @@ class BaseModel(metaclass=MetaModel):
             out[fname] = per_rid
         return out
 
+    def _snapshot_m2m_peers(self, fname: str) -> set[int]:
+        """Distinct comodel ids linked via a Many2many before a write/unlink."""
+        from .fields import Many2many
+
+        field = self._fields.get(fname)
+        if not isinstance(field, Many2many) or not self._ids:
+            return set()
+        relation, col1, col2, _, _ = field.resolve_spec(
+            type(self), self.env.registry
+        )
+        placeholders = ",".join(["%s"] * len(self._ids))
+        rows = self.env.conn.execute(
+            f'SELECT DISTINCT "{col2}" FROM "{relation}" '
+            f'WHERE "{col1}" IN ({placeholders})',
+            list(self._ids),
+        ).fetchall()
+        return {int(r[0]) for r in rows}
+
+    def _invalidate_symmetric_m2m(self, fname: str, peer_ids: set[int]) -> None:
+        """Invalidate the other side of a shared junction table."""
+        from .fields import Many2many
+
+        if not peer_ids:
+            return
+        field = self._fields.get(fname)
+        if not isinstance(field, Many2many):
+            return
+        relation, col1, col2, _, _ = field.resolve_spec(
+            type(self), self.env.registry
+        )
+        for model_name, other_fname, other_col1, other_col2 in (
+            self.env.registry._m2m_relation_index.get(relation, [])
+        ):
+            if model_name == self._name and other_fname == fname:
+                continue
+            # peer_ids are always on the comodel side (col2 of this field).
+            if other_col1 == col2 and other_col2 == col1:
+                self.env.cache.invalidate(
+                    model_name=model_name,
+                    ids=list(peer_ids),
+                    fields=[other_fname],
+                )
+
     def _invalidate_relational_caches(
         self,
         column_vals: dict[str, Any],
@@ -490,11 +533,13 @@ class BaseModel(metaclass=MetaModel):
         ]
         if m2m_fields and self._ids:
             for fname in m2m_fields:
+                peers = self._snapshot_m2m_peers(fname)
                 self.env.cache.invalidate(
                     model_name=self._name,
                     ids=list(self._ids),
                     fields=[fname],
                 )
+                self._invalidate_symmetric_m2m(fname, peers)
 
     def _apply_m2m(self, parent_ids: list[int], m2m_vals: dict[str, Any]) -> None:
         """Replace junction-table rows for each (field, parent_id) pair."""
@@ -566,6 +611,9 @@ class BaseModel(metaclass=MetaModel):
         if m2m_vals:
             new_record._apply_m2m([new_id], m2m_vals)
         self._invalidate_relational_caches(column_vals, m2m_vals)
+        for fname, value in m2m_vals.items():
+            peers = set(self._fields[fname].normalize_ids(value))
+            new_record._invalidate_symmetric_m2m(fname, peers)
         if related_vals:
             new_record._apply_related_vals(related_vals)
         # Initial-populate stored compute fields in topo order. Non-stored
@@ -599,6 +647,9 @@ class BaseModel(metaclass=MetaModel):
         before_m2o = (
             self._snapshot_many2one_columns(m2o_to_snap) if m2o_to_snap else None
         )
+        before_m2m_peers = {
+            fname: self._snapshot_m2m_peers(fname) for fname in m2m_vals
+        }
         if related_vals:
             self._apply_related_vals(related_vals)
         if column_vals:
@@ -621,6 +672,11 @@ class BaseModel(metaclass=MetaModel):
         self._invalidate_relational_caches(
             column_vals, m2m_vals, before_m2o=before_m2o
         )
+        for fname, value in m2m_vals.items():
+            field = self._fields[fname]
+            new_peers = set(field.normalize_ids(value))
+            affected = before_m2m_peers.get(fname, set()) | new_peers
+            self._invalidate_symmetric_m2m(fname, affected)
         changed = list(column_vals) + list(m2m_vals)
         if changed:
             self.env.notify_changed(self._name, list(self._ids), changed)
