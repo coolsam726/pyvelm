@@ -846,17 +846,32 @@ def _edit_o2m_table(value, spec, field):
         "    if(seq) seq.value=String((i+1)*10);\n"
         "  });\n"
         "}\n"
+        "function rewriteIdx(node,idx){\n"
+        "  if(!node||node.nodeType!==1) return;\n"
+        '  ["name","id","for"].forEach(function(a){\n'
+        "    if(!node.hasAttribute(a)) return;\n"
+        '    var v=node.getAttribute(a);\n'
+        '    if(v.indexOf("__IDX__")>=0) node.setAttribute(a,v.split("__IDX__").join(idx));\n'
+        "  });\n"
+        '  if(node.hasAttribute("x-data")){\n'
+        '    var xd=node.getAttribute("x-data");\n'
+        '    if(xd.indexOf("__IDX__")>=0) node.setAttribute("x-data",xd.split("__IDX__").join(idx));\n'
+        "  }\n"
+        "  for(var i=0;i<node.children.length;i++) rewriteIdx(node.children[i],idx);\n"
+        "}\n"
         "function addRow(){\n"
-        "  if(!tmpl) return;\n"
-        "  var html=tmpl.innerHTML.replace(/__IDX__/g,String(nextIdx++));\n"
+        "  if(!tmpl||!tmpl.content||!tmpl.content.firstElementChild) return;\n"
+        "  var idx=String(nextIdx++);\n"
         "  root.dataset.pvO2mNext=String(nextIdx);\n"
-        "  var frag=document.createRange().createContextualFragment(html);\n"
+        "  var row=tmpl.content.firstElementChild.cloneNode(true);\n"
+        "  rewriteIdx(row,idx);\n"
         '  var emptyRow=tbody.querySelector("[data-pv-o2m-empty]");\n'
         "  if(emptyRow) emptyRow.remove();\n"
-        "  if(addLineRow) tbody.insertBefore(frag, addLineRow);\n"
-        "  else tbody.appendChild(frag);\n"
+        "  if(addLineRow) tbody.insertBefore(row, addLineRow);\n"
+        "  else tbody.appendChild(row);\n"
+        "  if(window.Alpine&&typeof window.Alpine.initTree===\"function\") window.Alpine.initTree(row);\n"
         "  renumber();\n"
-        "  var first=frag.querySelector('input:not([type=hidden]),select,textarea');\n"
+        "  var first=row.querySelector('input:not([type=hidden]),select,textarea');\n"
         "  if(first) first.focus();\n"
         "}\n"
         'root.addEventListener("click",function(e){\n'
