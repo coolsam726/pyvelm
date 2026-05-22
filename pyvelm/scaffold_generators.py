@@ -142,6 +142,7 @@ def generate_model(
     model_name: str,
     *,
     force: bool = False,
+    vellum: bool = False,
 ) -> Path:
     """Write ``models/<stem>.py`` and update ``models/__init__.py``."""
     stem = model_stem(model_name, module_name)
@@ -150,8 +151,11 @@ def generate_model(
     if target.exists() and not force:
         raise FileExistsError(str(target))
     (module_path / "models").mkdir(exist_ok=True)
+    template = (
+        "snippets/model_vellum.py.template" if vellum else "snippets/model.py.template"
+    )
     body = _read_template(
-        "snippets/model.py.template",
+        template,
         {
             "module": module_name,
             "model": model_name,

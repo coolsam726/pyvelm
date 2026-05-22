@@ -1,7 +1,9 @@
-# Project context — pyvelm v0.2.9
+# Project context — pyvelm v0.2.10
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.2.10 (released 2026-05-23)** — Vellum demo UI in examples; `make:model
+--vellum`; domain `all` comparisons. See [v0.2.10 release summary](#v0210-release-summary).
 **v0.2.9 (released 2026-05-23)** — Domain `{"all": True}`; GitHub releases from
 CHANGELOG. See [v0.2.9 release summary](#v029-release-summary).
 **v0.2.8 (released 2026-05-23)** — Symmetric M2M cache; docs home refresh.
@@ -684,6 +686,28 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ---
 
+## v0.2.10 release summary
+
+**Released:** 2026-05-23
+**Package version:** `0.2.10` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this patch
+
+| Area | Highlights |
+|---|---|
+| **Examples** | `vellum_demo` views + **Vellum demo** menu in `examples/serve.py` |
+| **Console** | `pyvelm make:model --vellum` |
+| **Domains** | `{"all": True}` with `<` / `>` / `<=` / `>=` on collection paths |
+| **Docs** | [api/vellum.md](docs/api/vellum.md) |
+
+### Next focus options (post-v0.2.10)
+
+  - **Vellum Slice E** — migration DSL (deferred).
+  - **M2M command tuples** / transaction boundaries (v0.3 theme).
+
+---
+
 ## v0.2.9 release summary
 
 **Released:** 2026-05-23
@@ -699,8 +723,8 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ### Next focus options (post-v0.2.9)
 
+  - ~~**Domain** — comparison ops with `all`~~ — shipped in v0.2.10.
   - **Vellum Slice E** — migration DSL (deferred).
-  - **Domain** — comparison ops with `all` on collections.
 
 ---
 

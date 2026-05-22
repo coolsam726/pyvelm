@@ -29,7 +29,16 @@ from .paths import M2mHop, M2oHop, O2mHop, parse_path
 
 _SIMPLE_OPS = {"=", "!=", "<", "<=", ">", ">="}
 # For {"all": True} on collection paths: emit NOT EXISTS(member fails op).
-_ALL_FAIL_OPS = {"=": "!=", "!=": "=", "in": "not in", "not in": "in"}
+_ALL_FAIL_OPS = {
+    "=": "!=",
+    "!=": "=",
+    "<": ">=",
+    "<=": ">",
+    ">": "<=",
+    ">=": "<",
+    "in": "not in",
+    "not in": "in",
+}
 
 
 def _parse_leaf(leaf) -> tuple[str, str, Any, bool]:

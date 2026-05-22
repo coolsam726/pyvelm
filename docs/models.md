@@ -45,6 +45,10 @@ for r in adults:
 For optional Eloquent-style queries (`env.query`, scopes, eager load,
 soft deletes), see **[Vellum](vellum.md)**.
 
+Collection search paths support universal quantification with a fourth
+leaf element: `("tag_ids.name", "!=", "VIP", {"all": True})` — every
+related row must match (see [Architecture](architecture.md#domain-compiler)).
+
 Recordsets behave like Python collections — iteration, `len()`,
 `in`, slicing — and they're always tied to a specific `env`.
 

@@ -10,13 +10,22 @@ class MakeModelCommand(Command):
     signature = (
         "make:model {model : Technical name (e.g. product or inventory.product)} "
         "{--module= : Owning module} "
+        "{--vellum : Scaffold with Vellum mixin and _fillable} "
         "{--force : Overwrite an existing file}"
     )
 
-    def handle(self, model: str, module: str | None = None, force: bool = False) -> int:
+    def handle(
+        self,
+        model: str,
+        module: str | None = None,
+        vellum: bool = False,
+        force: bool = False,
+    ) -> int:
         try:
             mod_name, _root, mod_path = resolve_module(module)
-            path = generate_model(mod_path, mod_name, model, force=force)
+            path = generate_model(
+                mod_path, mod_name, model, force=force, vellum=vellum
+            )
         except (ValueError, FileExistsError) as exc:
             self.error(str(exc))
             return 1

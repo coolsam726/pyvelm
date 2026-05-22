@@ -96,6 +96,7 @@ nav:
           - pyvelm.registry: api/registry.md
           - pyvelm.env: api/env.md
           - pyvelm.domain: api/domain.md
+          - pyvelm.vellum: api/vellum.md
       - Modules & loader:
           - pyvelm.loader: api/loader.md
           - pyvelm.builders: api/builders.md

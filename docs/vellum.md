@@ -231,6 +231,5 @@ for f in pyvelm/modules/vellum/tests/test_*.py; do python "$f" -v; done
 
 ## API reference
 
-MkDocstrings can document `pyvelm.vellum` from source; the main entry
-points are `Vellum`, `QueryBuilder`, `SoftDeletes`, `scope`, `on`, and
-`env.query`.
+See **[pyvelm.vellum](api/vellum.md)** in the API reference for the full
+public surface (`Vellum`, `QueryBuilder`, `SoftDeletes`, `scope`, `on`, …).

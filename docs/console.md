@@ -74,7 +74,7 @@ Discovery uses the same module roots as the web app (`pyvelm.toml`
 | Command | Purpose |
 |---------|---------|
 | `make:module` | Empty addon skeleton (no models/views/menus) |
-| `make:model` | `models/<name>.py` + `models/__init__.py` import |
+| `make:model` | `models/<name>.py` + `models/__init__.py` import (`--vellum` for Vellum mixin) |
 | `make:view` | `views/<stem>.py` list + form + `DATA` entry |
 | `make:menu` | `views/menu.py` (or `--append` to existing) |
 | `make:command` | `commands/<name>.py` Artisan command class |
@@ -85,6 +85,7 @@ Typical workflow:
 cd my_erp
 pyvelm make:module inventory
 pyvelm make:model inventory.product --module=inventory
+pyvelm make:model blog.post --module=blog --vellum   # Vellum + _fillable scaffold
 pyvelm make:view inventory.product --module=inventory
 pyvelm make:menu --view=product.list --module=inventory
 pyvelm db autogen inventory --with-views   # migration + views for new models

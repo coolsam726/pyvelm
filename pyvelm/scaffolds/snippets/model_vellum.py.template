@@ -1,0 +1,11 @@
+"""Model ``{{model}}`` (Vellum opt-in)."""
+
+from pyvelm import BaseModel, Char
+from pyvelm.vellum import Vellum
+
+
+class {{class_name}}(Vellum, BaseModel):
+    _name = "{{model}}"
+    _fillable = ["name"]
+
+    name = Char(required=True)

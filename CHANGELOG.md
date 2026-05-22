@@ -11,6 +11,24 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.2.10] — 2026-05-23
+
+Vellum demo in the example server UI, domain `all` on comparisons, `make:model
+--vellum`, and API docs for `pyvelm.vellum`. Base module remains `0.18.0`.
+See [docs/releases/v0.2.10.md](docs/releases/v0.2.10.md).
+
+### Added
+
+- **`vellum_demo` views/menus** — sidebar **Vellum demo** when running
+  `examples/serve.py` (notes, comments, soft notes).
+- **`pyvelm make:model --vellum`** — scaffold `Vellum` before `BaseModel` with
+  `_fillable`.
+- **API** — [docs/api/vellum.md](docs/api/vellum.md) (mkdocstrings).
+
+### Changed
+
+- **Domain `{"all": True}`** — supports `<`, `<=`, `>`, `>=` on collection paths.
+
 ## [0.2.9] — 2026-05-23
 
 Universal-quantifier collection domains and CHANGELOG-driven GitHub

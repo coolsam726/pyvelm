@@ -366,7 +366,7 @@ visible.
 | Gap | Why deferred |
 |-----|---|
 | LRU / eviction on `env.cache` | Single env per request, ids are bounded by the working set. Premature optimization until proven a problem. |
-| Universal-quantifier edge cases | `("tag_ids.name", "!=", "VIP", {"all": True})` means every tag is non-VIP (vacuously true when there are no tags). Comparison ops (`<`, `>`) on collections with `all` are not supported yet. |
+| Universal-quantifier edge cases | Vacuous truth when a partner has no tags; `like`/`ilike` with `all` use `NOT ILIKE` failure rows. Polish `|`, `&`, `!` on domains still deferred. |
 | O2m/M2m caching (full dep graph) | Tuple cache + invalidation on inverse FK / M2M writes, comodel unlink, and symmetric M2M fields sharing a junction table. Remaining gap: raw SQL junction edits. |
 | M2M command tuples | Replace-only writes work for everything in the example; `[(0,_,vals), (4,id)]` are an API ergonomics layer, not a capability layer. |
 | Transaction boundaries beyond autocommit | Adds a real unit-of-work concept. Right when multi-statement consistency matters, not before. |

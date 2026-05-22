@@ -10,6 +10,8 @@ Requires PYVELM_DSN (copy .env.example to .env). Default mode is
 
 Open http://localhost:8000/login — admin / admin.
 
+Sidebar **Vellum demo** (notes, comments, soft deletes) loads with this server.
+
 Vellum smoke test (same module roots, no full DB wipe)::
 
     python examples/vellum_smoke.py

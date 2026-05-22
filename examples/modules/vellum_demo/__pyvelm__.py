@@ -4,3 +4,7 @@ SUMMARY: str = "Example models exercising the Vellum query builder."
 CATEGORY: str = "Examples"
 AUTHOR: str = "pyvelm"
 DEPENDS: list[str] = ["base", "vellum"]
+DATA: list[str] = [
+    "views/note.py",
+    "views/menu.py",
+]

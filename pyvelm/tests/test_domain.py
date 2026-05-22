@@ -80,6 +80,30 @@ class DomainCompileTests(unittest.TestCase):
         self.assertIn("NOT (EXISTS", where)
         self.assertEqual(params, ["VIP"])
 
+    def test_all_comparison_uses_inverted_op(self):
+        from pyvelm import Integer
+        from pyvelm.vellum import Vellum
+
+        reg = Registry()
+        with reg.activate():
+
+            class Tag(BaseModel):
+                _name = "test.tag_scored"
+                score = Integer()
+
+            class PartnerScored(Vellum, BaseModel):
+                _name = "test.partner_scored"
+                tag_ids = Many2many("test.tag_scored")
+
+        where, params, _ = domain_to_sql(
+            [("tag_ids.score", ">", 10, {"all": True})],
+            PartnerScored,
+            reg,
+        )
+        self.assertIn("NOT (EXISTS", where)
+        self.assertIn("<=", where)
+        self.assertEqual(params, [10])
+
     def test_all_on_simple_field_raises(self):
         reg, Partner = _mini_registry()
         with self.assertRaises(ValueError):
