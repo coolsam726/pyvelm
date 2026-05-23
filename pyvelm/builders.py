@@ -214,6 +214,8 @@ def list_view(
     *,
     title: str | None = None,
     form_view: str | None = None,
+    record_href: str | None = None,
+    create_href: str | None = None,
     sequence: str | None = None,
     priority: int = 16,
 ) -> ListView:
@@ -225,6 +227,8 @@ def list_view(
         fields:     Ordered list of field names or ``field(...)`` dicts.
         title:      Optional heading shown above the table.
         form_view:  Name of a form view to link each row to.
+        record_href: Optional URL for row navigation; ``{id}`` is replaced.
+        create_href: Optional URL for the New button (bypasses form create).
         sequence:   Field name of an integer field enabling drag-reorder.
         priority:   Inheritance chain priority (default 16).
 
@@ -239,6 +243,10 @@ def list_view(
         arch["title"] = title
     if form_view is not None:
         arch["form_view"] = form_view
+    if record_href is not None:
+        arch["record_href"] = record_href
+    if create_href is not None:
+        arch["create_href"] = create_href
     if sequence is not None:
         arch["sequence"] = sequence
     result: ListView = {

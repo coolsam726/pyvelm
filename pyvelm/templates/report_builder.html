@@ -1,0 +1,1393 @@
+{% extends "layouts/main.html" %}
+{% block title %}{{ page_title }} — Report Builder — pyvelm{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_subtitle %}Design your report without writing code{% endblock %}
+
+{% block content %}
+<script>window._pvReportBuilderCfg = {{ alpine_config | tojson }};</script>
+<div class="flex flex-col gap-5 max-w-6xl mx-auto" x-data="pvReportBuilder(window._pvReportBuilderCfg)">
+
+    {# Step indicator #}
+    <nav class="flex flex-wrap gap-1 p-1 bg-neutral-secondary rounded-lg text-sm">
+        <template x-for="(s, i) in steps" :key="s.id">
+            <button type="button" @click="goStep(s.id)"
+                    :class="step === s.id
+                        ? 'bg-neutral-primary text-heading shadow-sm font-semibold'
+                        : 'text-body-subtle hover:text-body'"
+                    class="flex-1 min-w-[120px] px-3 py-2 rounded-md transition-colors text-center">
+                <span class="text-2xs opacity-60 mr-1" x-text="i + 1"></span>
+                <span x-text="s.label"></span>
+            </button>
+        </template>
+    </nav>
+
+    {# Toolbar #}
+    <div class="flex flex-wrap items-center gap-2 justify-end">
+        <button type="button" @click="preview()" :disabled="!canPreview"
+                class="px-3 py-1.5 text-sm font-medium rounded-md border border-default
+                       hover:bg-neutral-secondary disabled:opacity-40">
+            Preview
+        </button>
+        <button type="button" @click="save()" :disabled="saving"
+                class="px-3 py-1.5 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90">
+            <span x-text="saving ? 'Saving…' : 'Save report'"></span>
+        </button>
+        <template x-if="reportId">
+            <a :href="'/web/reports/' + reportId + '/run'"
+               class="px-3 py-1.5 text-sm font-medium rounded-md border border-fg-brand text-fg-brand">
+                Run report
+            </a>
+        </template>
+    </div>
+
+    {# Step 1 — Data source #}
+    <section x-show="step === 1" x-cloak class="bg-neutral-primary border border-default rounded-lg p-5 space-y-4">
+        <div>
+            <h3 class="text-base font-semibold text-heading">What data should this report use?</h3>
+            <p class="text-sm text-body-subtle mt-1">Pick a record type, give your report a name, and choose list or summary layout.</p>
+        </div>
+        <label class="block">
+            <span class="text-sm font-medium text-heading mb-1 block">Report name</span>
+            <input type="text" x-model="meta.name" placeholder="e.g. Active customers"
+                   class="w-full max-w-md text-sm rounded-md border border-default bg-neutral-primary px-3 py-2
+                          focus:outline-none focus:ring-2 focus:ring-fg-brand">
+        </label>
+        <label class="block max-w-md">
+            <span class="text-sm font-medium text-heading mb-1 block">Data source</span>
+            <div class="relative"
+                 @click.outside="modelComboOpen = false"
+                 @keydown.escape.prevent="modelComboOpen = false">
+                <input type="text"
+                       x-model="modelQuery"
+                       @focus="modelComboOpen = true"
+                       @input.debounce.150ms="onModelQueryInput()"
+                       @keydown.arrow-down.prevent="moveModelCursor(1)"
+                       @keydown.arrow-up.prevent="moveModelCursor(-1)"
+                       @keydown.enter.prevent="pickModelCursor()"
+                       placeholder="Search record types…"
+                       autocomplete="off"
+                       class="w-full text-sm rounded-md border border-default bg-neutral-primary px-3 py-2
+                              focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand">
+                <button type="button"
+                        x-show="meta.root_model"
+                        @click.stop="clearModel()"
+                        aria-label="Clear"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded
+                               text-body-subtle hover:text-fg-danger">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+                <div x-show="modelComboOpen" x-cloak x-transition.opacity.duration.100ms
+                     class="absolute left-0 right-0 top-full mt-1 z-50
+                            bg-neutral-primary border border-default rounded-md shadow-lg
+                            max-h-60 overflow-auto text-sm">
+                    <template x-if="!filteredModels().length">
+                        <div class="px-3 py-2 text-xs text-body-subtle">No matches.</div>
+                    </template>
+                    <ul x-show="filteredModels().length" role="listbox">
+                        <template x-for="(m, i) in filteredModels()" :key="m.value">
+                            <li role="option"
+                                @click="pickModel(m)"
+                                @mousemove="modelComboCursor = i"
+                                :class="i === modelComboCursor
+                                        ? 'bg-brand-softer text-fg-brand'
+                                        : 'text-body hover:bg-neutral-secondary'"
+                                class="px-3 py-2 cursor-pointer flex justify-between gap-2">
+                                <span x-text="m.label" class="truncate"></span>
+                                <span x-show="m.value === meta.root_model"
+                                      class="text-2xs text-fg-brand shrink-0">selected</span>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </div>
+            <p x-show="meta.root_model" x-cloak class="text-2xs text-body-subtle mt-1" x-text="modelHint()"></p>
+        </label>
+        <label class="block max-w-md">
+            <span class="text-sm font-medium text-heading mb-1 block">Description <span class="font-normal text-body-subtle">(optional)</span></span>
+            <input type="text" x-model="meta.description" placeholder="Short note for other users"
+                   class="w-full text-sm rounded-md border border-default bg-neutral-primary px-3 py-2">
+        </label>
+        <div>
+            <span class="text-sm font-medium text-heading mb-2 block">Report type</span>
+            <div class="flex flex-wrap gap-2">
+                <button type="button" @click="setReportMode('detail')"
+                        :class="reportMode === 'detail' ? 'border-fg-brand bg-brand-soft text-fg-brand' : 'border-default text-body hover:bg-neutral-secondary'"
+                        class="px-4 py-3 rounded-lg border text-left max-w-xs transition-colors">
+                    <span class="block font-medium text-sm">Detailed list</span>
+                    <span class="block text-2xs text-body-subtle mt-0.5">One row per record with chosen columns</span>
+                </button>
+                <button type="button" @click="setReportMode('summary')"
+                        :class="reportMode === 'summary' ? 'border-fg-brand bg-brand-soft text-fg-brand' : 'border-default text-body hover:bg-neutral-secondary'"
+                        class="px-4 py-3 rounded-lg border text-left max-w-xs transition-colors">
+                    <span class="block font-medium text-sm">Summary</span>
+                    <span class="block text-2xs text-body-subtle mt-0.5">Group and count or sum values</span>
+                </button>
+            </div>
+        </div>
+        <div class="flex justify-end pt-2">
+            <button type="button" @click="goStep(2)" :disabled="!meta.root_model"
+                    class="px-4 py-2 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90 disabled:opacity-40">
+                Next: Choose columns →
+            </button>
+        </div>
+    </section>
+
+    {# Step 2 — Columns / grouping #}
+    <section x-show="step === 2" x-cloak class="space-y-4">
+        <div class="bg-neutral-primary border border-default rounded-lg p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <div>
+                    <h3 class="text-base font-semibold text-heading"
+                        x-text="reportMode === 'summary' ? 'Group and measure' : 'Choose columns'"></h3>
+                    <p class="text-sm text-body-subtle mt-1"
+                       x-text="reportMode === 'summary'
+                           ? 'Pick fields to group by, then add count or numeric totals.'
+                           : 'Browse fields level by level — open relations to go deeper, click a field to add it.'"></p>
+                </div>
+            </div>
+
+            {# Detail mode — column list + order by #}
+            <template x-if="reportMode === 'detail'">
+                <div class="space-y-5">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-2xs font-semibold uppercase tracking-wider text-body-subtle mb-2">
+                            Browse fields
+                        </p>
+                        {% include "widgets/field_drill_browser.html" %}
+                    </div>
+                    <div>
+                        <p class="text-2xs font-semibold uppercase tracking-wider text-body-subtle mb-2">
+                            Report columns (<span x-text="definition.columns.length"></span>)
+                        </p>
+                        <ul class="space-y-2" id="pv-report-columns">
+                            <template x-for="(col, i) in definition.columns" :key="'col-' + i">
+                                <li class="text-sm border border-default rounded-md px-2 py-2 bg-neutral-secondary/30 space-y-2"
+                                    :class="colDragOver === i ? 'ring-2 ring-fg-brand/40' : ''"
+                                    @dragover.prevent="colDragOver = i"
+                                    @dragleave="if (colDragOver === i) colDragOver = null"
+                                    @drop.prevent="dropColumn(i)">
+                                    <div class="flex items-center gap-2">
+                                        <span draggable="true"
+                                              @dragstart="colDragStart(i, $event)"
+                                              @dragend="colDragEnd()"
+                                              class="cursor-grab text-body-subtle hover:text-body select-none px-0.5"
+                                              title="Drag to reorder">⋮⋮</span>
+                                        <input type="text" x-model="col.label"
+                                               class="flex-1 min-w-0 bg-transparent border-0 text-body font-medium focus:outline-none">
+                                        <div class="relative shrink-0 w-28" x-show="colNeedsSubagg(col.expr)"
+                                             x-data="pvCombo({ options: subaggOptions, value: col.subaggregate || '', placeholder: 'Combine', compact: true, allowClear: true })"
+                                             x-effect="syncExternal(col.subaggregate)"
+                                             @combo-change="col.subaggregate = $event.detail.value || null"
+                                             @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                                            {% include "widgets/pv_combo_fragment.html" %}
+                                        </div>
+                                        <button type="button" @click="definition.columns.splice(i,1)"
+                                                class="text-body-subtle hover:text-danger px-1">×</button>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2 pl-5 text-2xs">
+                                        <span class="text-body-subtle">Format</span>
+                                        <div class="relative w-28"
+                                             x-data="pvCombo({ options: formatTypeOptions, value: (col.format && col.format.type) || 'text', placeholder: 'Format', compact: true, allowClear: false })"
+                                             x-effect="syncExternal((col.format && col.format.type) || 'text')"
+                                             @combo-change="setColFormatType(col, $event.detail.value)"
+                                             @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                                            {% include "widgets/pv_combo_fragment.html" %}
+                                        </div>
+                                        <div class="relative min-w-[150px]" x-show="ensureColFormat(col).type === 'currency'"
+                                             x-data="pvCombo({ options: [], value: '', placeholder: 'Currency…', compact: true, allowClear: false })"
+                                             x-effect="setOptions(currencySourceOptions(col)); syncExternal(currencySourceValue(col))"
+                                             @combo-change="setCurrencySource(col, $event.detail.value)"
+                                             @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                                            {% include "widgets/pv_combo_fragment.html" %}
+                                        </div>
+                                        <select x-show="['number','currency'].includes(ensureColFormat(col).type)"
+                                                x-model.number="ensureColFormat(col).decimals"
+                                                class="rounded border border-default px-1 py-0.5 text-xs bg-neutral-primary">
+                                            <option :value="0">0 dp</option>
+                                            <option :value="1">1 dp</option>
+                                            <option :value="2">2 dp</option>
+                                            <option :value="3">3 dp</option>
+                                            <option :value="4">4 dp</option>
+                                        </select>
+                                        <span class="text-body-subtle">Align</span>
+                                        <div class="relative w-24"
+                                             x-data="pvCombo({ options: alignOptions, value: (col.format && col.format.align) || 'left', placeholder: 'Align', compact: true, allowClear: false })"
+                                             x-effect="syncExternal((col.format && col.format.align) || 'left')"
+                                             @combo-change="ensureColFormat(col).align = $event.detail.value"
+                                             @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                                            {% include "widgets/pv_combo_fragment.html" %}
+                                        </div>
+                                    </div>
+                                </li>
+                            </template>
+                        </ul>
+                        <p x-show="!definition.columns.length" class="text-sm text-body-subtle py-4">
+                            Click fields on the left to add columns.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-5 pt-4 border-t border-default">
+                    <div class="flex flex-wrap items-start justify-between gap-2 mb-3">
+                        <div>
+                            <h4 class="text-sm font-semibold text-heading">Order by</h4>
+                            <p class="text-2xs text-body-subtle mt-0.5">
+                                Sort rows by one or more fields. First rule wins ties.
+                            </p>
+                        </div>
+                        <button type="button" @click="openFieldPicker({ type: 'order' })"
+                                class="text-xs text-fg-brand hover:underline whitespace-nowrap">
+                            + Add sort field
+                        </button>
+                    </div>
+                    <ul class="space-y-2" x-show="orderRules.length">
+                        <template x-for="(rule, ri) in orderRules" :key="'ord-' + ri">
+                            <li class="flex items-center gap-2 text-sm border border-default rounded-md px-2 py-2
+                                       bg-neutral-secondary/30"
+                                :class="orderDragOver === ri ? 'ring-2 ring-fg-brand/40' : ''"
+                                @dragover.prevent="orderDragOver = ri"
+                                @dragleave="if (orderDragOver === ri) orderDragOver = null"
+                                @drop.prevent="dropOrderRule(ri)">
+                                <span draggable="true"
+                                      @dragstart="orderDragStart(ri, $event)"
+                                      @dragend="orderDragEnd()"
+                                      class="cursor-grab text-body-subtle hover:text-body select-none px-0.5"
+                                      title="Drag to change priority">⋮⋮</span>
+                                <span class="flex-1 min-w-0 truncate text-body"
+                                      x-text="rule.label || fieldLabel(rule.field)"
+                                      :title="rule.field"></span>
+                                <div class="relative shrink-0 w-28"
+                                     x-data="pvCombo({ options: orderDirOptions, value: rule.direction, placeholder: 'Direction', compact: true, allowClear: false })"
+                                     x-effect="syncExternal(rule.direction)"
+                                     @combo-change="rule.direction = $event.detail.value || 'asc'"
+                                     @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                                    {% include "widgets/pv_combo_fragment.html" %}
+                                </div>
+                                <button type="button" @click="orderRules.splice(ri, 1)"
+                                        class="text-body-subtle hover:text-danger px-1">×</button>
+                            </li>
+                        </template>
+                    </ul>
+                    <p x-show="!orderRules.length" class="text-sm text-body-subtle">
+                        No sort order — rows appear in database order.
+                    </p>
+                </div>
+                </div>
+            </template>
+
+            {# Summary mode — group by + measures #}
+            <template x-if="reportMode === 'summary'">
+                <div class="space-y-4">
+                    <div>
+                        <p class="text-sm font-medium text-heading mb-2">Group by</p>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                            <template x-for="g in definition.groupby" :key="g">
+                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs
+                                             bg-brand-soft text-fg-brand border border-fg-brand/20">
+                                    <span x-text="fieldLabel(g)"></span>
+                                    <button type="button" @click="removeGroupby(g)" class="hover:opacity-70">×</button>
+                                </span>
+                            </template>
+                        </div>
+                        <div class="relative max-w-xs"
+                             x-data="pvCombo({ options: [], value: '', placeholder: '+ Add group…', compact: true, allowClear: false })"
+                             x-effect="setOptions(fieldComboOptions().filter(o => !definition.groupby.includes(o.value)))"
+                             @combo-change="if ($event.detail.value) { addGroupby($event.detail.value); clearSelection(); }"
+                             @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                            {% include "widgets/pv_combo_fragment.html" %}
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-heading mb-2">Measures</p>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                            <template x-for="(m, mi) in definition.measures" :key="mi">
+                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs
+                                             bg-neutral-secondary text-body border border-default">
+                                    <span x-text="measureLabel(m)"></span>
+                                    <button type="button" @click="definition.measures.splice(mi,1)" class="hover:opacity-70">×</button>
+                                </span>
+                            </template>
+                        </div>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <button type="button" @click="addMeasure('__count')"
+                                    :disabled="definition.measures.includes('__count')"
+                                    class="text-xs px-3 py-1.5 rounded-md border border-default hover:bg-neutral-secondary disabled:opacity-40">
+                                + Count records
+                            </button>
+                            <div class="relative min-w-[160px]"
+                                 x-data="pvCombo({ options: [], value: '', placeholder: '+ Sum a field…', compact: true, allowClear: false })"
+                                 x-effect="setOptions(numericFieldComboOptions())"
+                                 @combo-change="if ($event.detail.value) { addNumericMeasure($event.detail.value); clearSelection(); }"
+                                 @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                                {% include "widgets/pv_combo_fragment.html" %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-default">
+                        <div class="flex flex-wrap items-start justify-between gap-2 mb-3">
+                            <div>
+                                <h4 class="text-sm font-semibold text-heading">Order by</h4>
+                                <p class="text-2xs text-body-subtle mt-0.5">Sort grouped rows.</p>
+                            </div>
+                            <button type="button" @click="addSummaryOrderRule()"
+                                    :disabled="!summaryOrderOptions().length"
+                                    class="text-xs text-fg-brand hover:underline disabled:opacity-40">
+                                + Add sort key
+                            </button>
+                        </div>
+                        <ul class="space-y-2" x-show="orderRules.length">
+                            <template x-for="(rule, ri) in orderRules" :key="'sord-' + ri">
+                                <li class="flex items-center gap-2 text-sm border border-default rounded-md px-2 py-2
+                                           bg-neutral-secondary/30">
+                                    <span class="flex-1 min-w-0 truncate"
+                                          x-text="summaryOrderLabel(rule.field)"></span>
+                                    <div class="relative shrink-0 w-28"
+                                         x-data="pvCombo({ options: orderDirOptions, value: rule.direction, placeholder: 'Direction', compact: true, allowClear: false })"
+                                         x-effect="syncExternal(rule.direction)"
+                                         @combo-change="rule.direction = $event.detail.value || 'asc'"
+                                         @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                                        {% include "widgets/pv_combo_fragment.html" %}
+                                    </div>
+                                    <button type="button" @click="orderRules.splice(ri, 1)"
+                                            class="text-body-subtle hover:text-danger px-1">×</button>
+                                </li>
+                            </template>
+                        </ul>
+                        <p x-show="!orderRules.length" class="text-sm text-body-subtle">No sort order.</p>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div class="flex justify-between">
+            <button type="button" @click="goStep(1)"
+                    class="px-4 py-2 text-sm font-medium rounded-md border border-default hover:bg-neutral-secondary">
+                ← Back
+            </button>
+            <button type="button" @click="goStep(3)"
+                    class="px-4 py-2 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90">
+                Next: Filters →
+            </button>
+        </div>
+    </section>
+
+    {# Step 3 — Filters & parameters #}
+    <section x-show="step === 3" x-cloak class="space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <section class="bg-neutral-primary border border-default rounded-lg p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-semibold text-heading">Fixed filters</h3>
+                        <p class="text-2xs text-body-subtle">Always applied when the report runs.</p>
+                    </div>
+                    <button type="button" @click="addFilter()"
+                            class="text-xs text-fg-brand hover:underline">+ Add filter</button>
+                </div>
+                <template x-for="(f, i) in definition.filters" :key="i">
+                    <div class="flex flex-wrap gap-1 items-center text-xs bg-neutral-secondary/30 rounded-md p-2">
+                        <div class="flex flex-1 min-w-[140px] items-center gap-1">
+                            <span class="truncate text-body flex-1 min-w-0"
+                                  x-text="fieldLabel(f.field)"
+                                  :title="f.field"></span>
+                            <button type="button"
+                                    @click="openFieldPicker({ type: 'filter', obj: f, key: 'field' })"
+                                    class="shrink-0 text-2xs text-fg-brand hover:underline whitespace-nowrap">
+                                Browse…
+                            </button>
+                        </div>
+                        <div class="relative w-28 shrink-0"
+                             x-data="pvCombo({ options: filterOpOptions, value: f.op, placeholder: 'Operator', compact: true, allowClear: false })"
+                             x-effect="syncExternal(f.op)"
+                             @combo-change="f.op = $event.detail.value"
+                             @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                            {% include "widgets/pv_combo_fragment.html" %}
+                        </div>
+                        <input type="text" x-model="f.value" placeholder="value"
+                               class="rounded border border-default py-1 px-2 flex-1 min-w-[80px]">
+                        <button type="button" @click="definition.filters.splice(i,1)" class="text-body-subtle hover:text-danger">×</button>
+                    </div>
+                </template>
+                <p x-show="!definition.filters.length" class="text-xs text-body-subtle">No filters — all matching records are included.</p>
+            </section>
+
+            <section class="bg-neutral-primary border border-default rounded-lg p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-semibold text-heading">Ask when running</h3>
+                        <p class="text-2xs text-body-subtle">Let users enter values each time they run the report.</p>
+                    </div>
+                    <button type="button" @click="addParameter()" class="text-xs text-fg-brand hover:underline">+ Add prompt</button>
+                </div>
+                <template x-for="(p, i) in definition.parameters" :key="i">
+                    <div class="space-y-2 text-xs border border-default rounded-md p-3">
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="block">
+                                <span class="text-body-subtle mb-0.5 block">Prompt label</span>
+                                <input type="text" x-model="p.label" @input="syncParamName(p)"
+                                       placeholder="e.g. Customer name"
+                                       class="w-full rounded border border-default px-2 py-1">
+                            </label>
+                            <label class="block">
+                                <span class="text-body-subtle mb-0.5 block">Input type</span>
+                                <div class="relative"
+                                     x-data="pvCombo({ options: paramTypeOptions, value: p.type, placeholder: 'Type', compact: true, allowClear: false })"
+                                     x-effect="syncExternal(p.type)"
+                                     @combo-change="p.type = $event.detail.value"
+                                     @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                                    {% include "widgets/pv_combo_fragment.html" %}
+                                </div>
+                            </label>
+                        </div>
+                        <div class="flex flex-wrap gap-1 items-center">
+                            <span class="text-body-subtle">Filter field:</span>
+                            <div class="flex flex-1 min-w-[140px] items-center gap-1">
+                                <span class="truncate text-body flex-1 min-w-0"
+                                      x-text="fieldLabel(p.filter_field)"
+                                      :title="p.filter_field"></span>
+                                <button type="button"
+                                        @click="openFieldPicker({ type: 'param', obj: p, key: 'filter_field' })"
+                                        class="shrink-0 text-2xs text-fg-brand hover:underline whitespace-nowrap">
+                                    Browse…
+                                </button>
+                            </div>
+                            <div class="relative w-28 shrink-0"
+                                 x-data="pvCombo({ options: paramFilterOpOptions, value: p.filter_op, placeholder: 'Op', compact: true, allowClear: false })"
+                                 x-effect="syncExternal(p.filter_op)"
+                                 @combo-change="p.filter_op = $event.detail.value"
+                                 @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                                {% include "widgets/pv_combo_fragment.html" %}
+                            </div>
+                            <label class="inline-flex items-center gap-1 ml-1">
+                                <input type="checkbox" x-model="p.required" class="rounded border-default text-fg-brand">
+                                Required
+                            </label>
+                            <button type="button" @click="definition.parameters.splice(i,1)" class="text-body-subtle hover:text-danger ml-auto">×</button>
+                        </div>
+                    </div>
+                </template>
+            </section>
+        </div>
+
+        <section class="bg-neutral-primary border border-default rounded-lg p-4 space-y-3" x-show="reportId">
+            <h3 class="text-sm font-semibold text-heading">Schedule</h3>
+            <div class="flex flex-wrap items-center gap-3 text-sm">
+                <label class="inline-flex items-center gap-2">
+                    <input type="checkbox" x-model="meta.schedule_active" class="rounded border-default text-fg-brand">
+                    Run daily and save output
+                </label>
+                <div class="relative w-36"
+                     x-data="pvCombo({ options: outputFormatOptions, value: meta.output_format, placeholder: 'Format', compact: true, allowClear: false })"
+                     x-effect="syncExternal(meta.output_format)"
+                     @combo-change="meta.output_format = $event.detail.value"
+                     @click.outside="close()" @keydown.escape.prevent.stop="close()">
+                    {% include "widgets/pv_combo_fragment.html" %}
+                </div>
+                <button type="button" @click="saveSchedule()" class="text-xs text-fg-brand hover:underline">Apply schedule</button>
+            </div>
+        </section>
+
+        <details class="text-sm">
+            <summary class="cursor-pointer text-body-subtle hover:text-body">Advanced options</summary>
+            <label class="block mt-2 max-w-xs">
+                <span class="text-xs text-body-subtle">Maximum rows</span>
+                <input type="number" x-model.number="meta.row_limit" min="1" max="100000"
+                       class="w-full text-sm rounded-md border border-default bg-neutral-primary px-2 py-1.5 mt-1">
+            </label>
+        </details>
+
+        <div class="flex justify-between">
+            <button type="button" @click="goStep(2)"
+                    class="px-4 py-2 text-sm font-medium rounded-md border border-default hover:bg-neutral-secondary">← Back</button>
+            <button type="button" @click="goStep(4); preview()"
+                    class="px-4 py-2 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90">Preview report →</button>
+        </div>
+    </section>
+
+    {# Step 4 — Preview #}
+    <section x-show="step === 4" x-cloak class="space-y-4">
+        <section class="border border-default rounded-lg overflow-auto bg-neutral-primary">
+            <div class="px-3 py-2 border-b border-default flex items-center justify-between text-xs text-body-subtle">
+                <span>Live preview</span>
+                <span x-show="previewMeta.row_count !== null" x-cloak>
+                    <span x-text="previewMeta.row_count"></span> rows · <span x-text="previewMeta.duration_ms"></span> ms
+                </span>
+            </div>
+            <table class="min-w-full text-sm">
+                <thead class="bg-neutral-secondary">
+                    <tr>
+                        <template x-for="col in previewColumns" :key="col.key">
+                            <th class="px-3 py-2 text-2xs font-semibold uppercase text-body-subtle"
+                                :class="thAlignClass(col)"
+                                x-text="col.label"></th>
+                        </template>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-if="previewRows.length === 0 && !previewLoading">
+                        <tr><td :colspan="previewColumns.length || 1"
+                               class="px-3 py-8 text-center text-body-subtle">No rows match.</td></tr>
+                    </template>
+                    <template x-for="(row, ri) in previewRows" :key="ri">
+                        <tr class="border-t border-default hover:bg-neutral-secondary/40">
+                            <template x-for="col in previewColumns" :key="col.key">
+                                <td class="px-3 py-2 whitespace-nowrap"
+                                    :class="tdAlignClass(col)"
+                                    x-text="formatCell(row, col)"></td>
+                            </template>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </section>
+        <div class="flex justify-between">
+            <button type="button" @click="goStep(3)"
+                    class="px-4 py-2 text-sm font-medium rounded-md border border-default hover:bg-neutral-secondary">← Back</button>
+            <button type="button" @click="save()" :disabled="saving"
+                    class="px-4 py-2 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90">Save and finish</button>
+        </div>
+    </section>
+
+    {# Field picker modal (filters / run prompts) #}
+    <div x-show="fieldPickerOpen" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+         @click.self="closeFieldPicker()"
+         @keydown.escape.window="closeFieldPicker()">
+        <div class="bg-neutral-primary rounded-lg shadow-lg w-full max-w-lg p-4 space-y-3">
+            <div class="flex items-center justify-between">
+                <h4 class="text-sm font-semibold text-heading"
+                    x-text="pickMode === 'order' ? 'Select a field to sort by'
+                        : (pickMode === 'filter' || pickMode === 'param' ? 'Select a field' : 'Select a field')"></h4>
+                <button type="button" @click="closeFieldPicker()"
+                        class="text-body-subtle hover:text-body text-lg leading-none px-1">×</button>
+            </div>
+            {% include "widgets/field_drill_browser.html" %}
+            <div class="flex justify-end">
+                <button type="button" @click="closeFieldPicker()"
+                        class="px-3 py-1.5 text-sm rounded-md border border-default hover:bg-neutral-secondary">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const factory = (cfg) => ({
+        reportId: cfg.reportId || null,
+        reportMode: cfg.reportMode || 'detail',
+        step: 1,
+        steps: [
+            { id: 1, label: 'Data source' },
+            { id: 2, label: 'Columns' },
+            { id: 3, label: 'Filters' },
+            { id: 4, label: 'Preview' },
+        ],
+        models: [],
+        currencies: [],
+        fieldOptions: [],
+        fieldSearch: '',
+        fieldDrillPrefix: '',
+        fieldDrillBreadcrumb: [],
+        fieldDrillItems: [],
+        fieldDrillLoading: false,
+        pickMode: 'column',
+        fieldPickerOpen: false,
+        fieldPickTarget: null,
+        orderRules: cfg.orderRules || [],
+        orderDragFrom: null,
+        orderDragOver: null,
+        orderDirOptions: [
+            { value: 'asc', label: 'Ascending (A→Z)' },
+            { value: 'desc', label: 'Descending (Z→A)' },
+        ],
+        colDragFrom: null,
+        colDragOver: null,
+        formatTypeOptions: [
+            { value: 'text', label: 'Text' },
+            { value: 'number', label: 'Number (decimals)' },
+            { value: 'integer', label: 'Integer' },
+            { value: 'currency', label: 'Currency' },
+        ],
+        alignOptions: [
+            { value: 'left', label: 'Left' },
+            { value: 'center', label: 'Center' },
+            { value: 'right', label: 'Right' },
+        ],
+        modelQuery: '',
+        modelComboOpen: false,
+        modelComboCursor: 0,
+        subaggOptions: [
+            { value: '', label: 'Combine' },
+            { value: 'string_agg', label: 'Join text' },
+            { value: 'count', label: 'Count' },
+            { value: 'sum', label: 'Sum' },
+        ],
+        filterOpOptions: [
+            { value: '=', label: 'is' },
+            { value: '!=', label: 'is not' },
+            { value: 'ilike', label: 'contains' },
+            { value: '>', label: '>' },
+            { value: '<', label: '<' },
+            { value: 'in', label: 'is any of' },
+        ],
+        paramTypeOptions: [
+            { value: 'string', label: 'Text' },
+            { value: 'date', label: 'Date' },
+            { value: 'integer', label: 'Number' },
+            { value: 'boolean', label: 'Yes/No' },
+        ],
+        paramFilterOpOptions: [
+            { value: 'ilike', label: 'contains' },
+            { value: '=', label: 'equals' },
+        ],
+        outputFormatOptions: [
+            { value: 'xlsx', label: 'Excel' },
+            { value: 'csv', label: 'CSV' },
+            { value: 'pdf', label: 'PDF' },
+        ],
+        meta: {
+            name: cfg.meta?.name || '',
+            description: cfg.meta?.description || '',
+            root_model: cfg.meta?.root_model || '',
+            row_limit: cfg.meta?.row_limit || 10000,
+            schedule_active: cfg.meta?.schedule_active || false,
+            output_format: cfg.meta?.output_format || 'xlsx',
+        },
+        definition: {
+            version: 1,
+            root: cfg.meta?.root_model || '',
+            columns: cfg.definition?.columns || [],
+            filters: cfg.definition?.filters || [],
+            parameters: cfg.definition?.parameters || [],
+            parameter_filters: [],
+            groupby: cfg.definition?.groupby || [],
+            measures: cfg.definition?.measures || [],
+            order: cfg.definition?.order || [],
+        },
+        saving: false,
+        previewLoading: false,
+        previewColumns: [],
+        previewRows: [],
+        previewMeta: { row_count: null, duration_ms: null },
+
+        get canPreview() {
+            if (!this.meta.root_model) return false;
+            if (this.reportMode === 'summary') {
+                return this.definition.groupby.length > 0 && this.definition.measures.length > 0;
+            }
+            return this.definition.columns.length > 0;
+        },
+
+        init() {
+            this.loadModels().then(() => {
+                this.syncModelQuery();
+                this.loadCurrencies();
+                if (this.meta.root_model) {
+                    this.definition.root = this.meta.root_model;
+                    this.loadFields(this.meta.root_model);
+                    this.loadFieldLevel('');
+                }
+                if (this.reportId && (this.definition.columns.length || this.definition.groupby.length)) {
+                    this.step = 2;
+                }
+            });
+        },
+
+        syncModelQuery() {
+            const m = this.models.find(x => x.value === this.meta.root_model);
+            this.modelQuery = m ? m.label : '';
+        },
+
+        filteredModels() {
+            const q = (this.modelQuery || '').trim().toLowerCase();
+            if (!q) return this.models;
+            return this.models.filter(m =>
+                m.label.toLowerCase().includes(q) || m.value.toLowerCase().includes(q));
+        },
+
+        onModelQueryInput() {
+            this.modelComboOpen = true;
+            const q = this.modelQuery.trim().toLowerCase();
+            const exact = this.models.find(m => m.label.toLowerCase() === q);
+            if (exact) {
+                if (this.meta.root_model !== exact.value) {
+                    this.meta.root_model = exact.value;
+                    this.onModelChange();
+                }
+            } else if (this.meta.root_model) {
+                this.meta.root_model = '';
+                this.definition.root = '';
+            }
+            this.modelComboCursor = 0;
+        },
+
+        moveModelCursor(delta) {
+            if (!this.modelComboOpen) { this.modelComboOpen = true; return; }
+            const max = this.filteredModels().length - 1;
+            if (max < 0) return;
+            this.modelComboCursor = Math.max(0, Math.min(max, this.modelComboCursor + delta));
+        },
+
+        pickModelCursor() {
+            const m = this.filteredModels()[this.modelComboCursor];
+            if (m) this.pickModel(m);
+        },
+
+        pickModel(m) {
+            this.meta.root_model = m.value;
+            this.modelQuery = m.label;
+            this.modelComboOpen = false;
+            this.onModelChange();
+        },
+
+        clearModel() {
+            this.meta.root_model = '';
+            this.modelQuery = '';
+            this.modelComboOpen = false;
+            this.definition.root = '';
+            this.fieldOptions = [];
+            this.fieldDrillItems = [];
+            this.fieldDrillBreadcrumb = [];
+            this.fieldDrillPrefix = '';
+        },
+
+        goStep(n) {
+            this.step = n;
+            if (n === 2 && this.reportMode === 'detail') {
+                this.pickMode = 'column';
+                this.closeFieldPicker();
+            }
+        },
+
+        modelHint() {
+            const m = this.models.find(x => x.value === this.meta.root_model);
+            return m ? m.value : '';
+        },
+
+        setReportMode(mode) {
+            this.reportMode = mode;
+            this.orderRules = [];
+            if (mode === 'summary' && !this.definition.measures.length) {
+                this.definition.measures = ['__count'];
+            }
+        },
+
+        async loadModels() {
+            const r = await fetch('/api/reports/models', { credentials: 'same-origin' });
+            if (r.ok) this.models = (await r.json()).models || [];
+        },
+
+        async loadCurrencies() {
+            const r = await fetch('/api/reports/currencies', { credentials: 'same-origin' });
+            if (r.ok) this.currencies = (await r.json()).currencies || [];
+        },
+
+        async onModelChange() {
+            this.definition.root = this.meta.root_model;
+            this.definition.columns = [];
+            this.definition.filters = [];
+            this.definition.groupby = [];
+            this.definition.measures = this.reportMode === 'summary' ? ['__count'] : [];
+            this.orderRules = [];
+            this.syncModelQuery();
+            await Promise.all([
+                this.loadFields(this.meta.root_model),
+                this.loadFieldLevel(''),
+            ]);
+        },
+
+        async loadFieldLevel(prefix = '') {
+            const model = this.meta.root_model;
+            if (!model) {
+                this.fieldDrillItems = [];
+                this.fieldDrillBreadcrumb = [];
+                this.fieldDrillPrefix = '';
+                return;
+            }
+            this.fieldDrillLoading = true;
+            this.fieldSearch = '';
+            try {
+                const r = await fetch(
+                    '/api/reports/field-level?root=' + encodeURIComponent(model) +
+                    '&prefix=' + encodeURIComponent(prefix || ''),
+                    { credentials: 'same-origin' });
+                if (!r.ok) return;
+                const d = await r.json();
+                this.fieldDrillPrefix = d.prefix || '';
+                this.fieldDrillBreadcrumb = d.breadcrumb || [];
+                this.fieldDrillItems = d.items || [];
+            } finally {
+                this.fieldDrillLoading = false;
+            }
+        },
+
+        fieldDrillTo(prefix) {
+            const p = prefix == null ? '' : String(prefix);
+            if (p === (this.fieldDrillPrefix ?? '')) return;
+            this.loadFieldLevel(p);
+        },
+
+        fieldDrillBack() {
+            const crumbs = this.fieldDrillBreadcrumb || [];
+            if (crumbs.length < 2) {
+                this.loadFieldLevel('');
+                return;
+            }
+            const parent = crumbs[crumbs.length - 2];
+            this.loadFieldLevel(parent.prefix ?? '');
+        },
+
+        fieldDrillDown(item) {
+            if (!item.drillable) return;
+            this.loadFieldLevel(item.expr);
+        },
+
+        filteredDrillItems() {
+            const q = (this.fieldSearch || '').toLowerCase().trim();
+            if (!q) return this.fieldDrillItems;
+            return this.fieldDrillItems.filter(item => {
+                const hay = `${item.label} ${item.expr} ${item.name || ''}`.toLowerCase();
+                return hay.includes(q);
+            });
+        },
+
+        drillFieldLabel(item) {
+            const crumbs = this.fieldDrillBreadcrumb.slice(1).map(c => c.label);
+            if (!crumbs.length) return item.label;
+            crumbs.push(item.label);
+            return crumbs.join(' → ');
+        },
+
+        openFieldPicker(target) {
+            this.fieldPickTarget = target || null;
+            const t = target?.type || 'filter';
+            this.pickMode = t === 'param' ? 'param' : (t === 'order' ? 'order' : 'filter');
+            this.fieldPickerOpen = true;
+            this.loadFieldLevel('');
+        },
+
+        closeFieldPicker() {
+            this.fieldPickerOpen = false;
+            this.fieldPickTarget = null;
+            if (this.step === 2 && this.reportMode === 'detail') {
+                this.pickMode = 'column';
+            }
+            if (this.meta.root_model) this.loadFieldLevel('');
+        },
+
+        inferColumnFormat(item) {
+            const t = item.type || 'Char';
+            if (t === 'Integer') return { type: 'integer', align: 'right' };
+            if (t === 'Float') return { type: 'number', decimals: 2, align: 'right' };
+            if (t === 'Monetary') {
+                return {
+                    type: 'currency',
+                    decimals: 2,
+                    align: 'right',
+                    currency_source: 'field',
+                    currency_field: item.currency_field || 'currency_id',
+                };
+            }
+            if (t === 'Boolean') return { type: 'text', align: 'center' };
+            return { type: 'text', align: 'left' };
+        },
+
+        columnFieldMeta(expr) {
+            return this.fieldOptions.find(f => f.expr === expr);
+        },
+
+        monetaryCurrencyPath(expr, currencyField) {
+            if (!expr || !expr.includes('.')) return currencyField;
+            const parts = expr.split('.');
+            parts.pop();
+            parts.push(currencyField);
+            return parts.join('.');
+        },
+
+        currencySourceOptions(col) {
+            const opts = [];
+            const meta = this.columnFieldMeta(col.expr);
+            const cf = (col.format && col.format.currency_field) || meta?.currency_field;
+            if (cf) {
+                const path = this.monetaryCurrencyPath(col.expr, cf);
+                opts.push({
+                    value: `field:${cf}`,
+                    label: `Record field (${path})`,
+                    searchText: `field ${cf} ${path}`,
+                });
+            }
+            for (const c of this.currencies) {
+                opts.push({
+                    value: `id:${c.id}`,
+                    label: c.label,
+                    searchText: `${c.code} ${c.name} ${c.symbol}`,
+                });
+            }
+            return opts;
+        },
+
+        currencySourceValue(col) {
+            const f = this.ensureColFormat(col);
+            if (f.currency_source === 'fixed' && f.currency_id != null) {
+                return `id:${f.currency_id}`;
+            }
+            const cf = f.currency_field || this.columnFieldMeta(col.expr)?.currency_field || 'currency_id';
+            return `field:${cf}`;
+        },
+
+        setCurrencySource(col, val) {
+            const f = this.ensureColFormat(col);
+            delete f.symbol;
+            if (!val || String(val).startsWith('field:')) {
+                f.currency_source = 'field';
+                f.currency_field = val ? String(val).slice(6) : 'currency_id';
+                delete f.currency_id;
+            } else if (String(val).startsWith('id:')) {
+                f.currency_source = 'fixed';
+                f.currency_id = parseInt(String(val).slice(3), 10);
+                delete f.currency_field;
+            }
+        },
+
+        ensureColFormat(col) {
+            if (!col.format || typeof col.format !== 'object') {
+                col.format = { type: 'text', align: 'left' };
+            }
+            if (!col.format.align) col.format.align = 'left';
+            if (!col.format.type) col.format.type = 'text';
+            if (['number', 'currency'].includes(col.format.type) && col.format.decimals == null) {
+                col.format.decimals = 2;
+            }
+            return col.format;
+        },
+
+        setColFormatType(col, type) {
+            const fmt = this.ensureColFormat(col);
+            fmt.type = type || 'text';
+            if (['number', 'currency'].includes(type) && fmt.decimals == null) fmt.decimals = 2;
+            if (type === 'integer') fmt.align = fmt.align || 'right';
+            if (type === 'currency') {
+                if (!fmt.currency_source) fmt.currency_source = 'field';
+                if (!fmt.currency_field) {
+                    fmt.currency_field = this.columnFieldMeta(col.expr)?.currency_field || 'currency_id';
+                }
+            } else {
+                delete fmt.currency_source;
+                delete fmt.currency_field;
+                delete fmt.currency_id;
+                delete fmt.symbol;
+            }
+        },
+
+        selectDrillField(item) {
+            if (!item.selectable) return;
+            if (this.pickMode === 'column'
+                && item.drillable
+                && (item.kind === 'm2o' || item.kind === 'collection')) {
+                this.fieldDrillDown(item);
+                return;
+            }
+            if (this.pickMode === 'filter' || this.pickMode === 'param') {
+                if (this.fieldPickTarget) {
+                    this.fieldPickTarget.obj[this.fieldPickTarget.key] = item.expr;
+                }
+                this.closeFieldPicker();
+                return;
+            }
+            if (this.pickMode === 'order') {
+                this.addOrderRule(item.expr, this.drillFieldLabel(item));
+                this.closeFieldPicker();
+                return;
+            }
+            if (this.hasColumn(item.expr)) return;
+            const col = {
+                expr: item.expr,
+                label: this.drillFieldLabel(item),
+                format: this.inferColumnFormat(item),
+            };
+            if (item.kind === 'collection') col.subaggregate = 'string_agg';
+            this.definition.columns.push(col);
+            this.loadFieldLevel('');
+        },
+
+        colDragStart(i, e) {
+            this.colDragFrom = i;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(i));
+        },
+
+        colDragEnd() {
+            this.colDragFrom = null;
+            this.colDragOver = null;
+        },
+
+        dropColumn(toIndex) {
+            const from = this.colDragFrom;
+            this.colDragEnd();
+            if (from === null || from === toIndex) return;
+            const cols = [...this.definition.columns];
+            const [moved] = cols.splice(from, 1);
+            cols.splice(toIndex, 0, moved);
+            this.definition.columns = cols;
+        },
+
+        async loadFields(model) {
+            if (!model) { this.fieldOptions = []; return; }
+            const r = await fetch('/api/reports/fields?model=' + encodeURIComponent(model),
+                                  { credentials: 'same-origin' });
+            if (!r.ok) return;
+            const d = await r.json();
+            this.fieldOptions = [...(d.fields || []), ...(d.paths || [])].map(f => ({
+                expr: f.expr,
+                label: f.label,
+                kind: f.kind,
+                type: f.type,
+                currency_field: f.currency_field || null,
+                searchText: f.searchText || '',
+            }));
+        },
+
+        fieldComboOptions() {
+            return this.fieldOptions.map(f => ({
+                value: f.expr,
+                label: f.label,
+                searchText: f.searchText || `${f.label} ${f.expr}`,
+            }));
+        },
+
+        numericFieldComboOptions() {
+            return this.fieldOptions
+                .filter(f => !f.expr.includes('.') && ['Integer', 'Float'].includes(f.type))
+                .map(f => ({
+                    value: f.expr,
+                    label: f.label,
+                    searchText: f.searchText || `${f.label} ${f.expr}`,
+                }));
+        },
+
+        filteredFields() {
+            const q = (this.fieldSearch || '').toLowerCase();
+            return this.fieldOptions.filter(f => {
+                if (!q) return true;
+                const hay = (f.searchText || `${f.label} ${f.expr}`).toLowerCase();
+                return hay.includes(q);
+            });
+        },
+
+        groupableFields() {
+            return this.fieldOptions.filter(f => !f.expr.includes('.') && f.kind !== 'collection');
+        },
+
+        numericFields() {
+            return this.fieldOptions.filter(f =>
+                !f.expr.includes('.') && ['Integer', 'Float'].includes(f.type));
+        },
+
+        fieldLabel(expr) {
+            const opt = this.fieldOptions.find(x => x.expr === expr);
+            if (opt) return opt.label;
+            if (expr && expr.includes('.')) {
+                return expr.split('.').slice(-1)[0].replace(/_/g, ' ');
+            }
+            return expr;
+        },
+
+        measureLabel(m) {
+            if (m === '__count') return 'Count';
+            const [field, agg] = m.split(':');
+            return this.fieldLabel(field) + ' (' + (agg || 'sum') + ')';
+        },
+
+        hasColumn(expr) { return this.definition.columns.some(c => c.expr === expr); },
+
+        colNeedsSubagg(expr) {
+            return this.fieldOptions.find(f => f.expr === expr)?.kind === 'collection';
+        },
+
+        addColumn(f) {
+            if (this.hasColumn(f.expr)) return;
+            const col = {
+                expr: f.expr,
+                label: f.label,
+                format: this.inferColumnFormat({ type: f.type || 'Char' }),
+            };
+            if (f.kind === 'collection') col.subaggregate = 'string_agg';
+            this.definition.columns.push(col);
+        },
+
+        addOrderRule(field, label) {
+            if (!field || this.orderRules.some(r => r.field === field)) return;
+            this.orderRules.push({
+                field,
+                direction: 'asc',
+                label: label || this.fieldLabel(field),
+            });
+        },
+
+        summaryOrderOptions() {
+            const opts = [];
+            const used = new Set(this.orderRules.map(r => r.field));
+            for (const g of this.definition.groupby) {
+                if (!used.has(g)) {
+                    opts.push({ value: g, label: this.fieldLabel(g) });
+                }
+            }
+            for (const m of this.definition.measures) {
+                if (!used.has(m)) {
+                    opts.push({ value: m, label: this.measureLabel(m) });
+                }
+            }
+            return opts;
+        },
+
+        summaryOrderLabel(field) {
+            if (field === '__count') return 'Count';
+            return this.measureLabel(field) || this.fieldLabel(field) || field;
+        },
+
+        addSummaryOrderRule() {
+            const opts = this.summaryOrderOptions();
+            if (!opts.length) return;
+            const o = opts[0];
+            this.addOrderRule(o.value, o.label);
+        },
+
+        orderDragStart(i, e) {
+            this.orderDragFrom = i;
+            e.dataTransfer.effectAllowed = 'move';
+        },
+
+        orderDragEnd() {
+            this.orderDragFrom = null;
+            this.orderDragOver = null;
+        },
+
+        dropOrderRule(toIndex) {
+            const from = this.orderDragFrom;
+            this.orderDragEnd();
+            if (from === null || from === toIndex) return;
+            const rules = [...this.orderRules];
+            const [moved] = rules.splice(from, 1);
+            rules.splice(toIndex, 0, moved);
+            this.orderRules = rules;
+        },
+
+        addGroupby(expr) {
+            if (expr && !this.definition.groupby.includes(expr)) this.definition.groupby.push(expr);
+        },
+
+        removeGroupby(expr) {
+            this.definition.groupby = this.definition.groupby.filter(g => g !== expr);
+        },
+
+        addMeasure(spec) {
+            if (!this.definition.measures.includes(spec)) this.definition.measures.push(spec);
+        },
+
+        addNumericMeasure(expr) {
+            if (expr) this.addMeasure(expr + ':sum');
+        },
+
+        addFilter() {
+            const expr = this.fieldOptions[0]?.expr || 'id';
+            this.definition.filters.push({ field: expr, op: '=', value: '' });
+        },
+
+        addParameter() {
+            const n = 'param_' + (this.definition.parameters.length + 1);
+            const ff = this.fieldOptions[0]?.expr || 'name';
+            this.definition.parameters.push({
+                name: n, label: 'Search', type: 'string', required: false,
+                filter_field: ff, filter_op: 'ilike',
+            });
+        },
+
+        syncParamName(p) {
+            if (!p.label) return;
+            p.name = p.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || p.name;
+        },
+
+        buildOrder() {
+            return this.orderRules
+                .filter(r => r.field && (r.direction === 'asc' || r.direction === 'desc'))
+                .map(r => `${r.field} ${r.direction}`);
+        },
+
+        buildPayload() {
+            const filters = this.definition.filters
+                .filter(f => f.field && f.op && f.value !== '')
+                .map(f => {
+                    let v = f.value;
+                    if (f.op === 'in') v = v.split(',').map(s => s.trim());
+                    if (v === 'true') v = true;
+                    if (v === 'false') v = false;
+                    return [f.field, f.op, v];
+                });
+            const param_filters = this.definition.parameters
+                .filter(p => p.name && p.filter_field)
+                .map(p => [p.filter_field, p.filter_op || 'ilike', { param: p.name }]);
+            const defn = {
+                version: 1,
+                root: this.meta.root_model,
+                filters,
+                parameters: this.definition.parameters.map(p => ({
+                    name: p.name, label: p.label || p.name, type: p.type, required: !!p.required,
+                })),
+                parameter_filters: param_filters,
+            };
+            if (this.reportMode === 'summary') {
+                defn.groupby = [...this.definition.groupby];
+                defn.measures = [...this.definition.measures];
+                defn.columns = [];
+                defn.order = this.buildOrder();
+            } else {
+                defn.columns = this.definition.columns;
+                defn.order = this.buildOrder();
+                defn.groupby = [];
+                defn.measures = [];
+            }
+            return {
+                name: this.meta.name,
+                description: this.meta.description,
+                root_model: this.meta.root_model,
+                row_limit: this.meta.row_limit,
+                schedule_active: this.meta.schedule_active,
+                output_format: this.meta.output_format,
+                definition: defn,
+            };
+        },
+
+        async preview() {
+            if (!this.canPreview) return;
+            this.previewLoading = true;
+            try {
+                const body = this.buildPayload();
+                const r = await fetch('/api/reports/validate-run', {
+                    method: 'POST',
+                    headers: this.jsonHeaders(),
+                    credentials: 'same-origin',
+                    body: JSON.stringify(body.definition),
+                });
+                if (!r.ok) {
+                    window.pvAlert && window.pvAlert(await r.text(), { variant: 'danger' });
+                    return;
+                }
+                const d = await r.json();
+                this.previewColumns = d.columns || [];
+                this.previewRows = d.rows || [];
+                this.previewMeta = { row_count: d.row_count, duration_ms: d.duration_ms };
+            } finally {
+                this.previewLoading = false;
+            }
+        },
+
+        async save() {
+            if (!this.meta.name) {
+                window.pvAlert && window.pvAlert('Please enter a report name.', { variant: 'warning' });
+                this.goStep(1);
+                return;
+            }
+            if (!this.canPreview) {
+                window.pvAlert && window.pvAlert('Add columns or grouping before saving.', { variant: 'warning' });
+                this.goStep(2);
+                return;
+            }
+            this.saving = true;
+            try {
+                const body = this.buildPayload();
+                const url = this.reportId ? '/api/reports/' + this.reportId : '/api/reports';
+                const r = await fetch(url, {
+                    method: this.reportId ? 'PUT' : 'POST',
+                    headers: this.jsonHeaders(),
+                    credentials: 'same-origin',
+                    body: JSON.stringify(body),
+                });
+                if (!r.ok) throw new Error(await r.text());
+                const d = await r.json();
+                if (!this.reportId && d.id) {
+                    window.location.href = '/web/reports/' + d.id + '/build';
+                    return;
+                }
+                window.pvToast && window.pvToast('Report saved.', { variant: 'success' });
+            } catch (e) {
+                window.pvAlert && window.pvAlert('Save failed: ' + e.message, { variant: 'danger' });
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        async saveSchedule() {
+            if (!this.reportId) return;
+            await this.save();
+            const r = await fetch('/api/reports/' + this.reportId + '/schedule', {
+                method: 'POST',
+                headers: this.jsonHeaders(),
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    active: this.meta.schedule_active,
+                    output_format: this.meta.output_format,
+                }),
+            });
+            if (r.ok) window.pvToast && window.pvToast('Schedule updated.', { variant: 'success' });
+        },
+
+        thAlignClass(col) {
+            const a = (col.format && col.format.align) || 'left';
+            return { 'text-left': a === 'left', 'text-center': a === 'center', 'text-right': a === 'right' };
+        },
+
+        tdAlignClass(col) {
+            return this.thAlignClass(col);
+        },
+
+        formatCell(row, col) {
+            const key = typeof col === 'string' ? col : col.key;
+            const fmt = typeof col === 'object' ? col.format : null;
+            const lk = key + '__label';
+            if (row[lk] != null && row[lk] !== '') return row[lk];
+            const v = row[key];
+            if (v === true) return 'Yes';
+            if (v === false) return 'No';
+            if (v == null) return '';
+            const f = fmt || { type: 'text', align: 'left' };
+            const t = f.type || 'text';
+            if (t === 'integer') {
+                const n = parseFloat(v);
+                return isNaN(n) ? String(v) : Math.round(n).toLocaleString();
+            }
+            if (t === 'number' || t === 'currency') {
+                const dp = f.decimals != null ? f.decimals : 2;
+                const n = parseFloat(v);
+                if (isNaN(n)) return String(v);
+                const text = n.toLocaleString(undefined, {
+                    minimumFractionDigits: dp,
+                    maximumFractionDigits: dp,
+                });
+                if (t === 'currency') {
+                    const sym = row[col.key + '__currency_symbol'] ?? f.symbol ?? '';
+                    return sym ? (sym + text) : text;
+                }
+                return text;
+            }
+            return String(v);
+        },
+
+        jsonHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+            };
+        },
+    });
+    const register = () => Alpine.data('pvReportBuilder', factory);
+    if (typeof Alpine !== 'undefined') register();
+    else document.addEventListener('alpine:init', register);
+})();
+</script>
+{% endblock %}
+

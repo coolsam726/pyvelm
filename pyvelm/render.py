@@ -972,23 +972,22 @@ def _required_marker(field) -> str:
 def _edit_char(value, spec, field):
     val_str = str(value) if value is not None else ""
     if getattr(field, "choices", None):
-        # Constrained enumeration → render a <select> with one option
-        # per declared choice. The current value gets `selected`; the
-        # blank option only appears when the field is non-required and
-        # the value is currently empty.
-        opts = []
-        if not field.required and not val_str:
-            opts.append('<option value="" selected></option>')
-        for choice_val, choice_label in field.choices:
-            sel = " selected" if val_str == choice_val else ""
-            opts.append(
-                f'<option value="{escape(choice_val)}"{sel}>'
-                f"{escape(choice_label)}</option>"
-            )
+        options = [{"value": v, "label": l} for v, l in field.choices]
+        initial_label = next(
+            (lbl for val, lbl in field.choices if val_str == val), val_str
+        )
+        partial = _env.get_template("widgets/combo_input.html")
         return Markup(
-            f'<select name="{escape(spec["name"])}" '
-            f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
-            f'{"".join(opts)}</select>'
+            partial.render(
+                name=spec["name"],
+                options=options,
+                value=val_str,
+                initial_label=initial_label,
+                placeholder=field.string or "Select…",
+                readonly=bool(spec.get("readonly")),
+                hint="",
+                allow_clear=not field.required,
+            )
         )
     val_attr = escape(val_str)
     placeholder = escape(field.string or spec["name"])
@@ -2350,6 +2349,12 @@ def render_form_page(
                     "url": url,
                     "method": (act.get("method") or "POST").upper(),
                     "confirm": act.get("confirm") or "",
+                    "full_page": bool(
+                        act.get("full_page")
+                        or not url.startswith(
+                            f"/web/views/{view.module}/{view.name}"
+                        )
+                    ),
                 }
             )
     record_pager = None
@@ -3362,6 +3367,8 @@ def render_list_page(
     arch = resolve_arch(view)
     fields_spec = arch.get("fields", [])
     form_view_name = arch.get("form_view") or _find_form_view(view, env)
+    record_href = arch.get("record_href")
+    create_href = arch.get("create_href")
 
     model_cls = env.registry[view.model]
     Model = env[view.model]
@@ -3436,6 +3443,8 @@ def render_list_page(
         group_by=safe_group_by,
         sequence_field=sequence_field,
         form_view_name=form_view_name,
+        record_href=record_href,
+        create_href=create_href,
         list_nav_query=list_nav_query,
         page_title=page_title,
         subtitle=f"{total} record{'s' if total != 1 else ''}",
@@ -3461,6 +3470,8 @@ def render_list_rows(
     arch = resolve_arch(view)
     fields_spec = arch.get("fields", [])
     form_view_name = arch.get("form_view") or _find_form_view(view, env)
+    record_href = arch.get("record_href")
+    create_href = arch.get("create_href")
 
     model_cls = env.registry[view.model]
     Model = env[view.model]
@@ -3521,6 +3532,8 @@ def render_list_rows(
         group_by=safe_group_by,
         sequence_field=sequence_field,
         form_view_name=form_view_name,
+        record_href=record_href,
+        create_href=create_href,
         list_nav_query=list_nav_query,
     )
 
@@ -3969,6 +3982,148 @@ def render_apps_detail_page(
         app=app,
         page_title=app["display_name"],
         subtitle=app["name"],
+        **ctx,
+    )
+
+
+def render_report_run_page(report_rec, env, current_path: str | None = None) -> str:
+    """Interactive report run page with parameter form and live preview."""
+    from .reports.service import can_run_report, definition_dict
+
+    if not can_run_report(env, report_rec):
+        raise PermissionError("Not allowed to run this report")
+    defn = definition_dict(report_rec)
+    parameters = defn.get("parameters") or []
+    initial_params = {p["name"]: "" for p in parameters}
+    ctx = layout_context(env, current_path, leaf_label=report_rec.name)
+    ctx["breadcrumbs"] = [
+        {"label": "Home", "href": "/web/admin"},
+        {"label": "Reports", "href": "/web/records/reports/report.list"},
+        {"label": report_rec.name, "href": None},
+    ]
+    template = _env.get_template("report_run.html")
+    return template.render(
+        report={"id": report_rec.id, "name": report_rec.name, "description": report_rec.description or "", "root_model": report_rec.root_model},
+        parameters=parameters,
+        query_suffix="",
+        alpine_config={"reportId": report_rec.id, "initialParams": initial_params},
+        page_title=report_rec.name,
+        subtitle=f"Model: {report_rec.root_model}",
+        **ctx,
+    )
+
+
+def render_report_builder_page(
+    env, report_rec=None, current_path: str | None = None,
+) -> str:
+    """Visual report builder — create or edit."""
+    import json as _json
+    from .reports.compile import parse_definition
+
+    page_title = "New report"
+    alpine_cfg: dict = {
+        "reportId": None,
+        "reportMode": "detail",
+        "meta": {
+            "name": "",
+            "description": "",
+            "root_model": "",
+            "row_limit": 10000,
+            "schedule_active": False,
+            "output_format": "xlsx",
+        },
+        "definition": {
+            "version": 1,
+            "root": "",
+            "columns": [],
+            "filters": [],
+            "parameters": [],
+            "parameter_filters": [],
+            "order": [],
+        },
+        "columnSort": {},
+        "orderRules": [],
+    }
+    if report_rec is not None:
+        report_rec.ensure_one()
+        page_title = report_rec.name
+        defn = parse_definition(report_rec.definition)
+        filters_ui = []
+        for leaf in defn.get("filters") or []:
+            if isinstance(leaf, (list, tuple)) and len(leaf) >= 3:
+                v = leaf[2]
+                if isinstance(v, list):
+                    v = ", ".join(str(x) for x in v)
+                filters_ui.append({"field": leaf[0], "op": leaf[1], "value": str(v)})
+        param_links: dict[str, dict] = {}
+        for leaf in defn.get("parameter_filters") or []:
+            if (
+                isinstance(leaf, (list, tuple))
+                and len(leaf) >= 3
+                and isinstance(leaf[2], dict)
+                and "param" in leaf[2]
+            ):
+                param_links[leaf[2]["param"]] = {
+                    "filter_field": leaf[0],
+                    "filter_op": leaf[1],
+                }
+        parameters_ui = []
+        for p in defn.get("parameters") or []:
+            link = param_links.get(p.get("name"), {})
+            parameters_ui.append({
+                **p,
+                "filter_field": link.get("filter_field", ""),
+                "filter_op": link.get("filter_op", "ilike"),
+            })
+        report_mode = (
+            "summary"
+            if defn.get("groupby") and defn.get("measures")
+            else "detail"
+        )
+        column_sort: dict[str, str] = {}
+        order_rules: list[dict] = []
+        for item in defn.get("order") or []:
+            parts = str(item).strip().rsplit(None, 1)
+            if len(parts) != 2:
+                continue
+            field, direction = parts[0], parts[1].lower()
+            if direction not in ("asc", "desc"):
+                continue
+            column_sort[field] = direction
+            order_rules.append({
+                "field": field,
+                "direction": direction,
+                "label": field,
+            })
+        alpine_cfg = {
+            "reportId": report_rec.id,
+            "reportMode": report_mode,
+            "meta": {
+                "name": report_rec.name,
+                "description": report_rec.description or "",
+                "root_model": report_rec.root_model,
+                "row_limit": report_rec.row_limit or 10000,
+                "schedule_active": bool(report_rec.schedule_active),
+                "output_format": report_rec.output_format or "xlsx",
+            },
+            "definition": {
+                **defn,
+                "filters": filters_ui,
+                "parameters": parameters_ui,
+            },
+            "columnSort": column_sort,
+            "orderRules": order_rules,
+        }
+    ctx = layout_context(env, current_path, leaf_label=page_title)
+    ctx["breadcrumbs"] = [
+        {"label": "Home", "href": "/web/admin"},
+        {"label": "Reports", "href": "/web/records/reports/report.list"},
+        {"label": page_title, "href": None},
+    ]
+    template = _env.get_template("report_builder.html")
+    return template.render(
+        page_title=page_title,
+        alpine_config=alpine_cfg,
         **ctx,
     )
 

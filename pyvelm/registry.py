@@ -102,6 +102,10 @@ class Registry:
     def __iter__(self) -> Iterator[type]:
         return iter(self._models.values())
 
+    def items(self):
+        """Iterate ``(technical_name, model_cls)`` pairs."""
+        return self._models.items()
+
     def init_db(self, conn) -> None:
         # Multi-pass init:
         #   1. CREATE TABLE for each model (no FKs yet) so any target exists.

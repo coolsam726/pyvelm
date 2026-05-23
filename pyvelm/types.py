@@ -105,12 +105,16 @@ class ArchList(_ArchListRequired, total=False):
 
     - ``title``     — human-readable heading shown above the table.
     - ``form_view`` — ``"<name>"`` of a form view to link each row to.
+    - ``record_href`` — URL pattern for row clicks; ``{id}`` is substituted.
+    - ``create_href`` — URL for the list's New button (full navigation).
     - ``sequence``  — name of an integer field; when set the renderer
                       adds a drag handle and forces sort by that field.
     """
 
     title: str
     form_view: str
+    record_href: str
+    create_href: str
     sequence: str
 
 

@@ -1,0 +1,187 @@
+{% extends "layouts/main.html" %}
+{% block title %}{{ report.name }} — Report — pyvelm{% endblock %}
+{% block page_title %}{{ report.name }}{% endblock %}
+{% block page_subtitle %}Model: {{ report.root_model }}{% endblock %}
+
+{% block page_actions %}{% endblock %}
+
+{% block content %}
+<script>window._pvReportRunCfg = {{ alpine_config | tojson }};</script>
+<div class="flex flex-col gap-4" x-data="pvReportRun(window._pvReportRunCfg)">
+    <div class="flex flex-wrap gap-2 justify-end">
+        <a :href="`/api/reports/${reportId}/export.xlsx` + queryString()"
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+                  rounded-md bg-fg-brand hover:opacity-90 transition-opacity">
+            Download Excel
+        </a>
+        <a :href="`/api/reports/${reportId}/export.csv` + queryString()"
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                  rounded-md border border-default text-body hover:bg-neutral-secondary transition-colors">
+            Download CSV
+        </a>
+        <a :href="`/api/reports/${reportId}/export.pdf` + queryString()"
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                  rounded-md border border-default text-body hover:bg-neutral-secondary transition-colors">
+            Download PDF
+        </a>
+    </div>
+    {% if parameters %}
+    <form @submit.prevent="refresh()" class="bg-neutral-primary border border-default rounded-lg p-4">
+        <h3 class="text-sm font-semibold text-heading mb-3">Parameters</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for p in parameters %}
+            <label class="block text-xs text-body-subtle">
+                <span class="mb-1 block">{{ p.label }}{% if p.required %} *{% endif %}</span>
+                {% if p.type == 'boolean' %}
+                <input type="checkbox" x-model="params.{{ p.name }}"
+                       class="rounded border-default text-fg-brand focus:ring-fg-brand">
+                {% else %}
+                <input type="{{ 'date' if p.type == 'date' else 'text' }}"
+                       x-model="params.{{ p.name }}"
+                       class="w-full text-sm rounded-md border border-default bg-neutral-primary text-body
+                              px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand">
+                {% endif %}
+            </label>
+            {% endfor %}
+        </div>
+        <div class="mt-3 flex gap-2">
+            <button type="submit"
+                    class="px-3 py-1.5 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90">
+                Refresh preview
+            </button>
+        </div>
+    </form>
+    {% endif %}
+
+    <div class="flex items-center gap-3 text-xs text-body-subtle">
+        <span x-show="loading" x-cloak>Loading…</span>
+        <span x-show="!loading && meta.row_count !== null" x-cloak>
+            <span x-text="meta.row_count"></span> rows
+            <template x-if="meta.truncated"> (preview limited)</template>
+            · <span x-text="meta.duration_ms"></span> ms
+        </span>
+    </div>
+
+    <div class="border border-default rounded-lg overflow-auto bg-neutral-primary">
+        <table class="min-w-full text-sm">
+            <thead class="bg-neutral-secondary">
+                <tr>
+                    <template x-for="col in columns" :key="col.key">
+                        <th class="px-3 py-2 text-2xs font-semibold uppercase tracking-wider text-body-subtle"
+                            :class="colAlignClass(col)"
+                            x-text="col.label"></th>
+                    </template>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-if="rows.length === 0 && !loading">
+                    <tr><td :colspan="columns.length || 1"
+                           class="px-3 py-8 text-center text-body-subtle">No rows match.</td></tr>
+                </template>
+                <template x-for="(row, ri) in rows" :key="ri">
+                    <tr class="hover:bg-neutral-secondary/40 border-t border-default">
+                        <template x-for="col in columns" :key="col.key">
+                            <td class="px-3 py-2 text-body whitespace-nowrap"
+                                :class="colAlignClass(col)"
+                                x-text="displayCell(row, col)"></td>
+                        </template>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+
+    {% if report.description %}
+    <p class="text-sm text-body-subtle">{{ report.description }}</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const factory = (cfg) => ({
+        reportId: cfg.reportId,
+        columns: [],
+        rows: [],
+        params: cfg.initialParams || {},
+        loading: false,
+        meta: { row_count: null, duration_ms: null, truncated: false },
+
+        init() {
+            this.$nextTick(() => this.refresh());
+        },
+
+        displayCell(row, col) {
+            const key = typeof col === 'string' ? col : col.key;
+            const fmt = typeof col === 'object' ? col.format : null;
+            const labelKey = key + '__label';
+            if (row[labelKey] != null && row[labelKey] !== '') return row[labelKey];
+            const v = row[key];
+            if (v === true) return 'Yes';
+            if (v === false) return 'No';
+            if (v == null) return '';
+            const f = fmt || { type: 'text' };
+            const t = f.type || 'text';
+            if (t === 'integer') {
+                const n = parseFloat(v);
+                return isNaN(n) ? String(v) : Math.round(n).toLocaleString();
+            }
+            if (t === 'number' || t === 'currency') {
+                const dp = f.decimals != null ? f.decimals : 2;
+                const n = parseFloat(v);
+                if (isNaN(n)) return String(v);
+                const text = n.toLocaleString(undefined, {
+                    minimumFractionDigits: dp,
+                    maximumFractionDigits: dp,
+                });
+                if (t === 'currency') {
+                    const sym = row[key + '__currency_symbol'] ?? f.symbol ?? '';
+                    return sym ? (sym + text) : text;
+                }
+                return text;
+            }
+            return String(v);
+        },
+
+        colAlignClass(col) {
+            const a = (col.format && col.format.align) || 'left';
+            return { 'text-left': a === 'left', 'text-center': a === 'center', 'text-right': a === 'right' };
+        },
+
+        queryString() {
+            const p = new URLSearchParams();
+            for (const [k, v] of Object.entries(this.params)) {
+                if (v !== '' && v != null && v !== false) p.set(k, v);
+            }
+            const qs = p.toString();
+            return qs ? '?' + qs : '';
+        },
+
+        async refresh() {
+            this.loading = true;
+            try {
+                const r = await fetch(`/api/reports/${this.reportId}/preview` + this.queryString(),
+                                      { credentials: 'same-origin' });
+                if (!r.ok) throw new Error(await r.text());
+                const d = await r.json();
+                this.columns = d.columns || [];
+                this.rows = d.rows || [];
+                this.meta = {
+                    row_count: d.row_count,
+                    duration_ms: d.duration_ms,
+                    truncated: d.truncated,
+                };
+            } catch (e) {
+                window.pvAlert && window.pvAlert('Could not load report preview.', { variant: 'danger' });
+            } finally {
+                this.loading = false;
+            }
+        },
+    });
+    const register = () => Alpine.data('pvReportRun', factory);
+    if (typeof Alpine !== 'undefined') register();
+    else document.addEventListener('alpine:init', register);
+})();
+</script>
+{% endblock %}

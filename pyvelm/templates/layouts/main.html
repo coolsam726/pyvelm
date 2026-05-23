@@ -1190,6 +1190,174 @@
             },
         }));
 
+        // ── Static combobox (Selection / choices) ──
+        // Searchable dropdown for a fixed {value, label} list. Used by
+        // `widgets/combo_input.html` and anywhere a native <select> is
+        // too long to scan (report builder data source, etc.).
+        let _pvComboUid = 0;
+        Alpine.data('pvCombo', (cfg) => ({
+            uid: ++_pvComboUid,
+            name: cfg.name || null,
+            options: Array.isArray(cfg.options) ? cfg.options.slice() : [],
+            value: cfg.value != null ? String(cfg.value) : '',
+            label: cfg.initialLabel || '',
+            placeholder: cfg.placeholder || 'Search…',
+            readonly: !!cfg.readonly,
+            allowClear: cfg.allowClear !== false,
+            compact: !!cfg.compact,
+            hint: cfg.hint || '',
+            query: cfg.initialLabel || '',
+            open: false,
+            cursor: 0,
+            /** When true, show full option list (re-open after a selection). */
+            listAll: false,
+
+            init() {
+                this.syncQueryFromValue();
+            },
+
+            get filtered() {
+                const opts = this.options || [];
+                if (this.listAll || !this.open) return opts.slice(0, 200);
+                const q = this.query.trim().toLowerCase();
+                if (!q) return opts.slice(0, 200);
+                const selected = this.options.find(
+                    o => String(o.value) === String(this.value)
+                );
+                const selLabel = (selected?.label || '').toLowerCase();
+                if (selected && q === selLabel) return opts.slice(0, 200);
+                return opts.filter(o => {
+                    const hay = (
+                        o.searchText ||
+                        `${o.label || ''} ${o.value ?? ''}`
+                    ).toLowerCase();
+                    return hay.includes(q);
+                }).slice(0, 200);
+            },
+
+            inputClass() {
+                return this.compact
+                    ? 'w-full border border-default bg-neutral-primary rounded py-1 pl-2 pr-7 text-xs text-heading focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand disabled:cursor-not-allowed disabled:opacity-60'
+                    : 'w-full border border-default bg-neutral-primary rounded-md px-3 py-2 text-sm text-heading focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand disabled:cursor-not-allowed disabled:opacity-60';
+            },
+
+            syncQueryFromValue() {
+                const opt = this.options.find(o => String(o.value) === String(this.value));
+                this.label = opt ? opt.label : '';
+                this.query = this.label || this.value || '';
+                if (this.hint && opt && opt.value !== opt.label) {
+                    this.hint = String(opt.value);
+                }
+            },
+
+            /** Sync value from parent (x-effect) without clobbering in-progress edits. */
+            syncExternal(externalVal) {
+                if (this.open) return;
+                const v = externalVal == null || externalVal === undefined
+                    ? ''
+                    : String(externalVal);
+                if (v !== String(this.value)) {
+                    this.value = v;
+                    this.syncQueryFromValue();
+                }
+            },
+
+            setOptions(opts) {
+                this.options = Array.isArray(opts) ? opts.slice() : [];
+                if (!this.open) this.syncQueryFromValue();
+            },
+
+            dropdownStyle() {
+                if (!this.open) return {};
+                const el = this.$refs.input;
+                if (!el || typeof el.getBoundingClientRect !== 'function') return {};
+                const r = el.getBoundingClientRect();
+                const maxH = 240;
+                const gap = 4;
+                const spaceBelow = window.innerHeight - r.bottom - gap;
+                const spaceAbove = r.top - gap;
+                const openUp = spaceBelow < 140 && spaceAbove > spaceBelow;
+                const available = openUp ? spaceAbove : spaceBelow;
+                const style = {
+                    position: 'fixed',
+                    left: `${r.left}px`,
+                    width: `${Math.max(r.width, 120)}px`,
+                    maxHeight: `${Math.max(96, Math.min(maxH, available - 8))}px`,
+                    zIndex: 10000,
+                    overflowY: 'auto',
+                };
+                if (openUp) {
+                    style.bottom = `${window.innerHeight - r.top + gap}px`;
+                } else {
+                    style.top = `${r.bottom + gap}px`;
+                }
+                return style;
+            },
+
+            onFocus() {
+                if (this.readonly) return;
+                this.open = true;
+                this.listAll = true;
+                this.cursor = 0;
+            },
+
+            onInput() {
+                if (this.readonly) return;
+                this.listAll = false;
+                this.open = true;
+                const exact = this.options.find(
+                    o => o && (o.label || '').toLowerCase() === this.query.trim().toLowerCase()
+                );
+                if (exact) {
+                    this.value = String(exact.value);
+                    this.label = exact.label;
+                    this.$dispatch('combo-change', { value: this.value, label: this.label });
+                }
+            },
+
+            close() {
+                this.open = false;
+                this.listAll = false;
+                this.syncQueryFromValue();
+            },
+
+            moveCursor(delta) {
+                if (this.readonly) return;
+                if (!this.open) { this.open = true; return; }
+                const max = this.filtered.length - 1;
+                if (max < 0) return;
+                this.cursor = Math.max(0, Math.min(max, this.cursor + delta));
+            },
+
+            onEnter() {
+                if (!this.open || this.readonly) return;
+                const item = this.filtered[this.cursor];
+                if (item) this.pick(item);
+            },
+
+            pick(item) {
+                this.value = String(item.value);
+                this.label = item.label;
+                this.query = item.label;
+                this.open = false;
+                this.listAll = false;
+                if (this.hint) this.hint = String(item.value);
+                this.$dispatch('combo-change', { value: this.value, label: this.label });
+            },
+
+            clearSelection() {
+                this.value = '';
+                this.label = '';
+                this.query = '';
+                this.cursor = 0;
+                this.open = false;
+                this.listAll = false;
+                if (this.hint) this.hint = '';
+                this.$dispatch('combo-change', { value: '', label: '' });
+                this.$nextTick(() => this.$refs.input?.focus());
+            },
+        }));
+
         // ── Many2many chip editor ──
         // The widget partial at `widgets/m2m_input.html` mounts this
         // component with `cfg = {name, comodel, searchUrl, initial,

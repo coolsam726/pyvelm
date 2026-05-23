@@ -1502,6 +1502,351 @@ def create_app(
 
         return {"groupable": groupable, "measurable": measurable}
 
+    # ---- Report builder (secure compile + export) ----
+
+    def _report_or_404(env: Environment, report_id: int):
+        from .reports.service import can_run_report, load_report
+
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if "ir.report" not in registry:
+            raise HTTPException(status_code=404, detail="Reports module not installed")
+        rec = load_report(env, report_id)
+        if rec is None:
+            raise HTTPException(status_code=404, detail="Report not found")
+        try:
+            if not can_run_report(env, rec):
+                raise HTTPException(status_code=403, detail="Not allowed to run this report")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        return rec
+
+    @app.get("/api/reports/{report_id}/preview")
+    def api_report_preview(
+        report_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .reports.schema import ReportDefinitionError
+        from .reports.service import (
+            PREVIEW_LIMIT,
+            definition_dict,
+            execute_report,
+            log_run,
+            parse_run_params,
+            result_to_json,
+        )
+
+        rec = _report_or_404(env, report_id)
+        defn = definition_dict(rec)
+        params = parse_run_params(defn, dict(request.query_params))
+        try:
+            result = execute_report(env, rec, params, limit=PREVIEW_LIMIT)
+        except ReportDefinitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        log_run(
+            env, rec,
+            row_count=result.row_count,
+            duration_ms=result.duration_ms,
+            fmt="preview",
+        )
+        return result_to_json(result)
+
+    @app.get("/api/reports/{report_id}/export.xlsx")
+    def api_report_export_xlsx(
+        report_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .reports.export_xlsx import export_xlsx
+        from .reports.schema import ReportDefinitionError
+        from .reports.service import (
+            definition_dict,
+            execute_report,
+            log_run,
+            parse_run_params,
+        )
+
+        rec = _report_or_404(env, report_id)
+        defn = definition_dict(rec)
+        params = parse_run_params(defn, dict(request.query_params))
+        try:
+            result = execute_report(env, rec, params)
+            data = export_xlsx(result, title=rec.name)
+        except ReportDefinitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        log_run(
+            env, rec,
+            row_count=result.row_count,
+            duration_ms=result.duration_ms,
+            fmt="xlsx",
+        )
+        safe_name = (rec.name or "report").replace('"', "")[:80]
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}.xlsx"'},
+        )
+
+    @app.get("/api/reports/{report_id}/export.csv")
+    def api_report_export_csv(
+        report_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .reports.export_xlsx import export_csv
+        from .reports.schema import ReportDefinitionError
+        from .reports.service import (
+            definition_dict,
+            execute_report,
+            log_run,
+            parse_run_params,
+        )
+
+        rec = _report_or_404(env, report_id)
+        defn = definition_dict(rec)
+        params = parse_run_params(defn, dict(request.query_params))
+        try:
+            result = execute_report(env, rec, params)
+            body = export_csv(result)
+        except ReportDefinitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        log_run(
+            env, rec,
+            row_count=result.row_count,
+            duration_ms=result.duration_ms,
+            fmt="csv",
+        )
+        safe_name = (rec.name or "report").replace('"', "")[:80]
+        return Response(
+            content=body,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}.csv"'},
+        )
+
+    @app.get("/web/reports/{report_id}/run", response_class=HTMLResponse)
+    def web_report_run(
+        report_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import render_report_run_page
+
+        if env.uid is None:
+            return _login_redirect(request)
+        rec = _report_or_404(env, report_id)
+        return HTMLResponse(
+            render_report_run_page(
+                rec, env, current_path=str(request.url.path),
+            )
+        )
+
+    def _require_report_editor(env: Environment) -> None:
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if "ir.report" not in registry:
+            raise HTTPException(status_code=404, detail="Reports module not installed")
+        try:
+            env.check_access("ir.report", "write")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+
+    @app.get("/api/reports/models")
+    def api_reports_models(env: Environment = Depends(get_env)):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .reports.fields_api import list_readable_models
+        return {"models": list_readable_models(env)}
+
+    @app.get("/api/reports/fields")
+    def api_reports_fields(model: str = Query(...), env: Environment = Depends(get_env)):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .reports.fields_api import list_exportable_fields
+        try:
+            return list_exportable_fields(env, model)
+        except (ValueError, PermissionError) as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @app.get("/api/reports/field-level")
+    def api_reports_field_level(
+        root: str = Query(...),
+        prefix: str = Query(""),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .reports.fields_api import list_fields_level
+        try:
+            return list_fields_level(env, root, prefix=prefix)
+        except (ValueError, PermissionError) as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @app.get("/api/reports/currencies")
+    def api_reports_currencies(env: Environment = Depends(get_env)):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .reports.fields_api import list_active_currencies
+        return {"currencies": list_active_currencies(env)}
+
+    @app.post("/api/reports/validate-run")
+    async def api_reports_validate_run(
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .reports.schema import ReportDefinitionError
+        from .reports.execute import run_report
+        from .reports.service import PREVIEW_LIMIT, result_to_json
+        from .reports.compile import parse_definition
+
+        body = await request.json()
+        defn = parse_definition(body)
+        try:
+            result = run_report(env, defn, {}, limit=PREVIEW_LIMIT)
+            return result_to_json(result)
+        except ReportDefinitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+
+    @app.post("/api/reports")
+    async def api_reports_create(request: Request, env: Environment = Depends(get_env)):
+        import json as _json
+        _require_report_editor(env)
+        body = await request.json()
+        Report = env["ir.report"]
+        defn = body.get("definition") or {}
+        rec = Report.create({
+            "name": body.get("name", "Untitled report"),
+            "description": body.get("description") or False,
+            "root_model": body.get("root_model") or defn.get("root"),
+            "definition": _json.dumps(defn, indent=2),
+            "row_limit": int(body.get("row_limit") or 10000),
+            "output_format": body.get("output_format") or "xlsx",
+            "schedule_active": bool(body.get("schedule_active")),
+            "active": True,
+        })
+        return {"id": rec.id}
+
+    @app.put("/api/reports/{report_id}")
+    async def api_reports_update(
+        report_id: int, request: Request, env: Environment = Depends(get_env),
+    ):
+        import json as _json
+        _require_report_editor(env)
+        Report = env["ir.report"]
+        recs = Report.search([("id", "=", report_id)], limit=1)
+        if not recs:
+            raise HTTPException(status_code=404, detail="Report not found")
+        recs.ensure_one()
+        body = await request.json()
+        defn = body.get("definition")
+        vals = {
+            "name": body.get("name", recs.name),
+            "description": body.get("description", recs.description),
+            "root_model": body.get("root_model", recs.root_model),
+            "row_limit": int(body.get("row_limit", recs.row_limit or 10000)),
+            "output_format": body.get("output_format", recs.output_format or "xlsx"),
+            "schedule_active": bool(body.get("schedule_active", recs.schedule_active)),
+        }
+        if defn is not None:
+            vals["definition"] = _json.dumps(defn, indent=2)
+        recs.write(vals)
+        return {"id": recs.id}
+
+    @app.get("/api/reports/{report_id}/export.pdf")
+    def api_report_export_pdf(
+        report_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .reports.export_pdf import export_pdf
+        from .reports.schema import ReportDefinitionError
+        from .reports.service import (
+            definition_dict, execute_report, log_run, parse_run_params,
+        )
+        rec = _report_or_404(env, report_id)
+        defn = definition_dict(rec)
+        params = parse_run_params(defn, dict(request.query_params))
+        try:
+            result = execute_report(env, rec, params)
+            data = export_pdf(result, title=rec.name)
+        except ReportDefinitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        log_run(env, rec, row_count=result.row_count, duration_ms=result.duration_ms, fmt="pdf")
+        safe_name = (rec.name or "report").replace('"', "")[:80]
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}.pdf"'},
+        )
+
+    @app.post("/api/reports/{report_id}/schedule")
+    async def api_report_schedule(
+        report_id: int, request: Request, env: Environment = Depends(get_env),
+    ):
+        _require_report_editor(env)
+        from .reports.scheduler import disable_schedule, ensure_daily_cron
+        Report = env["ir.report"]
+        recs = Report.search([("id", "=", report_id)], limit=1)
+        if not recs:
+            raise HTTPException(status_code=404, detail="Report not found")
+        recs.ensure_one()
+        body = await request.json()
+        recs.write({
+            "output_format": body.get("output_format", recs.output_format or "xlsx"),
+            "schedule_active": bool(body.get("active", body.get("schedule_active"))),
+        })
+        if recs.schedule_active:
+            ensure_daily_cron(env, recs)
+        else:
+            disable_schedule(env, recs)
+        return {"ok": True, "cron_id": recs.cron_id.id if recs.cron_id else None}
+
+    @app.get("/web/reports/build", response_class=HTMLResponse)
+    def web_report_build(request: Request, env: Environment = Depends(get_env)):
+        from .render import render_report_builder_page
+        if env.uid is None:
+            return _login_redirect(request)
+        try:
+            env.check_access("ir.report", "create")
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="Cannot create reports")
+        return HTMLResponse(render_report_builder_page(env, report_rec=None, current_path=str(request.url.path)))
+
+    @app.get("/web/reports/{report_id}/build", response_class=HTMLResponse)
+    def web_report_build_edit(
+        report_id: int, request: Request, env: Environment = Depends(get_env),
+    ):
+        from .render import render_report_builder_page
+        if env.uid is None:
+            return _login_redirect(request)
+        Report = env["ir.report"]
+        recs = Report.search([("id", "=", report_id)], limit=1)
+        if not recs:
+            raise HTTPException(status_code=404, detail="Report not found")
+        try:
+            env.check_access("ir.report", "write")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        return HTMLResponse(
+            render_report_builder_page(env, report_rec=recs, current_path=str(request.url.path))
+        )
+
     # ---- admin dashboard ----
 
     @app.get("/web/admin", response_class=HTMLResponse)

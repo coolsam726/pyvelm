@@ -1,0 +1,60 @@
+{# Odoo-style drill-down field browser. Expects pvReportBuilder state/methods. #}
+<div class="border border-default rounded-lg flex flex-col min-h-[280px] max-h-80">
+    {# Breadcrumb + back #}
+    <div class="px-3 py-2 border-b border-default bg-neutral-secondary/40 flex flex-wrap items-center gap-1 text-xs">
+        <button type="button"
+                x-show="fieldDrillPrefix"
+                @click="fieldDrillBack()"
+                class="shrink-0 text-fg-brand hover:underline font-medium mr-1">
+            ← Back
+        </button>
+        <template x-for="(crumb, ci) in fieldDrillBreadcrumb" :key="'bc-' + ci + '-' + (crumb.prefix ?? '')">
+            <span x-show="ci > 0" class="text-body-subtle">›</span>
+            <button type="button"
+                    @click.stop="fieldDrillTo(crumb.prefix ?? '')"
+                    :class="(crumb.prefix ?? '') === (fieldDrillPrefix ?? '')
+                        ? 'font-semibold text-heading cursor-default'
+                        : 'text-fg-brand hover:underline'"
+                    x-text="crumb.label"></button>
+        </template>
+        <span x-show="fieldDrillLoading" class="ml-auto text-body-subtle">Loading…</span>
+    </div>
+
+    {# Search within current level #}
+    <div class="px-3 py-2 border-b border-default">
+        <input type="search" x-model="fieldSearch" placeholder="Filter fields at this level…"
+               class="w-full text-sm rounded-md border border-default bg-neutral-primary px-2.5 py-1.5
+                      focus:outline-none focus:ring-2 focus:ring-fg-brand">
+    </div>
+
+    {# Field list #}
+    <ul class="overflow-y-auto flex-1">
+        <template x-for="item in filteredDrillItems()" :key="item.expr">
+            <li class="flex items-stretch border-b border-default last:border-0 hover:bg-neutral-secondary/60">
+                <button type="button"
+                        @click="selectDrillField(item)"
+                        :disabled="!item.selectable || (pickMode === 'column' && hasColumn(item.expr))"
+                        class="flex-1 min-w-0 text-left px-3 py-2.5 text-sm disabled:opacity-40">
+                    <span class="font-medium text-body" x-text="item.label"></span>
+                    <span class="block text-2xs text-body-subtle truncate" x-text="item.expr"></span>
+                    <span x-show="item.kind === 'collection'" class="text-2xs text-fg-brand">Related list</span>
+                </button>
+                <button type="button"
+                        x-show="item.drillable"
+                        @click.stop="fieldDrillDown(item)"
+                        class="shrink-0 px-3 border-l border-default text-fg-brand hover:bg-brand-soft
+                               flex items-center gap-1 text-xs font-medium"
+                        title="Open related fields">
+                    <span>Open</span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+                    </svg>
+                </button>
+            </li>
+        </template>
+        <li x-show="!fieldDrillLoading && !filteredDrillItems().length"
+            class="px-3 py-8 text-sm text-body-subtle text-center">
+            No fields here. Go back or pick another data source.
+        </li>
+    </ul>
+</div>

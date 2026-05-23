@@ -7,9 +7,21 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.4.0] — 2026-05-22
+
+Visual report builder with drill-down field picker, column formatting, order by,
+and Excel/CSV/PDF export. See [docs/report-builder.md](docs/report-builder.md)
+and [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md).
+
 ### Added
 
-- *(nothing yet)*
+- **Report Builder** — `reports` module: secure JSON compiler (M2o joins,
+  O2m/M2m subquery columns), visual builder UI, Odoo-style field drill-down,
+  per-column format/align/currency, multi-field order by, preview, Excel/CSV/PDF
+  export, daily cron scheduling with attachment output, run audit log.
+- **`pvCombo`** — searchable combobox for static option lists (builder, forms).
+- **List routing** — `record_href` / `create_href` on list views for custom
+  open/create URLs (report builder entry points).
 
 ## [0.3.0] — 2026-05-22
 

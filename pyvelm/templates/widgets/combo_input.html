@@ -1,0 +1,32 @@
+{# Searchable combobox for static option lists (Selection / choices).
+
+   Expected variables:
+       name            form field name (optional — omit for Alpine-only use)
+       options         [{value, label}, ...]
+       value           current value (string)
+       initial_label   display label for value (or "")
+       placeholder     input placeholder
+       readonly        bool
+       hint            optional secondary line under input (e.g. technical name)
+       allow_clear     bool — show clear button (default true)
+#}
+<div class="pv-combo relative"
+     x-data='pvCombo({{ ({
+        "name": name,
+        "options": options,
+        "value": value,
+        "initialLabel": initial_label,
+        "placeholder": placeholder,
+        "readonly": readonly,
+        "hint": hint,
+        "allowClear": allow_clear,
+     }) | tojson }})'
+     @click.outside="close()"
+     @keydown.escape.prevent.stop="close()">
+
+    {% if name %}
+    <input type="hidden" name="{{ name }}" :value="value">
+    {% endif %}
+
+    {% include "widgets/pv_combo_fragment.html" %}
+</div>

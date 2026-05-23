@@ -1,6 +1,6 @@
 [project]
 name = "pyvelm"
-version = "0.3.0"
+version = "0.4.0"
 description = "Odoo-style ERP framework — recordsets, declarative models, env-bound cache."
 requires-python = ">=3.10"
 dependencies = [
@@ -13,6 +13,8 @@ dependencies = [
     "python-multipart>=0.0.18",
     "bcrypt>=4.2",
     "uvicorn>=0.29",
+    "openpyxl>=3.1",
+    "fpdf2>=2.7",
 ]
 
 [project.optional-dependencies]
