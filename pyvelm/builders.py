@@ -48,6 +48,19 @@ Quick-start
         ]),
     ]
 
+**Dashboard**::
+
+    from pyvelm.builders import dashboard_view, chart_widget, table_widget, stat_widget
+
+    VIEWS = [
+        dashboard_view("home", title="Dashboard", widgets=[
+            stat_widget("users", title="Active users", model="res.users",
+                        domain=[("active", "=", True)]),
+            chart_widget("pipeline", view=("crm", "lead.graph")),
+            table_widget("recent", view="user.list", limit=5),
+        ]),
+    ]
+
 **Menus**::
 
     from pyvelm.builders import Menus
@@ -55,7 +68,7 @@ Quick-start
     m = Menus("partners")  # same string as NAME in __pyvelm__.py
 
     MENUS = [
-        m.group("business", "Business", icon=_ICON_GRID, sequence=50),
+        m.group("business", "Business", icon="square-3-stack-3d", sequence=50),
         m.item("business.partners", "Partners",
                parent="business", view="partner.list", sequence=10),
         # Cross-module parent (admin owns the group):
@@ -68,6 +81,7 @@ from __future__ import annotations
 from typing import Any
 
 from pyvelm.types import (
+    ArchDashboard,
     ArchForm,
     ArchGraph,
     ArchKanban,
@@ -75,6 +89,8 @@ from pyvelm.types import (
     ArchList,
     ArchPivot,
     ArchSection,
+    DashboardColspan,
+    DashboardWidget,
     FieldRef,
     FieldRefLike,
     FormView,
@@ -86,6 +102,7 @@ from pyvelm.types import (
     PivotView,
     TargetSegment,
     ViewInherit,
+    ViewRef,
     WidgetHint,
 )
 
@@ -100,6 +117,11 @@ __all__ = [
     "kanban_view",
     "graph_view",
     "pivot_view",
+    "dashboard_view",
+    "chart_widget",
+    "table_widget",
+    "stat_widget",
+    "link_widget",
     # view-inherit constructor + op helpers
     "inherit_view",
     "op_after",
@@ -135,6 +157,9 @@ def field(
     ``name`` is the only required argument. All other kwargs map
     directly to ``FieldRef`` keys and are only included when provided,
     so the resulting dict stays minimal.
+
+    ``visible=False`` hides the column by default on list views; users
+    can show it again from the Columns menu (preference is persisted).
 
     Extra keyword arguments are forwarded as-is (e.g. custom
     ``filter_kind``/``group_kind`` attributes).
@@ -470,6 +495,178 @@ def pivot_view(
 
 
 # ---------------------------------------------------------------------------
+# Dashboard widgets
+# ---------------------------------------------------------------------------
+
+def _widget(widget_id: str, widget_type: str, **extra: Any) -> DashboardWidget:
+    result: DashboardWidget = {"id": widget_id, "type": widget_type}  # type: ignore[typeddict-item]
+    result.update(extra)  # type: ignore[typeddict-item]
+    return result
+
+
+def chart_widget(
+    widget_id: str,
+    *,
+    title: str | None = None,
+    model: str | None = None,
+    groupby: str | None = None,
+    measure: str = "__count",
+    chart: str = "bar",
+    domain: list | None = None,
+    view: ViewRef | None = None,
+    colspan: DashboardColspan = 2,
+) -> DashboardWidget:
+    """Chart tile — inline graph config or a reference to a graph view.
+
+    Pass ``view="lead.graph"`` (same module) or ``view=("crm", "lead.graph")``
+    to reuse an existing ``graph_view``. Otherwise set ``model``, ``groupby``,
+    and ``measure`` inline.
+    """
+    w = _widget(widget_id, "chart", colspan=colspan)
+    if title is not None:
+        w["title"] = title
+    if view is not None:
+        w["view"] = view
+    else:
+        if not model or not groupby:
+            raise ValueError("chart_widget: set view= or both model= and groupby=")
+        w["model"] = model
+        w["groupby"] = groupby
+        w["measure"] = measure
+        w["chart"] = chart  # type: ignore[typeddict-item]
+        if domain is not None:
+            w["domain"] = domain
+    return w
+
+
+def table_widget(
+    widget_id: str,
+    *,
+    title: str | None = None,
+    model: str | None = None,
+    fields: list[FieldRefLike] | None = None,
+    view: ViewRef | None = None,
+    columns: list[str] | None = None,
+    domain: list | None = None,
+    limit: int = 10,
+    order: str | None = None,
+    more_href: str | None = None,
+    colspan: DashboardColspan = 1,
+) -> DashboardWidget:
+    """Table tile — inline columns or a reference to a list view.
+
+    When ``view`` references a list view, pass ``columns`` to show a
+    subset of that view's fields (order follows ``columns``).
+    """
+    w = _widget(widget_id, "table", limit=limit, colspan=colspan)
+    if title is not None:
+        w["title"] = title
+    if view is not None:
+        w["view"] = view
+    else:
+        if not model or not fields:
+            raise ValueError("table_widget: set view= or both model= and fields=")
+        w["model"] = model
+        w["fields"] = fields
+    if columns is not None:
+        w["columns"] = list(columns)
+    if domain is not None:
+        w["domain"] = domain
+    if order is not None:
+        w["order"] = order
+    if more_href is not None:
+        w["more_href"] = more_href
+    return w
+
+
+def stat_widget(
+    widget_id: str,
+    *,
+    title: str,
+    model: str,
+    measure: str = "__count",
+    domain: list | None = None,
+    href: str | None = None,
+    colspan: DashboardColspan = 1,
+) -> DashboardWidget:
+    """Single KPI number aggregated from a model."""
+    w = _widget(widget_id, "stat", title=title, model=model, measure=measure, colspan=colspan)
+    if domain is not None:
+        w["domain"] = domain
+    if href is not None:
+        w["href"] = href
+    return w
+
+
+def link_widget(
+    widget_id: str,
+    *,
+    title: str,
+    subtitle: str,
+    description: str,
+    url: str,
+    colspan: DashboardColspan = 1,
+) -> DashboardWidget:
+    """Navigation card linking to another page."""
+    return _widget(
+        widget_id,
+        "link",
+        title=title,
+        subtitle=subtitle,
+        description=description,
+        url=url,
+        colspan=colspan,
+    )
+
+
+def dashboard_view(
+    name: str,
+    *,
+    widgets: list[DashboardWidget],
+    title: str | None = None,
+    subtitle: str | None = None,
+    columns: int = 2,
+    priority: int = 16,
+) -> dict:
+    """Declare a ``view_type="dashboard"`` page.
+
+    ``columns`` sets the desktop grid width (1–6). Widget ``colspan``
+    is an integer track count (capped at ``columns``) or ``'full'`` to
+    span the entire row.
+
+    Example::
+
+        dashboard_view("home", title="Dashboard", columns=3, widgets=[
+            stat_widget("users", title="Active users", model="res.users",
+                        domain=[("active", "=", True)]),
+            chart_widget("users_chart", title="Users by status",
+                         model="res.users", groupby="active", measure="__count",
+                         chart="pie"),
+            table_widget("recent_users", title="Recent users", view="user.list", limit=5),
+            link_widget("groups", title="Groups", subtitle="res.groups",
+                        description="...", url="/web/views/admin/group.list"),
+        ])
+    """
+    from pyvelm.types import DashboardView
+
+    if columns < 1 or columns > 6:
+        raise ValueError("dashboard_view: columns must be between 1 and 6")
+    arch: ArchDashboard = {"widgets": widgets, "columns": columns}
+    if title is not None:
+        arch["title"] = title
+    if subtitle is not None:
+        arch["subtitle"] = subtitle
+    result: DashboardView = {
+        "name": name,
+        "model": "dashboard",
+        "view_type": "dashboard",
+        "arch": arch,
+        "priority": priority,
+    }
+    return result
+
+
+# ---------------------------------------------------------------------------
 # View-inherit constructor
 # ---------------------------------------------------------------------------
 
@@ -734,12 +931,12 @@ def menu_group(
     Args:
         name:     Unique name within the module (e.g. ``"business"``).
         label:    Display text in the sidebar.
-        icon:     SVG string rendered next to the label.
+        icon:     Heroicons name (e.g. ``"home"``, ``"solid:chart-bar"``) or raw SVG.
         sequence: Ordering among siblings (lower = higher up).
 
     Example::
 
-        menu_group("business", "Business", icon=_ICON_GRID, sequence=50)
+        menu_group("business", "Business", icon="square-3-stack-3d", sequence=50)
     """
     result: Menu = {"name": name, "label": label, "sequence": sequence}
     if icon is not None:
@@ -774,7 +971,7 @@ def menu_item(
         view_module:  Module that owns the view (defaults to ``menu_module``).
         parent:       Group key — full ``"module.name"``, short ``"business"``
                       (needs ``menu_module=``), or ``("admin", "settings")``.
-        icon:         SVG for root-level standalone items (Dashboard, Apps).
+        icon:         Heroicons name or SVG for root-level items (Dashboard, Apps).
         sequence:     Ordering among siblings (lower = higher up).
     """
     resolved_href = _resolve_menu_href(

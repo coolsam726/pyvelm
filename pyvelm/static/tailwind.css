@@ -8,7 +8,9 @@
    (`pyvelm/static/`). */
 @source "../templates/**/*.html";
 @source "../render.py";
+@source "../widgets/**/*.py";
 @source "../../node_modules/flowbite/dist/**/*.js";
+@source "../../node_modules/flowbite-datepicker";
 
 /* Class-based dark mode — toggled via <html class="dark"> */
 @variant dark (&:where(.dark, .dark *));

@@ -1,7 +1,11 @@
-# Project context — pyvelm v0.3.0
+# Project context — pyvelm v0.4.0
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.4.0 (released 2026-05-22)** — Visual **Report Builder**: drill-down field
+picker, column formatting, order by, Excel/CSV/PDF export, daily cron.
+See [CHANGELOG.md](CHANGELOG.md), [docs/releases/v0.4.0.md](docs/releases/v0.4.0.md),
+and [docs/report-builder.md](docs/report-builder.md).
 **v0.3.0 (released 2026-05-22)** — Apps Sync, Vellum timestamps/`_guarded`,
 `display_name`, console UX polish. See [CHANGELOG.md](CHANGELOG.md) and
 [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md).
@@ -203,31 +207,62 @@ For the design rationale and the deferred-items rationale, see
         `partner.form.pro.xpath` — predicate sets readonly on every
         toggle-widget field; `**` labels `tag_ids` without hard-coding
         its section path.
+8. ✅ Report Builder: secure declarative reports + visual builder UI.
+     ✅ `reports` module (`ir.report`, `ir.report.run`, module version
+        `0.2.0`): definition schema v1, SQL compiler (M2o joins,
+        O2m/M2m correlated subqueries), ACL + record rules + company
+        scope, preview/execute/export.
+     ✅ Visual builder at `/web/reports/build`: 4-step wizard, Odoo-style
+        field drill-down (`GET /api/reports/field-level`), per-column
+        format/align/currency, multi-field order by (including fields not
+        in columns), filters + runtime parameters, list + summary modes.
+     ✅ Export: Excel/CSV/PDF; daily cron scheduling with attachment
+        output and run audit log (`ir.report.run`).
+     ✅ `pvCombo` searchable combobox; list `record_href` / `create_href`
+        for custom open/create URLs.
+     Docs: [docs/report-builder.md](docs/report-builder.md).
 
 ## Deliberately deferred (will bite us, fix when they do)
 
 - `env.cache` has no LRU or eviction. Fine until working sets get large.
-- Domain language is AND-only, no relational traversal, no polish notation.
-- Universal-quantifier domains on collections: `("tag_ids.name", "!=",
-  "VIP")` reads "has at least one non-VIP tag," not "every tag is
-  non-VIP." The latter needs `NOT EXISTS` semantics or an explicit `all`
-  operator.
 - Old-value invalidation on O2m/M2m: when a child moves from parent A to
   parent B, only B's dependent computes get invalidated; A's stay stale
   until the next read. Needs read-before-write in `model.write`.
-- No caching for One2many/Many2many reads — re-queried each access.
-- Stale FK cache on comodel unlink: `ON DELETE SET NULL` updates the DB,
-  but the cache still holds the old int. Needs a reverse-FK index.
 - M2M command tuples (`[(0,_,vals)]`, `[(4,id)]`) — current write is
   replace-only.
 - Stored compute backfill on schema add (real migrations are Stage 3).
 - No transaction boundaries beyond psycopg autocommit.
 - SQL by string concat (works because inputs are controlled at every call
   site; domain values flow through parameterized binds).
-- `registry` is a module global (fine until Stage 3 module loading needs
-  per-module slices).
 
-## Next concrete task
+## Current release — v0.4.0
+
+Report Builder is the headline of v0.4.0. Install the optional **`reports`**
+module from **Apps → Report Builder** (depends on `base` + `admin`). The
+compiler lives in `pyvelm/reports/`; models and menus in
+`pyvelm/modules/reports/`.
+
+### Known v1 limits
+
+- **Summary group-by** — drill-down picker is root-model fields only; no
+  `partner_id.country_id`-style group paths yet.
+- **Detail columns** — non-stored / computed fields are rejected at validate
+  time (stored columns only).
+- **Demo** — no seeded sample report in `vellum_demo` yet.
+
+### Next focus options
+
+- Report builder polish (summary group-by drill-down, computed columns,
+  `vellum_demo` sample report).
+- Expand `pyvelm/tests/test_reports.py` coverage; optional `docs/api/` stub
+  for `pyvelm.reports`.
+- Broader deferred items — see [Still deferred](#still-deferred) under the
+  v0.2.0 release summary.
+
+## Shipped features log (pre-v0.3.0)
+
+Chronological feature log kept for reference. Structured release summaries
+for v0.3.0+ are in the sections below.
 
 Stage 8 (multi-company) landed in 0.6.0 but had three UX/design bugs
 that made the demo silently lie:
@@ -451,10 +486,10 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     adds the columns + calls the same seed for upgraded installs.
     base bumped to 0.9.0.
 
-  ✅ **Bundled modules**: `base` + `admin` now ship inside the wheel
-  at `pyvelm/modules/<name>/`. `pyvelm.BUILTIN_MODULE_ROOTS` is the
-  single-entry list apps prepend to their discovery roots; the
-  `pyvelm-cron` CLI prepends it automatically. A poison
+  ✅ **Bundled modules**: `base`, `admin`, `reports`, `console`, `vellum`, and
+  others ship inside the wheel at `pyvelm/modules/<name>/`.
+  `pyvelm.BUILTIN_MODULE_ROOTS` is the single-entry list apps prepend to
+  their discovery roots; the `pyvelm-cron` CLI prepends it automatically. A poison
   `pyvelm/modules/__init__.py` prevents `pyvelm.modules.base` from
   being importable (would double-register every model class). The
   Tags settings view + menu entry moved from `admin` to `partners`
@@ -686,6 +721,56 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     * `render_pivot_page` injects `groupable_fields`,
       `measurable_fields`, and the current `init_row/col_groupby` +
       `init_measures` for toolbar state initialisation.
+
+---
+
+## v0.4.0 release summary
+
+**Released:** 2026-05-22
+**Package version:** `0.4.0` (pyproject.toml)
+**Reports module version:** `0.2.0`
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this release
+
+| Area | Highlights |
+|---|---|
+| **Report Builder** | Optional `reports` module — visual builder, secure JSON→SQL compiler, preview, Excel/CSV/PDF export, daily cron + audit log |
+| **Field drill-down** | Odoo-style level-by-level picker (`GET /api/reports/field-level`); deep paths like `company_id.currency_id.symbol` |
+| **Columns** | Drag-reorder, per-column format (text/number/integer/currency), alignment, fixed or per-row currency symbol |
+| **Order by** | Multi-field sort with priority; sort by fields not shown as columns |
+| **UI** | `pvCombo` searchable combobox; list `record_href` / `create_href` for custom URLs |
+| **Docs** | [docs/report-builder.md](docs/report-builder.md) in Guides nav |
+
+### Next focus options (post-v0.4.0)
+
+- **Report builder polish** — summary group-by drill-down; non-stored/computed
+  detail columns; sample report in `vellum_demo`.
+- **Vellum Slice E** — migration DSL (deferred).
+- **Deferred infra** — cache rollback, multi-worker rate limiter, nested dialogs.
+
+---
+
+## v0.3.0 release summary
+
+**Released:** 2026-05-22
+**Package version:** `0.3.0` (pyproject.toml)
+**Base module version:** `0.18.0` (unchanged)
+
+### What's in this release
+
+| Area | Highlights |
+|---|---|
+| **Apps Sync** | **Sync** button reloads models/DATA, additive schema diff, view/menu re-sync; `SYNC_HOOK` manifest hook |
+| **Vellum** | Auto `created_at`/`updated_at`; `_guarded` mass-assignment default; timestamp forms read-only |
+| **`display_name`** | Computed label on every model (`_rec_name` / `_compute_display_name`) |
+| **Console UX** | Breadcrumbs, form record pager (list context), list search bar polish, `pvToast` |
+| **Fixes** | Injected `id` field; `loader.reload_models` inside `registry.activate()` |
+
+### Next focus options (post-v0.3.0)
+
+- ~~**Report Builder**~~ — shipped in v0.4.0.
+- **Vellum Slice E** — migration DSL (deferred).
 
 ---
 

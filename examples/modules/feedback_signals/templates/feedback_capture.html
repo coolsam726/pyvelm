@@ -1,0 +1,359 @@
+{% extends "layouts/main.html" %}
+{% block title %}{% if mode == 'thanks' %}Thank you{% else %}Share feedback{% endif %} — pyvelm{% endblock %}
+{% block page_title %}{% if mode == 'thanks' %}Thank you{% else %}Share feedback{% endif %}{% endblock %}
+
+{% block page_heading_region %}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="/web/feedback_signals/static/feedback_capture.css">
+
+{% if mode == 'thanks' and record %}
+<div class="fs-capture-root max-w-2xl mx-auto py-6">
+    <div class="fs-capture-bg" aria-hidden="true"></div>
+    <div class="fs-glass rounded-2xl p-8 md:p-10 text-center fs-thanks-pop relative overflow-hidden">
+        <div class="fs-confetti inset-0 pointer-events-none" aria-hidden="true">
+            {% for i in range(24) %}
+            <span class="{% if i % 3 == 0 %}fs-confetti-piece--brand{% elif i % 3 == 1 %}fs-confetti-piece--soft{% else %}fs-confetti-piece--accent{% endif %}"
+                  style="left: {{ (i * 41) % 100 }}%; top: {{ (i * 17) % 30 }}%;
+                         animation-delay: {{ (i * 0.05) }}s;"></span>
+            {% endfor %}
+        </div>
+        <div class="relative z-10 space-y-5">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-success-soft text-fg-success-strong mx-auto">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                </svg>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-bold text-heading tracking-tight">
+                Your story landed — thank you
+            </h1>
+            <p class="text-body-subtle text-sm md:text-base max-w-md mx-auto">
+                We read the words, not just the stars. Deeper AI analysis runs in the background —
+                refresh this record in a moment if <span class="font-medium">Analyzer</span> still says lexicon.
+            </p>
+            <div class="text-left rounded-xl border border-default bg-neutral-secondary/60 px-5 py-4">
+                <p class="text-xs font-semibold uppercase tracking-wider text-body-subtle mb-2">Signal preview</p>
+                <p class="text-heading font-medium">{{ record.insight_summary or 'Still gathering signal…' }}</p>
+                {% if record.emotion_tags or record.topic_hints %}
+                <p class="text-sm text-body-subtle mt-2">
+                    {% if record.emotion_tags %}{{ record.emotion_tags }}{% endif %}
+                    {% if record.emotion_tags and record.topic_hints %} · {% endif %}
+                    {% if record.topic_hints %}{{ record.topic_hints }}{% endif %}
+                </p>
+                {% endif %}
+            </div>
+            <div class="flex flex-wrap gap-3 justify-center pt-2">
+                <a href="/web/feedback_signals/verify/{{ record.id }}"
+                   class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg bg-fg-brand hover:opacity-90 transition">
+                    Verify signals
+                </a>
+                <a href="/web/views/feedback_signals/feedback_intake/record/{{ record.id }}"
+                   class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-default hover:bg-neutral-secondary transition">
+                    View full record
+                </a>
+                <a href="/web/feedback_signals/capture"
+                   class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-default hover:bg-neutral-secondary transition">
+                    Share another story
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="fs-capture-root max-w-2xl mx-auto py-4 md:py-8"
+     x-data="feedbackCapture()"
+     x-init="init()"
+     @input.window="onEdit()">
+
+    <div class="fs-capture-bg" aria-hidden="true"></div>
+
+    <div class="relative z-10 space-y-6">
+        {# Hero #}
+        <header class="text-center space-y-3 px-2">
+            <p class="inline-flex items-center gap-2 text-2xs font-semibold uppercase tracking-widest text-fg-brand
+                      px-3 py-1 rounded-full bg-brand-softer border border-fg-brand/20">
+                <span class="w-1.5 h-1.5 rounded-full bg-fg-brand fs-pulse-ring"></span>
+                Narrative-first feedback
+            </p>
+            <h1 class="text-2xl md:text-4xl font-bold text-heading tracking-tight leading-tight">
+                Skip the star rating.<br class="hidden sm:inline">
+                <span class="text-fg-brand">Tell us what happened.</span>
+            </h1>
+            <p class="text-sm md:text-base text-body-subtle max-w-lg mx-auto leading-relaxed">
+                Two minutes of honest story beats a mood-driven ★★★★★.
+                We analyze your words for context — stars are optional at the end.
+            </p>
+        </header>
+
+        {% if form_error %}
+        <div class="fs-alert-error text-center">
+            {{ form_error }}
+        </div>
+        {% endif %}
+
+        {# Progress #}
+        <div class="flex items-center justify-center gap-2" role="progressbar"
+             :aria-valuenow="step" aria-valuemin="0" aria-valuemax="3">
+            <template x-for="(label, i) in stepLabels" :key="i">
+                <span class="fs-step-dot"
+                      :class="{
+                          'is-active': step === i,
+                          'is-done': step > i
+                      }"
+                      :title="label"></span>
+            </template>
+        </div>
+
+        <form method="post" action="/web/feedback_signals/capture"
+              class="fs-glass rounded-2xl p-6 md:p-8 space-y-6"
+              @submit="onSubmit($event)">
+
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <input type="hidden" name="surface" :value="surface">
+            <input type="hidden" name="explicit_rating" :value="rating || ''">
+            <input type="hidden" name="effort_seconds" :value="effortSeconds">
+            <input type="hidden" name="edit_count" :value="editCount">
+            <input type="hidden" name="abandoned_once" :value="almostLeft ? 'true' : 'false'">
+
+            {# Step 0 — welcome #}
+            <section x-show="step === 0" x-cloak x-transition.opacity.duration.300ms
+                     class="text-center space-y-6 py-4">
+                <div class="space-y-2">
+                    <p class="text-lg text-heading font-medium">Ready when you are</p>
+                    <p class="text-sm text-body-subtle">
+                        Three short beats: where → story → optional gut-check.
+                        No account surveys, no NPS theater.
+                    </p>
+                </div>
+                <ul class="text-left text-sm text-body space-y-2 max-w-sm mx-auto">
+                    <li class="flex gap-3">
+                        <span class="text-fg-brand font-bold">1</span>
+                        <span>Pick the corner of the product you were in</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="text-fg-brand font-bold">2</span>
+                        <span>Describe what you tried and what actually happened</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="text-fg-brand font-bold">3</span>
+                        <span>Add stars only if you feel like it</span>
+                    </li>
+                </ul>
+                <button type="button" @click="next()"
+                        class="inline-flex items-center gap-2 px-6 py-3 text-base font-semibold text-white
+                               rounded-xl bg-fg-brand hover:opacity-90 shadow-lg transition">
+                    Begin my story
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+                    </svg>
+                </button>
+            </section>
+
+            {# Step 1 — where #}
+            <section x-show="step === 1" x-cloak x-transition.opacity.duration.300ms class="space-y-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-heading">Where were you?</h2>
+                    <p class="text-sm text-body-subtle mt-1">Tap the area that best matches your moment.</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {% for s in surfaces %}
+                    <button type="button"
+                            class="fs-chip text-left rounded-xl border border-default p-4
+                                   {% if repost and repost.surface == s.id %}is-selected{% endif %}"
+                            :class="{ 'is-selected': surface === '{{ s.id }}' }"
+                            @click="surface = '{{ s.id }}'">
+                        <span class="block font-semibold text-heading">{{ s.label }}</span>
+                        <span class="block text-xs text-body-subtle mt-0.5">{{ s.hint }}</span>
+                    </button>
+                    {% endfor %}
+                </div>
+                <p x-show="!surface && triedNext" x-cloak class="text-xs text-fg-danger">
+                    Pick a spot so we know which team should hear you.
+                </p>
+            </section>
+
+            {# Step 2 — story #}
+            <section x-show="step === 2" x-cloak x-transition.opacity.duration.300ms class="space-y-5">
+                <div>
+                    <h2 class="text-xl font-semibold text-heading">What unfolded?</h2>
+                    <p class="text-sm text-body-subtle mt-1">
+                        Write like you're explaining to a friend — specifics help us fix the right thing.
+                    </p>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-sm font-medium text-heading">I was trying to…</label>
+                    <textarea name="story_goal" rows="2" class="fs-story-area w-full text-sm rounded-xl border border-default
+                              bg-neutral-primary px-4 py-3 focus:outline-none focus:ring-2 focus:ring-fg-brand"
+                              placeholder="e.g. Invite two teammates before our standup"
+                              x-model="storyGoal">{{ repost.story_goal if repost else '' }}</textarea>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-sm font-medium text-heading">What actually happened?</label>
+                    <textarea name="story_outcome" rows="3" class="fs-story-area w-full text-sm rounded-xl border border-default
+                              bg-neutral-primary px-4 py-3 focus:outline-none focus:ring-2 focus:ring-fg-brand"
+                              placeholder="e.g. The invite link expired and I had to start over twice"
+                              x-model="storyOutcome">{{ repost.story_outcome if repost else '' }}</textarea>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-sm font-medium text-heading">
+                        What got in the way?
+                        <span class="text-body-subtle font-normal">(optional)</span>
+                    </label>
+                    <textarea name="story_blocker" rows="2" class="fs-story-area w-full text-sm rounded-xl border border-default
+                              bg-neutral-primary px-4 py-3 focus:outline-none focus:ring-2 focus:ring-fg-brand"
+                              placeholder="e.g. No error message — just a spinner"
+                              x-model="storyBlocker">{{ repost.story_blocker if repost else '' }}</textarea>
+                </div>
+
+                <div class="rounded-xl bg-neutral-secondary/50 border border-default px-4 py-3 space-y-2">
+                    <div class="flex justify-between text-xs">
+                        <span class="font-medium text-body-subtle" x-text="encouragement"></span>
+                        <span class="text-body-subtle" x-text="wordCount + ' words'"></span>
+                    </div>
+                    <div class="fs-energy-track" aria-hidden="true">
+                        <div class="fs-energy-fill" :style="'width:' + energy + '%'"></div>
+                    </div>
+                </div>
+            </section>
+
+            {# Step 3 — optional stars #}
+            <section x-show="step === 3" x-cloak x-transition.opacity.duration.300ms class="space-y-5">
+                <div class="text-center space-y-2">
+                    <h2 class="text-xl font-semibold text-heading">Optional gut-check</h2>
+                    <p class="text-sm text-body-subtle max-w-md mx-auto">
+                        Your story is already the main signal.
+                        Tap a star only if it still fits — skip freely.
+                    </p>
+                </div>
+                <div class="flex justify-center gap-2 flex-wrap" role="group" aria-label="Star rating">
+                    <template x-for="n in 5" :key="n">
+                        <button type="button"
+                                class="fs-star-btn w-12 h-12 rounded-xl border border-default text-2xl
+                                       flex items-center justify-center"
+                                :class="{ 'is-on': rating === n }"
+                                :aria-pressed="rating === n"
+                                @click="rating = (rating === n ? null : n)"
+                                x-text="n <= (rating || 0) ? '★' : '☆'"></button>
+                    </template>
+                </div>
+                <p class="text-center text-xs text-body-subtle" x-show="!rating">
+                    No rating is perfectly fine — we weight your words higher.
+                </p>
+            </section>
+
+            {# Nav #}
+            <div class="flex items-center justify-between gap-3 pt-2 border-t border-default"
+                 x-show="step > 0" x-cloak>
+                <button type="button" @click="prev()"
+                        class="px-4 py-2 text-sm font-medium rounded-lg border border-default
+                               hover:bg-neutral-secondary transition"
+                        x-show="step > 0">
+                    Back
+                </button>
+                <div class="flex-1"></div>
+                <button type="button" @click="next()" x-show="step < 3"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white
+                               rounded-lg bg-fg-brand hover:opacity-90 transition">
+                    <span x-text="step === 2 ? 'Almost done' : 'Continue'"></span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+                    </svg>
+                </button>
+                <button type="submit" x-show="step === 3"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white
+                               rounded-lg bg-fg-brand hover:opacity-90 transition">
+                    Send my story
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
+                    </svg>
+                </button>
+            </div>
+        </form>
+
+        <p class="text-center text-2xs text-body-subtle">
+            Admins see derived tone, topics, and mood-noise on the
+            <a href="/web/views/feedback_signals/feedback_intake.list" class="text-fg-brand hover:underline">intakes list</a>.
+        </p>
+    </div>
+</div>
+
+<script>
+function feedbackCapture() {
+    const repost = {{ repost | tojson }};
+    return {
+        step: repost ? 2 : 0,
+        stepLabels: ['Welcome', 'Where', 'Story', 'Stars'],
+        surface: repost?.surface || '',
+        storyGoal: repost?.story_goal || '',
+        storyOutcome: repost?.story_outcome || '',
+        storyBlocker: repost?.story_blocker || '',
+        rating: repost?.explicit_rating || null,
+        triedNext: false,
+        startedAt: Date.now(),
+        editCount: 0,
+        almostLeft: false,
+        dirty: false,
+
+        get effortSeconds() {
+            return Math.max(0, Math.round((Date.now() - this.startedAt) / 1000));
+        },
+        get wordCount() {
+            const t = [this.storyGoal, this.storyOutcome, this.storyBlocker].join(' ');
+            return (t.match(/\S+/g) || []).length;
+        },
+        get energy() {
+            return Math.min(100, this.wordCount * 5);
+        },
+        get encouragement() {
+            const w = this.wordCount;
+            if (w < 3) return 'A sentence is enough — start anywhere';
+            if (w < 12) return 'Good start — specifics are gold';
+            if (w < 30) return 'Rich context — this helps a real human';
+            return 'Exceptional detail — thank you';
+        },
+
+        init() {
+            window.addEventListener('beforeunload', (e) => {
+                if (this.dirty && this.step > 0 && this.step < 3) {
+                    this.almostLeft = true;
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+        },
+        onEdit() {
+            this.editCount += 1;
+            this.dirty = true;
+        },
+        next() {
+            this.triedNext = true;
+            if (this.step === 1 && !this.surface) return;
+            if (this.step === 2 && !this.storyGoal.trim() && !this.storyOutcome.trim()) return;
+            if (this.step < 3) this.step += 1;
+        },
+        prev() {
+            if (this.step > 0) this.step -= 1;
+        },
+        onSubmit(e) {
+            if (!this.surface) {
+                e.preventDefault();
+                this.step = 1;
+                this.triedNext = true;
+                return;
+            }
+            if (!this.storyGoal.trim() && !this.storyOutcome.trim()) {
+                e.preventDefault();
+                this.step = 2;
+                return;
+            }
+        },
+    };
+}
+</script>
+{% endif %}
+{% endblock %}

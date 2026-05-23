@@ -1,0 +1,200 @@
+{% extends "layouts/main.html" %}
+{% block title %}{{ page_title }} — pyvelm{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<style>
+/* Equal-width tracks: minmax(0,1fr) prevents content from widening one column.
+   Mobile stacks; desktop uses --pv-cols explicit tracks (no Tailwind grid-cols). */
+.pv-dash-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+}
+@media (min-width: 1024px) {
+    .pv-dash-grid {
+        grid-template-columns: repeat(var(--pv-cols, 2), minmax(0, 1fr));
+    }
+}
+.pv-dash-tile {
+    min-width: 0;
+    width: 100%;
+    grid-column: 1 / -1;
+}
+.pv-dash-tile > * {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+@media (min-width: 1024px) {
+    .pv-dash-tile {
+        grid-column: span var(--pv-span, 1);
+    }
+}
+</style>
+<div class="pv-dash-grid" style="--pv-cols: {{ grid_columns }}">
+    {% for w in widgets %}
+    <div class="pv-dash-tile" style="--pv-span: {{ w.colspan }}">
+        {% if w.error %}
+        <div class="bg-neutral-primary border border-danger rounded-xl px-6 py-5 text-sm text-danger">
+            <p class="font-semibold">{{ w.title or w.id }}</p>
+            <p class="mt-1 text-body-subtle">{{ w.error }}</p>
+        </div>
+
+        {% elif w.type == 'stat' %}
+        <div class="bg-neutral-primary border border-default rounded-xl shadow-sm px-6 py-6 h-full">
+            {% if w.href %}
+            <a href="{{ w.href }}" class="block group">
+            {% endif %}
+                <p class="text-xs font-medium uppercase tracking-wider text-body-subtle">
+                    {{ w.title }}
+                </p>
+                <p class="mt-2 text-3xl font-bold text-heading tabular-nums
+                           {% if w.href %}group-hover:text-fg-brand transition-colors{% endif %}">
+                    {{ w.value_display }}
+                </p>
+            {% if w.href %}
+            </a>
+            {% endif %}
+        </div>
+
+        {% elif w.type == 'link' %}
+        <a href="{{ w.url }}"
+           class="group block bg-neutral-primary border border-default rounded-xl shadow-sm px-6 py-6 h-full
+                  hover:shadow-md hover:border-fg-brand/40 transition">
+            <p class="text-2xs font-mono uppercase tracking-wider text-body-subtle mb-2">
+                {{ w.subtitle }}
+            </p>
+            <p class="text-base font-semibold text-heading group-hover:text-fg-brand transition-colors">
+                {{ w.title }}
+            </p>
+            <p class="mt-2 text-sm text-body leading-relaxed">{{ w.description }}</p>
+        </a>
+
+        {% elif w.type == 'chart' %}
+        <div class="bg-neutral-primary border border-default rounded-xl shadow-sm overflow-hidden h-full flex flex-col">
+            {% if w.title %}
+            <div class="px-5 py-3 border-b border-default">
+                <h2 class="text-sm font-semibold text-heading">{{ w.title }}</h2>
+            </div>
+            {% endif %}
+            <div class="p-4 flex-1">
+                {% if w.chart_data and w.chart_data.values %}
+                <div id="pv-dash-chart-{{ w.id }}" class="w-full min-h-[280px]"></div>
+                {% else %}
+                <p class="text-sm text-body-subtle text-center py-16">No data to chart.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% elif w.type == 'table' %}
+        <div class="bg-neutral-primary border border-default rounded-xl shadow-sm overflow-hidden h-full flex flex-col">
+            <div class="px-5 py-3 border-b border-default flex items-center justify-between gap-2">
+                {% if w.title %}
+                <h2 class="text-sm font-semibold text-heading">{{ w.title }}</h2>
+                {% else %}
+                <span></span>
+                {% endif %}
+                {% if w.more_href %}
+                <a href="{{ w.more_href }}"
+                   class="text-xs font-medium text-fg-brand hover:underline whitespace-nowrap">
+                    View all
+                </a>
+                {% endif %}
+            </div>
+            <div class="overflow-x-auto flex-1">
+                <table class="w-full text-sm">
+                    <thead class="bg-neutral-tertiary border-b border-default">
+                        <tr>
+                            {% for h in w.headers %}
+                            <th class="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-body-subtle whitespace-nowrap">
+                                {{ h.label }}
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-default">
+                        {% for row in w.rows %}
+                        <tr class="hover:bg-neutral-secondary transition-colors">
+                            {% for cell in row.cells %}
+                            <td class="px-4 py-2.5 align-middle text-body whitespace-nowrap">
+                                {{ cell.html }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="{{ w.headers|length }}"
+                                class="px-4 py-8 text-center text-sm text-body-subtle">
+                                No records.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.50.0/dist/apexcharts.min.js" defer></script>
+<script>
+(function initPvDashboardCharts() {
+    const charts = {{ chart_widgets | tojson }};
+    if (typeof ApexCharts === 'undefined') {
+        setTimeout(initPvDashboardCharts, 60);
+        return;
+    }
+    const isDark = document.documentElement.classList.contains('dark');
+    const fg = getComputedStyle(document.documentElement).getPropertyValue('--color-body').trim()
+        || (isDark ? '#e5e7eb' : '#1f2937');
+    const fgSubtle = getComputedStyle(document.documentElement).getPropertyValue('--color-body-subtle').trim()
+        || (isDark ? '#9ca3af' : '#6b7280');
+    const brand = getComputedStyle(document.documentElement).getPropertyValue('--color-fg-brand').trim()
+        || '#2563eb';
+    const gridClr = getComputedStyle(document.documentElement).getPropertyValue('--color-border-default').trim()
+        || (isDark ? '#374151' : '#e5e7eb');
+    const palette = [brand, '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+
+    charts.forEach(function (w) {
+        const el = document.getElementById('pv-dash-chart-' + w.id);
+        const d = w.chart_data;
+        if (!el || !d || !d.values || !d.values.length) return;
+
+        const apexType = d.chart_type === 'pie' ? 'pie'
+            : d.chart_type === 'line' ? 'line' : 'bar';
+        const base = {
+            chart: { type: apexType, height: 300, background: 'transparent',
+                      toolbar: { show: false }, foreColor: fg },
+            theme: { mode: isDark ? 'dark' : 'light' },
+            colors: palette,
+            grid: { borderColor: gridClr },
+            tooltip: { theme: isDark ? 'dark' : 'light' },
+            legend: { labels: { colors: fgSubtle } },
+        };
+        let opts;
+        if (apexType === 'pie') {
+            opts = Object.assign({}, base, {
+                series: d.values,
+                labels: d.labels,
+                dataLabels: { enabled: true },
+            });
+        } else {
+            opts = Object.assign({}, base, {
+                series: [{ name: d.measure_label, data: d.values }],
+                xaxis: { categories: d.labels, labels: { style: { colors: fgSubtle } } },
+                yaxis: { labels: { style: { colors: fgSubtle } } },
+                dataLabels: { enabled: false },
+                plotOptions: { bar: { borderRadius: 4 } },
+            });
+        }
+        new ApexCharts(el, opts).render();
+    });
+})();
+</script>
+{% endblock %}

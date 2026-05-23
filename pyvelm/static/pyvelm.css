@@ -274,3 +274,57 @@
         transform: translateX(1rem);
     }
 }
+
+/* Datetime popup — one flat panel (calendar + time + actions). */
+.pv-datetime-panel {
+    padding: 0;
+}
+
+.pv-datetime-panel .pv-datetime-calendar {
+    width: 100%;
+}
+
+/* Flowbite/vanillajs-datepicker draws its own card; flatten inside our shell. */
+.pv-datetime-panel .datepicker-picker,
+.pv-datetime-panel .datepicker-main,
+.pv-datetime-panel .datepicker-dropdown {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    width: 100% !important;
+    max-width: none !important;
+}
+
+.pv-datetime-panel .datepicker-header {
+    border-bottom: 1px solid var(--color-default);
+    background: var(--color-neutral-primary);
+}
+
+.pv-datetime-panel .datepicker-view {
+    background: var(--color-neutral-primary);
+}
+
+.pv-datetime-panel .datepicker-footer {
+    border-top: 1px solid var(--color-default);
+    background: var(--color-neutral-primary);
+}
+
+.pv-datetime-footer {
+    border-top: 1px solid var(--color-default);
+    background: var(--color-neutral-primary);
+}
+
+.pv-datetime-time-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 0.75rem;
+}
+
+.pv-datetime-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0 0.75rem 0.625rem;
+}

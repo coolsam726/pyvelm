@@ -5,16 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}pyvelm{% endblock %}</title>
 
-    {# Apply saved theme before paint to avoid FOUC. #}
-    <script>
-        (function () {
-            var t = localStorage.getItem('pyvelm-theme');
-            if (t === 'dark' ||
-                (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-            }
-        })();
-    </script>
+    {% include "layouts/_head_init.html" %}
 
     {# Inter is the body font in pyvelm.css. Loaded from Google Fonts so
        the build pipeline doesn't have to ship font files. #}
@@ -26,6 +17,7 @@
     {# Compiled CSS — Tailwind v4 + Flowbite plugin + the theme tokens
        defined in pyvelm.css. Built via `npm run build`. #}
     <link rel="stylesheet" href="/web/static/dist/pyvelm.css">
+    {% include "layouts/_head_theme.html" %}
 
     {# Behavior. HTMX for in-page swaps; Alpine.js for the sidebar /
        theme / dropdown / dialog interactions; Flowbite ships a few
@@ -34,6 +26,7 @@
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
     <script src="/web/static/dist/flowbite.min.js" defer></script>
+    <script src="/web/static/pv_datetime_picker.js" defer></script>
 
     <style>
       /* Hide Alpine-controlled elements until alpine:init fires. */
@@ -109,10 +102,13 @@
     {% block head_extra %}{% endblock %}
 </head>
 
+{% set use_sidebar = use_sidebar if use_sidebar is defined else true %}
 <body x-data="pyvelm()"
       @click.window="handleActionTriggerClick($event)"
-      class="bg-neutral-secondary text-body min-h-screen flex font-sans antialiased">
+      class="bg-neutral-secondary text-body min-h-screen flex font-sans antialiased
+             {% if use_sidebar %}md:flex-row{% else %}flex-col{% endif %}">
 
+{% if use_sidebar %}
 {# ───── Mobile backdrop ───── #}
 <div x-show="sidebarOpen" x-cloak x-transition.opacity
      class="fixed inset-0 bg-black/30 z-20 md:hidden"
@@ -124,9 +120,10 @@
               md:translate-x-0 transition-transform duration-200 ease-in-out"
        :class="{ '-translate-x-full': !sidebarOpen }">
 
-    {# Brand. #}
-    <div class="px-4 h-[60px] flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
+    {# Brand — logo, app name, and current page (sidebar mode only). #}
+    <div class="px-4 min-h-[60px] flex items-center justify-between gap-2 border-b border-default/60">
+        <a href="/web/apps"
+           class="flex items-center gap-2.5 min-w-0 flex-1 text-heading hover:opacity-90 transition">
             <div class="w-7 h-7 rounded-lg bg-fg-brand flex items-center justify-center shrink-0">
                 <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor"
                      viewBox="0 0 24 24" stroke-width="2.5">
@@ -134,8 +131,13 @@
                           d="M3.75 7.5L12 3l8.25 4.5M3.75 7.5v9L12 21l8.25-4.5v-9M3.75 7.5L12 12m0 0l8.25-4.5M12 12v9"/>
                 </svg>
             </div>
-            <span class="font-semibold text-heading text-sm tracking-tight">pyvelm</span>
-        </div>
+            <div class="min-w-0">
+                <span class="font-semibold text-heading text-sm tracking-tight block">pyvelm</span>
+                {% if self.page_title() %}
+                <span class="text-xs text-body-subtle truncate block mt-0.5">{{ self.page_title() }}</span>
+                {% endif %}
+            </div>
+        </a>
         <button @click="sidebarOpen = false" aria-label="Close sidebar"
                 class="md:hidden p-1 rounded-md text-body-subtle hover:text-heading hover:bg-neutral-secondary">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -204,29 +206,51 @@
     </div>
     {% endif %}
 </aside>
+{% endif %}
 
 {# ───── Main column ───── #}
-<div class="flex-1 flex flex-col min-h-screen overflow-x-hidden">
+<div class="flex-1 flex flex-col min-h-screen overflow-x-hidden w-full">
 
     {# Topbar. #}
     <header class="flex items-center gap-3 px-4 md:px-6 h-[60px]
-                   bg-neutral-secondary sticky top-0 z-10">
+                   bg-neutral-secondary sticky top-0 z-10 border-b border-default">
 
+        {% if use_sidebar %}
         <button @click="sidebarOpen = true" aria-label="Open menu"
                 class="md:hidden p-1.5 -ml-1.5 rounded-md text-body hover:bg-neutral-secondary">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
             </svg>
         </button>
+        {% endif %}
 
-        {# page_title block — kept invisible here so the page-heading
-           region below can still call self.page_title(). The topbar
-           shows the fixed app name per the Nuru design spec. #}
+        {# page_title: filled by child templates; visible in sidebar header or topnav bar. #}
         <span class="sr-only">{% block page_title %}{% endblock %}</span>
-        <span class="text-base font-semibold text-heading tracking-tight truncate flex-1 min-w-0">
-            pyvelm
-        </span>
 
+        {% if use_sidebar %}
+        <div class="flex-1 min-w-0" aria-hidden="true"></div>
+        {% else %}
+        {# Topnav-only shell: logo, app name, current page — nothing else in the bar. #}
+        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+            <a href="/web/apps" aria-label="pyvelm apps"
+               class="shrink-0 text-heading hover:opacity-90 transition">
+                <div class="w-7 h-7 rounded-lg bg-fg-brand flex items-center justify-center">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor"
+                         viewBox="0 0 24 24" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M3.75 7.5L12 3l8.25 4.5M3.75 7.5v9L12 21l8.25-4.5v-9M3.75 7.5L12 12m0 0l8.25-4.5M12 12v9"/>
+                    </svg>
+                </div>
+            </a>
+            <span class="text-base font-semibold text-heading tracking-tight shrink-0">pyvelm</span>
+            <span class="text-body-subtle/40 shrink-0 hidden sm:inline" aria-hidden="true">/</span>
+            <h1 class="text-base font-medium text-heading tracking-tight truncate min-w-0">
+                {{ self.page_title() }}
+            </h1>
+        </div>
+        {% endif %}
+
+        {% if use_sidebar %}
         <div class="flex items-center gap-2">
 
             {# Company switcher. #}
@@ -327,6 +351,10 @@
                         <p class="text-xs text-body-subtle">{{ current_user_login or '' }}</p>
                     </div>
                     <div class="py-1 text-sm">
+                        <a href="/web/account/profile"
+                           class="block px-4 py-1.5 text-body hover:bg-neutral-secondary hover:text-heading">
+                            My profile
+                        </a>
                         <a href="/web/admin"
                            class="block px-4 py-1.5 text-body hover:bg-neutral-secondary hover:text-heading">
                             Admin
@@ -346,6 +374,7 @@
             </div>
             {% endif %}
         </div>
+        {% endif %}
     </header>
 
     {# Flash slot reserved — used for future toast/notification injection. #}
@@ -365,7 +394,7 @@
        suppress it, or override `{% block page_breadcrumb %}` for a
        custom layout. #}
     {% block page_heading_region %}
-    {% if breadcrumbs or self.page_title() or subtitle is defined or self.page_actions() %}
+    {% if use_sidebar and (breadcrumbs or subtitle is defined or self.page_actions()) %}
     <div class="px-4 md:px-6 pt-5 pb-4">
         {% block page_breadcrumb %}
         {% if breadcrumbs %}
@@ -401,11 +430,8 @@
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="min-w-0 flex-1">
                 {% block page_heading %}
-                <h2 class="text-xl font-semibold text-heading tracking-tight truncate">
-                    {{ self.page_title() }}
-                </h2>
                 {% if subtitle is defined and subtitle %}
-                <p class="mt-1 text-xs text-body-subtle">{{ subtitle }}</p>
+                <p class="text-xs text-body-subtle">{{ subtitle }}</p>
                 {% endif %}
                 {% endblock %}
             </div>
@@ -943,6 +969,21 @@
         document.body.addEventListener('htmx:afterSwap', e => {
             pvInjectCsrfFields(e.target);
         });
+
+        // Flowbite date pickers + unified datetime popups — re-init after HTMX swaps.
+        function pvInitDatepickers() {
+            if (typeof window.initDatepickers === 'function') {
+                window.initDatepickers();
+            }
+        }
+        function pvInitPickers() {
+            if (typeof window.pvInitDatetimePickers === 'function') {
+                window.pvInitDatetimePickers();
+            }
+            pvInitDatepickers();
+        }
+        document.addEventListener('DOMContentLoaded', pvInitPickers);
+        document.body.addEventListener('htmx:afterSwap', () => pvInitPickers());
 
         // HTMX fires `htmx:confirm` before it would call window.confirm.
         // We intercept every request that carries an hx-confirm message,

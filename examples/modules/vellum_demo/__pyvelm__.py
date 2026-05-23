@@ -1,6 +1,6 @@
 NAME: str = "vellum_demo"
 DISPLAY_NAME: str = "Vellum Demo"
-VERSION: tuple[int, ...] = (0, 3, 2)
+VERSION: tuple[int, ...] = (0, 4, 0)
 SUMMARY: str = "Example models exercising the Vellum query builder."
 CATEGORY: str = "Demo"
 AUTHOR: str = "pyvelm"

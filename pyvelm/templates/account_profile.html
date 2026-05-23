@@ -1,0 +1,80 @@
+{% extends "layouts/main.html" %}
+{% block title %}My profile — pyvelm{% endblock %}
+{% block page_title %}My profile{% endblock %}
+
+{% block content %}
+<p class="mb-6 text-sm">
+    <a href="/web/account/password" class="text-fg-brand hover:underline">Change password</a>
+    <span class="text-body-subtle mx-2">·</span>
+    <a href="/web/apps" class="text-body-subtle hover:text-fg-brand hover:underline">Back to apps</a>
+</p>
+<div class="max-w-2xl mx-auto">
+    <div class="bg-neutral-primary border border-default rounded-xl shadow-sm p-6 md:p-8 space-y-8">
+        {% if error %}
+        <p class="px-3 py-2 rounded-md bg-danger-soft border border-fg-danger/30 text-fg-danger text-sm">
+            {{ error }}
+        </p>
+        {% endif %}
+        {% if success %}
+        <p class="px-3 py-2 rounded-md bg-success-soft border border-success-strong/30 text-success-strong text-sm">
+            Profile updated.
+        </p>
+        {% endif %}
+
+        <form method="post" action="/web/account/profile" class="space-y-8">
+            <section class="space-y-4">
+                <h3 class="text-sm font-semibold text-heading uppercase tracking-wide">Avatar</h3>
+                {{ avatar_widget }}
+            </section>
+
+            <section class="space-y-4">
+                <h3 class="text-sm font-semibold text-heading uppercase tracking-wide">Identity</h3>
+                <div>
+                    <label class="block text-sm font-medium text-heading mb-1.5" for="profile-name">Display name</label>
+                    <input id="profile-name" name="name" type="text" required maxlength="200"
+                           value="{{ name }}"
+                           autocomplete="name"
+                           class="w-full bg-neutral-primary border border-default rounded-md px-3 py-2 text-sm
+                                  text-heading focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-heading mb-1.5">Login</label>
+                    <p class="text-sm text-body">{{ login }}</p>
+                    <p class="mt-1 text-xs text-body-subtle">Login cannot be changed here. Ask an administrator.</p>
+                </div>
+            </section>
+
+            <section class="space-y-3">
+                <h3 class="text-sm font-semibold text-heading uppercase tracking-wide">Account</h3>
+                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <dt class="text-body-subtle">Default company</dt>
+                        <dd class="mt-0.5 text-heading">{{ company_name or '—' }}</dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <dt class="text-body-subtle mb-1">Groups</dt>
+                        <dd class="flex flex-wrap gap-1.5">
+                            {% if groups %}
+                                {% for g in groups %}
+                                <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-medium
+                                             bg-brand-soft text-fg-brand">{{ g }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-body">—</span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                </dl>
+            </section>
+
+            <div class="flex items-center justify-end gap-3 pt-2 border-t border-default">
+                <button type="submit"
+                        class="px-4 py-2 bg-success text-white text-sm font-medium rounded-md
+                               hover:opacity-90 transition-opacity">
+                    Save profile
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

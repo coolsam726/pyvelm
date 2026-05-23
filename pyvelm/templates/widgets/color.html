@@ -1,0 +1,17 @@
+{# Hex colour picker for Char fields (``widget="color"``). #}
+{% if readonly %}
+<p class="text-sm text-heading font-mono">{{ value or '—' }}</p>
+{% else %}
+<div class="flex flex-wrap items-center gap-3" x-data="{ hex: {{ value_json | safe }} || '#6366f1' }">
+    <input type="color"
+           x-model="hex"
+           class="h-10 w-14 rounded-md border border-default bg-neutral-primary cursor-pointer p-0.5"
+           aria-label="Pick colour">
+    <input type="text" name="{{ name }}" x-model="hex"
+           placeholder="#6366f1"
+           pattern="^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+           class="flex-1 min-w-[8rem] bg-neutral-primary border border-default rounded-md px-3 py-2 text-sm
+                  text-heading font-mono focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand">
+    <p class="w-full text-xs text-body-subtle">Accent colour for this company (buttons, links, sidebar logo).</p>
+</div>
+{% endif %}

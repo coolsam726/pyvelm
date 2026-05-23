@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date as _date, datetime as _datetime
+from datetime import date as _date, datetime as _datetime, time as _time
 from typing import Any
 
 
@@ -385,7 +385,7 @@ class Date(Field):
     """A calendar date, stored as ``date``.
 
     Accepts ``date``, ``datetime`` (truncated to day), or
-    ``YYYY-MM-DD`` strings (HTML ``<input type=\"date\">``)."""
+    ``YYYY-MM-DD`` strings (Flowbite datepicker / ISO)."""
 
     sql_type = "date"
     python_type = _date
@@ -402,6 +402,34 @@ class Date(Field):
         if isinstance(value, _date):
             return value
         return _date.fromisoformat(str(value))
+
+    def to_python(self, value):
+        return value
+
+
+class Time(Field):
+    """Time of day, stored as ``time without time zone``.
+
+    Accepts ``time``, ``datetime`` (truncated), or ``HH:MM`` strings."""
+
+    sql_type = "time"
+    python_type = _time
+
+    def column_ddl(self) -> str:
+        null = "" if self.required else " NULL"
+        return f'"{self.column}" time{null}'
+
+    def to_sql_param(self, value):
+        if value is None or value is False or value == "":
+            return None
+        if isinstance(value, _time):
+            return value
+        if isinstance(value, _datetime):
+            return value.time()
+        text = str(value).strip()
+        if len(text) == 5 and text[2] == ":":
+            return _time.fromisoformat(text)
+        return _time.fromisoformat(text)
 
     def to_python(self, value):
         return value

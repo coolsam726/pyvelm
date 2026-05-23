@@ -1,0 +1,170 @@
+{% extends "layouts/main.html" %}
+{% block title %}Signal analytics — pyvelm{% endblock %}
+{% block page_title %}Signal analytics{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="/web/feedback_signals/static/feedback_capture.css">
+
+<div class="max-w-6xl mx-auto space-y-8 py-2">
+    <p class="text-sm text-body-subtle max-w-2xl">
+        Roll-up of stored signals across all feedback intakes.
+        Scores are captured once at submit (or edit) — this page reads them, it does not re-call the LLM.
+    </p>
+
+    {# Summary cards #}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="fs-glass rounded-xl p-4">
+            <p class="text-2xs font-semibold uppercase tracking-wider text-body-subtle">Total stories</p>
+            <p class="text-3xl font-bold text-heading mt-1">{{ snap.total }}</p>
+            <p class="text-xs text-body-subtle mt-1">{{ snap.llm_count }} LLM · {{ snap.lexicon_count }} lexicon</p>
+        </div>
+        <div class="fs-glass rounded-xl p-4">
+            <p class="text-2xs font-semibold uppercase tracking-wider text-body-subtle">Avg sentiment</p>
+            <p class="text-3xl font-bold text-heading mt-1">
+                {% if snap.avg_sentiment is not none %}{{ "%+.2f"|format(snap.avg_sentiment) }}{% else %}—{% endif %}
+            </p>
+            <p class="text-xs text-body-subtle mt-1">−1 unhappy → +1 happy</p>
+        </div>
+        <div class="fs-glass rounded-xl p-4">
+            <p class="text-2xs font-semibold uppercase tracking-wider text-body-subtle">Avg mood noise</p>
+            <p class="text-3xl font-bold text-heading mt-1">
+                {% if snap.avg_mood_noise is not none %}{{ snap.avg_mood_noise }}{% else %}—{% endif %}
+            </p>
+            <p class="text-xs text-body-subtle mt-1">{{ snap.high_mood_noise }} high (≥0.55)</p>
+        </div>
+        <div class="fs-glass rounded-xl p-4">
+            <p class="text-2xs font-semibold uppercase tracking-wider text-body-subtle">Tone split</p>
+            <p class="text-lg font-semibold text-heading mt-1">
+                <span class="text-fg-danger">{{ snap.negative_tone }}↓</span>
+                ·
+                <span class="text-success">{{ snap.positive_tone }}↑</span>
+            </p>
+            <p class="text-xs text-body-subtle mt-1">negative vs positive tone</p>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+        {# Tone breakdown #}
+        <section class="fs-glass rounded-xl p-5 space-y-3">
+            <h2 class="text-sm font-semibold text-heading">Stories by tone</h2>
+            {% if snap.tones %}
+            <ul class="space-y-2">
+                {% for tone, count in snap.tones %}
+                <li>
+                    <div class="flex justify-between text-xs text-body-subtle mb-1">
+                        <span class="capitalize">{{ tone }}</span>
+                        <span>{{ count }}</span>
+                    </div>
+                    <div class="fs-energy-track">
+                        <div class="fs-energy-fill" style="width: {{ (100 * count / snap.total)|round }}%"></div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-sm text-body-subtle">No data yet.</p>
+            {% endif %}
+        </section>
+
+        {# Surface table #}
+        <section class="fs-glass rounded-xl p-5 space-y-3">
+            <h2 class="text-sm font-semibold text-heading">By product area</h2>
+            {% if snap.surfaces %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-2xs uppercase tracking-wider text-body-subtle border-b border-default">
+                            <th class="pb-2 pr-4">Surface</th>
+                            <th class="pb-2 pr-4">Count</th>
+                            <th class="pb-2">Avg mood noise</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for name, count, avg_noise in snap.surfaces %}
+                        <tr class="border-b border-default/50">
+                            <td class="py-2 pr-4 capitalize text-heading">{{ name }}</td>
+                            <td class="py-2 pr-4 text-body">{{ count }}</td>
+                            <td class="py-2 text-body">
+                                {% if avg_noise is not none %}{{ avg_noise }}{% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-sm text-body-subtle">No data yet.</p>
+            {% endif %}
+        </section>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+        <section class="fs-glass rounded-xl p-5">
+            <h2 class="text-sm font-semibold text-heading mb-3">Top emotions</h2>
+            {% if snap.emotions %}
+            <ul class="flex flex-wrap gap-2">
+                {% for em, n in snap.emotions %}
+                <li class="text-xs px-2.5 py-1 rounded-full bg-brand-softer text-fg-brand capitalize">{{ em }} ({{ n }})</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-sm text-body-subtle">—</p>
+            {% endif %}
+        </section>
+        <section class="fs-glass rounded-xl p-5">
+            <h2 class="text-sm font-semibold text-heading mb-3">Top topics</h2>
+            {% if snap.topics %}
+            <ul class="flex flex-wrap gap-2">
+                {% for tp, n in snap.topics %}
+                <li class="text-xs px-2.5 py-1 rounded-full bg-neutral-secondary text-body capitalize">{{ tp }} ({{ n }})</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-sm text-body-subtle">—</p>
+            {% endif %}
+        </section>
+    </div>
+
+    {# Mood noise alerts #}
+    {% if snap.alerts %}
+    <section class="fs-glass rounded-xl p-5 space-y-3 border-fg-danger/20">
+        <h2 class="text-sm font-semibold text-heading">High mood noise — stars may lie</h2>
+        <p class="text-xs text-body-subtle">These stories disagree strongly with their star ratings. Prioritize narrative over NPS.</p>
+        <ul class="space-y-2">
+            {% for a in snap.alerts %}
+            <li class="text-sm rounded-lg border border-default px-3 py-2 bg-neutral-secondary/40">
+                <a href="/web/views/feedback_signals/feedback_intake/record/{{ a.id }}"
+                   class="font-medium text-fg-brand hover:underline capitalize">{{ a.surface }}</a>
+                <span class="text-body-subtle"> · noise {{ a.mood_noise }}</span>
+                <p class="text-body text-xs mt-1">{{ a.insight }}</p>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    {# Glossary #}
+    <section class="fs-glass rounded-xl p-5 space-y-4">
+        <h2 class="text-sm font-semibold text-heading">What the numbers mean</h2>
+        <dl class="grid md:grid-cols-2 gap-4 text-sm">
+            {% for item in glossary %}
+            <div>
+                <dt class="font-medium text-heading">{{ item.name }}
+                    <span class="text-body-subtle font-normal">({{ item.range }})</span>
+                </dt>
+                <dd class="text-body-subtle mt-1 leading-relaxed">{{ item.meaning }}</dd>
+            </div>
+            {% endfor %}
+        </dl>
+    </section>
+
+    <div class="flex flex-wrap gap-3 text-sm">
+        <a href="/web/views/feedback_signals/feedback_intake.list"
+           class="text-fg-brand hover:underline">All intakes</a>
+        <a href="/web/views/feedback_signals/feedback_intake.graph_tone"
+           class="text-fg-brand hover:underline">Tone chart</a>
+        <a href="/web/views/feedback_signals/feedback_intake.pivot"
+           class="text-fg-brand hover:underline">Surface × tone pivot</a>
+    </div>
+</div>
+{% endblock %}

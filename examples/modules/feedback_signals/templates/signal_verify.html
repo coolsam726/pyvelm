@@ -1,0 +1,120 @@
+{% extends "layouts/main.html" %}
+{% block title %}Verify signals — {{ record.surface }}{% endblock %}
+{% block page_title %}Verify signals{% endblock %}
+{% block page_heading_region %}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="/web/feedback_signals/static/feedback_capture.css">
+
+<div class="fs-capture-root max-w-3xl mx-auto py-6">
+    <div class="fs-capture-bg" aria-hidden="true"></div>
+
+    <div class="fs-glass rounded-2xl p-6 md:p-8 space-y-6 relative z-10">
+        <div>
+            <p class="text-xs font-semibold uppercase tracking-wider text-body-subtle">Intake #{{ record.id }}</p>
+            <h1 class="text-xl md:text-2xl font-bold text-heading mt-1">Teach the analyzer</h1>
+            <p class="text-sm text-body-subtle mt-2 max-w-xl">
+                Confirm or correct the signals below. Verified examples are injected into
+                future LLM prompts (few-shot learning without retraining weights).
+            </p>
+        </div>
+
+        {% if form_error %}
+        <p class="fs-alert-error">{{ form_error }}</p>
+        {% endif %}
+
+        {% if saved %}
+        <p class="fs-alert-success">
+            Saved — this example will guide the next analyses.
+        </p>
+        {% endif %}
+
+        <section class="rounded-xl border border-default bg-neutral-secondary/50 px-4 py-4 space-y-2">
+            <h2 class="text-sm font-semibold text-heading">Their story</h2>
+            <p class="text-xs text-body-subtle">Surface: <span class="font-medium text-heading">{{ record.surface }}</span></p>
+            {% if record.story_goal %}
+            <p class="text-sm"><span class="text-body-subtle">Trying to:</span> {{ record.story_goal }}</p>
+            {% endif %}
+            {% if record.story_outcome %}
+            <p class="text-sm"><span class="text-body-subtle">What happened:</span> {{ record.story_outcome }}</p>
+            {% endif %}
+            {% if record.story_blocker %}
+            <p class="text-sm"><span class="text-body-subtle">Blocker:</span> {{ record.story_blocker }}</p>
+            {% endif %}
+            {% if record.explicit_rating %}
+            <p class="text-sm text-body-subtle">Stars: {{ record.explicit_rating }}/5</p>
+            {% endif %}
+        </section>
+
+        <section class="rounded-xl border border-dashed border-default px-4 py-4">
+            <h2 class="text-sm font-semibold text-heading mb-2">Auto analysis ({{ record.analysis_source or 'pending' }})</h2>
+            <p class="text-sm text-heading">{{ record.insight_summary or '—' }}</p>
+            <p class="text-xs text-body-subtle mt-2">
+                {{ record.tone_label }} · {{ record.emotion_tags or '—' }} · sentiment {{ record.text_sentiment }}
+            </p>
+        </section>
+
+        <form method="post" action="/web/feedback_signals/verify/{{ record.id }}" class="space-y-5">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+
+            <div class="grid gap-4 sm:grid-cols-2">
+                <label class="block space-y-1">
+                    <span class="text-xs font-medium text-body-subtle">Tone</span>
+                    <select name="verified_tone" class="fs-field">
+                        {% for t in tone_choices %}
+                        <option value="{{ t }}" {% if defaults.tone == t %}selected{% endif %}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="block space-y-1">
+                    <span class="text-xs font-medium text-body-subtle">Sentiment (−1 to 1)</span>
+                    <input type="number" step="0.01" min="-1" max="1" name="verified_sentiment"
+                           value="{{ defaults.sentiment }}"
+                           class="fs-field">
+                </label>
+            </div>
+
+            <label class="block space-y-1">
+                <span class="text-xs font-medium text-body-subtle">Emotions (comma-separated)</span>
+                <input type="text" name="verified_emotions" value="{{ defaults.emotions }}"
+                       placeholder="frustration, confusion"
+                       class="fs-field">
+                <span class="text-xs text-body-subtle">Allowed: {{ emotion_hint }}</span>
+            </label>
+
+            <label class="block space-y-1">
+                <span class="text-xs font-medium text-body-subtle">Topics (comma-separated)</span>
+                <input type="text" name="verified_topics" value="{{ defaults.topics }}"
+                       placeholder="billing, support"
+                       class="fs-field">
+                <span class="text-xs text-body-subtle">Allowed: {{ topic_hint }}</span>
+            </label>
+
+            <label class="block space-y-1">
+                <span class="text-xs font-medium text-body-subtle">Operator insight (one sentence)</span>
+                <textarea name="verified_insight" rows="2" class="fs-field">{{ defaults.insight }}</textarea>
+            </label>
+
+            <label class="block space-y-1">
+                <span class="text-xs font-medium text-body-subtle">Notes (optional, not sent to LLM)</span>
+                <textarea name="verified_notes" rows="2" class="fs-field">{{ record.verified_notes or '' }}</textarea>
+            </label>
+
+            <div class="flex flex-wrap gap-3 pt-2">
+                <button type="submit" name="action" value="save"
+                        class="inline-flex px-4 py-2 text-sm font-medium text-white rounded-lg bg-fg-brand hover:opacity-90">
+                    Save correction
+                </button>
+                <button type="submit" name="action" value="approve"
+                        class="inline-flex px-4 py-2 text-sm font-medium rounded-lg border border-default hover:bg-neutral-secondary">
+                    Approve auto signals
+                </button>
+                <a href="/web/feedback_signals/review"
+                   class="inline-flex px-4 py-2 text-sm font-medium text-body-subtle hover:text-heading">
+                    Back to queue
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

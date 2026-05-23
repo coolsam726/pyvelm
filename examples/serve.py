@@ -10,7 +10,13 @@ Requires PYVELM_DSN (copy .env.example to .env). Default mode is
 
 Open http://localhost:8000/login — admin / admin.
 
-Sidebar **Vellum demo** (notes, comments, soft deletes) loads with this server.
+Sidebar **Vellum demo** (notes, comments, soft deletes) and **Feedback signals**
+(narrative-first feedback analysis) load with this server.
+
+**Date / datetime / time pickers** are on example forms — open any record in
+**CRM → All Leads**, **Partners**, **Feedback intakes**, or **Vellum demo → Demo notes**
+and click Edit. **Date** uses the Flowbite calendar; **Datetime** opens one popup
+(calendar + time); **Time** is a styled time input.
 
 Vellum smoke test (same module roots, no full DB wipe)::
 
@@ -56,9 +62,14 @@ def _build_app(*, runtime_env: str | None = None):
         print("Loaded modules:", [s.name for s in specs])
 
     pool = ConnectionPool(dsn, min_size=1, max_size=4, open=True)
-    return create_app(
+    app = create_app(
         reg, pool, module_roots=MODULE_ROOTS, runtime_env=env_mode,
     )
+    app.state.pool = pool
+    from feedback_signals.web import register_routes
+
+    register_routes(app)
+    return app
 
 
 app = _build_app(runtime_env=default_serve_env(from_cli=False))

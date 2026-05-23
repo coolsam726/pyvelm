@@ -5,22 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Sign in — pyvelm</title>
 
-    {# Apply saved theme before paint to avoid FOUC. #}
-    <script>
-        (function () {
-            var t = localStorage.getItem('pyvelm-theme');
-            if (t === 'dark' ||
-                (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-            }
-        })();
-    </script>
+    {% include "layouts/_head_init.html" %}
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
           rel="stylesheet">
     <link rel="stylesheet" href="/web/static/dist/pyvelm.css">
+    {% include "layouts/_head_theme.html" %}
 </head>
 <body class="bg-neutral-secondary text-body min-h-screen flex items-center justify-center font-sans antialiased">
 <div class="w-full max-w-sm px-6">

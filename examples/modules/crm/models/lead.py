@@ -1,4 +1,4 @@
-from pyvelm import BaseModel, Boolean, Char, Float, Integer, Many2one, depends
+from pyvelm import BaseModel, Boolean, Char, Date, Datetime, Float, Integer, Many2one, Time, depends
 
 
 class Lead(BaseModel):
@@ -12,6 +12,9 @@ class Lead(BaseModel):
     expected_revenue = Float(string="Expected Revenue (k€)")
     probability = Integer(string="Probability %")
     salesperson = Char(string="Salesperson")
+    expected_close = Date(string="Expected close")
+    next_contact_at = Datetime(string="Next contact")
+    preferred_call_time = Time(string="Best time to call")
     active = Boolean(default=True)
     company_id = Many2one("res.company", ondelete="SET NULL")
 

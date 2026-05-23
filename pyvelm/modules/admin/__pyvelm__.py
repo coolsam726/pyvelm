@@ -6,6 +6,7 @@ AUTHOR: str = "pyvelm"
 DEPENDS: list[str] = ["base"]
 DATA: list[str] = [
     "views/acl.py",
+    "views/dashboard.py",
     "views/menu.py",
 ]
 INSTALL_HOOK: str = "admin.hooks:install"

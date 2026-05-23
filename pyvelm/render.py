@@ -43,6 +43,7 @@ from .fields import (
     Monetary,
     One2many,
     Text,
+    Time,
     spec_readonly,
 )
 
@@ -1036,34 +1037,23 @@ def _edit_float(value, spec, field):
 
 @widget(Date, mode="edit")
 def _edit_date(value, spec, field):
-    val_attr = ""
-    if value is not None:
-        val_attr = escape(
-            value.isoformat() if hasattr(value, "isoformat") else str(value)
-        )
-    return Markup(
-        f'<input type="date" name="{escape(spec["name"])}" value="{val_attr}" '
-        f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
-    )
+    from pyvelm.widgets.datetime_pickers import render_date_picker
+
+    return render_date_picker(value, spec, field)
 
 
 @widget(Datetime, mode="edit")
 def _edit_datetime(value, spec, field):
-    val_attr = ""
-    if value is not None and hasattr(value, "strftime"):
-        # HTML <input type="datetime-local"> wants ISO without timezone
-        # and minute precision. The DB stores naive UTC; we shift to
-        # the active company's tz so what the user sees and types is
-        # local time. The parse side reverses the shift.
-        local = _utc_to_local(value, _spec_env(spec)) or value
-        val_attr = escape(local.strftime("%Y-%m-%dT%H:%M"))
-    elif value is not None:
-        val_attr = escape(str(value))
-    return Markup(
-        f'<input type="datetime-local" name="{escape(spec["name"])}" '
-        f'value="{val_attr}" '
-        f'class="{_INPUT_CLS}"{_readonly_marker(spec)}{_required_marker(field)}>'
-    )
+    from pyvelm.widgets.datetime_pickers import render_datetime_picker
+
+    return render_datetime_picker(value, spec, field, env=_spec_env(spec))
+
+
+@widget(Time, mode="edit")
+def _edit_time(value, spec, field):
+    from pyvelm.widgets.datetime_pickers import render_time_picker
+
+    return render_time_picker(value, spec, field)
 
 
 @widget(Monetary, mode="edit")
@@ -1253,6 +1243,33 @@ def _edit_image(value, spec, field):
     return _render_image_widget(value, spec, readonly=bool(spec.get("readonly")))
 
 
+# ---- color widget (Char-backed hex for company themes) ----
+
+
+def _render_color_widget(value, spec, readonly: bool) -> Markup:
+    partial = _env.get_template("widgets/color.html")
+    return Markup(
+        partial.render(
+            name=spec["name"],
+            value=value or "",
+            value_json=json.dumps(value or ""),
+            readonly=readonly,
+        )
+    )
+
+
+@widget(Char, hint="color")
+@widget(Text, hint="color")
+def _display_color(value, spec, field):
+    return _render_color_widget(value, spec, readonly=True)
+
+
+@widget(Char, hint="color", mode="edit")
+@widget(Text, hint="color", mode="edit")
+def _edit_color(value, spec, field):
+    return _render_color_widget(value, spec, readonly=bool(spec.get("readonly")))
+
+
 # ---- attachment widget (field-less; addressed by res_model + res_id) ----
 
 
@@ -1311,6 +1328,33 @@ _env = jinja2.Environment(
     trim_blocks=True,
     lstrip_blocks=True,
 )
+
+from pyvelm.icons import register_jinja_globals as _register_icon_globals
+
+
+def register_shell_globals(jinja_env) -> None:
+    """Register shared Jinja globals for framework and module template envs."""
+    _register_icon_globals(jinja_env)
+    jinja_env.globals.setdefault("company_primary_color", "")
+    jinja_env.globals.setdefault("company_theme_style", "")
+
+
+register_shell_globals(_env)
+
+
+def merge_template_context(
+    env, current_path: str | None = None, **extra
+) -> dict:
+    """Merge layout shell + company theme for any Jinja template render."""
+    ctx = layout_context(env, current_path) if env is not None else {}
+    if env is not None:
+        ctx.update(extra)
+        return ctx
+    from pyvelm.theme import company_theme_context
+
+    ctx = company_theme_context(None)
+    ctx.update(extra)
+    return ctx
 
 
 def _enrich_specs_for_edit(env, model_cls, fields_spec) -> list[dict]:
@@ -1430,6 +1474,22 @@ def _build_rows(view, recordset, fields_spec) -> list[dict]:
     return out
 
 
+def _field_spec_name(spec) -> str:
+    return spec if isinstance(spec, str) else spec["name"]
+
+
+def _filter_fields_spec(fields_spec, column_names: list[str] | None) -> list:
+    """Return a subset of field specs in ``column_names`` order."""
+    if not column_names:
+        return list(fields_spec)
+    by_name = {_field_spec_name(s): s for s in fields_spec}
+    out = []
+    for name in column_names:
+        if name in by_name:
+            out.append(by_name[name])
+    return out
+
+
 def _field_headers(model_cls, fields_spec) -> list[dict]:
     """Build the table-header list, enriched with the metadata the
     central search-bar dropdown needs to pick a per-field filter UI.
@@ -1474,6 +1534,7 @@ def _field_headers(model_cls, fields_spec) -> list[dict]:
                 "filter_kind": filter_kind,
                 "group_kind": group_kind,
                 "comodel": comodel,
+                "visible_default": spec.get("visible", True) is not False,
             }
         )
     return out
@@ -1513,7 +1574,9 @@ def render_new_row(view, env) -> str:
     return template.render(view=view, row={"id": None, "cells": cells})
 
 
-_O2M_NESTED_KEY = re.compile(r"^([a-zA-Z_][\w]*)\[(\d+)\]\[([a-zA-Z_][\w]*)\]$")
+_O2M_NESTED_KEY = re.compile(
+    r"^([a-zA-Z_][\w]*)\[(\d+)\]\[([a-zA-Z_][\w]*)\](?:_(date|time))?$"
+)
 
 
 class _O2mRowView:
@@ -1559,8 +1622,12 @@ def _o2m_bucket_form(
             continue
         idx = int(m.group(2))
         sub = m.group(3)
+        part = m.group(4)
         sub_field = co_cls._fields.get(sub)
         bucket = by_idx.setdefault(idx, {})
+        if isinstance(sub_field, Datetime) and part in ("date", "time"):
+            bucket[f"{sub}_{part}"] = form_data[key]
+            continue
         if isinstance(sub_field, Many2many):
             posted = (
                 form_data.getlist(key)
@@ -1668,15 +1735,10 @@ def _parse_scalar(field, raw, env=None):
             return (int(raw), None)
         if isinstance(field, Datetime):
             dt = field.to_sql_param(raw)
-            # User-typed datetime is in the active company's tz; shift
-            # it to UTC for storage and drop tzinfo to match the naive-
-            # UTC column convention.
-            if dt is not None and env is not None and dt.tzinfo is None:
-                tz = _active_tz(env)
-                if tz is not _UTC:
-                    dt = dt.replace(tzinfo=tz).astimezone(_UTC).replace(tzinfo=None)
-            return (dt, None)
+            return (_localize_datetime_for_storage(dt, env), None)
         if isinstance(field, Date):
+            return (field.to_sql_param(raw), None)
+        if isinstance(field, Time):
             return (field.to_sql_param(raw), None)
         return (raw, None)
     except (TypeError, ValueError):
@@ -1690,7 +1752,38 @@ def _parse_scalar(field, raw, env=None):
             return (None, "Must be a date (YYYY-MM-DD).")
         if isinstance(field, Datetime):
             return (None, "Must be a datetime.")
+        if isinstance(field, Time):
+            return (None, "Must be a time (HH:MM).")
         return (None, "Invalid value.")
+
+
+def _localize_datetime_for_storage(dt, env):
+    """Shift user-local naive datetimes to naive UTC for storage."""
+    if dt is not None and env is not None and dt.tzinfo is None:
+        tz = _active_tz(env)
+        if tz is not _UTC:
+            return dt.replace(tzinfo=tz).astimezone(_UTC).replace(tzinfo=None)
+    return dt
+
+
+def _parse_datetime_field(
+    form_data, fname: str, field: Datetime, *, env
+) -> tuple[Any, str | None]:
+    """Parse a Datetime from one ``datetime-local`` value or legacy split fields."""
+    from pyvelm.widgets.datetime_pickers import combine_datetime_form_values
+
+    combined, err = combine_datetime_form_values(form_data, fname, env=env)
+    if err:
+        return None, err
+    if combined is None:
+        if getattr(field, "required", False):
+            return None, "This field is required."
+        return None, None
+    try:
+        dt = field.to_sql_param(combined)
+        return (_localize_datetime_for_storage(dt, env), None)
+    except (TypeError, ValueError):
+        return None, "Must be a datetime."
 
 
 def harvest_o2m_commands(model_cls, form_data, env) -> tuple[dict, dict]:
@@ -1744,11 +1837,27 @@ def harvest_o2m_commands(model_cls, form_data, env) -> tuple[dict, dict]:
                 continue
             child_vals: dict = {}
             had_error = False
-            for sub_name, sub_raw in raw.items():
+            for sub_name in list(raw.keys()):
+                if sub_name.endswith("_date") or sub_name.endswith("_time"):
+                    base = sub_name.rsplit("_", 1)[0]
+                    if isinstance(co_cls._fields.get(base), Datetime):
+                        continue
+                sub_raw = raw[sub_name]
                 sub_field = co_cls._fields.get(sub_name)
                 if sub_field is None or not sub_field.is_stored:
                     continue
-                value, err = _parse_scalar(sub_field, sub_raw, env)
+                if isinstance(sub_field, Datetime) and (
+                    f"{sub_name}_date" in raw or f"{sub_name}_time" in raw
+                ):
+                    mini = {
+                        f"{sub_name}_date": raw.get(f"{sub_name}_date", ""),
+                        f"{sub_name}_time": raw.get(f"{sub_name}_time", ""),
+                    }
+                    value, err = _parse_datetime_field(
+                        mini, sub_name, sub_field, env=env
+                    )
+                else:
+                    value, err = _parse_scalar(sub_field, sub_raw, env)
                 if err:
                     errors[f"{oname}[{idx}][{sub_name}]"] = err
                     had_error = True
@@ -1841,6 +1950,17 @@ def parse_form_vals(model_cls, form_data, env=None) -> tuple[dict, dict]:
             is_vellum_timestamp_field = lambda _c, _f: False  # noqa: E731
         if is_vellum_timestamp_field(model_cls, fname):
             continue
+        if isinstance(field, Datetime) and (
+            fname in form_data
+            or f"{fname}_date" in form_data
+            or f"{fname}_time" in form_data
+        ):
+            parsed, err = _parse_datetime_field(form_data, fname, field, env=env)
+            if err:
+                errors[fname] = err
+            else:
+                vals[fname] = parsed
+            continue
         if fname not in form_data:
             continue
         if isinstance(field, Boolean):
@@ -1869,18 +1989,9 @@ def parse_form_vals(model_cls, form_data, env=None) -> tuple[dict, dict]:
                 vals[fname] = float(raw)
             elif isinstance(field, Many2one):
                 vals[fname] = int(raw)
-            elif isinstance(field, Datetime):
-                # HTML datetime-local sends "YYYY-MM-DDTHH:MM"; the
-                # field's to_sql_param accepts ISO 8601 either way.
-                # User-typed value is in the active company's tz —
-                # shift to UTC for storage (when env is available).
-                dt = field.to_sql_param(raw)
-                if dt is not None and env is not None and dt.tzinfo is None:
-                    tz = _active_tz(env)
-                    if tz is not _UTC:
-                        dt = dt.replace(tzinfo=tz).astimezone(_UTC).replace(tzinfo=None)
-                vals[fname] = dt
             elif isinstance(field, Date):
+                vals[fname] = field.to_sql_param(raw)
+            elif isinstance(field, Time):
                 vals[fname] = field.to_sql_param(raw)
             else:
                 vals[fname] = raw
@@ -1895,6 +2006,8 @@ def parse_form_vals(model_cls, form_data, env=None) -> tuple[dict, dict]:
                 errors[fname] = "Must be a date (YYYY-MM-DD)."
             elif isinstance(field, Datetime):
                 errors[fname] = "Must be a datetime."
+            elif isinstance(field, Time):
+                errors[fname] = "Must be a time (HH:MM)."
             else:
                 errors[fname] = "Invalid value."
     from .vellum.fillable import filter_mass_assignment
@@ -2605,6 +2718,106 @@ def _format_group_label(value, fname: str, trunc: str | None, model_cls) -> str:
     return str(value)
 
 
+def _parse_view_ref(ref, default_module: str) -> tuple[str, str]:
+    """Resolve ``view`` / ``("module", "name")`` widget references."""
+    if isinstance(ref, (list, tuple)) and len(ref) >= 2:
+        return str(ref[0]), str(ref[1])
+    if not isinstance(ref, str):
+        raise ValueError(f"view ref must be str or (module, name), got {ref!r}")
+    if "/" in ref:
+        mod, name = ref.split("/", 1)
+        return mod, name
+    return default_module, ref
+
+
+def _find_ui_view(env, module: str, name: str, view_type: str | None = None):
+    if "ir.ui.view" not in env.registry:
+        return None
+    domain = [("module", "=", module), ("name", "=", name)]
+    if view_type:
+        domain.append(("view_type", "=", view_type))
+    recs = env["ir.ui.view"].search(domain, limit=1)
+    return recs if recs else None
+
+
+def _graph_chart_data(
+    env,
+    *,
+    model: str,
+    groupby: str,
+    measure: str = "__count",
+    chart: str = "bar",
+    domain: list | None = None,
+    search: str = "",
+    filters: str = "",
+    stacked: bool = False,
+    horizontal: bool = False,
+) -> dict:
+    """Aggregate one measure by one groupby field for chart rendering."""
+    model_cls = env.registry[model]
+    Model = env[model]
+    groupby_spec = groupby
+    measure_spec = measure or "__count"
+    chart_type = chart or "bar"
+    static_domain = list(domain or [])
+
+    pseudo_fields_spec = [
+        {"name": n} for n, f in model_cls._fields.items() if f.is_stored
+    ]
+    full_domain = list(static_domain)
+    if search:
+        full_domain.extend(_build_search_domain(model_cls, pseudo_fields_spec, search))
+    if filters:
+        full_domain.extend(_parse_filters(model_cls, pseudo_fields_spec, filters))
+
+    rows = Model.read_group(
+        full_domain,
+        groupby=[groupby_spec],
+        measures=[measure_spec],
+    )
+
+    if ":" in groupby_spec:
+        gfname, gtrunc = groupby_spec.split(":", 1)
+    else:
+        gfname, gtrunc = groupby_spec, None
+    label_key = f"{groupby_spec}__label"
+
+    labels: list[str] = []
+    values: list[float] = []
+    for r in rows:
+        raw = r.get(groupby_spec)
+        if label_key in r and r[label_key] is not None:
+            label = str(r[label_key])
+        else:
+            label = _format_group_label(raw, gfname, gtrunc, model_cls)
+        labels.append(label)
+        v = r.get(measure_spec, 0)
+        try:
+            values.append(float(v or 0))
+        except (TypeError, ValueError):
+            values.append(0.0)
+
+    if measure_spec == "__count":
+        measure_label = "Count"
+    else:
+        mfname = measure_spec.split(":", 1)[0]
+        mf = model_cls._fields.get(mfname)
+        base_label = (mf.string if mf and mf.string else mfname) if mf else mfname
+        agg = measure_spec.split(":", 1)[1] if ":" in measure_spec else "sum"
+        measure_label = f"{base_label} ({agg})"
+
+    return {
+        "chart_type": chart_type,
+        "labels": labels,
+        "values": values,
+        "measure_label": measure_label,
+        "stacked": stacked,
+        "horizontal": horizontal,
+        "groupby": groupby_spec,
+        "measure": measure_spec,
+    }
+
+
 def render_graph_page(
     view,
     env,
@@ -2634,75 +2847,21 @@ def render_graph_page(
     chart_type = arch.get("chart", "bar")
     static_domain = list(arch.get("domain") or [])
 
-    model_cls = env.registry[view.model]
-    Model = env[view.model]
-
-    # The graph page doesn't ship the full chip-style filter UI yet, so
-    # we synthesize a `fields_spec` listing every stored field on the
-    # model. This keeps the existing helpers happy and lets free-text
-    # search hit the model's Char/Text columns naturally.
-    pseudo_fields_spec = [
-        {"name": n} for n, f in model_cls._fields.items() if f.is_stored
-    ]
-    domain = list(static_domain)
-    if search:
-        domain.extend(_build_search_domain(model_cls, pseudo_fields_spec, search))
-    if filters:
-        domain.extend(_parse_filters(model_cls, pseudo_fields_spec, filters))
-
-    rows = Model.read_group(
-        domain,
-        groupby=[groupby_spec],
-        measures=[measure_spec],
+    chart_data = _graph_chart_data(
+        env,
+        model=view.model,
+        groupby=groupby_spec,
+        measure=measure_spec,
+        chart=chart_type,
+        domain=static_domain,
+        search=search,
+        filters=filters,
+        stacked=bool(arch.get("stacked")),
+        horizontal=bool(arch.get("horizontal")),
     )
-
-    # Trunc / field name resolution mirrors read_group's parsing.
-    if ":" in groupby_spec:
-        gfname, gtrunc = groupby_spec.split(":", 1)
-    else:
-        gfname, gtrunc = groupby_spec, None
-    label_key = f"{groupby_spec}__label"  # only set for M2o groupbys
-
-    labels: list[str] = []
-    values: list[float] = []
-    for r in rows:
-        raw = r.get(groupby_spec)
-        if label_key in r and r[label_key] is not None:
-            label = str(r[label_key])
-        else:
-            label = _format_group_label(raw, gfname, gtrunc, model_cls)
-        labels.append(label)
-        v = r.get(measure_spec, 0)
-        # `count` results come back as ints, everything else as float
-        # or Decimal — coerce to float for JSON friendliness.
-        try:
-            values.append(float(v or 0))
-        except (TypeError, ValueError):
-            values.append(0.0)
-
-    # Measure label for axis / legend display. Fall back to the raw
-    # measure spec when the field doesn't carry a `string` attr.
-    if measure_spec == "__count":
-        measure_label = "Count"
-    else:
-        mfname = measure_spec.split(":", 1)[0]
-        mf = model_cls._fields.get(mfname)
-        base_label = (mf.string if mf and mf.string else mfname) if mf else mfname
-        agg = measure_spec.split(":", 1)[1] if ":" in measure_spec else "sum"
-        measure_label = f"{base_label} ({agg})"
+    n_groups = len(chart_data["labels"])
 
     page_title = _view_title(view, arch)
-    chart_data = {
-        "chart_type": chart_type,
-        "labels": labels,
-        "values": values,
-        "measure_label": measure_label,
-        "stacked": bool(arch.get("stacked")),
-        "horizontal": bool(arch.get("horizontal")),
-        # current selections (for toolbar initialisation)
-        "groupby": groupby_spec,
-        "measure": measure_spec,
-    }
 
     # Build field lists for toolbar dropdowns.
     from .fields import Boolean, Date, Datetime, Float, Integer, Many2one
@@ -2744,7 +2903,7 @@ def render_graph_page(
         search=search,
         filters=filters,
         page_title=page_title,
-        subtitle=f"{len(rows)} group{'s' if len(rows) != 1 else ''}",
+        subtitle=f"{n_groups} group{'s' if n_groups != 1 else ''}",
         view_switcher=_other_views_for_model(env, view),
         groupable_fields=groupable_fields,
         measurable_fields=measurable_fields,
@@ -3538,6 +3697,80 @@ def render_list_rows(
     )
 
 
+def _load_account_user(env):
+    """Return the signed-in ``res.users`` row (ACL bypass for self-service)."""
+    prev = env._acl_bypass
+    env._acl_bypass = True
+    try:
+        user = env["res.users"].browse(env.uid)
+        if not env["res.users"].search([("id", "=", env.uid)]):
+            return None
+        return user
+    finally:
+        env._acl_bypass = prev
+
+
+def _account_profile_context(user) -> dict:
+    company_name = ""
+    if user.company_id:
+        company_name = user.company_id.name or ""
+    groups = [g.name for g in user.group_ids] if user.group_ids else []
+    return {
+        "name": user.name or "",
+        "login": user.login or "",
+        "company_name": company_name,
+        "groups": groups,
+        "avatar_widget": _render_image_widget(
+            user.avatar_url or "",
+            {"name": "avatar_url"},
+            readonly=False,
+        ),
+    }
+
+
+def _account_layout_context(
+    env, current_path: str | None = None, *, leaf_label: str | None = None
+) -> dict:
+    """Shell context for account pages — top bar only, no admin sidebar."""
+    ctx = layout_context(env, current_path, leaf_label)
+    # Account URLs are outside the menu tree — skip menu-derived crumbs.
+    ctx["breadcrumbs"] = []
+    ctx["use_sidebar"] = False
+    return ctx
+
+
+def render_account_profile_page(
+    env,
+    *,
+    current_path: str | None = None,
+    error: str = "",
+    success: bool = False,
+    form_overrides: dict | None = None,
+) -> str:
+    """Self-service profile editor (name + avatar) for the signed-in user."""
+    user = _load_account_user(env)
+    if user is None:
+        raise ValueError("No signed-in user")
+    ctx = _account_profile_context(user)
+    if form_overrides:
+        for key in ("name",):
+            if key in form_overrides:
+                ctx[key] = form_overrides[key]
+        if "avatar_url" in form_overrides:
+            ctx["avatar_widget"] = _render_image_widget(
+                form_overrides["avatar_url"] or "",
+                {"name": "avatar_url"},
+                readonly=False,
+            )
+    template = _env.get_template("account_profile.html")
+    return template.render(
+        error=error,
+        success=success,
+        **ctx,
+        **_account_layout_context(env, current_path, leaf_label="My profile"),
+    )
+
+
 def render_password_page(
     env, *, current_path: str | None = None, error: str = "", success: bool = False
 ) -> str:
@@ -3549,7 +3782,7 @@ def render_password_page(
     return template.render(
         error=error,
         success=success,
-        **layout_context(env, current_path),
+        **_account_layout_context(env, current_path, leaf_label="Change password"),
     )
 
 
@@ -3586,17 +3819,222 @@ def render_login_page(
     next: str = "",
     prefill_login: str = "",
     csrf_token: str = "",
+    env=None,
 ) -> str:
+    from pyvelm.theme import company_theme_context
+
     template = _env.get_template("login.html")
+    ctx = company_theme_context(env) if env is not None else {}
+    ctx.update(
+        {
+            "error": error,
+            "next": next,
+            "prefill_login": prefill_login,
+            "csrf_token": csrf_token,
+        }
+    )
+    return template.render(**ctx)
+
+
+def _format_stat_value(value) -> str:
+    try:
+        n = float(value or 0)
+    except (TypeError, ValueError):
+        return str(value)
+    if n == int(n):
+        return f"{int(n):,}"
+    return f"{n:,.2f}"
+
+
+def _resolve_dashboard_colspan(
+    colspan,
+    grid_columns: int,
+    *,
+    default: int = 1,
+) -> int:
+    """Map widget ``colspan`` (int or ``'full'``) to a grid track count."""
+    if isinstance(colspan, str) and colspan.lower() == "full":
+        return grid_columns
+    try:
+        n = int(colspan if colspan is not None else default)
+    except (TypeError, ValueError):
+        n = default
+    return max(1, min(n, grid_columns))
+
+
+def _materialize_dashboard_widgets(
+    env, widgets: list[dict], source_module: str
+) -> list[dict]:
+    """Turn declarative widget specs into template-ready dicts."""
+    from types import SimpleNamespace
+
+    from .views import resolve_arch
+
+    out: list[dict] = []
+    for raw in widgets:
+        wtype = raw.get("type")
+        wid = raw.get("id") or f"widget_{len(out)}"
+        default_span = 2 if wtype == "chart" else 1
+        colspan = raw.get("colspan", default_span)
+        title = raw.get("title") or ""
+        base = {"type": wtype, "id": wid, "colspan": colspan, "title": title}
+
+        if wtype == "link":
+            out.append({
+                **base,
+                "subtitle": raw.get("subtitle") or "",
+                "description": raw.get("description") or "",
+                "url": raw.get("url") or "#",
+            })
+            continue
+
+        if wtype == "stat":
+            model = raw["model"]
+            domain = list(raw.get("domain") or [])
+            measure = raw.get("measure") or "__count"
+            Model = env[model]
+            if measure == "__count":
+                value = Model.search_count(domain)
+            else:
+                rows = Model.read_group(domain, groupby=[], measures=[measure])
+                value = rows[0].get(measure, 0) if rows else 0
+            out.append({
+                **base,
+                "value_display": _format_stat_value(value),
+                "href": raw.get("href"),
+            })
+            continue
+
+        if wtype == "chart":
+            view_ref = raw.get("view")
+            if view_ref:
+                mod, vname = _parse_view_ref(view_ref, source_module)
+                gv = _find_ui_view(env, mod, vname, "graph")
+                if not gv:
+                    out.append({**base, "error": f"Graph view {mod}/{vname} not found"})
+                    continue
+                garch = resolve_arch(gv)
+                model = gv.model
+                groupby = garch["groupby"]
+                measure = garch.get("measure") or "__count"
+                chart = garch.get("chart", "bar")
+                domain = list(garch.get("domain") or [])
+                if not title:
+                    title = _view_title(gv, garch)
+            else:
+                model = raw["model"]
+                groupby = raw["groupby"]
+                measure = raw.get("measure") or "__count"
+                chart = raw.get("chart", "bar")
+                domain = list(raw.get("domain") or [])
+            try:
+                chart_data = _graph_chart_data(
+                    env,
+                    model=model,
+                    groupby=groupby,
+                    measure=measure,
+                    chart=chart,
+                    domain=domain,
+                )
+                out.append({**base, "title": title, "chart_data": chart_data})
+            except Exception as exc:
+                out.append({**base, "error": str(exc)})
+            continue
+
+        if wtype == "table":
+            view_ref = raw.get("view")
+            list_mod = source_module
+            list_name = ""
+            more_href = raw.get("more_href")
+            if view_ref:
+                list_mod, list_name = _parse_view_ref(view_ref, source_module)
+                lv = _find_ui_view(env, list_mod, list_name, "list")
+                if not lv:
+                    out.append({**base, "error": f"List view {list_mod}/{list_name} not found"})
+                    continue
+                larch = resolve_arch(lv)
+                model = lv.model
+                fields_spec = list(larch.get("fields") or [])
+                if not title:
+                    title = _view_title(lv, larch)
+                if not more_href:
+                    more_href = f"/web/views/{list_mod}/{list_name}"
+            else:
+                model = raw["model"]
+                fields_spec = list(raw.get("fields") or [])
+            column_names = raw.get("columns")
+            if column_names:
+                fields_spec = _filter_fields_spec(fields_spec, list(column_names))
+            domain = list(raw.get("domain") or [])
+            limit = int(raw.get("limit") or 10)
+            model_cls = env.registry[model]
+            fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
+            headers = _field_headers(model_cls, fields_spec)
+            safe_ord = _safe_order(fields_spec, raw.get("order") or "")
+            recs = env[model].search(domain, limit=limit, order=safe_ord)
+            pseudo = SimpleNamespace(
+                model=model, module=list_mod, name=list_name or "inline"
+            )
+            rows = _build_rows(pseudo, recs, fields_spec)
+            out.append({
+                **base,
+                "title": title,
+                "headers": headers,
+                "rows": rows,
+                "more_href": more_href,
+            })
+            continue
+
+        out.append({**base, "error": f"Unknown widget type {wtype!r}"})
+    return out
+
+
+def render_dashboard_page(
+    view,
+    env,
+    *,
+    current_path: str | None = None,
+) -> str:
+    """Render a declarative dashboard from ``view_type="dashboard"`` arch."""
+    from .views import resolve_arch
+
+    arch = resolve_arch(view)
+    page_title = arch.get("title") or _view_title(view, arch)
+    subtitle = arch.get("subtitle") or ""
+    grid_columns = max(1, min(6, int(arch.get("columns") or 2)))
+    widgets = _materialize_dashboard_widgets(
+        env, list(arch.get("widgets") or []), view.module
+    )
+    for w in widgets:
+        w["colspan"] = _resolve_dashboard_colspan(w.get("colspan"), grid_columns)
+    chart_widgets = [
+        w for w in widgets
+        if w.get("type") == "chart" and w.get("chart_data")
+    ]
+    template = _env.get_template("dashboard.html")
+    ctx = layout_context(env, current_path, leaf_label=page_title) if env else {}
     return template.render(
-        error=error,
-        next=next,
-        prefill_login=prefill_login,
-        csrf_token=csrf_token,
+        page_title=page_title,
+        subtitle=subtitle,
+        grid_columns=grid_columns,
+        widgets=widgets,
+        chart_widgets=chart_widgets,
+        **ctx,
     )
 
 
 def render_admin_page(env=None, current_path: str | None = None) -> str:
+    if env is not None and "ir.ui.view" in env.registry:
+        dash = env["ir.ui.view"].search(
+            [
+                ("module", "=", "admin"),
+                ("name", "=", "home"),
+                ("view_type", "=", "dashboard"),
+            ],
+            limit=1,
+        )
+        if dash:
+            return render_dashboard_page(dash, env, current_path=current_path)
     cards = [
         {
             "title": "Groups",
@@ -4140,6 +4578,12 @@ STATIC_DIR = Path(__file__).parent / "static"
 # individual renderers don't have to re-build it.
 
 
+def _resolve_menu_icon(icon: str | None):
+    from pyvelm.icons import resolve_icon
+
+    return resolve_icon(icon)
+
+
 def _menu(env, current_path: str | None) -> list[dict]:
     """Build the sidebar menu tree from `ir.ui.menu`.
 
@@ -4179,7 +4623,7 @@ def _menu(env, current_path: str | None) -> list[dict]:
             entry = {
                 "label": r.label,
                 "href": r.href or None,
-                "icon": Markup(r.icon) if r.icon else None,
+                "icon": _resolve_menu_icon(r.icon),
                 "children": [],
             }
             parent_id = r.parent_id.id if r.parent_id else None
@@ -4335,6 +4779,8 @@ def layout_context(
         finally:
             bypass_env._acl_bypass = False
 
+    from pyvelm.theme import company_theme_context
+
     menu_tree = _menu(env, current_path)
     return {
         "menu": menu_tree,
@@ -4345,6 +4791,7 @@ def layout_context(
         "companies": companies,
         "current_company_id": env.company_id,
         "current_company_name": current_company_name,
+        **company_theme_context(env),
         # Default crumbs derived from the menu. Pages that want a
         # different leaf label (e.g. the record name on a form view)
         # pass `leaf_label`; renderers can override `breadcrumbs`

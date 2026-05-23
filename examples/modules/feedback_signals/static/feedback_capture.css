@@ -1,0 +1,216 @@
+/* Feedback signals — demo polish using pyvelm theme tokens only. */
+
+.fs-capture-root {
+  --fs-glow: color-mix(in srgb, var(--color-fg-brand) 28%, transparent);
+  position: relative;
+  isolation: isolate;
+}
+
+.fs-capture-bg {
+  position: absolute;
+  inset: -2rem -1rem auto;
+  height: 20rem;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      ellipse 80% 60% at 15% 20%,
+      var(--fs-glow),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 70% 50% at 85% 10%,
+      color-mix(in srgb, var(--color-brand-medium) 20%, transparent),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 50% 90%,
+      color-mix(in srgb, var(--color-teal) 12%, transparent),
+      transparent 70%
+    );
+  opacity: 0.85;
+}
+
+/* Same surface language as dashboard / list pages */
+.fs-glass {
+  position: relative;
+  z-index: 1;
+  background: var(--color-neutral-primary);
+  border: 1px solid var(--color-default);
+  border-radius: var(--radius-xl, 0.75rem);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--color-heading) 5%, transparent),
+    0 4px 16px color-mix(in srgb, var(--color-heading) 4%, transparent);
+}
+
+.fs-step-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 9999px;
+  background: var(--color-neutral-tertiary);
+  transition: transform 0.25s ease, background 0.25s ease, width 0.25s ease;
+}
+
+.fs-step-dot.is-active {
+  width: 1.6rem;
+  background: var(--color-fg-brand);
+}
+
+.fs-step-dot.is-done {
+  background: var(--color-success);
+}
+
+.fs-chip {
+  background: var(--color-neutral-primary);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.fs-chip:hover {
+  transform: translateY(-1px);
+  background: var(--color-neutral-secondary);
+}
+
+.fs-chip.is-selected {
+  border-color: var(--color-fg-brand);
+  box-shadow: 0 0 0 3px var(--fs-glow);
+  background: var(--color-brand-softer);
+}
+
+.fs-story-area {
+  min-height: 5.5rem;
+  resize: vertical;
+  line-height: 1.55;
+  color: var(--color-body);
+}
+
+.fs-story-area::placeholder {
+  color: var(--color-body-subtle);
+}
+
+.fs-energy-track {
+  height: 0.35rem;
+  border-radius: 9999px;
+  background: var(--color-neutral-tertiary);
+  overflow: hidden;
+}
+
+.fs-energy-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--color-fg-brand),
+    var(--color-brand-medium)
+  );
+  transition: width 0.35s ease;
+}
+
+.fs-star-btn {
+  background: var(--color-neutral-primary);
+  color: var(--color-body-subtle);
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.fs-star-btn:hover {
+  transform: scale(1.12);
+  background: var(--color-neutral-secondary);
+}
+
+.fs-star-btn.is-on {
+  transform: scale(1.08);
+  background: var(--color-brand-softer);
+  border-color: var(--color-fg-brand);
+  color: var(--color-fg-brand);
+}
+
+.fs-confetti span {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: fs-confetti-fall 1.4s ease-out forwards;
+}
+
+.fs-confetti-piece--brand {
+  background: var(--color-fg-brand);
+}
+
+.fs-confetti-piece--soft {
+  background: var(--color-brand-medium);
+}
+
+.fs-confetti-piece--accent {
+  background: var(--color-teal);
+}
+
+@keyframes fs-confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(12rem) rotate(540deg);
+  }
+}
+
+.fs-thanks-pop {
+  animation: fs-pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes fs-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.fs-pulse-ring {
+  animation: fs-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes fs-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.04); }
+}
+
+/* Form controls on verify/capture — match login + list focus rings */
+.fs-field {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-default);
+  background: var(--color-neutral-primary);
+  color: var(--color-body);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.fs-field:focus {
+  outline: none;
+  border-color: var(--color-fg-brand);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-fg-brand) 35%, transparent);
+}
+
+.fs-alert-error {
+  font-size: 0.875rem;
+  color: var(--color-fg-danger-strong);
+  background: var(--color-danger-soft);
+  border: 1px solid var(--color-danger-subtle);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+}
+
+.fs-alert-success {
+  font-size: 0.875rem;
+  color: var(--color-fg-success-strong);
+  background: var(--color-success-soft);
+  border: 1px solid var(--color-success-subtle);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+}

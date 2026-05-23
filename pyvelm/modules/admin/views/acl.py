@@ -97,7 +97,7 @@ VIEWS: list[View] = [
 
     # ---- res.company ----
     list_view("company.list", "res.company",
-              fields=["name", "currency_id", "timezone",
+              fields=["name", "currency_id", "timezone", "primary_color",
                       field("active", widget="toggle")]),
 
     form_view("company.form", "res.company",
@@ -106,6 +106,7 @@ VIEWS: list[View] = [
                       "name",
                       "currency_id",
                       "timezone",
+                      field("primary_color", widget="color"),
                       field("active", widget="toggle"),
                   ]),
               ]),

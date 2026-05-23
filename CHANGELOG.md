@@ -7,6 +7,44 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.5.0] — 2026-05-23
+
+Per-company branding, declarative dashboards, date/datetime/time pickers, list
+column picker, account profile, and the Feedback Signals example module. See
+[docs/releases/v0.5.0.md](docs/releases/v0.5.0.md).
+
+### Added
+
+- **Per-company theme** — `res.company.primary_color` (base module **0.19.0**);
+  generates a primary palette and injects CSS overrides after `pyvelm.css` on
+  main, login, and password layouts.
+- **Declarative dashboards** — `dashboard_view`, `chart_widget`, `table_widget`,
+  `stat_widget`, `link_widget`; configurable grid `columns`, `colspan='full'`,
+  table column subsets; Chart.js rendering and admin home dashboard.
+- **Date / datetime / time pickers** — Flowbite inline calendar, combined
+  datetime popup (`pv_datetime_picker.js`), and `Time` field type on forms.
+- **List column visibility** — `field(..., visible=False)` hides columns by
+  default; **Columns** menu toggles fields with per-view `localStorage`.
+- **Account profile** — `/web/account/profile` to edit name, email, and password.
+- **Menu icons** — Heroicons via `heroicons[jinja]`; menu builders accept string
+  icon names (e.g. `icon="square-3-stack-3d"`).
+- **`pyvelm.request_env`** — `apply_request_scope()` binds session uid and
+  `pyvelm_company` cookie for custom module `get_env` handlers.
+- **Color widget** — hex color input on forms (`widget="color"`).
+- **`feedback_signals` example** — narrative feedback capture, optional LLM
+  analysis (Ollama / OpenRouter), lexicon fallback, signal verify UI, analytics
+  dashboard.
+
+### Changed
+
+- **Theme partials** — `_head_init.html` (dark-mode FOUC) and `_head_theme.html`
+  (company overrides); `merge_template_context()` for module Jinja environments.
+
+### Fixed
+
+- Custom module routes that defined their own `get_env` without the company
+  cookie showed the default indigo theme instead of the active company's color.
+
 ## [0.4.0] — 2026-05-22
 
 Visual report builder with drill-down field picker, column formatting, order by,

@@ -11,6 +11,9 @@ class DemoNote(Vellum, BaseModel):
     title = fields.Char(required=True)
     body = fields.Char()
     score = fields.Integer(default=0)
+    publish_on = fields.Date(string="Publish on")
+    event_at = fields.Datetime(string="Event at")
+    standup_at = fields.Time(string="Daily standup")
     comment_ids = fields.One2many("vellum.demo.comment", inverse_name="note_id")
     active = fields.Boolean(default=True)
 

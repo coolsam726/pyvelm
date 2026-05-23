@@ -1,5 +1,5 @@
 NAME: str = "partners"
-VERSION: tuple[int, ...] = (0, 3, 0)
+VERSION: tuple[int, ...] = (0, 4, 0)
 SUMMARY: str = "Companies, contacts, and the partner directory."
 CATEGORY: str = "Business"
 AUTHOR: str = "pyvelm"

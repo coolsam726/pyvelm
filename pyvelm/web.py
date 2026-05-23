@@ -376,26 +376,16 @@ def create_app(
             env._acl_bypass = False
 
     def get_env(request: Request):
+        from pyvelm.request_env import apply_request_scope
+
         with pool.connection() as conn:
             env = Environment(conn, registry=registry, uid=None)
-            # Session cookie takes priority; fall back to HTTP Basic auth.
-            uid = _resolve_user_from_session(env, request.cookies.get(_SESSION_COOKIE))
-            if uid is None:
-                uid = _resolve_user_from_basic(
-                    env, request.headers.get("authorization")
-                )
-            if uid is not None:
-                env.uid = uid
-                # Drop caches keyed on the previous (None) uid.
-                env._user_groups_cache = None  # type: ignore[attr-defined]
-                env._access_cache.clear()
-            # Thread company scope from dedicated cookie.
-            raw_company = request.cookies.get(_COMPANY_COOKIE)
-            if raw_company:
-                try:
-                    env = env.with_company(int(raw_company))
-                except (ValueError, TypeError):
-                    pass  # malformed cookie — ignore; effectively no scope
+            env = apply_request_scope(
+                env,
+                request,
+                resolve_session=_resolve_user_from_session,
+                resolve_basic=_resolve_user_from_basic,
+            )
             yield env
 
     def _load_view(env, module: str, name: str):
@@ -470,10 +460,19 @@ def create_app(
     ):
         if env.uid is None:
             return _login_redirect(request)
-        from .render import render_graph_page, render_kanban_page, render_list_page
+        from .render import (
+            render_dashboard_page,
+            render_graph_page,
+            render_kanban_page,
+            render_list_page,
+        )
 
         rec = _load_view(env, module, name)
         path = str(request.url.path)
+        if rec.view_type == "dashboard":
+            return HTMLResponse(
+                render_dashboard_page(rec, env, current_path=path)
+            )
         if rec.view_type == "list":
             return HTMLResponse(
                 render_list_page(
@@ -2171,6 +2170,66 @@ def create_app(
             )
         )
 
+    # ---- self-service account profile ----
+
+    @app.get("/web/account/profile", response_class=HTMLResponse)
+    def account_profile_page(request: Request, env: Environment = Depends(get_env)):
+        if env.uid is None:
+            return _login_redirect(request)
+        from .render import render_account_profile_page
+
+        return HTMLResponse(
+            render_account_profile_page(
+                env,
+                current_path=str(request.url.path),
+            )
+        )
+
+    @app.post("/web/account/profile", response_class=HTMLResponse)
+    async def account_profile_submit(request: Request, env: Environment = Depends(get_env)):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .render import render_account_profile_page
+
+        form = await request.form()
+        name = (form.get("name") or "").strip()
+        avatar_url = (form.get("avatar_url") or "").strip()
+
+        def reject(msg: str, *, status: int = 422) -> HTMLResponse:
+            return HTMLResponse(
+                render_account_profile_page(
+                    env,
+                    current_path=str(request.url.path),
+                    error=msg,
+                    form_overrides={"name": name, "avatar_url": avatar_url},
+                ),
+                status_code=status,
+            )
+
+        if not name:
+            return reject("Display name is required.")
+
+        prev = env._acl_bypass
+        env._acl_bypass = True
+        try:
+            with env.transaction():
+                env["res.users"].browse(env.uid).write({
+                    "name": name,
+                    "avatar_url": avatar_url or False,
+                })
+        except (PermissionError, ValueError) as exc:
+            return reject(str(exc) or "Could not update profile.")
+        finally:
+            env._acl_bypass = prev
+
+        return HTMLResponse(
+            render_account_profile_page(
+                env,
+                current_path=str(request.url.path),
+                success=True,
+            )
+        )
+
     # ---- self-service password change ----
 
     @app.get("/web/account/password", response_class=HTMLResponse)
@@ -2260,17 +2319,23 @@ def create_app(
 
         # Already authenticated and the token is valid? Skip the login screen.
         token = request.cookies.get(_SESSION_COOKIE)
-        if token:
-            with pool.connection() as conn:
-                env = Environment(conn, registry=registry, uid=None)
-                if _resolve_user_from_session(env, token) is not None:
-                    return RedirectResponse(next or "/web/admin", status_code=302)
-        return HTMLResponse(
-            render_login_page(
-                next=next,
-                csrf_token=request.state.csrf_token,
+        with pool.connection() as conn:
+            env = Environment(conn, registry=registry, uid=None)
+            if token and _resolve_user_from_session(env, token) is not None:
+                return RedirectResponse(next or "/web/admin", status_code=302)
+            raw_co = request.cookies.get(_COMPANY_COOKIE)
+            if raw_co:
+                try:
+                    env = env.with_company(int(raw_co))
+                except (TypeError, ValueError):
+                    pass
+            return HTMLResponse(
+                render_login_page(
+                    next=next,
+                    csrf_token=request.state.csrf_token,
+                    env=env,
+                )
             )
-        )
 
     # ── /login rate limit ──
     # Per-IP sliding window. 5 attempts per 5 minutes; the 6th gets
@@ -2331,12 +2396,20 @@ def create_app(
                     [("login", "=", login_val), ("active", "=", True)], limit=1
                 )
                 if not users or not users.check_password(password_val):
+                    theme_env = env
+                    raw_co = request.cookies.get(_COMPANY_COOKIE)
+                    if raw_co:
+                        try:
+                            theme_env = env.with_company(int(raw_co))
+                        except (TypeError, ValueError):
+                            theme_env = env
                     return HTMLResponse(
                         render_login_page(
                             error="Invalid username or password.",
                             next=next_url,
                             prefill_login=login_val,
                             csrf_token=request.state.csrf_token,
+                            env=theme_env,
                         ),
                         status_code=401,
                     )

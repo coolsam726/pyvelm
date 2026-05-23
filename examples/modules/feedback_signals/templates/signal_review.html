@@ -1,0 +1,49 @@
+{% extends "layouts/main.html" %}
+{% block title %}Review signal queue{% endblock %}
+{% block page_title %}Review signal queue{% endblock %}
+{% block page_heading_region %}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="/web/feedback_signals/static/feedback_capture.css">
+
+<div class="fs-capture-root max-w-3xl mx-auto py-6">
+    <div class="fs-capture-bg" aria-hidden="true"></div>
+    <div class="fs-glass rounded-2xl p-6 md:p-8 relative z-10 space-y-5">
+        <div>
+            <h1 class="text-xl font-bold text-heading">Human review queue</h1>
+            <p class="text-sm text-body-subtle mt-1">
+                {{ pending_count }} intake(s) waiting · {{ verified_count }} verified example(s) for few-shot
+            </p>
+        </div>
+
+        {% if not pending %}
+        <p class="text-sm text-body-subtle rounded-lg border border-default px-4 py-6 text-center">
+            All caught up — no intakes need verification.
+        </p>
+        {% else %}
+        <ul class="divide-y divide-default rounded-xl border border-default overflow-hidden">
+            {% for rec in pending %}
+            <li class="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-4 bg-neutral-secondary/30 hover:bg-neutral-secondary/60">
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-heading truncate">{{ rec.insight_summary or rec.surface }}</p>
+                    <p class="text-xs text-body-subtle mt-0.5">
+                        #{{ rec.id }} · {{ rec.surface }} · {{ rec.analysis_source or 'lexicon' }}
+                        · {{ rec.created_at }}
+                    </p>
+                </div>
+                <a href="/web/feedback_signals/verify/{{ rec.id }}"
+                   class="shrink-0 inline-flex px-3 py-1.5 text-sm font-medium text-white rounded-lg bg-fg-brand hover:opacity-90">
+                    Verify
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div class="flex flex-wrap gap-3 text-sm">
+            <a href="/web/views/feedback_signals/feedback_intake/list" class="text-fg-brand hover:underline">All intakes</a>
+            <a href="/web/feedback_signals/export-training.jsonl" class="text-fg-brand hover:underline">Export training JSONL</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

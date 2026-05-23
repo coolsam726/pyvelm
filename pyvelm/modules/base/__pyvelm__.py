@@ -1,5 +1,5 @@
 NAME: str = "base"
-VERSION: tuple[int, ...] = (0, 18, 0)
+VERSION: tuple[int, ...] = (0, 19, 0)
 SUMMARY: str = "Core models and framework primitives."
 CATEGORY: str = "System"
 AUTHOR: str = "pyvelm"

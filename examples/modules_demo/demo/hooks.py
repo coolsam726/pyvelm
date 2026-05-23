@@ -166,10 +166,13 @@ def _seed_partners(env, tags):
         if existing:
             out[code] = existing
             continue
+        from datetime import date
+
         vals = {
             "name": name,
             "code": code,
             "age": age,
+            "birth_date": date(date.today().year - max(age, 0), 3, 1),
             "country_id": by_code.get(ccode),
             "tag_ids": [tags[t] for t in tag_names if t in tags],
         }
@@ -206,7 +209,9 @@ def _seed_leads(env, partners):
         ("Xi multi-region trial", "CONT-014", "qualified", 1, 88.0, 55, "alice.sales"),
         ("Omicron parts contract", "CONT-015", "lost", 2, 210.0, 0, "bob.sales"),
     ]
-    for name, p_code, stage, prio, rev, prob, sp in lead_specs:
+    from datetime import date, datetime, time, timedelta
+
+    for idx, (name, p_code, stage, prio, rev, prob, sp) in enumerate(lead_specs):
         existing = Lead.search([("name", "=", name)], limit=1)
         if existing:
             continue
@@ -219,6 +224,10 @@ def _seed_leads(env, partners):
             "expected_revenue": rev,
             "probability": prob,
             "salesperson": sp,
+            "expected_close": date.today() + timedelta(days=30 + idx * 4),
+            "next_contact_at": datetime.now().replace(microsecond=0)
+            + timedelta(days=idx % 7, hours=11),
+            "preferred_call_time": time(9 + (idx % 7), 0),
         })
     # Suppress "p_codes unused" warning when the partners dict is empty.
     _ = p_codes

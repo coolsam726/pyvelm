@@ -151,7 +151,7 @@ from pyvelm.builders import Menus
 m = Menus("partners")
 
 MENUS = [
-    m.group("business", "Business", icon=_ICON_GRID, sequence=50),
+    m.group("business", "Business", icon="square-3-stack-3d", sequence=50),
     # parent="business"  →  partners.business
     # view="partner.list"  →  /web/views/partners/partner.list
     m.item("business.partners", "Partners",
@@ -170,6 +170,12 @@ MENUS = [
 | `parent=("admin", "settings")` | `parent` = `admin.settings` |
 | `view="partner.list"` | `href` = `/web/views/partners/partner.list` |
 | `href="/web/apps"` | Use for non-view routes (Dashboard, Apps) |
+| `icon="home"` | [Heroicons](https://heroicons.com) name (outline by default) |
+
+**Menu icons** use the [`heroicons`](https://pypi.org/project/heroicons/) package.
+Pass a kebab-case name on groups and root-level items, e.g. `icon="chart-bar"`.
+Variants: `icon="solid:shield-check"`, `icon="mini:bell"`, `icon="micro:bell"`.
+Legacy inline SVG strings still work if they start with `<svg`.
 
 Low-level `menu_group` / `menu_item` still work with full `href` and
 `parent="partners.business"` if you prefer raw dicts.

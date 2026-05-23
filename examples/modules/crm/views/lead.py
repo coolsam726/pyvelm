@@ -25,6 +25,8 @@ VIEWS: list[View] = [
             field("expected_revenue", label="Revenue (k€)"),
             field("probability", label="Prob %"),
             "salesperson",
+            "expected_close",
+            "next_contact_at",
             "label",
             "active",
         ],
@@ -35,6 +37,11 @@ VIEWS: list[View] = [
         sections=[
             section("main",       "Opportunity", ["name", "partner_id", "stage", "priority"]),
             section("financials", "Financials",  ["expected_revenue", "probability", "salesperson"]),
+            section(
+                "scheduling",
+                "Scheduling (date · datetime popup · time)",
+                ["expected_close", "next_contact_at", "preferred_call_time"],
+            ),
             section("meta",       "Meta",        ["company_id", "active"]),
         ],
     ),

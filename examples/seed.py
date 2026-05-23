@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import random
 import sys
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 import psycopg
@@ -40,6 +41,22 @@ def _upsert_tag(Tag, name: str):
 def _upsert_company(Company, name: str):
     rec = Company.search([("name", "=", name)], limit=1)
     return rec if rec else Company.create({"name": name, "active": True})
+
+
+def _birth_date_for_age(age: int) -> date:
+    """Rough birth date from age — enough for the date picker demo."""
+    year = date.today().year - max(age, 0)
+    return date(year, 6, 15)
+
+
+def _lead_schedule(index: int) -> dict:
+    """Sample date, datetime, and time values for CRM leads."""
+    return {
+        "expected_close": date.today() + timedelta(days=21 + index * 5),
+        "next_contact_at": datetime.now().replace(microsecond=0)
+        + timedelta(days=index % 10, hours=9 + (index % 6)),
+        "preferred_call_time": time(8 + (index % 9), (index * 15) % 60),
+    }
 
 
 def main():
@@ -138,7 +155,9 @@ def main():
         ]
 
         created_partners: dict[str, object] = {}
-        for name, code, age, vip_note, country_key, tag_names, company in PARTNERS_DATA:
+        for idx, (name, code, age, vip_note, country_key, tag_names, company) in enumerate(
+            PARTNERS_DATA
+        ):
             existing = Partner.search([("code", "=", code)], limit=1)
             if existing:
                 created_partners[code] = existing
@@ -147,6 +166,7 @@ def main():
                 "name": name,
                 "code": code,
                 "age": age,
+                "birth_date": _birth_date_for_age(age),
                 **({"vip_note": vip_note} if vip_note else {}),
                 "country_id": countries[country_key],
                 "tag_ids": [tags[t] for t in tag_names],
@@ -222,7 +242,16 @@ def main():
                     partner_map[code] = p
 
         lead_count = 0
-        for lead_name, p_code, stage, priority, revenue, prob, salesperson, company in LEADS_DATA:
+        for lead_idx, (
+            lead_name,
+            p_code,
+            stage,
+            priority,
+            revenue,
+            prob,
+            salesperson,
+            company,
+        ) in enumerate(LEADS_DATA):
             existing = Lead.search([("name", "=", lead_name), ("company_id", "=", company)], limit=1)
             if existing:
                 continue
@@ -237,6 +266,7 @@ def main():
                 "salesperson": salesperson,
                 "company_id": company,
                 "active": stage != "lost",
+                **_lead_schedule(lead_idx),
             })
             lead_count += 1
 

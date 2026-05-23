@@ -7,14 +7,26 @@ VIEWS: list[View] = [
     list_view(
         "demo_note.list",
         "vellum.demo.note",
-        fields=["id", "title", "score", "body", "active", "created_at", "updated_at"],
+        fields=[
+            "id",
+            "title",
+            "publish_on",
+            "event_at",
+            "score",
+            "active",
+            "created_at",
+        ],
         form_view="demo_note.form",
     ),
     form_view(
         "demo_note.form",
         "vellum.demo.note",
         sections=[
-            section("main", "Note", ["title", "body", "score", "active"]),
+            section(
+                "main",
+                "Note",
+                ["title", "body", "score", "publish_on", "event_at", "standup_at", "active"],
+            ),
             section(
                 "comments",
                 "Comments",

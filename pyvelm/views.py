@@ -48,6 +48,7 @@ _LIST_PROMOTION_PATHS: dict[str, list[tuple[str, ...]]] = {
     # title/subtitle stay as plain strings (single-field references)
     # because addressing them by name doesn't help inheritance.
     "kanban": [("card", "fields"), ("card", "badges")],
+    "dashboard": [("widgets", "*", "fields")],
 }
 
 

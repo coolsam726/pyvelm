@@ -2,6 +2,7 @@ from pyvelm import (
     BaseModel,
     Boolean,
     Char,
+    Date,
     Integer,
     Many2many,
     Many2one,
@@ -16,6 +17,7 @@ class Partner(BaseModel):
 
     name = Char(required=True, string="Name")
     age = Integer()
+    birth_date = Date(string="Birth date")
     active = Boolean(default=True)
     # Added in 0.2.0. Fresh installs create the column from this
     # declaration; upgrades from 0.1.0 get it via migrations/0_1_to_0_2.py

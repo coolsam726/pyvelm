@@ -86,6 +86,7 @@ class FieldRef(_FieldRefRequired, total=False):
     label: str
     readonly: bool
     required: bool
+    visible: bool
 
 
 # Authoring form: string or dict.
@@ -233,8 +234,60 @@ class ArchPivot(_ArchPivotRequired, total=False):
     domain: list
 
 
+# ---- dashboard widgets -------------------------------------------
+
+DashboardWidgetType = Literal["chart", "table", "stat", "link"]
+DashboardColspan = Union[int, Literal["full"]]
+ViewRef = Union[str, tuple[str, str]]
+
+
+class DashboardWidget(TypedDict, total=False):
+    """One tile on a ``view_type="dashboard"`` page.
+
+    Every widget carries ``type`` and ``id`` (a stable DOM key). Other
+    keys depend on the type — see the builder helpers in
+    ``pyvelm.builders``.
+    """
+
+    type: DashboardWidgetType
+    id: str
+    title: str
+    colspan: DashboardColspan
+    # chart
+    model: str
+    groupby: str
+    measure: str
+    chart: Literal["bar", "line", "pie"]
+    domain: list
+    view: ViewRef
+    # table
+    fields: list[FieldRefLike]
+    columns: list[str]
+    limit: int
+    order: str
+    more_href: str
+    # stat
+    href: str
+    # link
+    subtitle: str
+    description: str
+    url: str
+
+
+class _ArchDashboardRequired(TypedDict):
+    widgets: list[DashboardWidget]
+
+
+class ArchDashboard(_ArchDashboardRequired, total=False):
+    """Arch for ``view_type="dashboard"`` views."""
+
+    title: str
+    subtitle: str
+    columns: int
+
+
 # Any view's arch must be one of these shapes (matching `view_type`).
-Arch = Union[ArchList, ArchForm, ArchKanban, ArchGraph, ArchPivot]
+Arch = Union[ArchList, ArchForm, ArchKanban, ArchGraph, ArchPivot, ArchDashboard]
 
 
 # ---- discriminated-union view types ----
@@ -310,10 +363,23 @@ class PivotView(_PivotViewRequired, total=False):
     priority: int
 
 
+class _DashboardViewRequired(TypedDict):
+    name: str
+    model: str
+    view_type: Literal["dashboard"]
+    arch: ArchDashboard
+
+
+class DashboardView(_DashboardViewRequired, total=False):
+    """A ``view_type="dashboard"`` view declaration."""
+
+    priority: int
+
+
 # Union alias kept for backwards compatibility and for lists that mix
 # view types (the common case).
-ViewType = Literal["list", "form", "kanban", "graph", "pivot"]
-View = Union[ListView, FormView, KanbanView, GraphView, PivotView]
+ViewType = Literal["list", "form", "kanban", "graph", "pivot", "dashboard"]
+View = Union[ListView, FormView, KanbanView, GraphView, PivotView, DashboardView]
 
 
 # ---- inheritance ops ----------------------------------------------
@@ -377,7 +443,8 @@ class _MenuRequired(TypedDict):
 class Menu(_MenuRequired, total=False):
     """One entry in a module's ``MENUS`` list.
 
-    Top-level groups have an ``icon`` (SVG string) and no ``parent`` or
+    Top-level groups have an ``icon`` (Heroicons name like ``"home"`` or
+    legacy inline SVG) and no ``parent`` or
     ``href``. Leaf items have a ``parent`` (``"<module>.<group_name>"``,
     e.g. ``"partners.business"`` for group ``business`` in module
     ``partners``) and an ``href`` (typically ``/web/views/<module>/<view>``).

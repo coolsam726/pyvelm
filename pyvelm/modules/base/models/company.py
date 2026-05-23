@@ -28,3 +28,7 @@ class Company(BaseModel):
     # storage. ``UTC`` is the safe default; no validation here — the
     # render layer falls back to UTC if the value can't be resolved.
     timezone = Char(default="UTC", string="Timezone")
+    # Hex accent for this company (e.g. ``#6366f1``). When the user has
+    # this company active, the UI overrides the default primary palette.
+    # Empty → framework default (indigo in tailwind.css).
+    primary_color = Char(string="Primary color")

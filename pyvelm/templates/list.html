@@ -107,9 +107,22 @@
                 clear all
             </button>
 
+            {# Column visibility — toggles which list columns are shown. #}
+            <button type="button"
+                    @click="columnsOpen = !columnsOpen; if (columnsOpen) panelOpen = false"
+                    :class="columnsOpen ? 'bg-brand-soft text-fg-brand border-fg-brand' : 'text-body-subtle hover:text-fg-brand border-default'"
+                    class="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium shrink-0
+                           transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/>
+                </svg>
+                <span>Columns</span>
+            </button>
+
             {# Filters toggle — opens the per-column Filter By + Group By panel. #}
             <button type="button"
-                    @click="panelOpen = !panelOpen"
+                    @click="panelOpen = !panelOpen; if (panelOpen) columnsOpen = false"
                     :class="panelOpen ? 'bg-brand-soft text-fg-brand border-fg-brand' : 'text-body-subtle hover:text-fg-brand border-default'"
                     class="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium shrink-0
                            transition-colors">
@@ -134,6 +147,29 @@
              - other    → not in this slice
            Group By items are single-select; clicking the active one
            clears the grouping. #}
+        <div x-show="columnsOpen" x-cloak x-transition.opacity.duration.100ms
+             @click.outside="columnsOpen = false"
+             class="absolute left-0 right-0 top-full mt-1 z-30
+                    bg-neutral-primary border border-default rounded-lg shadow-sm p-3
+                    max-h-64 overflow-y-auto"
+             data-pv-columns-panel>
+            <header class="px-2 py-1 text-2xs font-bold uppercase tracking-wider text-body-subtle mb-1">
+                Show columns
+            </header>
+            <div class="space-y-0.5">
+                <template x-for="h in headers" :key="h.name">
+                    <label class="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-body
+                                  hover:bg-neutral-secondary cursor-pointer select-none">
+                        <input type="checkbox"
+                               class="rounded border-default text-fg-brand focus:ring-fg-brand/40"
+                               :checked="isColumnVisible(h.name)"
+                               @change="toggleColumn(h.name)">
+                        <span x-text="h.label"></span>
+                    </label>
+                </template>
+            </div>
+        </div>
+
         <div x-show="panelOpen" x-cloak x-transition.opacity.duration.100ms
              class="absolute left-0 right-0 top-full mt-1 z-30
                     bg-neutral-primary border border-default rounded-lg shadow-sm
@@ -306,6 +342,8 @@ document.addEventListener('alpine:init', () => {
         groupBy: cfg.groupBy || null,
         // Dropdown state.
         panelOpen: false,
+        columnsOpen: false,
+        visibleColumns: {},
         // Which Filter By field is currently expanded inside the
         // dropdown (only one at a time).
         openFilterField: null,
@@ -316,6 +354,46 @@ document.addEventListener('alpine:init', () => {
         // Column reorder state. Persisted to localStorage keyed by
         // (module, view_name). When set, applies on every table render.
         get _orderKey() { return `pv-list-order-${this.module}-${this.name}`; },
+        get _columnsKey() { return `pv-list-cols-${this.module}-${this.name}`; },
+
+        initColumnVisibility() {
+            const defaults = {};
+            (this.headers || []).forEach(h => {
+                defaults[h.name] = h.visible_default !== false;
+            });
+            this.visibleColumns = { ...defaults };
+            try {
+                const raw = localStorage.getItem(this._columnsKey);
+                if (!raw) return;
+                const stored = JSON.parse(raw);
+                if (stored && typeof stored === 'object') {
+                    for (const [name, on] of Object.entries(stored)) {
+                        if (name in this.visibleColumns) {
+                            this.visibleColumns[name] = !!on;
+                        }
+                    }
+                }
+            } catch (e) {}
+        },
+        isColumnVisible(name) {
+            return this.visibleColumns[name] !== false;
+        },
+        toggleColumn(name) {
+            const next = !this.isColumnVisible(name);
+            if (!next && this.visibleColumnCount() <= 1) {
+                return;
+            }
+            this.visibleColumns[name] = next;
+            try {
+                localStorage.setItem(this._columnsKey, JSON.stringify(this.visibleColumns));
+            } catch (e) {}
+        },
+        visibleColumnCount() {
+            return (this.headers || []).filter(h => this.isColumnVisible(h.name)).length;
+        },
+        gutterColumnCount() {
+            return 1 + (this.sequenceField ? 1 : 0);
+        },
 
         // The free-text "search" chip is the one with field===null.
         // Helpers below add/replace it on input commits.
@@ -671,6 +749,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         init() {
+            this.initColumnVisibility();
             // Rehydrate the in-progress search input from the active
             // search chip, if any — so a deep-link reload shows the
             // user's query inside the bar rather than only as a chip.
