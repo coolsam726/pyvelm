@@ -5,13 +5,13 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.3.0](releases/v0.3.0.md) (2026-05-22) — Apps Sync, Vellum
-timestamps and `_guarded`, `display_name`, console UX (breadcrumbs, pager, search).
-See [releases](releases/v0.3.0.md) and the
+**Latest release:** [v0.4.0](releases/v0.4.0.md) (2026-05-22) — Visual **Report
+Builder** with drill-down fields, column formatting, order by, and
+Excel/CSV/PDF export. See [releases](releases/v0.4.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.3.0
+pip install pyvelm==0.4.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -53,6 +53,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.4.0](releases/v0.4.0.md) | **[Report Builder](report-builder.md)** — drill-down fields, formatting, order by, export |
 | [v0.3.0](releases/v0.3.0.md) | **Apps Sync**; Vellum timestamps/`_guarded`; `display_name`; breadcrumbs & pager |
 | [v0.2.10](releases/v0.2.10.md) | **Vellum demo** sidebar in example server; `make:model --vellum` |
 | [v0.2.9](releases/v0.2.9.md) | `{"all": True}` on `tag_ids.*` domains; GitHub release notes from CHANGELOG |
@@ -79,6 +80,8 @@ If you're new, read these in order:
    module without forking them.
 6. **[Modules](modules.md)** — the manifest, data files, the
    loader, writing migrations, the Apps catalog.
+7. **[Report Builder](report-builder.md)** — user-defined reports,
+   visual builder, secure SQL compilation, export and scheduling.
 
 Then as you need them:
 
@@ -108,6 +111,9 @@ produces a bootable app:
   the mail-dispatcher cron.
 - **`admin`** — list / form views + sidebar menus that put a
   working management UI in front of the base models.
+- **`reports`** — `ir.report` / `ir.report.run`, visual builder,
+  secure compiler, Excel/CSV/PDF export (see
+  [Report Builder](report-builder.md)).
 - **`console`** — Artisan-style `pyvelm make:*` generators (see
   [Console commands](console.md)).
 - **`vellum`** — marker module; import **`pyvelm.vellum`** in your

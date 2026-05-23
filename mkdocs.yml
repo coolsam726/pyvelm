@@ -82,6 +82,7 @@ nav:
       - Building UIs: views.md
       - Extending views: inheritance.md
       - Modules: modules.md
+      - Report Builder: report-builder.md
       - Security: security.md
       - Deployment: deployment.md
       - CLI reference: cli.md

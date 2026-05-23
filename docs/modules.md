@@ -207,9 +207,9 @@ Each step is callable on its own (`loader.discover`,
 
 ### `BUILTIN_MODULE_ROOTS`
 
-The pyvelm wheel ships two modules — `base` (framework primitives)
-and `admin` (the UI for them). They live at
-`pyvelm/modules/<name>/` inside the package and are exposed as
+The pyvelm wheel ships built-in modules under `pyvelm/modules/` —
+`base` (framework primitives), `admin` (management UI), `reports`
+(report builder), `console` (generators), and others. They are exposed as
 `pyvelm.BUILTIN_MODULE_ROOTS` — a single-entry list you prepend to
 your own discovery roots. Apps that boot the framework should
 always include it. `pyvelm-cron` prepends it automatically.
