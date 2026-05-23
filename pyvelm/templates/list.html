@@ -47,16 +47,11 @@
     {% include "_view_switcher.html" %}
     {% endif %}
 
-    {# ── Toolbar: Odoo-style single search bar.
-
-       The search bar is a single full-width control with active-filter
-       chips sitting below it (in their own row when present). Click
-       the × on a chip to drop that filter. Free-text search is itself
-       a chip — typing into the input updates an in-flight chip that
-       commits on debounce. A trailing "Filters" button toggles the
-       per-column dropdown (Filter By + Group By). #}
+    {# ── Toolbar: search bar + page size on one row. #}
+    <div class="flex items-center justify-between gap-3">
     <div data-pv-search-bar
-         class="relative bg-neutral-primary border border-default rounded-lg"
+         class="relative flex-1 min-w-0 bg-neutral-primary border border-default rounded-lg
+                transition-shadow focus-within:ring-2 focus-within:ring-fg-brand focus-within:border-fg-brand"
          @click.outside="panelOpen = false"
          @keydown.escape="panelOpen = false">
 
@@ -84,6 +79,7 @@
             </template>
 
             <input type="search"
+                   x-ref="listSearchInput"
                    x-model="searchInput"
                    @input.debounce.400ms="onSearchChange()"
                    @keydown.escape="clearSearch()"
@@ -229,6 +225,21 @@
         </div>
     </div>
 
+    <div class="flex items-center gap-1.5 text-xs text-body-subtle shrink-0">
+        <span>Rows</span>
+        <select x-model.number="pageSize"
+                @change="page = 0; load()"
+                class="text-xs rounded-md border border-default bg-neutral-primary text-body
+                       py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand
+                       focus:border-fg-brand">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+        </select>
+    </div>
+    </div>
+
     {# Group-by chip (rendered separately from search chips because the
        grouping is a single-value mode rather than an AND-leaf). #}
     <div x-show="groupBy" x-cloak class="flex items-center gap-1.5">
@@ -244,21 +255,6 @@
                 </svg>
             </button>
         </span>
-    </div>
-
-    {# Secondary control strip (page size, sticky right). #}
-    <div class="flex items-center justify-end gap-1.5 text-xs text-body-subtle">
-        <span>Rows</span>
-        <select x-model.number="pageSize"
-                @change="page = 0; load()"
-                class="text-xs rounded-md border border-default bg-neutral-primary text-body
-                       py-1 pl-2 pr-6 focus:outline-none focus:ring-2 focus:ring-fg-brand/40
-                       focus:border-fg-brand">
-            <option value="10" selected>10</option>
-            <option value="20">20</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
-        </select>
     </div>
 
     {# ── Table + Pagination — HTMX swap target #}
@@ -678,6 +674,7 @@ document.addEventListener('alpine:init', () => {
             // Defer one tick so the initial server-rendered HTML is in
             // the DOM before we permute it.
             this.$nextTick(() => {
+                this.$refs.listSearchInput?.focus({ preventScroll: true });
                 this.applyColumnOrder();
                 this.initDragReorder();
                 this.initRowReorder();

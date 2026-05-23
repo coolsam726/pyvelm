@@ -1,6 +1,11 @@
 {% extends "layouts/main.html" %}
 {% block title %}{{ title }} — pyvelm{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
+{% block page_actions %}
+{% if record_pager %}
+{% include "_record_pager.html" %}
+{% endif %}
+{% endblock %}
 {% block content %}
 <div id="pyvelm-form-shell" data-pv-form-shell>
 {% include "form_body.html" %}

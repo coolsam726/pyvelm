@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from .attribute import collect_accessors_mutators, merge_maps
 from .events import collect_events, merge_events
-from .scope import PYVELM_SCOPE
+from .scope import PYVELM_SCOPE, unwrap_scope_callable
 
 
 def install_vellum_metadata(cls) -> None:
@@ -15,8 +15,9 @@ def install_vellum_metadata(cls) -> None:
     events = merge_events(mro_bases)
 
     for name, attr in cls.__dict__.items():
-        if getattr(attr, PYVELM_SCOPE, False):
-            scopes[name] = attr
+        fn = unwrap_scope_callable(attr)
+        if fn is not None and getattr(fn, PYVELM_SCOPE, False):
+            scopes[name] = fn
         acc_muts = collect_accessors_mutators({name: attr})
         accessors.update(acc_muts[0])
         mutators.update(acc_muts[1])

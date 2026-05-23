@@ -27,7 +27,6 @@ class Partner(BaseModel):
     tag_ids = Many2many("res.tag")
     company_id = Many2one("res.company", ondelete="SET NULL")
 
-    display_name = Char(compute="_compute_display_name")
     age_bucket = Char(compute="_compute_age_bucket", store=True)
 
     @depends("name", "country_id.code", "country_id.region_id.name")

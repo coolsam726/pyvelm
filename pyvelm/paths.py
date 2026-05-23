@@ -206,13 +206,25 @@ def parse_path(model_cls, path: str, registry) -> Path:
     hops: list[Hop] = []
     current = model_cls
     for i, attr in enumerate(tokens):
+        is_last = i == len(tokens) - 1
+        if attr == "id":
+            if not is_last:
+                raise ValueError(
+                    f"Path {path!r} on {model_cls._name}: "
+                    f"'id' must be the leaf of a dependency path"
+                )
+            return Path(
+                source_model=model_cls._name,
+                hops=hops,
+                leaf_model=current._name,
+                leaf_attr="id",
+            )
         if attr not in current._fields:
             raise ValueError(
                 f"Path {path!r} on {model_cls._name}: "
                 f"{current._name!r} has no field {attr!r}"
             )
         field = current._fields[attr]
-        is_last = i == len(tokens) - 1
         if is_last:
             return Path(
                 source_model=model_cls._name,

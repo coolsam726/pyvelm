@@ -3,8 +3,72 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 from .domain import domain_to_sql
-from .fields import Field, Many2one, finalize_related_field
+from .fields import Char, Field, Integer, Many2one, finalize_related_field
 from .registry import active_registry
+
+
+def _rec_name_field(cls) -> str | None:
+    """Return the Char/Text (etc.) field used for the default display_name."""
+    raw = getattr(cls, "_rec_name", "name")
+    if not raw:
+        return None
+    name = str(raw)
+    return name if name in cls._fields else None
+
+
+def _display_name_depends(cls) -> tuple[str, ...]:
+    rec = _rec_name_field(cls)
+    return (rec,) if rec else ("id",)
+
+
+def _inject_id(model_name: str, fields: dict[str, Field]) -> None:
+    """Primary key — always present in ``_fields`` and dependency paths."""
+    if "id" in fields:
+        return
+    field = Integer(string="ID", readonly=True)
+    field.bind(model_name, "id")
+    fields["id"] = field
+
+
+def _inject_display_name(model_name: str, fields: dict[str, Field]) -> None:
+    if "display_name" in fields:
+        return
+    field = Char(compute="_compute_display_name", string="Display Name")
+    field.bind(model_name, "display_name")
+    fields["display_name"] = field
+
+
+def _install_auto_fields(
+    cls, namespace: dict, fields: dict[str, Field]
+) -> None:
+    """Expose metaclass-injected fields as class descriptors."""
+    for fname in ("id", "display_name"):
+        if fname in fields and fname not in namespace:
+            setattr(cls, fname, fields[fname])
+
+
+def _bind_compute_fields(
+    cls, fields: dict[str, Field], namespace: dict
+) -> None:
+    for fname, field in fields.items():
+        if not field.compute:
+            continue
+        method = namespace.get(field.compute) or getattr(cls, field.compute, None)
+        if method is None:
+            raise ValueError(
+                f"{cls._name}.{fname}: compute method "
+                f"{field.compute!r} not found"
+            )
+        deps = getattr(method, "_pyvelm_depends", None)
+        if deps is None:
+            if fname == "display_name" and field.compute == "_compute_display_name":
+                deps = _display_name_depends(cls)
+            else:
+                raise ValueError(
+                    f"{cls._name}.{fname}: compute method "
+                    f"{field.compute!r} must be decorated with @depends(...)"
+                )
+        field.depends_on = tuple(deps)
 
 
 class MetaModel(type):
@@ -33,6 +97,10 @@ class MetaModel(type):
             co_field.bind(namespace.get("_name") or "", "company_id")
             fields["company_id"] = co_field
 
+        if _name_val:
+            _inject_id(_name_val, fields)
+            _inject_display_name(_name_val, fields)
+
         cls._fields = fields
         for f in fields.values():
             finalize_related_field(cls, f)
@@ -42,23 +110,8 @@ class MetaModel(type):
             cls._table = namespace.get("_table") or _name_val.replace(".", "_")
             for f in fields.values():
                 f.model_name = cls._name
-            # Bind compute methods to their fields: copy @depends paths.
-            for fname, field in fields.items():
-                if not field.compute:
-                    continue
-                method = namespace.get(field.compute) or getattr(cls, field.compute, None)
-                if method is None:
-                    raise ValueError(
-                        f"{cls._name}.{fname}: compute method "
-                        f"{field.compute!r} not found"
-                    )
-                deps = getattr(method, "_pyvelm_depends", None)
-                if deps is None:
-                    raise ValueError(
-                        f"{cls._name}.{fname}: compute method "
-                        f"{field.compute!r} must be decorated with @depends(...)"
-                    )
-                field.depends_on = tuple(deps)
+            _install_auto_fields(cls, namespace, fields)
+            _bind_compute_fields(cls, fields, namespace)
             active_registry().register(cls)
         return cls
 
@@ -104,6 +157,8 @@ class MetaModel(type):
             if isinstance(attr_value, Field):
                 attr_value.bind(existing._name, attr_name)
                 merged[attr_name] = attr_value
+        _inject_id(existing._name, merged)
+        _inject_display_name(existing._name, merged)
         cls._fields = merged
         for f in merged.values():
             finalize_related_field(cls, f)
@@ -114,23 +169,8 @@ class MetaModel(type):
         for f in merged.values():
             f.model_name = existing._name
 
-        # Bind compute methods declared in this extension.
-        for fname, field in merged.items():
-            if not field.compute:
-                continue
-            method = namespace.get(field.compute) or getattr(cls, field.compute, None)
-            if method is None:
-                raise ValueError(
-                    f"{existing._name}.{fname}: compute method "
-                    f"{field.compute!r} not found in extension {ext_name!r}"
-                )
-            deps = getattr(method, "_pyvelm_depends", None)
-            if deps is None:
-                raise ValueError(
-                    f"{existing._name}.{fname}: compute method "
-                    f"{field.compute!r} must be decorated with @depends(...)"
-                )
-            field.depends_on = tuple(deps)
+        _install_auto_fields(cls, namespace, merged)
+        _bind_compute_fields(cls, merged, namespace)
 
         # Replace registry entry with the extended class.
         reg.register(cls, module_name=reg._model_module.get(existing._name))
@@ -149,6 +189,23 @@ class BaseModel(metaclass=MetaModel):
     _table: str | None = None
     _fields: dict[str, Field] = {}
     _company_scoped: bool = False  # set True to auto-inject company_id
+    # Field whose value feeds the default ``display_name`` compute (when
+    # the model does not override ``_compute_display_name``). Defaults to
+    # ``"name"``; set to another field name, or ``False`` to use only id.
+    _rec_name: str | bool = "name"
+
+    def _compute_display_name(self) -> None:
+        """Default display label: ``_rec_name`` value, else ``model #id``."""
+        rec_field = _rec_name_field(type(self))
+        for record in self:
+            label = None
+            if rec_field:
+                val = getattr(record, rec_field)
+                if val not in (None, ""):
+                    label = str(val)
+            if label is None:
+                label = f"{record._name} #{record.id}"
+            record.display_name = label
 
     def __init__(self, env, ids: Iterable[int] = ()) -> None:
         self.env = env
@@ -219,7 +276,7 @@ class BaseModel(metaclass=MetaModel):
         # currently-known columns with their constraints).
         cols = ['"id" SERIAL PRIMARY KEY']
         for f in cls._fields.values():
-            if not f.is_stored:
+            if not f.is_stored or f.name == "id":
                 continue
             cols.append(f.column_ddl())
         conn.execute(
@@ -230,7 +287,7 @@ class BaseModel(metaclass=MetaModel):
         # install time.  Existing columns are a no-op; new ones are added
         # as nullable so pre-existing rows aren't rejected.
         for f in cls._fields.values():
-            if not f.is_stored:
+            if not f.is_stored or f.name == "id":
                 continue
             conn.execute(
                 f'ALTER TABLE "{cls._table}" '
@@ -331,9 +388,14 @@ class BaseModel(metaclass=MetaModel):
                 raise ValueError(f"Unknown field {fname!r} on {self._name}")
             field = self._fields[fname]
             if field.readonly:
-                raise ValueError(
-                    f"{self._name}.{fname} is readonly and cannot be written."
-                )
+                try:
+                    from pyvelm.vellum.timestamps import is_vellum_timestamp_field
+                except ImportError:
+                    is_vellum_timestamp_field = lambda _c, _f: False  # noqa: E731
+                if not is_vellum_timestamp_field(self.__class__, fname):
+                    raise ValueError(
+                        f"{self._name}.{fname} is readonly and cannot be written."
+                    )
             if field.related:
                 related_vals[fname] = value
             elif isinstance(field, Many2many):

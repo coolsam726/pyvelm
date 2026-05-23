@@ -1,0 +1,67 @@
+<script>
+    window.pvAppsUninstallMixin = () => ({
+        async confirmUninstall(name) {
+            let preview;
+            try {
+                const r = await fetch(`/web/apps/${name}/uninstall-preview`, {
+                    credentials: 'same-origin',
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                preview = await r.json();
+            } catch (e) {
+                window.pvAlert(`Could not load preview: ${e.message}`,
+                               { variant: 'danger', title: 'Uninstall' });
+                return;
+            }
+            if (preview.blockers && preview.blockers.length) {
+                window.pvAlert(
+                    'Cannot uninstall:\n  • ' + preview.blockers.join('\n  • '),
+                    { variant: 'warning', title: `Uninstall ${name}` }
+                );
+                return;
+            }
+            const lines = [`Uninstall ${name}? This will:`];
+            if (preview.tables && preview.tables.length) {
+                lines.push(`  • DROP TABLE: ${preview.tables.join(', ')}`);
+            }
+            if (preview.views) lines.push(`  • Delete ${preview.views} ir.ui.view row(s)`);
+            if (preview.menus) lines.push(`  • Delete ${preview.menus} ir.ui.menu row(s)`);
+            lines.push('');
+            lines.push('This is irreversible.');
+            const ok = await window.pvConfirm(lines.join('\n'), {
+                variant: 'danger',
+                title: `Uninstall ${name}`,
+                confirmLabel: 'Uninstall',
+            });
+            if (!ok) return;
+            const r = await fetch(`/web/apps/${name}/uninstall`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'HX-Request': 'true',
+                    'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                },
+            });
+            if (r.ok || r.status === 204) {
+                window.location.href = '/web/admin';
+            } else {
+                const detail = await r.text().catch(() => r.statusText);
+                window.pvAlert(`Uninstall failed: ${detail}`,
+                               { variant: 'danger', title: 'Uninstall' });
+            }
+        },
+    });
+
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('pvAppsUninstall', window.pvAppsUninstallMixin);
+    });
+
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+        const xhr = e.detail.xhr;
+        if (!e.detail.successful || !xhr) return;
+        const path = e.detail.pathInfo?.requestPath || '';
+        if (!/\/web\/apps\/[^/]+\/(install|upgrade)$/.test(path)) return;
+        const redirect = xhr.getResponseHeader('HX-Redirect');
+        if (redirect) window.location.assign(redirect);
+    });
+</script>

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import base64
 
-from pyvelm import BaseModel, Char, Integer, Text
+from pyvelm import BaseModel, Char, Integer, Text, depends
 
 
 class Attachment(BaseModel):
@@ -46,10 +46,10 @@ class Attachment(BaseModel):
     storage_key = Char(string="Storage Key")
     datas = Text(string="Data")  # base64-encoded bytes for the db backend
 
-    @property
-    def display_name(self) -> str:
-        self.ensure_one()
-        return self.name or self.datas_fname or f"Attachment #{self.id}"
+    @depends("name", "datas_fname")
+    def _compute_display_name(self):
+        for r in self:
+            r.display_name = r.name or r.datas_fname or f"ir.attachment #{r.id}"
 
     # ---- bytes round-trip ----
 

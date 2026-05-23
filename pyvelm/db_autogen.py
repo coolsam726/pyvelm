@@ -248,3 +248,46 @@ def migration_filename(
 
 def parse_version(s: str) -> tuple[int, ...]:
     return tuple(int(p) for p in s.split("."))
+
+
+@dataclass
+class ApplyResult:
+    """Outcome of applying a schema diff in-process (no migration file)."""
+
+    new_tables: int = 0
+    new_columns: int = 0
+
+    @property
+    def is_empty(self) -> bool:
+        return self.new_tables == 0 and self.new_columns == 0
+
+    def summary(self) -> str:
+        if self.is_empty:
+            return "schema unchanged"
+        parts: list[str] = []
+        if self.new_tables:
+            parts.append(f"{self.new_tables} table(s)")
+        if self.new_columns:
+            parts.append(f"{self.new_columns} column(s)")
+        return "schema: " + ", ".join(parts)
+
+
+def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
+    """Apply additive DDL from ``compute_diff`` immediately.
+
+    Used on Apps **Upgrade / Sync** so operators need not hand-run
+    ``pyvelm db autogen`` for every column addition. Idempotent
+    (``IF NOT EXISTS``). Does not write a migration file.
+    """
+    diff = compute_diff(env, module)
+    result = ApplyResult(
+        new_tables=len(diff.new_tables),
+        new_columns=len(diff.new_columns),
+    )
+    if diff.is_empty:
+        return result
+    for _, ddl in diff.new_tables:
+        env.conn.execute(ddl)
+    for _table, _col, stmt, _was_required in diff.new_columns:
+        env.conn.execute(stmt)
+    return result

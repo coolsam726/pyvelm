@@ -10,7 +10,7 @@ class MakeModelCommand(Command):
     signature = (
         "make:model {model : Technical name (e.g. product or inventory.product)} "
         "{--module= : Owning module} "
-        "{--vellum : Scaffold with Vellum mixin and _fillable} "
+        "{--vellum : Scaffold with Vellum mixin and _guarded} "
         "{--force : Overwrite an existing file}"
     )
 

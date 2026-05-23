@@ -5,13 +5,13 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.2.10](releases/v0.2.10.md) (2026-05-23) — Vellum demo UI
-in `examples/serve.py`, `make:model --vellum`, domain `all` on comparisons.
-See [releases](releases/v0.2.10.md) and the
+**Latest release:** [v0.3.0](releases/v0.3.0.md) (2026-05-22) — Apps Sync, Vellum
+timestamps and `_guarded`, `display_name`, console UX (breadcrumbs, pager, search).
+See [releases](releases/v0.3.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.2.10
+pip install pyvelm==0.3.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -53,6 +53,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.3.0](releases/v0.3.0.md) | **Apps Sync**; Vellum timestamps/`_guarded`; `display_name`; breadcrumbs & pager |
 | [v0.2.10](releases/v0.2.10.md) | **Vellum demo** sidebar in example server; `make:model --vellum` |
 | [v0.2.9](releases/v0.2.9.md) | `{"all": True}` on `tag_ids.*` domains; GitHub release notes from CHANGELOG |
 | [v0.2.8](releases/v0.2.8.md) | Symmetric M2M cache — `partner.tag_ids` write clears stale `tag.partner_ids` |

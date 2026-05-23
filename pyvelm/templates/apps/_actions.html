@@ -1,0 +1,61 @@
+{# Install / upgrade / sync / uninstall. Set ``compact=true`` on catalog cards. #}
+{% set compact = compact | default(false) %}
+{% set btn = 'px-2.5 py-1 text-2xs' if compact else 'px-3 py-1.5 text-xs' %}
+<div class="flex flex-wrap items-center justify-end {% if compact %}gap-1.5{% else %}gap-2{% endif %}">
+    {% if app.state == "uninstalled" %}
+        {% if app.deps_unknown %}
+        <button type="button" disabled
+                class="{{ btn }} font-medium rounded-md
+                       bg-neutral-tertiary text-body-subtle cursor-not-allowed"
+                title="Missing deps not on disk: {{ app.deps_unknown | join(', ') }}">
+            Missing deps
+        </button>
+        {% else %}
+        <button type="button"
+                hx-post="/web/apps/{{ app.name }}/install"
+                hx-swap="none"
+                hx-confirm="{% if app.deps_missing %}Install {{ app.name }}? This will cascade-install {{ app.deps_missing | join(', ') }} first.{% else %}Install {{ app.name }}?{% endif %}"
+                class="{{ btn }} font-semibold rounded-md
+                       bg-fg-brand text-white hover:opacity-90 transition-opacity">
+            Install{% if app.deps_missing and not compact %} (+ {{ app.deps_missing | length }} dep{% if app.deps_missing | length > 1 %}s{% endif %}){% elif app.deps_missing %} (+{{ app.deps_missing | length }}){% endif %}
+        </button>
+        {% endif %}
+    {% elif app.state == "to_upgrade" %}
+    <button type="button"
+            hx-post="/web/apps/{{ app.name }}/upgrade"
+            hx-swap="none"
+            hx-confirm="Upgrade {{ app.name }} from {{ app.installed_version }} to {{ app.available_version }}? Applies schema changes, re-syncs views/menus, and runs migrations in one transaction."
+            class="{{ btn }} font-semibold rounded-md
+                   bg-warning text-white hover:opacity-90 transition-opacity">
+        {% if compact %}Upgrade{% else %}Upgrade to {{ app.available_version }}{% endif %}
+    </button>
+    {% else %}
+    <button type="button"
+            hx-post="/web/apps/{{ app.name }}/upgrade"
+            hx-swap="none"
+            hx-confirm="Sync {{ app.name }} ({{ app.installed_version }})? Re-applies schema diff, reloads views and menus from disk — use this after pulling new module code without a version bump."
+            class="{{ btn }} font-semibold rounded-md
+                   bg-fg-brand text-white hover:opacity-90 transition-opacity">
+        Sync
+    </button>
+    {% endif %}
+
+    {% if app.state != "uninstalled" and app.name != "base" %}
+    <button type="button"
+            @click="confirmUninstall('{{ app.name }}')"
+            title="Uninstall {{ app.name }}"
+            class="{{ btn }} font-medium rounded-md
+                   border border-default text-fg-danger
+                   hover:bg-danger-soft transition-colors">
+        Uninstall
+    </button>
+    {% endif %}
+
+    {% if compact %}
+    <a href="/web/apps/{{ app.name }}"
+       class="{{ btn }} font-medium rounded-md border border-default text-body
+              hover:bg-neutral-secondary transition-colors">
+        Details
+    </a>
+    {% endif %}
+</div>

@@ -85,7 +85,7 @@ Typical workflow:
 cd my_erp
 pyvelm make:module inventory
 pyvelm make:model inventory.product --module=inventory
-pyvelm make:model blog.post --module=blog --vellum   # Vellum + _fillable scaffold
+pyvelm make:model blog.post --module=blog --vellum   # Vellum + _guarded scaffold
 pyvelm make:view inventory.product --module=inventory
 pyvelm make:menu --view=product.list --module=inventory
 pyvelm db autogen inventory --with-views   # migration + views for new models

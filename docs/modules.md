@@ -307,7 +307,7 @@ and run DDL.
 | Action | What happens |
 |---|---|
 | **Install** | Topologically installs the target and any uninstalled prerequisites. Models are imported into the live registry; the standard install pass runs (schema, hook, view/menu sync). |
-| **Upgrade** | Re-runs the install pass so version-gap migrations execute and data files re-sync. Note: new field declarations only take effect after a process restart — the DB schema is migrated but the in-memory model class isn't reloaded. The confirm prompt calls this out. |
+| **Upgrade** / **Sync** | Available for every installed module (including when the manifest version matches `ir_module`). Reloads models and `DATA` files from disk, runs additive schema (`_setup_table` + in-process autogen diff), executes version-gap migration scripts when the manifest version increased, then re-syncs views and menus. No uninstall/reinstall needed for new `views/*.py` entries. |
 | **Uninstall** | Drops tables owned by the module, deletes its `ir.ui.view` and `ir.ui.menu` rows, removes the `ir_module` entry. All inside one transaction. |
 
 POST endpoints respond with `HX-Redirect: /web/apps` so the sidebar

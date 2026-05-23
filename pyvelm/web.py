@@ -36,6 +36,23 @@ from .fields import Many2many, Many2one, One2many
 from .registry import Registry
 
 
+def _form_list_nav(request: Request) -> dict[str, str | None]:
+    """List-view query params carried on form URLs for prev/next navigation."""
+    q = request.query_params
+    list_key = (q.get("list") or "").strip()
+    list_module: str | None = None
+    list_name: str | None = None
+    if "/" in list_key:
+        list_module, list_name = list_key.split("/", 1)
+    return {
+        "list_module": list_module or None,
+        "list_name": list_name or None,
+        "list_search": q.get("search") or "",
+        "list_order": q.get("order") or "",
+        "list_filters": q.get("filters") or "",
+    }
+
+
 def _display_value(record) -> str:
     """Best-effort short label for a Many2one render.
 
@@ -962,6 +979,7 @@ def create_app(
                 body_only=body_only,
                 current_path=str(request.url.path),
                 prefill=prefill or None,
+                **_form_list_nav(request),
             )
         )
 
@@ -992,6 +1010,7 @@ def create_app(
                 mode="display",
                 body_only=body_only,
                 current_path=str(request.url.path),
+                **_form_list_nav(request),
             )
         )
 
@@ -1021,6 +1040,7 @@ def create_app(
                 mode="edit",
                 body_only=body_only,
                 current_path=str(request.url.path),
+                **_form_list_nav(request),
             )
         )
 
@@ -1066,6 +1086,7 @@ def create_app(
                     submitted=vals,
                     form_playback=form,
                     current_path=str(request.url.path),
+                    **_form_list_nav(request),
                 ),
                 status_code=422,
             )
@@ -1088,6 +1109,7 @@ def create_app(
                     form_playback=form,
                     form_error=str(exc),
                     current_path=str(request.url.path),
+                    **_form_list_nav(request),
                 ),
                 status_code=422,
             )
@@ -1124,6 +1146,7 @@ def create_app(
                 mode="display",
                 body_only=body_only,
                 current_path=str(request.url.path),
+                **_form_list_nav(request),
             )
         )
 
@@ -1162,6 +1185,7 @@ def create_app(
                     submitted=vals,
                     form_playback=form,
                     current_path=str(request.url.path),
+                    **_form_list_nav(request),
                 ),
                 status_code=422,
             )
@@ -1181,6 +1205,7 @@ def create_app(
                     form_playback=form,
                     form_error=str(exc),
                     current_path=str(request.url.path),
+                    **_form_list_nav(request),
                 ),
                 status_code=422,
             )
@@ -1214,6 +1239,7 @@ def create_app(
                 mode="display",
                 body_only=body_only,
                 current_path=str(request.url.path),
+                **_form_list_nav(request),
             )
         )
 
@@ -1504,6 +1530,24 @@ def create_app(
             )
         )
 
+    @app.get("/web/apps/{name}", response_class=HTMLResponse)
+    def web_app_detail(
+        name: str, request: Request, env: Environment = Depends(get_env)
+    ):
+        from .render import render_apps_detail_page
+
+        if env.uid is None:
+            return _login_redirect(request)
+        html = render_apps_detail_page(
+            env=env,
+            module_roots=app.state.module_roots,
+            name=name,
+            current_path=str(request.url.path),
+        )
+        if html is None:
+            raise HTTPException(status_code=404, detail=f"Unknown module {name!r}")
+        return HTMLResponse(html)
+
     def _require_admin(env: Environment) -> None:
         """Only the superuser (uid=1) may install or upgrade modules.
 
@@ -1516,23 +1560,32 @@ def create_app(
                 detail="Module install / upgrade requires superuser (uid=1)",
             )
 
+    def _header_safe_text(text: str) -> str:
+        """HTTP response headers must be latin-1 (Starlette)."""
+        for ch in ("\u2014", "\u2013", "\u2212", "\u2026"):
+            text = text.replace(ch, "-")
+        return text.encode("latin-1", "replace").decode("latin-1")
+
     def _apps_action_response(
         request: Request, env: Environment, result: dict
     ) -> Response:
         """Convert an install/upgrade result into an HTMX response.
 
-        HTMX clients get an empty body with `HX-Redirect: /web/apps`
-        so the full page (including the sidebar) reloads — newly-
-        installed modules may have added menu entries the cached
-        chrome doesn't know about. Plain browser POSTs land on the
-        same redirect via 303.
+        HTMX clients get an empty body with ``HX-Redirect`` to the main
+        shell (Odoo-style full reload). The sync summary is appended as
+        ``?pv_flash=`` on the redirect URL so the landing page can show it
+        after load (custom headers / sessionStorage were unreliable with HTMX).
         """
+        from urllib.parse import quote
+
+        message = _header_safe_text(result.get("message", "Module updated."))
+        redirect = f"/web/admin?pv_flash={quote(message, safe='')}"
         if request.headers.get("HX-Request") == "true":
             return Response(
                 status_code=204,
-                headers={"HX-Redirect": "/web/apps"},
+                headers={"HX-Redirect": redirect},
             )
-        return RedirectResponse("/web/apps", status_code=303)
+        return RedirectResponse(redirect, status_code=303)
 
     @app.post("/web/apps/{name}/install")
     def web_app_install(
@@ -1608,7 +1661,7 @@ def create_app(
         ``hx-target="#pyvelm-form-shell"`` swap immediately shows the
         new ``lastcall`` / ``nextcall`` values (localized to the
         active company's tz). Adds an ``HX-Trigger: pv-toast`` event
-        so the layout's toast surfaces success / failure.
+        so the layout's ``pvToast`` stack surfaces success / failure.
         """
         import json as _json
 

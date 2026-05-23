@@ -119,9 +119,9 @@
     --color-light-subtle: var(--color-secondary-100);
     --color-light: var(--color-secondary-100);
     --color-light-medium: var(--color-secondary-100);
-    --color-default-subtle: var(--color-secondary-200);
-    --color-default: var(--color-secondary-200);
-    --color-default-medium: var(--color-secondary-200);
+    --color-default-subtle: var(--color-secondary-100);
+    --color-default: var(--color-secondary-100);
+    --color-default-medium: var(--color-secondary-100);
     --color-default-strong: var(--color-secondary-200);
 
     /* used for status colors */
@@ -215,9 +215,9 @@
      --color-light: var(--color-gray-800);
      --color-light-medium: var(--color-gray-700);
      --color-default-subtle: var(--color-gray-900);
-     --color-default: var(--color-gray-800);
-     --color-default-medium: var(--color-gray-700);
-     --color-default-strong: var(--color-gray-600);
+     --color-default: var(--color-gray-900);
+     --color-default-medium: var(--color-gray-800);
+     --color-default-strong: var(--color-gray-700);
      --color-success-subtle: var(--color-emerald-900);
      --color-danger-subtle: var(--color-rose-900);
      --color-warning-subtle: var(--color-orange-900);
@@ -239,4 +239,38 @@
 [data-pv-field-error] .pv-m2o input[type="text"] {
     border-color: var(--color-fg-danger) !important;
     box-shadow: 0 0 0 1px var(--color-fg-danger);
+}
+
+/* Toast stack — fixed notifications (see pyvelmToast in main.html). */
+.pv-toast-stack {
+    z-index: 100;
+}
+.pv-toast {
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.12), 0 4px 10px -4px rgb(0 0 0 / 0.08);
+}
+.pv-toast-enter {
+    animation: pv-toast-in 0.22s ease-out forwards;
+}
+.pv-toast-leave {
+    animation: pv-toast-out 0.18s ease-in forwards;
+}
+@keyframes pv-toast-in {
+    from {
+        opacity: 0;
+        transform: translateX(1rem);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+@keyframes pv-toast-out {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(1rem);
+    }
 }

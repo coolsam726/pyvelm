@@ -1,0 +1,13 @@
+{% if app.state == "installed" %}
+<span class="text-2xs font-medium px-1.5 py-0.5 rounded-full bg-success-soft text-success-strong shrink-0">
+    Installed
+</span>
+{% elif app.state == "to_upgrade" %}
+<span class="text-2xs font-medium px-1.5 py-0.5 rounded-full bg-warning-soft text-warning-strong shrink-0">
+    Upgrade
+</span>
+{% else %}
+<span class="text-2xs font-medium px-1.5 py-0.5 rounded-full bg-neutral-tertiary text-body-subtle shrink-0">
+    Not installed
+</span>
+{% endif %}

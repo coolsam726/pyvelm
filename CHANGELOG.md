@@ -11,6 +11,69 @@ out of the 0.x line.
 
 - *(nothing yet)*
 
+## [0.3.0] — 2026-05-22
+
+Apps Sync, Vellum timestamps and `_guarded`, `display_name`, console UX polish
+(breadcrumbs, record pager, list search bar, toasts). Base module remains
+`0.18.0`. See [docs/releases/v0.3.0.md](docs/releases/v0.3.0.md).
+
+### Added
+
+- **`display_name`** — every model gets a computed ``display_name`` (override
+  ``_rec_name`` to pick the source field, default ``name``; override
+  ``_compute_display_name`` for custom formatting).
+- **Apps Sync** — installed modules show a **Sync** button when up to date;
+  reloads models/DATA, applies additive schema diff (autogen under the hood),
+  re-syncs views and menus without uninstall/reinstall.
+- **`SYNC_HOOK`** — manifest hook run on Sync/upgrade (same version); e.g.
+  `vellum_demo` seeds demo notes/comments via `hooks.sync`.
+- **`vellum_demo` demo data** — install/sync hooks create sample rows when tables
+  are empty.
+
+### Fixed
+
+- **`id` field** — injected on every model (readonly integer) so dependency paths and
+  ``display_name`` fallbacks using ``@depends("id")`` work without declaring ``id``.
+- **`loader.reload_models`** — run ``importlib.reload`` inside ``registry.activate()``
+  so Apps Sync does not raise “No active pyvelm registry”.
+- **Vellum timestamp forms** — `created_at` / `updated_at` are system-set on save;
+  edit forms show them read-only instead of writable inputs.
+
+### Changed
+
+- **Vellum mass assignment** — Laravel-style `_guarded` is the default scaffold and
+  policy for Vellum models (`_guarded = ["id", "created_at", "updated_at"]` when
+  neither `_fillable` nor `_guarded` is declared); `_guarded = ["*"]` blocks all
+  keys; forms use the same filter via `parse_form_vals`.
+- **Vellum timestamps** — `created_at` / `updated_at` are maintained automatically
+  on Vellum models (`_timestamps = False` to disable); new columns need Apps Sync
+  or a migration.
+- **`loader.install`** — always runs schema setup + `apply_schema_diff` and
+  reloads data-file modules on upgrade; returns per-module sync summary.
+- **Apps actions** — install/upgrade/sync redirect to `/web/admin` with a full
+  page reload (Odoo-style); sync summary shown in a toast after landing.
+- **`DISPLAY_NAME`** — optional manifest field for the Apps catalog human title;
+  ``NAME`` stays the technical id (shown under the state badge). Defaults from
+  ``vellum_demo`` → ``Vellum Demo`` when omitted.
+- **Apps catalog UX** — flat grid (max 4 columns), cards with quick-action footer,
+  display/technical names, search focused on load; detail page in a card with
+  actions pinned top-right above long documentation.
+- **`pvToast`** — non-blocking toast stack in the main layout (`window.pvToast`,
+  ``HX-Trigger: pv-toast``, ``?pv_flash=`` after Apps actions). Use ``pvAlert``
+  when the user must acknowledge (errors, confirms).
+- **Confirm/alert dialogs** — ``pvConfirm``, ``pvAlert``, and ``hx-confirm`` now
+  use the draggable ``PvDialog`` chrome (same component as inline form dialogs);
+  the centered ``<dialog>`` modal was removed.
+- **Breadcrumbs** — Home → list view → record on form/detail pages; the list
+  crumb links back to the model's list view. List pages show Home → view only
+  (menu section labels are no longer inserted between them).
+- **Form record pager** — prev/next arrows on display and edit forms follow the
+  list view's search, filters, and sort (``?list=module/name&search=…`` on URLs);
+  navigation wraps cyclically at the ends of the list.
+- **List search bar** — shares a row with the page-size control; visible
+  focus ring on the bar; autofocus on list, graph, and pivot views.
+- **Lighter borders** — default border token toned down for tables and inputs.
+
 ## [0.2.10] — 2026-05-23
 
 Vellum demo in the example server UI, domain `all` on comparisons, `make:model

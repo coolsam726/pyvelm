@@ -1,0 +1,40 @@
+{# Odoo-style prev/next on form pages. Expects ``record_pager`` with
+   prev_url, next_url, index, total. Full-page links (not HTMX) so the
+   heading, breadcrumbs, and pager stay in sync; autosave runs first. #}
+<div class="inline-flex items-center gap-2 shrink-0" data-pv-hide-in-dialog>
+    <div class="inline-flex rounded-md border border-default overflow-hidden bg-neutral-primary">
+        {% if record_pager.prev_url %}
+        <a href="{{ record_pager.prev_url }}"
+           class="inline-flex items-center justify-center w-8 h-8 text-body-subtle
+                  hover:bg-neutral-secondary hover:text-heading transition-colors"
+           title="Previous record (wraps at start)" aria-label="Previous record">
+        {% else %}
+        <span class="inline-flex items-center justify-center w-8 h-8 text-body-subtle/40
+                     cursor-not-allowed"
+              aria-disabled="true" title="No previous record">
+        {% endif %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+            </svg>
+        {% if record_pager.prev_url %}</a>{% else %}</span>{% endif %}
+
+        {% if record_pager.next_url %}
+        <a href="{{ record_pager.next_url }}"
+           class="inline-flex items-center justify-center w-8 h-8 text-body-subtle
+                  border-l border-default hover:bg-neutral-secondary hover:text-heading transition-colors"
+           title="Next record (wraps at end)" aria-label="Next record">
+        {% else %}
+        <span class="inline-flex items-center justify-center w-8 h-8 text-body-subtle/40
+                     border-l border-default cursor-not-allowed"
+              aria-disabled="true" title="No next record">
+        {% endif %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+            </svg>
+        {% if record_pager.next_url %}</a>{% else %}</span>{% endif %}
+    </div>
+    <span class="text-xs text-body-subtle tabular-nums whitespace-nowrap"
+          title="Position in the current list">
+        {{ record_pager.index }} / {{ record_pager.total }}
+    </span>
+</div>

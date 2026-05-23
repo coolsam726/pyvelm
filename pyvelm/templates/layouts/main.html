@@ -69,9 +69,6 @@
       .htmx-request .htmx-indicator,
       .htmx-request.htmx-indicator { display: block; }
 
-      /* Slightly tinted backdrop on the global dialog. */
-      #pv-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
-
       /* Floating draggable form dialog (pvFormDialog). Sits above
          everything; the card is positioned absolutely so the drag
          handler can update left/top directly. The default position
@@ -89,10 +86,14 @@
         max-height: 85vh;
         background: var(--color-neutral-primary);
         color: var(--color-body);
-        border: 1px solid var(--color-border-default);
+        border: 1px solid var(--color-default);
         border-radius: 0.75rem;
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
         overflow: hidden;
+      }
+      .pv-fdialog-card.pv-fdialog-card--prompt {
+        width: min(90vw, 28rem);
+        max-height: none;
       }
       .pv-fdialog-card.is-dragging { cursor: grabbing; user-select: none; }
       .pv-fdialog-title { cursor: grab; user-select: none; }
@@ -384,6 +385,11 @@
                      fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
                 </svg>
+            {% elif crumb.href %}
+                <a href="{{ crumb.href }}"
+                   class="text-body hover:text-fg-brand hover:underline transition-colors truncate max-w-[200px]">
+                    {{ crumb.label }}
+                </a>
             {% else %}
                 <span class="text-body truncate max-w-[200px]" aria-current="page">{{ crumb.label }}</span>
             {% endif %}
@@ -392,8 +398,8 @@
         {% endif %}
         {% endblock %}
 
-        <div class="flex flex-wrap items-start justify-between gap-4">
-            <div class="min-w-0">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="min-w-0 flex-1">
                 {% block page_heading %}
                 <h2 class="text-xl font-semibold text-heading tracking-tight truncate">
                     {{ self.page_title() }}
@@ -403,7 +409,10 @@
                 {% endif %}
                 {% endblock %}
             </div>
-            <div class="flex flex-wrap items-center gap-2">{% block page_actions %}{% endblock %}</div>
+            <div id="pv-page-actions"
+                 class="flex flex-wrap items-center justify-end gap-2 shrink-0">
+                {% block page_actions %}{% endblock %}
+            </div>
         </div>
     </div>
     {% endif %}
@@ -415,42 +424,35 @@
     </main>
 </div>
 
-{# ───── Global dialog ──── #}
-{# Single Alpine component for confirm + alert. Pages can dispatch
-   `pv-confirm-request` / `pv-alert-request` events with a `resolve`
-   callback; the helpers `pvConfirm(message, opts)` and
-   `pvAlert(message, opts)` are sugar over the same events. Replaces
-   the browser's native confirm prompt for delete buttons etc. #}
-<div x-data="pyvelmDialog()"
-     @pv-confirm-request.window="openConfirm($event.detail)"
-     @pv-alert-request.window="openAlert($event.detail)">
-    <dialog x-ref="dlg" id="pv-dialog"
-            x-effect="open ? $refs.dlg.showModal() : ($refs.dlg.open && $refs.dlg.close())"
-            @close="onNativeClose()"
-            @click="$event.target === $refs.dlg && mode !== 'alert' && dismiss()"
-            class="m-auto w-full max-w-md rounded-xl border border-default
-                   bg-neutral-primary shadow-xl p-0 text-body">
-        <div class="flex items-center justify-between px-5 py-4 border-b border-default">
-            <h3 class="text-sm font-semibold text-heading truncate" x-text="title"></h3>
-            <button type="button" x-show="mode !== 'alert'" @click="dismiss()"
-                    class="p-1 rounded text-body-subtle hover:text-heading transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
+{# ───── Toast stack ───── #}
+{# Non-blocking notifications. Dispatch ``pv-toast-request`` or call
+   ``window.pvToast(message, { title, variant, duration })``. HTMX
+   ``HX-Trigger: pv-toast`` is routed here via the listener below. #}
+<div x-data="pyvelmToast()"
+     @pv-toast-request.window="push($event.detail)"
+     class="pv-toast-stack fixed top-4 right-4 flex flex-col gap-2 w-full max-w-sm px-4 sm:px-0 pointer-events-none"
+     aria-live="polite"
+     aria-relevant="additions">
+    <template x-for="t in items" :key="t.id">
+        <div role="status"
+             class="pv-toast pointer-events-auto rounded-lg border shadow-lg overflow-hidden
+                    bg-neutral-primary text-body"
+             :class="[panelClass(t.variant), t.leaving ? 'pv-toast-leave' : 'pv-toast-enter']">
+            <div class="flex gap-3 px-4 py-3">
+                <div class="flex-1 min-w-0">
+                    <p x-show="t.title" x-text="t.title"
+                       class="text-xs font-semibold text-heading mb-0.5"></p>
+                    <p x-text="t.message" class="text-sm leading-snug break-words"></p>
+                </div>
+                <button type="button" @click="dismiss(t.id)" aria-label="Dismiss"
+                        class="shrink-0 p-0.5 rounded text-body-subtle hover:text-heading transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
         </div>
-        <div class="px-5 py-4">
-            <p x-text="message" class="text-sm text-body leading-relaxed"></p>
-        </div>
-        <div class="flex items-center justify-end gap-2 px-5 py-3 border-t border-default">
-            <button type="button" x-show="mode !== 'alert'" @click="dismiss()"
-                    x-text="cancelLabel"
-                    class="px-4 py-1.5 text-sm rounded-md text-body hover:bg-neutral-secondary"></button>
-            <button type="button" @click="confirm()"
-                    x-text="confirmLabel"
-                    :class="confirmBtnClass"></button>
-        </div>
-    </dialog>
+    </template>
 </div>
 
 {# ───── Floating draggable form dialog ───── #}
@@ -471,7 +473,10 @@
             <div class="pv-fdialog-backdrop"
                  @click="closeOnBackdrop && close()"></div>
             <div class="pv-fdialog-card"
-                 :class="{ 'is-dragging': dragging }"
+                 :class="{
+                     'is-dragging': dragging,
+                     'pv-fdialog-card--prompt': mode === 'confirm' || mode === 'alert',
+                 }"
                  x-ref="card"
                  :style="cardStyle">
                 <div class="pv-fdialog-title flex items-center justify-between
@@ -479,7 +484,9 @@
                      @mousedown="startDrag($event)">
                     <h3 class="text-sm font-semibold text-heading truncate"
                         x-text="title || 'Dialog'"></h3>
-                    <button type="button" @click.stop="close()"
+                    <button type="button"
+                            x-show="mode !== 'alert'"
+                            @click.stop="close()"
                             aria-label="Close"
                             class="p-1 rounded text-body-subtle hover:text-heading">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor"
@@ -489,12 +496,31 @@
                         </svg>
                     </button>
                 </div>
-                <div data-pv-form-shell
-                     x-ref="body"
-                     class="flex-1 overflow-auto p-4">
-                    <template x-if="loading">
-                        <p class="text-sm text-body-subtle">Loading…</p>
-                    </template>
+                <div class="flex-1 overflow-auto flex flex-col min-h-0">
+                    <div x-show="mode === 'confirm' || mode === 'alert'"
+                         class="p-4 flex flex-col flex-1 min-h-0">
+                        <p class="text-sm text-body leading-relaxed whitespace-pre-wrap flex-1"
+                           x-text="message"></p>
+                        <div class="flex items-center justify-end gap-2 pt-4 mt-2
+                                    border-t border-default shrink-0">
+                            <button type="button"
+                                    x-show="mode === 'confirm'"
+                                    @click="close()"
+                                    x-text="cancelLabel"
+                                    class="px-4 py-1.5 text-sm rounded-md text-body
+                                           hover:bg-neutral-secondary transition-colors"></button>
+                            <button type="button"
+                                    @click="confirmPrompt()"
+                                    x-text="confirmLabel"
+                                    :class="confirmBtnClass"></button>
+                        </div>
+                    </div>
+                    <div x-show="mode === 'content'"
+                         x-ref="content"
+                         data-pv-form-shell
+                         class="p-4 flex-1 overflow-auto min-h-0">
+                        <p x-show="loading" class="text-sm text-body-subtle">Loading…</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -548,57 +574,39 @@
             },
         }));
 
-        Alpine.data('pyvelmDialog', () => ({
-            open: false,
-            mode: 'confirm',     // 'confirm' | 'alert'
-            variant: 'danger',   // 'danger' | 'warning' | 'success' | 'info' | 'default'
-            title: 'Confirm',
-            message: '',
-            confirmLabel: 'Confirm',
-            cancelLabel: 'Cancel',
-            _resolver: null,
-            openConfirm(d) {
-                this.mode = 'confirm';
-                this.variant = d.variant || 'danger';
-                this.title = d.title || 'Confirm';
-                this.message = d.message || '';
-                this.confirmLabel = d.confirmLabel || 'Confirm';
-                this.cancelLabel = d.cancelLabel || 'Cancel';
-                this._resolver = d.resolve || null;
-                this.open = true;
+        let _pvToastUid = 0;
+        Alpine.data('pyvelmToast', () => ({
+            items: [],
+            push(d) {
+                if (!d || !d.message) return;
+                const id = ++_pvToastUid;
+                const variant = d.variant || 'info';
+                const duration = d.duration === undefined ? 6000 : d.duration;
+                this.items.push({
+                    id,
+                    title: d.title || '',
+                    message: d.message,
+                    variant,
+                    leaving: false,
+                });
+                if (duration > 0) {
+                    setTimeout(() => this.dismiss(id), duration);
+                }
             },
-            openAlert(d) {
-                this.mode = 'alert';
-                this.variant = d.variant || 'info';
-                this.title = d.title || 'Notice';
-                this.message = d.message || '';
-                this.confirmLabel = d.confirmLabel || 'OK';
-                this.cancelLabel = '';
-                this._resolver = d.resolve || null;
-                this.open = true;
+            dismiss(id) {
+                const t = this.items.find((x) => x.id === id);
+                if (!t || t.leaving) return;
+                t.leaving = true;
+                setTimeout(() => {
+                    this.items = this.items.filter((x) => x.id !== id);
+                }, 180);
             },
-            confirm() {
-                if (this._resolver) this._resolver(true);
-                this._resolver = null;
-                this.open = false;
-            },
-            dismiss() {
-                if (this._resolver) this._resolver(false);
-                this._resolver = null;
-                this.open = false;
-            },
-            onNativeClose() {
-                if (this._resolver) this._resolver(false);
-                this._resolver = null;
-                this.open = false;
-            },
-            get confirmBtnClass() {
-                const base =
-                    'px-4 py-1.5 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity';
-                if (this.variant === 'danger') return base + ' bg-fg-danger';
-                if (this.variant === 'success') return base + ' bg-success';
-                if (this.variant === 'warning') return base + ' bg-warning';
-                return base + ' bg-fg-brand';
+            panelClass(variant) {
+                const base = 'border-l-4 ';
+                if (variant === 'danger') return base + 'border-fg-danger bg-danger-soft';
+                if (variant === 'success') return base + 'border-success bg-success-soft';
+                if (variant === 'warning') return base + 'border-warning bg-warning-soft';
+                return base + 'border-fg-brand';
             },
         }));
 
@@ -606,7 +614,10 @@
         // Hosts an HTMX-loaded HTML body in a floating, draggable card.
         // Public API:
         //   window.PvDialog.open({url, title, closeOnBackdrop, onResult})
+        //   window.PvDialog.confirm({message, title, variant, ...}) → Promise<bool>
+        //   window.PvDialog.alert({message, title, variant, ...}) → Promise<bool>
         //   window.PvDialog.close(result?)
+        // Confirm/alert reuse the same draggable chrome as form dialogs.
         // The body marks itself with `data-pv-form-shell` so the standard
         // form-body buttons (Save / Cancel / Edit) target the dialog's
         // own shell via `hx-target="closest [data-pv-form-shell]"`. The
@@ -617,8 +628,13 @@
         // `X-PV-Dialog: 1` so the server knows to emit that trigger.
         Alpine.data('pvFormDialog', () => ({
             open: false,
+            mode: 'content',       // 'content' | 'confirm' | 'alert'
             loading: false,
             title: '',
+            message: '',
+            variant: 'danger',
+            confirmLabel: 'Confirm',
+            cancelLabel: 'Cancel',
             closeOnBackdrop: false,
             dragging: false,
             _x: null, _y: null,           // current top-left position (px)
@@ -631,6 +647,12 @@
                 // Imperative entry point — bind once.
                 window.PvDialog = {
                     open: (cfg) => this.openWith(cfg || {}),
+                    confirm: (opts) => this.openPrompt(
+                        Object.assign({ mode: 'confirm' }, typeof opts === 'string'
+                            ? { message: opts } : (opts || {}))),
+                    alert: (opts) => this.openPrompt(
+                        Object.assign({ mode: 'alert' }, typeof opts === 'string'
+                            ? { message: opts } : (opts || {}))),
                     close: (result) => this.closeWith(result),
                 };
                 // Tag every htmx request fired from inside the dialog
@@ -691,7 +713,42 @@
                 return `left: ${this._x}px; top: ${this._y}px;`;
             },
 
+            openPrompt(cfg) {
+                return new Promise(resolve => {
+                    const mode = cfg.mode === 'alert' ? 'alert' : 'confirm';
+                    this.mode = mode;
+                    this.variant = cfg.variant || (mode === 'alert' ? 'info' : 'danger');
+                    this.title = cfg.title || (mode === 'alert' ? 'Notice' : 'Confirm');
+                    this.message = cfg.message || '';
+                    this.confirmLabel = cfg.confirmLabel
+                        || (mode === 'alert' ? 'OK' : 'Confirm');
+                    this.cancelLabel = cfg.cancelLabel || 'Cancel';
+                    this.closeOnBackdrop = false;
+                    this._resolve = (result) => resolve(!!(result && result.confirmed));
+                    this._x = null;
+                    this._y = null;
+                    this.loading = false;
+                    this.open = true;
+                    this.$nextTick(() => this.center());
+                });
+            },
+
+            confirmPrompt() {
+                this.closeWith({ confirmed: true });
+            },
+
+            get confirmBtnClass() {
+                const base =
+                    'px-4 py-1.5 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity';
+                if (this.variant === 'danger') return base + ' bg-fg-danger';
+                if (this.variant === 'success') return base + ' bg-success';
+                if (this.variant === 'warning') return base + ' bg-warning';
+                return base + ' bg-fg-brand';
+            },
+
             async openWith(cfg) {
+                this.mode = 'content';
+                this.message = '';
                 this.title = cfg.title || '';
                 this.closeOnBackdrop = !!cfg.closeOnBackdrop;
                 this._resolve = cfg.onResult || null;
@@ -708,7 +765,7 @@
                         // MutationObserver picks up the x-data
                         // widgets automatically.
                         await window.htmx.ajax('GET', cfg.url, {
-                            target: this.$refs.body,
+                            target: this.$refs.content,
                             swap: 'innerHTML',
                         });
                     }
@@ -730,10 +787,14 @@
                 const cb = this._resolve;
                 this._resolve = null;
                 this.open = false;
+                this.mode = 'content';
                 this.title = '';
+                this.message = '';
                 this.loading = false;
                 this._x = null;
                 this._y = null;
+                const content = this.$refs.content;
+                if (content) content.innerHTML = '';
                 if (cb) {
                     try { cb(result || null); } catch (_) {}
                 }
@@ -793,18 +854,58 @@
 
         // Imperative API used by inline scripts and the action-trigger
         // wiring in `pyvelm()`.
-        window.pvConfirm = (message, opts = {}) =>
-            new Promise(resolve =>
-                window.dispatchEvent(new CustomEvent('pv-confirm-request', {
-                    detail: { message, resolve, ...opts },
-                })));
-        window.pvAlert = (message, opts = {}) =>
-            new Promise(resolve =>
-                window.dispatchEvent(new CustomEvent('pv-alert-request', {
-                    detail: { message, resolve, ...opts },
-                })));
+        window.pvConfirm = (message, opts = {}) => {
+            const cfg = typeof message === 'string'
+                ? { message, ...(opts || {}) }
+                : (message || {});
+            return window.PvDialog.confirm(cfg);
+        };
+        window.pvAlert = (message, opts = {}) => {
+            const cfg = typeof message === 'string'
+                ? { message, ...(opts || {}) }
+                : (message || {});
+            return window.PvDialog.alert(cfg);
+        };
+        window.pvToast = (message, opts = {}) =>
+            window.dispatchEvent(new CustomEvent('pv-toast-request', {
+                detail: { message, variant: 'info', duration: 6000, ...opts },
+            }));
 
-        // ── Replace hx-confirm with the styled pvConfirm dialog ──
+        // Survives full-page redirects (e.g. Apps Sync → /web/admin).
+        window.pvStashFlash = (xhr) => {
+            if (!xhr) return;
+            let msg = xhr.getResponseHeader('X-Pv-Flash');
+            if (!msg) {
+                const trigger = xhr.getResponseHeader('HX-Trigger');
+                if (trigger) {
+                    try { msg = JSON.parse(trigger)['pv-toast']; } catch (_) {}
+                }
+            }
+            if (msg) sessionStorage.setItem('pv-flash', msg);
+        };
+        window.pvConsumeFlash = () => {
+            let flash = sessionStorage.getItem('pv-flash');
+            if (flash) {
+                sessionStorage.removeItem('pv-flash');
+            } else {
+                const params = new URLSearchParams(window.location.search);
+                flash = params.get('pv_flash');
+                if (flash) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('pv_flash');
+                    history.replaceState(null, '', url.pathname + url.search + url.hash);
+                }
+            }
+            if (flash && window.pvToast) {
+                window.pvToast(flash, { title: 'Apps', variant: 'success' });
+            }
+        };
+        // After Alpine has mounted global chrome (toast stack, dialog).
+        document.addEventListener('alpine:initialized', () => {
+            window.pvConsumeFlash();
+        });
+
+        // ── Replace hx-confirm with the draggable pvConfirm dialog ──
         // ── CSRF: inject X-CSRF-Token on every HTMX request ──
         // The middleware sets `pyvelm_csrf` cookie on first GET; we
         // mirror it as a header on each subsequent unsafe request so
@@ -850,7 +951,10 @@
         document.body.addEventListener('htmx:confirm', e => {
             if (!e.detail.question) return;
             e.preventDefault();
-            window.pvConfirm(e.detail.question, { variant: 'danger' })
+            const elt = e.detail.elt;
+            const variant = elt?.dataset?.pvConfirmVariant || 'danger';
+            const title = elt?.dataset?.pvConfirmTitle || 'Confirm';
+            window.pvConfirm(e.detail.question, { variant, title })
                 .then(ok => { if (ok) e.detail.issueRequest(true); });
         });
 
@@ -875,14 +979,20 @@
                            { variant: 'danger', title: 'Cannot save' });
         });
 
-        // ── Generic toast bridge for server-side actions (e.g. cron's
-        // "Run Now" button). The server emits `HX-Trigger: pv-toast`
-        // with a message string; we surface it via pvAlert as a plain
-        // info toast. Failures should send a different event or set
-        // variant via JSON detail down the road.
-        document.body.addEventListener('pv-toast', e => {
-            const msg = (e.detail && (e.detail.value || e.detail)) || '';
-            if (msg) window.pvAlert(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        // ── HTMX toast bridge (no redirect). Cron "Run Now" etc. emit
+        // ``HX-Trigger: pv-toast`` with a string or ``{message, variant}``.
+        // Apps install/sync uses ``?pv_flash=``; pvConsumeFlash shows a toast.
+        document.body.addEventListener('pv-toast', (e) => {
+            const raw = (e.detail && (e.detail.value ?? e.detail)) ?? '';
+            if (!raw) return;
+            if (typeof raw === 'string') {
+                window.pvToast(raw);
+            } else if (typeof raw === 'object') {
+                const { message, variant, title, duration } = raw;
+                window.pvToast(message || JSON.stringify(raw), {
+                    variant, title, duration,
+                });
+            }
         });
 
         // ── Many2one combobox ──

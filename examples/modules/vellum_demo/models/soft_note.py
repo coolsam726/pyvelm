@@ -1,9 +1,15 @@
-from pyvelm import BaseModel, Char, Datetime
+from pyvelm import BaseModel, fields
 from pyvelm.vellum import SoftDeletes, Vellum
 
 
 class DemoSoftNote(Vellum, BaseModel, SoftDeletes):
-    _name = "vellum.demo.soft_note"
+    """
+    Soft delete note model with active field.
+    """
 
-    title = Char(required=True)
-    deleted_at = Datetime(string="Deleted At")
+    _name = "vellum.demo.soft_note"
+    _rec_name = "title"
+
+    title = fields.Char(required=True)
+    deleted_at = fields.Datetime(string="Deleted At")
+    active = fields.Boolean(default=True)

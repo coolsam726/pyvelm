@@ -5,15 +5,19 @@
    this body only carries the action buttons (which must move with the
    swap because they change between display/edit modes). #}
 {% set base = "/web/views/" ~ view.module ~ "/" ~ view.name %}
-{% set rec_url = base ~ "/record/" ~ (record_id if record_id else 'new') %}
+{% set nav_qs = ('?' ~ list_nav_query) if list_nav_query else '' %}
+{% set rec_url = base ~ "/record/" ~ (record_id if record_id else 'new') ~ nav_qs %}
+{% set rec_edit_url = base ~ "/record/" ~ record_id ~ "/edit" ~ nav_qs if record_id else '' %}
+
+{# HTMX body swap: keep prev/next in the layout heading (top-right). #}
+{% if body_only and record_pager %}
+<div id="pv-page-actions" hx-swap-oob="true"
+     class="flex flex-wrap items-center justify-end gap-2">
+    {% include "_record_pager.html" %}
+</div>
+{% endif %}
 
 <div class="max-w-4xl mx-auto space-y-6">
-    {# Page heading — visible in both full-page and body-only (HTMX swap)
-       contexts. The layout chrome only renders this when body_only=False,
-       so we duplicate it here so client-side swaps and direct HTMX GETs
-       both surface the title. #}
-    <h2 class="text-lg font-semibold text-heading">{{ title }}</h2>
-
     {# Action toolbar — small, right-aligned, mode-aware. #}
     <div class="flex items-center justify-between gap-3">
         <span class="inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider
@@ -38,7 +42,7 @@
             {% endfor %}
             <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
                            rounded-md bg-fg-brand hover:opacity-90 transition"
-                    hx-get="{{ rec_url }}/edit"
+                    hx-get="{{ rec_edit_url }}"
                     hx-target="closest [data-pv-form-shell]"
                     hx-swap="innerHTML">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">

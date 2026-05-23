@@ -8,11 +8,32 @@ from pyvelm.env import Environment
 from ._metadata import install_vellum_metadata
 from ._subclass import _detect_field_method_collisions
 from .attribute import apply_mutators, read_accessor
-from .fillable import filter_mass_assignment, validate_mass_assignment_config
+from .fillable import (
+    apply_vellum_mass_assignment_defaults,
+    filter_mass_assignment,
+    validate_mass_assignment_config,
+)
 from .collection import filter_recordset, where_recordset, wrap
 from .events import fire as fire_vellum_event
 from .query import QueryBuilder
 from .relations import BelongsTo, BelongsToMany, HasMany, HasOne
+from .timestamps import apply_timestamp_vals
+
+
+def finalize_vellum_model(cls) -> None:
+    """Post-metaclass setup for Vellum models (timestamps, mass assignment, metadata)."""
+    if Vellum not in getattr(cls, "__mro__", ()) or not getattr(cls, "_name", None):
+        return
+    if getattr(cls, "_vellum_finalized", False):
+        return
+    _detect_field_method_collisions(cls)
+    validate_mass_assignment_config(cls)
+    from .timestamps import install_vellum_timestamps
+
+    install_vellum_timestamps(cls)
+    apply_vellum_mass_assignment_defaults(cls)
+    install_vellum_metadata(cls)
+    cls._vellum_finalized = True
 
 
 class Vellum:
@@ -23,17 +44,16 @@ class Vellum:
         class Post(Vellum, BaseModel):
             _name = "blog.post"
 
+    Automatic Laravel-style ``created_at`` / ``updated_at`` timestamps are
+    enabled by default (``_timestamps = True``). Set ``_timestamps = False`` to
+    disable.
+
     For SQL queries at runtime, prefer ``env.query("blog.post")`` so you
     always use the registry class after ``_inherit`` merges. ``Post.query(env)``
     is fine in the defining module (tests, type-checked code).
     """
 
-    def __init_subclass__(cls, **kwargs) -> None:
-        super().__init_subclass__(**kwargs)
-        if getattr(cls, "_name", None):
-            _detect_field_method_collisions(cls)
-            validate_mass_assignment_config(cls)
-            install_vellum_metadata(cls)
+    _timestamps = True
 
     def __getattr__(self, name: str):
         accessors = getattr(self.__class__, "_vellum_accessors", None) or {}
@@ -45,6 +65,7 @@ class Vellum:
         cls = self.__class__
         vals = filter_mass_assignment(cls, dict(vals))
         vals = apply_mutators(cls, self.env, vals)
+        vals = apply_timestamp_vals(cls, vals, updating=False)
         empty = cls(self.env, ())
         fire_vellum_event(cls, "creating", empty, vals=vals)
         fire_vellum_event(cls, "saving", empty, vals=vals)
@@ -59,6 +80,7 @@ class Vellum:
         cls = self.__class__
         vals = filter_mass_assignment(cls, dict(vals))
         vals = apply_mutators(cls, self.env, vals)
+        vals = apply_timestamp_vals(cls, vals, updating=True)
         fire_vellum_event(cls, "updating", self)
         fire_vellum_event(cls, "saving", self)
         super().write(vals)

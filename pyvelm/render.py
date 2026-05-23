@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from urllib.parse import urlencode
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -1835,6 +1836,12 @@ def parse_form_vals(model_cls, form_data, env=None) -> tuple[dict, dict]:
             continue
         if not field.is_stored:
             continue
+        try:
+            from pyvelm.vellum.timestamps import is_vellum_timestamp_field
+        except ImportError:
+            is_vellum_timestamp_field = lambda _c, _f: False  # noqa: E731
+        if is_vellum_timestamp_field(model_cls, fname):
+            continue
         if fname not in form_data:
             continue
         if isinstance(field, Boolean):
@@ -1891,6 +1898,9 @@ def parse_form_vals(model_cls, form_data, env=None) -> tuple[dict, dict]:
                 errors[fname] = "Must be a datetime."
             else:
                 errors[fname] = "Invalid value."
+    from .vellum.fillable import filter_mass_assignment
+
+    vals = filter_mass_assignment(model_cls, vals)
     return vals, errors
 
 
@@ -1950,7 +1960,14 @@ def _form_section_html(
         label = spec.get("label") or field.string or fname
         hint = spec.get("widget")
         ro = spec_readonly(spec, field)
-        renderer = find_renderer(field, hint, mode=mode)
+        try:
+            from pyvelm.vellum.timestamps import is_vellum_timestamp_field
+        except ImportError:
+            is_vellum_timestamp_field = lambda _c, _f: False  # noqa: E731
+        render_mode = mode
+        if mode == "edit" and is_vellum_timestamp_field(model_cls, fname):
+            render_mode = "display"
+        renderer = find_renderer(field, hint, mode=render_mode)
 
         if fname in submitted:
             # Resurrect the value the user just submitted so they don't
@@ -2090,15 +2107,164 @@ def _view_title(view, arch: dict) -> str:
     return arch.get("title") or _humanize_model(view.model)
 
 
+_RECORD_NAV_CAP = 5000
+
+
+def encode_list_nav_query(
+    list_module: str | None,
+    list_name: str | None,
+    *,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+) -> str:
+    """Query string carrying list-view context onto form URLs."""
+    params: dict[str, str] = {}
+    if list_module and list_name:
+        params["list"] = f"{list_module}/{list_name}"
+    if search:
+        params["search"] = search
+    if order:
+        params["order"] = order
+    if filters:
+        params["filters"] = filters
+    return urlencode(params)
+
+
+def _list_view_domain_and_order(
+    list_view,
+    env,
+    *,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+) -> tuple[list, str]:
+    """Mirror ``render_list_page`` domain + ORDER BY for record navigation."""
+    from .views import resolve_arch
+
+    arch = resolve_arch(list_view)
+    fields_spec = arch.get("fields", [])
+    model_cls = env.registry[list_view.model]
+
+    domain: list = list(arch.get("domain") or [])
+    if search:
+        domain.extend(_build_search_domain(model_cls, fields_spec, search))
+    domain.extend(_parse_filters(model_cls, fields_spec, filters))
+
+    sequence_field = arch.get("sequence")
+    if sequence_field and sequence_field in model_cls._fields:
+        safe_ord = f'"{sequence_field}" ASC, "id" ASC'
+    else:
+        safe_ord = _safe_order(fields_spec, order)
+    return domain, safe_ord
+
+
+def _load_list_view(env, list_module: str | None, list_name: str | None, model: str):
+    """Resolve the list view used for prev/next; fall back to any list on *model*."""
+    if list_module and list_name and "ir.ui.view" in env.registry:
+        View = env["ir.ui.view"]
+        matches = View.search(
+            [
+                ("module", "=", list_module),
+                ("name", "=", list_name),
+                ("view_type", "=", "list"),
+            ],
+            limit=1,
+        )
+        if matches:
+            rec = matches
+            rec.ensure_one()
+            if rec.model == model:
+                return rec
+    lookup = _list_view_for_model(env, model)
+    if not lookup:
+        return None
+    mod, name = lookup
+    if "ir.ui.view" not in env.registry:
+        return None
+    matches = env["ir.ui.view"].search(
+        [("module", "=", mod), ("name", "=", name), ("view_type", "=", "list")],
+        limit=1,
+    )
+    if not matches:
+        return None
+    rec = matches
+    rec.ensure_one()
+    return rec
+
+
+def _record_pager(
+    env,
+    *,
+    model: str,
+    record_id: int,
+    form_module: str,
+    form_name: str,
+    mode: str,
+    list_module: str | None = None,
+    list_name: str | None = None,
+    list_search: str = "",
+    list_order: str = "",
+    list_filters: str = "",
+) -> dict | None:
+    """Prev/next URLs following the list view's search, filters, and sort."""
+    list_view = _load_list_view(env, list_module, list_name, model)
+    if list_view is None:
+        return None
+
+    domain, safe_ord = _list_view_domain_and_order(
+        list_view,
+        env,
+        search=list_search,
+        order=list_order,
+        filters=list_filters,
+    )
+    Model = env[model]
+    recs = Model.search(domain, order=safe_ord, limit=_RECORD_NAV_CAP)
+    ids = list(recs.ids)
+    if record_id not in ids:
+        return None
+
+    idx = ids.index(record_id)
+    nav_qs = encode_list_nav_query(
+        list_view.module,
+        list_view.name,
+        search=list_search,
+        order=list_order,
+        filters=list_filters,
+    )
+    suffix = "/edit" if mode == "edit" else ""
+    base = f"/web/views/{form_module}/{form_name}/record"
+
+    def _url(rid: int) -> str:
+        path = f"{base}/{rid}{suffix}"
+        return f"{path}?{nav_qs}" if nav_qs else path
+
+    total = len(ids)
+    if total == 1:
+        prev_id = next_id = ids[0]
+    else:
+        prev_id = ids[(idx - 1) % total]
+        next_id = ids[(idx + 1) % total]
+
+    return {
+        "prev_url": _url(prev_id),
+        "next_url": _url(next_id),
+        "index": idx + 1,
+        "total": total,
+        "nav_qs": nav_qs,
+    }
+
+
 def _record_title(record_or_none, view_model: str, mode: str) -> str:
     """Best-effort short title for the form header."""
     if mode == "new" or record_or_none is None:
         return f"New {_humanize_model(view_model, plural=False)}"
     cls = type(record_or_none)
-    if "name" in cls._fields:
-        nm = getattr(record_or_none, "name", None)
-        if nm:
-            return str(nm)
+    if "display_name" in cls._fields:
+        dn = getattr(record_or_none, "display_name", None)
+        if dn:
+            return str(dn)
     return f"{view_model} #{record_or_none.id}"
 
 
@@ -2110,6 +2276,11 @@ def render_form_page(
     mode: str,
     body_only: bool = False,
     current_path: str | None = None,
+    list_module: str | None = None,
+    list_name: str | None = None,
+    list_search: str = "",
+    list_order: str = "",
+    list_filters: str = "",
     errors: dict | None = None,
     submitted: dict | None = None,
     form_error: str | None = None,
@@ -2142,11 +2313,26 @@ def render_form_page(
     title = _record_title(record_or_none, view.model, mode)
     template_name = "form_body.html" if body_only else "form.html"
     template = _env.get_template(template_name)
-    # The form view doesn't have a menu entry — make the breadcrumb
-    # come from the model's list view's group instead, with the
-    # record's title as the leaf.
-    ctx = {} if body_only else layout_context(env, current_path, leaf_label=title)
+    # Title lives in the layout heading only — breadcrumbs stop at the list.
+    ctx = {} if body_only else layout_context(env, current_path)
     if not body_only:
+        list_bc = _list_breadcrumb_for_model(
+            env,
+            view.model,
+            ctx.get("menu"),
+            list_module=list_module,
+            list_name=list_name,
+            list_search=list_search,
+            list_order=list_order,
+            list_filters=list_filters,
+        )
+        if list_bc:
+            ctx["breadcrumbs"] = build_breadcrumbs(
+                ctx["menu"],
+                current_path,
+                parent_href=list_bc["href"],
+                parent_label=list_bc["label"],
+            )
         ctx["subtitle"] = f"{view.model} · {mode}"
     # Resolve header actions: substitute {id} with the current record's
     # id (display-mode only; new/edit records can't take row-level
@@ -2166,15 +2352,36 @@ def render_form_page(
                     "confirm": act.get("confirm") or "",
                 }
             )
+    record_pager = None
+    if mode in ("display", "edit") and record_or_none is not None and record_or_none._ids:
+        record_pager = _record_pager(
+            env,
+            model=view.model,
+            record_id=record_or_none.id,
+            form_module=view.module,
+            form_name=view.name,
+            mode=mode,
+            list_module=list_module,
+            list_name=list_name,
+            list_search=list_search,
+            list_order=list_order,
+            list_filters=list_filters,
+        )
     return template.render(
         view=view,
         record=record_or_none,
         record_id=(record_or_none.id if record_or_none else None),
         title=title,
         mode=mode,
+        body_only=body_only,
         sections=sections,
         form_error=form_error,
         header_actions=header_actions,
+        record_pager=record_pager,
+        list_nav_query=encode_list_nav_query(
+            list_module, list_name,
+            search=list_search, order=list_order, filters=list_filters,
+        ),
         **ctx,
     )
 
@@ -3210,6 +3417,9 @@ def render_list_page(
         total_pages = max(1, (total + page_size - 1) // page_size)
 
     page_title = _view_title(view, arch)
+    list_nav_query = encode_list_nav_query(
+        view.module, view.name, search=search, order=order, filters=filters
+    )
     template = _env.get_template("list.html")
     return template.render(
         view=view,
@@ -3226,10 +3436,11 @@ def render_list_page(
         group_by=safe_group_by,
         sequence_field=sequence_field,
         form_view_name=form_view_name,
+        list_nav_query=list_nav_query,
         page_title=page_title,
         subtitle=f"{total} record{'s' if total != 1 else ''}",
         view_switcher=_other_views_for_model(env, view),
-        **layout_context(env, current_path),
+        **layout_context(env, current_path, leaf_label=page_title),
     )
 
 
@@ -3291,6 +3502,9 @@ def render_list_rows(
         rows = _build_rows(view, recs, fields_spec)
         total_pages = max(1, (total + page_size - 1) // page_size)
 
+    list_nav_query = encode_list_nav_query(
+        view.module, view.name, search=search, order=order, filters=filters
+    )
     template = _env.get_template("list_rows.html")
     return template.render(
         view=view,
@@ -3307,6 +3521,7 @@ def render_list_rows(
         group_by=safe_group_by,
         sequence_field=sequence_field,
         form_view_name=form_view_name,
+        list_nav_query=list_nav_query,
     )
 
 
@@ -3421,6 +3636,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
     Each entry shape:
         {
           "name": str,
+          "display_name": str,
           "summary": str, "description": str, "category": str,
           "author": str, "icon": str,
           "available_version": str,
@@ -3463,6 +3679,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
         catalog.append(
             {
                 "name": spec.name,
+                "display_name": spec.display_name,
                 "summary": spec.summary,
                 "description": spec.description,
                 "category": spec.category or "Uncategorised",
@@ -3476,8 +3693,17 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
                 "deps_unknown": deps_unknown,
             }
         )
-    catalog.sort(key=lambda c: (c["category"], c["name"]))
+    catalog.sort(key=lambda c: (c["display_name"].lower(), c["name"]))
     return catalog
+
+
+def _apps_catalog_entry(
+    env, module_roots: list, name: str
+) -> dict | None:
+    for entry in _apps_catalog(env, module_roots):
+        if entry["name"] == name:
+            return entry
+    return None
 
 
 def install_module_action(env, module_roots: list, target_name: str) -> dict:
@@ -3537,15 +3763,10 @@ def install_module_action(env, module_roots: list, target_name: str) -> dict:
 
 
 def upgrade_module_action(env, module_roots: list, target_name: str) -> dict:
-    """Run the loader's install pass for an already-installed module.
-    If the on-disk version exceeds the installed version, migrations
-    run; either way views / menus / data files re-sync.
-
-    Note: in-process model definitions are NOT reloaded — a new field
-    declared in the upgraded version only takes effect after a
-    process restart. The DB schema migration runs regardless via
-    the version-gap migration files. Callers should advise users to
-    restart for fresh model definitions to take effect.
+    """Re-sync an installed module: reload models + DATA from disk,
+    apply additive schema (``_setup_table`` + autogen diff), run
+    version-gap migrations when the manifest version increased, and
+    upsert views / menus.
     """
     from . import loader as _loader
 
@@ -3553,11 +3774,26 @@ def upgrade_module_action(env, module_roots: list, target_name: str) -> dict:
     if target_name not in specs:
         raise ValueError(f"Unknown module {target_name!r}")
     spec = specs[target_name]
-    _loader.install([spec], env)
+    current = _loader._installed_version(env, target_name)
+    if current is None:
+        raise ValueError(
+            f"Module {target_name!r} is not installed — use Install first."
+        )
+    _loader.reload_models(spec, env.registry)
+    outcomes = _loader.install([spec], env)
+    detail = outcomes[0] if outcomes else {}
+    parts = [
+        f"Synced {target_name} ({spec.version_str})",
+        detail.get("schema", ""),
+        detail.get("views", ""),
+        detail.get("menus", ""),
+    ]
+    message = " | ".join(p for p in parts if p)
     return {
         "ok": True,
         "upgraded": [target_name],
-        "message": f"Upgraded {target_name} to {spec.version_str}",
+        "message": message,
+        "detail": detail,
     }
 
 
@@ -3690,8 +3926,7 @@ def uninstall_module_action(env, module_roots: list, target_name: str) -> dict:
 
 
 def render_apps_page(env, module_roots: list, current_path: str | None = None) -> str:
-    """Read-only Apps catalog at `/web/apps`. Slice 2 adds the install /
-    upgrade actions on top of the same template."""
+    """Apps catalog at `/web/apps` — grid of module cards."""
     catalog = _apps_catalog(env, module_roots)
     summary = {
         "total": len(catalog),
@@ -3699,9 +3934,11 @@ def render_apps_page(env, module_roots: list, current_path: str | None = None) -
         "to_upgrade": sum(1 for c in catalog if c["state"] == "to_upgrade"),
         "uninstalled": sum(1 for c in catalog if c["state"] == "uninstalled"),
     }
+    categories = sorted({c["category"] for c in catalog})
     template = _env.get_template("apps.html")
     return template.render(
         catalog=catalog,
+        categories=categories,
         summary=summary,
         page_title="Apps",
         subtitle=(
@@ -3711,6 +3948,28 @@ def render_apps_page(env, module_roots: list, current_path: str | None = None) -
             f"{summary['uninstalled']} uninstalled"
         ),
         **layout_context(env, current_path),
+    )
+
+
+def render_apps_detail_page(
+    env, module_roots: list, name: str, current_path: str | None = None
+) -> str | None:
+    """Per-module detail at `/web/apps/<name>`. Returns None if unknown."""
+    app = _apps_catalog_entry(env, module_roots, name)
+    if app is None:
+        return None
+    ctx = layout_context(env, current_path, leaf_label=app["display_name"])
+    ctx["breadcrumbs"] = [
+        {"label": "Home", "href": "/web/admin"},
+        {"label": "Apps", "href": "/web/apps"},
+        {"label": app["display_name"], "href": None},
+    ]
+    template = _env.get_template("apps_detail.html")
+    return template.render(
+        app=app,
+        page_title=app["display_name"],
+        subtitle=app["name"],
+        **ctx,
     )
 
 
@@ -3790,42 +4049,95 @@ def _menu(env, current_path: str | None) -> list[dict]:
     return [_mark(item) for item in items]
 
 
+def _menu_entry_for_href(
+    menu_tree: list, href: str
+) -> tuple[dict | None, dict | None]:
+    """Return ``(parent_group, leaf)`` whose ``href`` equals *href*."""
+    for group in menu_tree:
+        if group.get("href") == href:
+            return None, group
+        for child in group.get("children", []) or []:
+            if child.get("href") == href:
+                return group, child
+    return None, None
+
+
+def _label_for_href(menu_tree: list, href: str, fallback: str) -> str:
+    _parent, leaf = _menu_entry_for_href(menu_tree, href)
+    if leaf is not None:
+        return leaf.get("label") or fallback
+    return fallback
+
+
+def _list_breadcrumb_for_model(
+    env,
+    model_name: str,
+    menu_tree: list | None = None,
+    *,
+    list_module: str | None = None,
+    list_name: str | None = None,
+    list_search: str = "",
+    list_order: str = "",
+    list_filters: str = "",
+) -> dict | None:
+    """Return ``{label, href}`` for the model's list view, if any."""
+    list_view = _load_list_view(env, list_module, list_name, model_name)
+    if list_view is None:
+        return None
+    module = list_view.module
+    name = list_view.name
+    href = f"/web/views/{module}/{name}"
+    qs = encode_list_nav_query(
+        list_module or module,
+        list_name or name,
+        search=list_search,
+        order=list_order,
+        filters=list_filters,
+    )
+    if qs:
+        href = f"{href}?{qs}"
+    fallback = _humanize_model(model_name)
+    if "ir.ui.view" in env.registry:
+        from .views import resolve_arch
+
+        fallback = _view_title(list_view, resolve_arch(list_view))
+    label = _label_for_href(menu_tree or [], f"/web/views/{module}/{name}", fallback)
+    return {"label": label, "href": href}
+
+
 def build_breadcrumbs(
-    menu_tree: list, current_path: str | None, leaf_label: str | None = None
+    menu_tree: list,
+    current_path: str | None,
+    leaf_label: str | None = None,
+    *,
+    parent_href: str | None = None,
+    parent_label: str | None = None,
 ) -> list[dict]:
-    """Derive crumbs from the menu structure.
+    """Build navigation crumbs: Home → list → record/detail.
 
-    Walks the menu looking for a child whose `href` matches `current_path`.
-    Returns `[{"label", "href"}, ...]` with "Home" + parent-group label +
-    leaf label. The leaf is overridable (e.g. `Alice` instead of
-    `partner.form` on a form page).
-
-    Always starts with a "Home" entry pointing at /web/admin so the user
-    has a way back regardless of menu depth.
+    * Home always links to ``/web/admin``.
+    * List / kanban / graph pages get a single leaf (the view), linked
+      from Home only on the leaf when it is not the current page.
+    * Form / new / edit pages pass ``parent_href`` + ``parent_label``
+      (the model's list view) so the middle crumb links back to the
+      list. The record title stays in the page heading only (no third
+      crumb unless ``leaf_label`` is passed explicitly).
     """
     crumbs: list[dict] = [{"label": "Home", "href": "/web/admin"}]
-    parent: dict | None = None
-    leaf: dict | None = None
-    if current_path:
-        for group in menu_tree:
-            # A flat link.
-            if group.get("href") == current_path:
-                leaf = group
-                break
-            # A children group — look one level down.
-            for child in group.get("children", []) or []:
-                if child.get("href") == current_path:
-                    parent = group
-                    leaf = child
-                    break
-            if leaf is not None:
-                break
-    if parent is not None:
-        crumbs.append({"label": parent["label"], "href": None})
+    if parent_href and parent_label:
+        crumbs.append({"label": parent_label, "href": parent_href})
+        if leaf_label:
+            crumbs.append({"label": leaf_label, "href": None})
+        return crumbs
+
+    _parent, leaf = (
+        _menu_entry_for_href(menu_tree, current_path)
+        if current_path
+        else (None, None)
+    )
     if leaf is not None:
-        crumbs.append({"label": leaf_label or leaf["label"], "href": None})
+        crumbs.append({"label": leaf_label or leaf.get("label") or "Page", "href": None})
     elif leaf_label:
-        # Path isn't in the menu but the caller knows the label.
         crumbs.append({"label": leaf_label, "href": None})
     return crumbs
 

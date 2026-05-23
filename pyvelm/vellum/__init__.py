@@ -21,6 +21,7 @@ from .query import QueryBuilder
 from .relations import BelongsTo, BelongsToMany, HasMany, HasOne, Relation
 from .scope import scope
 from .soft_delete import SoftDeletes
+from .timestamps import apply_timestamp_vals, install_vellum_timestamps, utc_now
 
 __all__ = [
     "BelongsTo",
@@ -34,7 +35,9 @@ __all__ = [
     "apply_with_counts",
     "eager_load",
     "filter_mass_assignment",
+    "install_vellum_timestamps",
     "on",
     "scope",
+    "utc_now",
     "wrap",
 ]

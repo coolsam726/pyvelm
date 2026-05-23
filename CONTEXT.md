@@ -1,9 +1,10 @@
-# Project context — pyvelm v0.2.10
+# Project context — pyvelm v0.3.0
 
 Building an Odoo-style ERP framework in Python.
 
-**v0.2.10 (released 2026-05-23)** — Vellum demo UI in examples; `make:model
---vellum`; domain `all` comparisons. See [v0.2.10 release summary](#v0210-release-summary).
+**v0.3.0 (released 2026-05-22)** — Apps Sync, Vellum timestamps/`_guarded`,
+`display_name`, console UX polish. See [CHANGELOG.md](CHANGELOG.md) and
+[docs/releases/v0.3.0.md](docs/releases/v0.3.0.md).
 **v0.2.9 (released 2026-05-23)** — Domain `{"all": True}`; GitHub releases from
 CHANGELOG. See [v0.2.9 release summary](#v029-release-summary).
 **v0.2.8 (released 2026-05-23)** — Symmetric M2M cache; docs home refresh.
@@ -266,9 +267,9 @@ Tailwind v4 + Flowbite build pipeline:
   `layout_context(env, current_path)` so the shell knows the active
   user, company, menu state, and current path.
 - Theme toggle and sidebar-collapse persist via `localStorage`. The
-  layout also ships a small Alpine-driven dialog component
-  (`pvConfirm` / `pvAlert`) for future replacement of `hx-confirm`
-  browser prompts.
+  layout also ships draggable confirm/alert prompts (`pvConfirm` /
+  `pvAlert` via `PvDialog.confirm` / `.alert`) on the same chrome as
+  inline form dialogs.
 - Login page stays standalone (no shell) and uses the same compiled
   stylesheet for consistency.
 
@@ -276,8 +277,9 @@ UI polish wave (post-0.7.0):
 
   - **Layout system** — proper page heading region (h2 + subtitle +
     breadcrumb), unified across list/form/kanban/admin via
-    `render.layout_context()`. `build_breadcrumbs(menu, current_path,
-    leaf_label)` derives crumbs from the menu tree.
+    `render.layout_context()`. `build_breadcrumbs` yields
+    Home → list (linked on form pages) → record title; list pages
+    show Home → view label only.
   - **DataTable** (`templates/list.html` + `list_table.html`) — Alpine
     `pvList` component adds per-column filters, drag-and-drop column
     reorder with `localStorage` persistence, and search/sort on top of
@@ -308,7 +310,8 @@ UI polish wave (post-0.7.0):
     back to the native prompt because async work can't complete on
     hard navigations.
   - **pvConfirm interceptor** — one `htmx:confirm` listener routes
-    every `hx-confirm` through the styled dialog. Templates unchanged.
+    every `hx-confirm` through the draggable `PvDialog` confirm mode.
+    Templates unchanged.
   - **Flowbite form-control polish** — semantic-token inputs, Text
     fields render as `<textarea>`, required `*` indicator surfaces.
   - **Human-readable page headings** — `_view_title(view, arch)` reads

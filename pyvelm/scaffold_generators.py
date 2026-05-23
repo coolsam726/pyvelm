@@ -167,14 +167,44 @@ def generate_model(
     return target
 
 
-def _field_refs_for_model(registry: Registry | None, model_name: str) -> tuple[list[str], list[str]]:
-    """Pick stored fields for starter list/form views."""
+def _timestamp_field_names(cls) -> list[str]:
+    """Timestamp columns to show on list/form views when enabled."""
+    try:
+        from pyvelm.vellum.timestamps import (
+            created_at_column,
+            updated_at_column,
+            uses_timestamps,
+        )
+    except ImportError:
+        return []
+    if not uses_timestamps(cls):
+        return []
+    names: list[str] = []
+    for col in (created_at_column(cls), updated_at_column(cls)):
+        if col and col in cls._fields:
+            names.append(col)
+    return names
+
+
+def _field_refs_for_model(registry: Registry | None, model_name: str) -> tuple[list[str], list[str], list[str]]:
+    """Pick stored fields for starter list/form views.
+
+    Returns ``(list_fields, form_fields, form_timestamp_fields)``.
+    """
     if registry is None or model_name not in registry:
-        return ["name"], ["name"]
+        return ["name"], ["name"], []
     from .fields import Many2many, One2many
 
     cls = registry[model_name]
-    skip = {"id", "create_uid", "write_uid", "create_date", "write_date"}
+    skip = {
+        "id",
+        "create_uid",
+        "write_uid",
+        "create_date",
+        "write_date",
+        "created_at",
+        "updated_at",
+    }
     list_names: list[str] = []
     form_names: list[str] = []
     for fname, field in cls._fields.items():
@@ -191,12 +221,27 @@ def _field_refs_for_model(registry: Registry | None, model_name: str) -> tuple[l
         form_names.insert(0, "name")
     if not list_names:
         list_names = form_names = ["name"] if "name" in cls._fields else ["id"]
-    return list_names, form_names
+    timestamp_names = _timestamp_field_names(cls)
+    for ts in timestamp_names:
+        if ts not in list_names:
+            list_names.append(ts)
+    return list_names, form_names, timestamp_names
 
 
 def _format_field_list(names: list[str]) -> str:
     lines = [f'            "{n}",' for n in names]
     return "\n".join(lines)
+
+
+def _format_timestamp_section(timestamp_fields: list[str]) -> str:
+    if not timestamp_fields:
+        return ""
+    body = _format_field_list(timestamp_fields)
+    return (
+        "            section(\"metadata\", \"Record info\", [\n"
+        f"{body}\n"
+        "            ]),\n"
+    )
 
 
 def generate_views(
@@ -214,7 +259,7 @@ def generate_views(
     if target.exists() and not force:
         raise FileExistsError(str(target))
     (module_path / "views").mkdir(exist_ok=True)
-    list_fields, form_fields = _field_refs_for_model(registry, model_name)
+    list_fields, form_fields, timestamp_fields = _field_refs_for_model(registry, model_name)
     body = _read_template(
         "snippets/view.py.template",
         {
@@ -223,6 +268,7 @@ def generate_views(
             "stem": stem,
             "list_fields": _format_field_list(list_fields),
             "form_fields": _format_field_list(form_fields),
+            "timestamp_section": _format_timestamp_section(timestamp_fields),
             "title": stem.replace("_", " ").title(),
         },
     )

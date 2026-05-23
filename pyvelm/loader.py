@@ -11,6 +11,7 @@ Optionally:
 
     MODELS_PACKAGE = "myapp.partners.models"   # defaults to <pkg>.models
     INSTALL_HOOK = "myapp.partners.hooks:install"
+    SYNC_HOOK = "myapp.partners.hooks:sync"   # runs on Apps Sync (re-install path)
     MIGRATIONS_PACKAGE = "myapp.partners.migrations"  # defaults to <pkg>.migrations
 
 The loader:
@@ -47,10 +48,12 @@ class ModuleSpec:
     models_package: str
     migrations_package: str | None
     install_hook: Callable | None = None
+    sync_hook: Callable | None = None
     package_path: Path | None = None
     data: list[str] = dc_field(default_factory=list)
     # Optional human-facing manifest fields. Drive the Apps catalog UI;
     # none of them affect install behavior.
+    display_name: str = ""             # human label for Apps UI (defaults from name)
     summary: str = ""                  # one-line tagline
     description: str = ""              # longer prose (Markdown-ish)
     category: str = ""                 # grouping label, e.g. "CRM" or "Admin"
@@ -67,6 +70,13 @@ class ModuleSpec:
     @property
     def version_str(self) -> str:
         return ".".join(str(p) for p in self.version)
+
+
+def module_display_name(name: str, explicit: str | None = None) -> str:
+    """Readable Apps label. ``NAME`` stays the technical id (``vellum_demo``)."""
+    if explicit and str(explicit).strip():
+        return str(explicit).strip()
+    return " ".join(part.capitalize() for part in name.split("_") if part)
 
 
 def _import_attr(dotted: str):
@@ -104,6 +114,8 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
     migrations_pkg = getattr(mod, "MIGRATIONS_PACKAGE", f"{package}.migrations")
     install_dotted = getattr(mod, "INSTALL_HOOK", None)
     install_hook = _import_attr(install_dotted) if install_dotted else None
+    sync_dotted = getattr(mod, "SYNC_HOOK", None)
+    sync_hook = _import_attr(sync_dotted) if sync_dotted else None
     data = list(getattr(mod, "DATA", []))
     command_refs = list(getattr(mod, "COMMANDS", []))
 
@@ -115,8 +127,12 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
         models_package=models_pkg,
         migrations_package=migrations_pkg,
         install_hook=install_hook,
+        sync_hook=sync_hook,
         package_path=pkg_path,
         data=data,
+        display_name=module_display_name(
+            name, getattr(mod, "DISPLAY_NAME", None)
+        ),
         summary=getattr(mod, "SUMMARY", ""),
         description=getattr(mod, "DESCRIPTION", ""),
         category=getattr(mod, "CATEGORY", ""),
@@ -253,6 +269,26 @@ def _load_models(spec: ModuleSpec, registry: Registry) -> None:
         importlib.import_module(spec.models_package)
         _sync_models_from_package(spec, registry, before_models)
     spec.loaded = True
+
+
+def reload_models(spec: ModuleSpec, registry: Registry) -> None:
+    """Re-import a module's models package (upgrade / dev reload).
+
+    Refreshes Python class definitions on the live registry without
+    requiring a full process restart.
+    """
+    if not _has_models_package(spec):
+        return
+    with registry.activate():
+        before_models: dict[str, type] = dict(registry._models)
+        pkg = importlib.import_module(spec.models_package)
+        importlib.reload(pkg)
+        prefix = spec.models_package + "."
+        for mod_name in sorted(
+            k for k in sys.modules if k.startswith(prefix)
+        ):
+            importlib.reload(sys.modules[mod_name])
+        _sync_models_from_package(spec, registry, before_models)
 
 
 def _ensure_ir_module(env: Environment) -> None:
@@ -400,11 +436,14 @@ def _load_data_files(spec: ModuleSpec) -> None:
                 f"_pyvelm_data_{spec.name}_"
                 + rel_path.replace("/", "_").replace(".py", "")
             )
-            spec_obj = importlib.util.spec_from_file_location(mod_name, path)
-            if spec_obj is None or spec_obj.loader is None:
-                raise ImportError(f"Could not import data file {path}")
-            mod = importlib.util.module_from_spec(spec_obj)
-            spec_obj.loader.exec_module(mod)
+            if mod_name in sys.modules:
+                mod = importlib.reload(sys.modules[mod_name])
+            else:
+                spec_obj = importlib.util.spec_from_file_location(mod_name, path)
+                if spec_obj is None or spec_obj.loader is None:
+                    raise ImportError(f"Could not import data file {path}")
+                mod = importlib.util.module_from_spec(spec_obj)
+                spec_obj.loader.exec_module(mod)
             views.extend(getattr(mod, "VIEWS", []))
             inherits.extend(getattr(mod, "VIEW_INHERITS", []))
             menus.extend(getattr(mod, "MENUS", []))
@@ -583,16 +622,26 @@ def _sync_menus(spec: ModuleSpec, env: Environment) -> None:
             Menu.create(vals)
 
 
-def install(specs: list[ModuleSpec], env: Environment) -> None:
+def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
     """Install or upgrade each module, in `specs` order, atomically per
-    module. Models must already be loaded into `env.registry`."""
+    module. Models must already be loaded into `env.registry`.
+
+    Returns one result dict per spec with keys ``name``, ``schema``,
+    ``views``, ``menus`` (human-readable summaries for the Apps UI).
+    """
+    from . import db_autogen
+
     with env.transaction():
         _ensure_ir_module(env)
+    results: list[dict] = []
     for spec in specs:
         with env.transaction():
             current = _installed_version(env, spec.name)
+            schema_note = ""
             if current is None:
                 _setup_module_schema(spec, env)
+                applied = db_autogen.apply_schema_diff(env, spec.name)
+                schema_note = applied.summary()
                 if spec.install_hook is not None:
                     spec.install_hook(env)
                 env.conn.execute(
@@ -600,21 +649,43 @@ def install(specs: list[ModuleSpec], env: Environment) -> None:
                     f'("name", "version") VALUES (%s, %s)',
                     [spec.name, spec.version_str],
                 )
-            elif current < spec.version:
-                _run_migrations(spec, env, current, spec.version)
+            else:
+                _setup_module_schema(spec, env)
+                if current < spec.version:
+                    _run_migrations(spec, env, current, spec.version)
+                applied = db_autogen.apply_schema_diff(env, spec.name)
+                schema_note = applied.summary()
                 env.conn.execute(
                     f'UPDATE "{IR_MODULE_TABLE}" SET "version" = %s, '
                     f'"installed_at" = now() WHERE "name" = %s',
                     [spec.version_str, spec.name],
                 )
-            # Load data files (views, future seed records) and sync
-            # them. Runs every install pass so re-declaring overwrites
-            # the previous state. Base views first so extensions in
-            # dependent modules can resolve their parents.
+            # Load data files (views, menus) from disk — always reload
+            # so Upgrade/Sync picks up new DATA without reinstall.
             _load_data_files(spec)
+            view_count = len(spec.views)
+            inherit_count = len(spec.view_inherits)
+            menu_count = len(spec.menus)
             _sync_views(spec, env)
             _sync_view_inherits(spec, env)
             _sync_menus(spec, env)
+            if current is not None and spec.sync_hook is not None:
+                spec.sync_hook(env)
+            results.append(
+                {
+                    "name": spec.name,
+                    "schema": schema_note,
+                    "views": (
+                        f"{view_count} view(s)"
+                        + (
+                            f", {inherit_count} inherit(s)"
+                            if inherit_count
+                            else ""
+                        )
+                    ),
+                    "menus": f"{menu_count} menu(s)",
+                }
+            )
 
     # Build cross-model indexes once everything's loaded.
     env.registry._build_o2m_inverse_index()
@@ -623,6 +694,7 @@ def install(specs: list[ModuleSpec], env: Environment) -> None:
     env.registry._build_compute_graph()
     for cls in env.registry._models.values():
         cls._validate_relations(env.registry)
+    return results
 
 
 def load_and_install(roots: list[Path | str], env: Environment) -> list[ModuleSpec]:

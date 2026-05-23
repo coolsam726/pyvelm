@@ -76,6 +76,15 @@ class Registry:
         self._models[model_cls._name] = model_cls
         if module_name is not None:
             self._model_module[model_cls._name] = module_name
+        self._finalize_vellum_model(model_cls)
+
+    def _finalize_vellum_model(self, model_cls: type) -> None:
+        """Run Vellum class hooks after the metaclass has built ``_fields``."""
+        try:
+            from pyvelm.vellum.mixin import finalize_vellum_model
+        except ImportError:
+            return
+        finalize_vellum_model(model_cls)
 
     def models_of(self, module_name: str) -> list[type]:
         """Models contributed by a single module, in registration order."""

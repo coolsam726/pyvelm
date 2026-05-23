@@ -1,8 +1,9 @@
 """{{name}} module manifest."""
 
 NAME: str = "{{name}}"
+DISPLAY_NAME: str = "{{display_name}}"
 VERSION: tuple[int, ...] = (0, 1, 0)
-SUMMARY: str = "{{name}} — describe what it does in one line."
+SUMMARY: str = "{{display_name}} — describe what it does in one line."
 DESCRIPTION: str = ""
 CATEGORY: str = "Apps"
 AUTHOR: str = ""

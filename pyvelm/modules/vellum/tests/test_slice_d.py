@@ -7,8 +7,10 @@ from pathlib import Path
 
 import psycopg
 
-from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Environment, Registry, loader
+from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Registry, loader
 from pyvelm.vellum import SoftDeletes, Vellum
+from pyvelm.vellum.fillable import filter_mass_assignment
+from pyvelm.vellum.timestamps import apply_timestamp_vals
 
 DSN = os.environ.get("PYVELM_DSN")
 HERE = Path(__file__).resolve().parents[4]
@@ -32,13 +34,15 @@ class VellumSliceDTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.conn.close()
 
-    def test_fillable_drops_unknown_keys(self):
+    def test_guarded_drops_id_on_create(self):
         Note = self.env["vellum.demo.note"]
         note = Note.create(
-            {"title": "ok", "body": "b", "score": 1, "secret": "nope"}
+            {"id": 99999, "title": "ok", "body": "b", "score": 1}
         )
+        self.assertNotEqual(note.id, 99999)
         self.assertEqual(note.title, "ok")
-        self.assertFalse(hasattr(note, "secret"))
+        self.assertIsNotNone(note.created_at)
+        self.assertIsNotNone(note.updated_at)
 
     def test_fillable_strict_raises(self):
         Cls = self.env.registry["vellum.demo.note"]
@@ -53,8 +57,9 @@ class VellumSliceDTests(unittest.TestCase):
         note = self.env["vellum.demo.note"].create(
             {"title": "before", "score": 1}
         )
-        note.fill({"title": "after", "ignored": True})
+        note.fill({"title": "after", "id": 99999})
         self.assertEqual(note.title, "after")
+        self.assertNotEqual(note.id, 99999)
 
     def test_soft_delete_hide_and_restore(self):
         Soft = self.env["vellum.demo.soft_note"]
@@ -96,6 +101,89 @@ class VellumSliceDTests(unittest.TestCase):
                     _name = "vellum.demo.bad_fill"
                     _fillable = ["a"]
                     _guarded = ["b"]
+
+
+class MassAssignmentPolicyTests(unittest.TestCase):
+    def test_guarded_star_blocks_all(self):
+        class M:
+            _name = "test.m"
+            _guarded = ["*"]
+
+        self.assertEqual(filter_mass_assignment(M, {"a": 1, "b": 2}), {})
+
+    def test_guarded_allows_unlisted_keys(self):
+        class M:
+            _name = "test.m"
+            _guarded = ["id"]
+
+        self.assertEqual(
+            filter_mass_assignment(M, {"id": 1, "title": "x"}),
+            {"title": "x"},
+        )
+
+    def test_vellum_defaults_to_guard_id(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Post(Vellum, BaseModel):
+                _name = "test.post"
+                title = Char()
+
+        self.assertEqual(getattr(Post, "_guarded", None), ["id", "created_at", "updated_at"])
+        self.assertIn("created_at", Post._fields)
+        self.assertIn("updated_at", Post._fields)
+        self.assertIsNone(getattr(Post, "_fillable", None))
+        self.assertEqual(
+            filter_mass_assignment(Post, {"id": 9, "title": "hi", "created_at": "x"}),
+            {"title": "hi"},
+        )
+
+    def test_timestamps_disabled(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Legacy(Vellum, BaseModel):
+                _name = "test.legacy"
+                _timestamps = False
+                title = Char()
+
+        self.assertEqual(getattr(Legacy, "_guarded", None), ["id"])
+        self.assertNotIn("created_at", Legacy._fields)
+
+    def test_apply_timestamp_vals_on_create(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Post(Vellum, BaseModel):
+                _name = "test.post2"
+                title = Char()
+
+        vals = apply_timestamp_vals(Post, {"title": "a"}, updating=False)
+        self.assertIn("created_at", vals)
+        self.assertIn("updated_at", vals)
+        self.assertEqual(vals["created_at"], vals["updated_at"])
+
+    def test_apply_timestamp_vals_on_write(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Post(Vellum, BaseModel):
+                _name = "test.post3"
+                title = Char()
+
+        vals = apply_timestamp_vals(Post, {"title": "a"}, updating=True)
+        self.assertNotIn("created_at", vals)
+        self.assertIn("updated_at", vals)
+
+    def test_fillable_still_whitelists(self):
+        class M:
+            _name = "test.m"
+            _fillable = ["title"]
+
+        self.assertEqual(
+            filter_mass_assignment(M, {"title": "a", "body": "b"}),
+            {"title": "a"},
+        )
 
 
 if __name__ == "__main__":

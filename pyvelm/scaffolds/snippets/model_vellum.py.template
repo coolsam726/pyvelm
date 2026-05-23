@@ -6,6 +6,6 @@ from pyvelm.vellum import Vellum
 
 class {{class_name}}(Vellum, BaseModel):
     _name = "{{model}}"
-    _fillable = ["name"]
+    _guarded = ["id"]
 
     name = Char(required=True)

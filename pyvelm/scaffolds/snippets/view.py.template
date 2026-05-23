@@ -20,6 +20,6 @@ VIEWS = [
             section("main", "{{title}}", [
 {{form_fields}}
             ]),
-        ],
+{{timestamp_section}}        ],
     ),
 ]

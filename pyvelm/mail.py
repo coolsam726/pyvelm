@@ -60,7 +60,7 @@ from datetime import datetime
 from email.message import EmailMessage
 from typing import Protocol
 
-from pyvelm import BaseModel, Char, Integer, Many2one, Text
+from pyvelm import BaseModel, Char, Integer, Many2one, Text, depends
 from pyvelm.cron import _DatetimeField  # reuse the datetime field from cron
 
 log = logging.getLogger("pyvelm.mail")
@@ -206,6 +206,7 @@ def _load_backend() -> tuple[MailBackend, str | None]:
 
 class Message(BaseModel):
     _name = "mail.message"
+    _rec_name = "body"
 
     model = Char()
     res_id = Integer()
@@ -222,10 +223,11 @@ class Message(BaseModel):
     state = Char(default="outgoing")  # outgoing / sent / failed
     error = Text()
 
-    @property
-    def display_name(self) -> str:
-        self.ensure_one()
-        return self.body[:60] if self.body else ""
+    @depends("body")
+    def _compute_display_name(self):
+        for r in self:
+            body = r.body or ""
+            r.display_name = body[:60] if body else f"mail.message #{r.id}"
 
     # ---- dispatcher -----------------------------------------------------
 

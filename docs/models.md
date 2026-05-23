@@ -169,6 +169,43 @@ related field type must match the leaf. Writes update the leaf record.
 Pass `readonly=True` on any field declaration to block `write()` and
 form edits (unless the view overrides with `field(..., readonly=False)`).
 
+## Primary key (`id`)
+
+Every model has an implicit readonly ``id`` field (the table's ``SERIAL PRIMARY KEY``).
+You never declare it in model classes; it is available for domains, ordering, and
+compute dependencies (e.g. ``@depends("id")`` on the default ``display_name`` when
+no ``_rec_name`` field exists).
+
+## Display name
+
+Every model gets a computed ``display_name`` field automatically (Odoo-style).
+By default it reads the model's ``_rec_name`` field, which defaults to
+``"name"`` when that column exists; otherwise it falls back to
+``"<model> #<id>"``.
+
+```python
+class Comment(BaseModel):
+    _name = "my.comment"
+    _rec_name = "body"   # use body instead of name
+    body = Text()
+```
+
+Override ``_compute_display_name`` (with ``@depends``) for richer labels —
+you do not need to redeclare the ``display_name`` field:
+
+```python
+class Partner(BaseModel):
+    _name = "res.partner"
+    name = Char()
+    country_id = Many2one("res.country")
+
+    @depends("name", "country_id.code")
+    def _compute_display_name(self):
+        for r in self:
+            code = r.country_id.code if r.country_id else None
+            r.display_name = f"{r.name} [{code}]" if code else r.name
+```
+
 ## Computed fields
 
 A field becomes "computed" when you point it at a method via
@@ -179,12 +216,11 @@ class Partner(BaseModel):
     _name = "res.partner"
     name = Char()
     age = Integer()
-    display_name = Char(compute="_compute_display_name")
+    age_bucket = Char(compute="_compute_age_bucket", store=True)
 
-    @depends("name", "age")
-    def _compute_display_name(self):
-        for r in self:
-            r.display_name = f"{r.name} ({r.age})" if r.age else r.name
+    @depends("age")
+    def _compute_age_bucket(self):
+        ...
 ```
 
 The `@depends` decorator declares which fields the compute reads.

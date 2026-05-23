@@ -133,11 +133,11 @@
                     <path stroke-linecap="round" stroke-linejoin="round"
                           d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0015.803 15.803z"/>
                 </svg>
-                <input type="search" x-model="searchText"
+                <input type="search" x-ref="searchInput" x-model="searchText"
                        placeholder="Search…"
                        class="w-full pl-7 pr-2 py-1 text-xs rounded border border-default
                               bg-neutral-primary text-body placeholder:text-body-subtle
-                              focus:outline-none focus:ring-2 focus:ring-fg-brand/40">
+                              focus:outline-none focus:ring-2 focus:ring-fg-brand focus:border-fg-brand">
             </div>
         </form>
 
@@ -275,6 +275,11 @@ document.addEventListener('alpine:init', () => {
             const f = this.groupable.find(x => x.value === spec);
             return f ? f.label : spec;
         },
+
+        init() {
+            this.$nextTick(() => this.$refs.searchInput?.focus({ preventScroll: true }));
+        },
+
         measureLabelFor(spec) {
             const f = this.measurable.find(x => x.value === spec);
             return f ? f.label : spec;
