@@ -1,0 +1,87 @@
+{% extends "layouts/main.html" %}
+{% block title %}My approvals — pyvelm{% endblock %}
+{% block page_title %}My approvals{% endblock %}
+{% block page_subtitle %}Pending sign-offs assigned to you{% endblock %}
+
+{% block content %}
+<script>window._pvWorkflowInboxCfg = { items: {{ items | tojson }} };</script>
+<div class="max-w-4xl mx-auto space-y-4" x-data="pvWorkflowInbox(window._pvWorkflowInboxCfg)">
+
+    <template x-if="!items.length">
+        <p class="text-sm text-body-subtle py-8 text-center rounded-lg border border-default bg-neutral-primary">
+            No pending approvals — you're all caught up.
+        </p>
+    </template>
+
+    <template x-for="item in items" :key="item.id">
+        <article class="rounded-lg border border-default bg-neutral-primary p-4 flex flex-wrap gap-4 justify-between items-start">
+            <div class="space-y-1 min-w-0 flex-1">
+                <h3 class="text-sm font-semibold text-heading" x-text="item.transition_label"></h3>
+                <p class="text-sm text-body" x-text="item.record_label"></p>
+                <p class="text-2xs text-body-subtle">
+                    <span x-text="item.state_label"></span>
+                    <span x-show="item.requester"> · requested by <span x-text="item.requester"></span></span>
+                    <span x-show="item.deadline_at"> · due <span x-text="item.deadline_at"></span></span>
+                </p>
+            </div>
+            <div class="flex flex-wrap gap-2 shrink-0">
+                <a x-show="item.form_href" :href="item.form_href"
+                   class="px-3 py-1.5 text-sm rounded-md border border-default hover:bg-neutral-secondary">
+                    Open record
+                </a>
+                <button type="button" @click="act(item.id, true)"
+                        class="px-3 py-1.5 text-sm font-medium rounded-md bg-success-soft text-success-strong">
+                    Approve
+                </button>
+                <button type="button" @click="act(item.id, false)"
+                        class="px-3 py-1.5 text-sm font-medium rounded-md bg-danger-soft text-fg-danger">
+                    Reject
+                </button>
+            </div>
+        </article>
+    </template>
+</div>
+
+<script>
+(() => {
+    function factory(cfg) {
+        return {
+            items: cfg.items || [],
+            async act(id, approved) {
+                const item = this.items.find(i => i.id === id);
+                const label = item && item.transition_label ? item.transition_label : 'this request';
+                const ok = await window.pvConfirm(
+                    approved
+                        ? 'Approve «' + label + '»?'
+                        : 'Reject «' + label + '»?',
+                    {
+                        title: approved ? 'Approve' : 'Reject',
+                        variant: approved ? 'success' : 'danger',
+                        confirmLabel: approved ? 'Approve' : 'Reject',
+                    },
+                );
+                if (!ok) return;
+                const r = await fetch('/api/workflow/approvals/' + id + '/act', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ approved, comment: '' }),
+                });
+                if (r.ok) {
+                    this.items = this.items.filter(i => i.id !== id);
+                    window.pvToast && window.pvToast(approved ? 'Approved.' : 'Rejected.', { variant: 'success' });
+                } else {
+                    window.pvAlert && window.pvAlert(await r.text(), { variant: 'danger' });
+                }
+            },
+        };
+    }
+    const register = () => Alpine.data('pvWorkflowInbox', factory);
+    if (typeof Alpine !== 'undefined') register();
+    else document.addEventListener('alpine:init', register);
+})();
+</script>
+{% endblock %}

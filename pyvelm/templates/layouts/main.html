@@ -686,7 +686,7 @@
                 // success contract.
                 document.body.addEventListener('htmx:configRequest', (ev) => {
                     if (!this.open) return;
-                    const body = this.$refs.body;
+                    const body = this.$refs.content;
                     if (body && body.contains(ev.detail.elt)) {
                         ev.detail.headers['X-PV-Dialog'] = '1';
                     }

@@ -1,0 +1,168 @@
+{# Workflow status and actions on record forms. #}
+{% if workflow_context and workflow_context.has_workflow %}
+<script>window._pvWorkflowBarCfg = {{ workflow_context | tojson }};</script>
+<div class="rounded-lg border border-default bg-neutral-primary p-4 space-y-3"
+     x-data="pvWorkflowBar(window._pvWorkflowBarCfg)">
+
+    {% if workflow_context.statusbar %}
+    <nav class="flex flex-wrap items-center gap-1 text-2xs" aria-label="Workflow progress">
+        {% for st in workflow_context.statusbar %}
+        <span class="flex items-center gap-1">
+            <span class="px-2 py-1 rounded-full font-medium
+                {% if st.current %}bg-fg-brand text-white
+                {% elif st.done %}bg-success-soft text-success-strong
+                {% else %}bg-neutral-secondary text-body-subtle{% endif %}">
+                {{ st.label }}
+            </span>
+            {% if not loop.last %}<span class="text-body-subtle">›</span>{% endif %}
+        </span>
+        {% endfor %}
+    </nav>
+    {% endif %}
+
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <span class="text-2xs font-semibold uppercase tracking-wider text-body-subtle">Workflow</span>
+            {% if workflow_context.started %}
+            <p class="text-sm font-medium text-heading mt-0.5">
+                {{ workflow_context.state_label }}
+                {% if workflow_context.pending_transition %}
+                <span class="text-warning-strong text-2xs ml-2">(awaiting approval)</span>
+                {% endif %}
+            </p>
+            {% else %}
+            <p class="text-sm text-body-subtle mt-0.5">
+                {% if workflow_context.auto_start %}
+                {{ workflow_context.definition_name }} — not started on this record yet.
+                {% else %}
+                Not started — {{ workflow_context.definition_name }}
+                {% endif %}
+            </p>
+            {% endif %}
+        </div>
+        <div class="flex flex-wrap gap-2">
+            {% if not workflow_context.started and workflow_context.can_start %}
+            <button type="button" @click="start()"
+                    class="px-3 py-1.5 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90">
+                Start workflow
+            </button>
+            {% endif %}
+            {% for tr in workflow_context.get('transitions', []) %}
+            <button type="button"
+                    @click="openTransitionByKey('{{ tr.key | e }}')"
+                    class="px-3 py-1.5 text-sm font-medium border border-default rounded-md hover:bg-neutral-secondary">
+                {{ tr.label }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% if workflow_context.get('pending_approvals') %}
+    <div class="border-t border-default pt-3 space-y-2">
+        <p class="text-sm font-medium text-heading">Pending your approval</p>
+        {% for ap in workflow_context.pending_approvals %}
+        <div class="flex gap-2">
+            <button type="button" @click="approve({{ ap.id }}, true)"
+                    class="px-2 py-1 text-sm rounded bg-success-soft text-success-strong">Approve</button>
+            <button type="button" @click="approve({{ ap.id }}, false)"
+                    class="px-2 py-1 text-sm rounded bg-danger-soft text-fg-danger">Reject</button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(() => {
+    function factory(ctx) {
+        return {
+            instanceId: ctx.instance_id,
+            transitions: ctx.transitions || [],
+            resModel: {{ (view.model if view is defined else '""') | tojson }},
+            resId: {{ (record_id if record_id is defined else none) | tojson }},
+
+            async start() {
+                const ok = await window.pvConfirm('Start the workflow on this record?', {
+                    title: 'Start workflow',
+                    variant: 'info',
+                    confirmLabel: 'Start',
+                });
+                if (!ok) return;
+                const r = await fetch('/api/workflow/instances/start', {
+                    method: 'POST',
+                    headers: this.headers(),
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ model: this.resModel, res_id: this.resId }),
+                });
+                if (r.ok) location.reload();
+                else window.pvAlert && window.pvAlert(await r.text(), { variant: 'danger' });
+            },
+
+            openTransitionByKey(key) {
+                const tr = this.transitions.find(t => t.key === key);
+                if (tr) this.openTransition(tr);
+            },
+
+            async openTransition(tr) {
+                const fields = tr.form_fields || [];
+                if (fields.length && window.PvDialog) {
+                    window.PvDialog.open({
+                        url: '/web/workflow/instances/' + this.instanceId + '/transition/' + encodeURIComponent(tr.key),
+                        title: tr.form_title || tr.label || 'Details',
+                        onResult: () => location.reload(),
+                    });
+                    return;
+                }
+                const ok = await window.pvConfirm(
+                    'Run «' + (tr.label || tr.key) + '» on this record?',
+                    {
+                        title: tr.form_title || tr.label || 'Confirm',
+                        variant: tr.kind === 'approval' ? 'warning' : 'info',
+                        confirmLabel: 'Continue',
+                    },
+                );
+                if (!ok) return;
+                const r = await fetch('/api/workflow/instances/' + this.instanceId + '/transition', {
+                    method: 'POST',
+                    headers: this.headers(),
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ transition: tr.key, values: {} }),
+                });
+                if (r.ok) location.reload();
+                else window.pvAlert && window.pvAlert(await r.text(), { variant: 'danger' });
+            },
+
+            async approve(id, approved) {
+                const ok = await window.pvConfirm(
+                    approved ? 'Approve this request?' : 'Reject this request?',
+                    {
+                        title: approved ? 'Approve' : 'Reject',
+                        variant: approved ? 'success' : 'danger',
+                        confirmLabel: approved ? 'Approve' : 'Reject',
+                    },
+                );
+                if (!ok) return;
+                const r = await fetch('/api/workflow/approvals/' + id + '/act', {
+                    method: 'POST',
+                    headers: this.headers(),
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ approved, comment: '' }),
+                });
+                if (r.ok) location.reload();
+                else window.pvAlert && window.pvAlert(await r.text(), { variant: 'danger' });
+            },
+
+            headers() {
+                return {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                };
+            },
+        };
+    }
+    const register = () => Alpine.data('pvWorkflowBar', factory);
+    if (typeof Alpine !== 'undefined') register();
+    else document.addEventListener('alpine:init', register);
+})();
+</script>
+{% endif %}

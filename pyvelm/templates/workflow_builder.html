@@ -1,0 +1,446 @@
+{% extends "layouts/main.html" %}
+{% block title %}{{ page_title }} — Workflow designer — pyvelm{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_subtitle %}Design approvals and stage forms without code{% endblock %}
+
+{% block content %}
+<script>window._pvWorkflowBuilderCfg = {{ alpine_config | tojson }};</script>
+<div class="flex flex-col gap-5 max-w-6xl mx-auto" x-data="pvWorkflowBuilder(window._pvWorkflowBuilderCfg)">
+
+    <nav class="flex flex-wrap gap-1 p-1 bg-neutral-secondary rounded-lg text-sm">
+        <template x-for="(s, i) in steps" :key="s.id">
+            <button type="button" @click="goStep(s.id)"
+                    :class="step === s.id ? 'bg-neutral-primary text-heading shadow-sm font-semibold' : 'text-body-subtle hover:text-body'"
+                    class="flex-1 min-w-[100px] px-3 py-2 rounded-md transition-colors text-center">
+                <span class="text-2xs opacity-60 mr-1" x-text="i + 1"></span>
+                <span x-text="s.label"></span>
+            </button>
+        </template>
+    </nav>
+
+    <div class="flex flex-wrap items-center gap-2 justify-end">
+        <button type="button" @click="save()" :disabled="saving"
+                class="px-3 py-1.5 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90">
+            <span x-text="saving ? 'Saving…' : 'Save workflow'"></span>
+        </button>
+    </div>
+
+    {# Step 1 — Basics #}
+    <section x-show="step === 1" x-cloak class="bg-neutral-primary border border-default rounded-lg p-5 space-y-4">
+        <h3 class="text-base font-semibold text-heading">What is this workflow for?</h3>
+        <label class="block max-w-md">
+            <span class="text-sm font-medium text-heading mb-1 block">Name</span>
+            <input type="text" x-model="meta.name" class="w-full text-sm rounded-md border border-default px-3 py-2">
+        </label>
+        <label class="block max-w-md">
+            <span class="text-sm font-medium text-heading mb-1 block">Description</span>
+            <input type="text" x-model="meta.description" class="w-full text-sm rounded-md border border-default px-3 py-2">
+        </label>
+        <label class="block max-w-md">
+            <span class="text-sm font-medium text-heading mb-1 block">Record type</span>
+            <select x-model="meta.model" @change="onModelChange()"
+                    class="w-full text-sm rounded-md border border-default px-3 py-2">
+                <option value="">— choose —</option>
+                <template x-for="m in models" :key="m.value">
+                    <option :value="m.value" x-text="m.label"></option>
+                </template>
+            </select>
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm">
+            <input type="checkbox" x-model="meta.active" class="rounded border-default">
+            <span>Active (only one active workflow per record type)</span>
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm">
+            <input type="checkbox" x-model="definition.auto_start" class="rounded border-default">
+            <span>Auto-start when a new record is created</span>
+        </label>
+    </section>
+
+    {# Step 2 — States #}
+    <section x-show="step === 2" x-cloak class="bg-neutral-primary border border-default rounded-lg p-5 space-y-4">
+        <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold text-heading">States</h3>
+            <button type="button" @click="addState()"
+                    class="text-sm px-3 py-1.5 rounded-md border border-default hover:bg-neutral-secondary">Add state</button>
+        </div>
+        <template x-for="(st, i) in definition.states" :key="st._uid">
+            <div class="flex flex-wrap gap-2 items-end border border-default rounded-lg p-3">
+                <label class="flex-1 min-w-[120px]">
+                    <span class="text-2xs text-body-subtle">Key</span>
+                    <input type="text" x-model="st.key" class="w-full text-sm rounded border border-default px-2 py-1">
+                </label>
+                <label class="flex-1 min-w-[160px]">
+                    <span class="text-2xs text-body-subtle">Label</span>
+                    <input type="text" x-model="st.label" class="w-full text-sm rounded border border-default px-2 py-1">
+                </label>
+                <label class="inline-flex items-center gap-1 text-sm">
+                    <input type="radio" name="initial" :value="st._uid" @change="setInitial(st._uid)">
+                    Initial
+                </label>
+                <label class="inline-flex items-center gap-1 text-sm">
+                    <input type="checkbox" x-model="st.final"> Final
+                </label>
+                <button type="button" @click="removeState(i)" class="text-sm text-fg-danger">Remove</button>
+            </div>
+        </template>
+    </section>
+
+    {# Step 3 — Transitions #}
+    <section x-show="step === 3" x-cloak class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold text-heading">Transitions &amp; stage forms</h3>
+            <button type="button" @click="addTransition()"
+                    class="text-sm px-3 py-1.5 rounded-md border border-default hover:bg-neutral-secondary">Add transition</button>
+        </div>
+        <template x-for="(tr, ti) in definition.transitions" :key="tr._uid">
+            <div class="bg-neutral-primary border border-default rounded-lg p-4 space-y-3">
+                <div class="flex flex-wrap gap-2 items-end">
+                    <label class="min-w-[100px]">
+                        <span class="text-2xs text-body-subtle">Key</span>
+                        <input type="text" x-model="tr.key" class="w-full text-sm rounded border px-2 py-1">
+                    </label>
+                    <label class="flex-1 min-w-[140px]">
+                        <span class="text-2xs text-body-subtle">Button label</span>
+                        <input type="text" x-model="tr.label" class="w-full text-sm rounded border px-2 py-1">
+                    </label>
+                    <label>
+                        <span class="text-2xs text-body-subtle">From</span>
+                        <select x-model="tr.fromSingle" class="text-sm rounded border px-2 py-1">
+                            <template x-for="st in definition.states" :key="st.key">
+                                <option :value="st.key" x-text="st.label"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label>
+                        <span class="text-2xs text-body-subtle">To</span>
+                        <select x-model="tr.to" class="text-sm rounded border px-2 py-1">
+                            <template x-for="st in definition.states" :key="st.key">
+                                <option :value="st.key" x-text="st.label"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label>
+                        <span class="text-2xs text-body-subtle">Kind</span>
+                        <select x-model="tr.kind" class="text-sm rounded border px-2 py-1">
+                            <option value="user">User action</option>
+                            <option value="approval">Requires approval</option>
+                        </select>
+                    </label>
+                    <button type="button" @click="removeTransition(ti)" class="text-sm text-fg-danger">Remove</button>
+                </div>
+                <div x-show="tr.kind === 'approval'" class="text-sm space-y-3 pl-2 border-l-2 border-fg-brand">
+                    <div class="flex flex-wrap gap-3">
+                        <label>
+                            <span class="text-2xs text-body-subtle block">Strategy</span>
+                            <select x-model="tr.approval.strategy" class="text-sm rounded border px-2 py-1">
+                                <option value="any">Any one approver</option>
+                                <option value="all">All approvers</option>
+                                <option value="sequential">Sequential (one after another)</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span class="text-2xs text-body-subtle block">Assignee</span>
+                            <select x-model="tr.approval.assignee_type" class="text-sm rounded border px-2 py-1">
+                                <option value="group">Group</option>
+                                <option value="user">User</option>
+                                <option value="field">Record field (Many2one user)</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label x-show="tr.approval.assignee_type === 'group'" class="block max-w-md">
+                        <span class="text-2xs text-body-subtle">Approver group</span>
+                        <select x-model.number="tr.approval.group_id" class="w-full text-sm rounded border px-2 py-1 mt-1">
+                            <option :value="null">Admin (default)</option>
+                            <template x-for="g in groups" :key="g.id">
+                                <option :value="g.id" x-text="g.name"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label x-show="tr.approval.assignee_type === 'user'" class="block max-w-md">
+                        <span class="text-2xs text-body-subtle">Approver user</span>
+                        <select x-model.number="tr.approval.user_id" class="w-full text-sm rounded border px-2 py-1 mt-1">
+                            <option value="">— choose —</option>
+                            <template x-for="u in users" :key="u.id">
+                                <option :value="u.id" x-text="u.name"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label x-show="tr.approval.assignee_type === 'field'" class="block max-w-md">
+                        <span class="text-2xs text-body-subtle">User field on record</span>
+                        <select x-model="tr.approval.user_field" class="w-full text-sm rounded border px-2 py-1 mt-1">
+                            <option value="">— choose —</option>
+                            <template x-for="rf in userFields()" :key="rf.name">
+                                <option :value="rf.name" x-text="rf.label"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <div class="flex flex-wrap gap-3">
+                        <label>
+                            <span class="text-2xs text-body-subtle block">Deadline (hours)</span>
+                            <input type="number" min="0" x-model.number="tr.approval.deadline_hours"
+                                   placeholder="optional"
+                                   class="w-28 text-sm rounded border px-2 py-1">
+                        </label>
+                        <label class="block max-w-xs">
+                            <span class="text-2xs text-body-subtle block">Escalate to group</span>
+                            <select x-model.number="tr.approval.escalate_to_group_id"
+                                    class="w-full text-sm rounded border px-2 py-1 mt-1">
+                                <option :value="null">Notify only</option>
+                                <template x-for="g in groups" :key="'esc-' + g.id">
+                                    <option :value="g.id" x-text="g.name"></option>
+                                </template>
+                            </select>
+                        </label>
+                    </div>
+                    <label>
+                        <span class="text-2xs text-body-subtle">On reject, return to</span>
+                        <select x-model="tr.reject_to" class="text-sm rounded border px-2 py-1 ml-2">
+                            <template x-for="st in definition.states" :key="st.key">
+                                <option :value="st.key" x-text="st.label"></option>
+                            </template>
+                        </select>
+                    </label>
+                </div>
+                <div class="border-t border-default pt-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-heading">Data collected at this step</span>
+                        <button type="button" @click="addFormField(tr)" class="text-2xs px-2 py-1 rounded border">Add field</button>
+                    </div>
+                    <template x-for="(ff, fi) in (tr.form.fields || [])" :key="ff._uid">
+                        <div class="flex flex-wrap gap-2 items-end text-sm">
+                            <select x-model="ff.source" @change="onFieldSourceChange(ff)" class="rounded border px-2 py-1">
+                                <option value="stage">New (stored on workflow)</option>
+                                <option value="record">Existing record field</option>
+                            </select>
+                            <template x-if="ff.source === 'record'">
+                                <select x-model="ff.name" class="rounded border px-2 py-1 min-w-[140px]">
+                                    <template x-for="rf in recordFields" :key="rf.name">
+                                        <option :value="rf.name" x-text="rf.label"></option>
+                                    </template>
+                                </select>
+                            </template>
+                            <template x-if="ff.source !== 'record'">
+                                <input type="text" x-model="ff.name" placeholder="field key" class="rounded border px-2 py-1 w-28">
+                                <input type="text" x-model="ff.label" placeholder="Label" class="rounded border px-2 py-1 flex-1 min-w-[120px]">
+                                <select x-model="ff.type" class="rounded border px-2 py-1">
+                                    <option value="char">Text</option>
+                                    <option value="text">Long text</option>
+                                    <option value="boolean">Yes/No</option>
+                                    <option value="integer">Number</option>
+                                    <option value="date">Date</option>
+                                </select>
+                            </template>
+                            <label class="inline-flex items-center gap-1">
+                                <input type="checkbox" x-model="ff.required"> Required
+                            </label>
+                            <button type="button" @click="tr.form.fields.splice(fi, 1)" class="text-fg-danger">×</button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+    </section>
+
+    {# Step 4 — Review #}
+    <section x-show="step === 4" x-cloak class="bg-neutral-primary border border-default rounded-lg p-5">
+        <h3 class="text-base font-semibold text-heading mb-3">Summary</h3>
+        <pre class="text-xs overflow-auto max-h-96 bg-neutral-secondary rounded p-3" x-text="JSON.stringify(buildDefinition(), null, 2)"></pre>
+    </section>
+</div>
+
+<script>
+(() => {
+    let _uid = 0;
+    const nextUid = () => 'w' + (++_uid);
+
+    function factory(cfg) {
+        const defn = cfg.definition || { version: 1, model: '', states: [], transitions: [] };
+        (defn.states || []).forEach(s => { if (!s._uid) s._uid = nextUid(); });
+        (defn.transitions || []).forEach(t => {
+            if (!t._uid) t._uid = nextUid();
+            t.fromSingle = (t.from && t.from[0]) || '';
+            if (!t.form) t.form = { title: t.label || '', fields: [] };
+            (t.form.fields || []).forEach(f => { if (!f._uid) f._uid = nextUid(); });
+            if (!t.approval) t.approval = { strategy: 'any', assignee_type: 'group', group_id: null };
+        });
+
+        return {
+            workflowId: cfg.workflowId,
+            step: 1,
+            steps: [
+                { id: 1, label: 'Basics' },
+                { id: 2, label: 'States' },
+                { id: 3, label: 'Transitions' },
+                { id: 4, label: 'Review' },
+            ],
+            meta: cfg.meta || { name: '', description: '', model: '', active: true },
+            definition: defn,
+            models: cfg.models || [],
+            groups: cfg.groups || [],
+            users: cfg.users || [],
+            recordFields: cfg.recordFields || [],
+            saving: false,
+
+            goStep(id) { this.step = id; if (id === 3) this.loadRecordFields(); },
+
+            onModelChange() {
+                this.definition.model = this.meta.model;
+                this.loadRecordFields();
+            },
+
+            async loadRecordFields() {
+                if (!this.meta.model) return;
+                const r = await fetch('/api/workflow/fields?model=' + encodeURIComponent(this.meta.model), {
+                    credentials: 'same-origin',
+                });
+                if (r.ok) this.recordFields = await r.json();
+            },
+
+            userFields() {
+                return (this.recordFields || []).filter(rf =>
+                    rf.type === 'many2one' && (rf.comodel === 'res.users' || rf.name.endsWith('_user_id'))
+                );
+            },
+
+            addState() {
+                const key = 'state_' + (this.definition.states.length + 1);
+                this.definition.states.push({
+                    _uid: nextUid(), key, label: key.replace(/_/g, ' '), initial: false, final: false,
+                });
+            },
+
+            removeState(i) { this.definition.states.splice(i, 1); },
+
+            setInitial(uid) {
+                this.definition.states.forEach(s => { s.initial = s._uid === uid; });
+            },
+
+            addTransition() {
+                const from = this.definition.states[0]?.key || 'draft';
+                const to = this.definition.states[1]?.key || from;
+                this.definition.transitions.push({
+                    _uid: nextUid(),
+                    key: 'action_' + (this.definition.transitions.length + 1),
+                    label: 'New action',
+                    fromSingle: from,
+                    to,
+                    kind: 'user',
+                    approval: { strategy: 'any', assignee_type: 'group', group_id: null },
+                    reject_to: from,
+                    form: { title: 'Details', fields: [] },
+                });
+            },
+
+            removeTransition(i) { this.definition.transitions.splice(i, 1); },
+
+            addFormField(tr) {
+                if (!tr.form) tr.form = { title: tr.label, fields: [] };
+                tr.form.fields.push({
+                    _uid: nextUid(), name: 'note', label: 'Note', type: 'text', source: 'stage', required: false,
+                });
+            },
+
+            onFieldSourceChange(ff) {
+                if (ff.source === 'record' && this.recordFields.length) {
+                    ff.name = this.recordFields[0].name;
+                }
+            },
+
+            buildDefinition() {
+                const states = this.definition.states.map(s => {
+                    const o = { key: s.key, label: s.label || s.key };
+                    if (s.initial) o.initial = true;
+                    if (s.final) o.final = true;
+                    if (s.cancelled) o.cancelled = true;
+                    return o;
+                });
+                const transitions = this.definition.transitions.map(t => {
+                    const o = {
+                        key: t.key,
+                        label: t.label || t.key,
+                        from: [t.fromSingle || (t.from && t.from[0]) || 'draft'],
+                        to: t.to,
+                        kind: t.kind || 'user',
+                    };
+                    if (t.kind === 'approval') {
+                        const ac = t.approval || {};
+                        o.approval = {
+                            strategy: ac.strategy || 'any',
+                            assignee_type: ac.assignee_type || 'group',
+                        };
+                        if (ac.group_id) o.approval.group_id = ac.group_id;
+                        if (ac.user_id) o.approval.user_id = ac.user_id;
+                        if (ac.user_field) o.approval.user_field = ac.user_field;
+                        if (ac.deadline_hours) o.approval.deadline_hours = ac.deadline_hours;
+                        if (ac.escalate_to_group_id) {
+                            o.approval.escalate_to_group_id = ac.escalate_to_group_id;
+                        }
+                        if (t.reject_to) o.reject_to = t.reject_to;
+                    }
+                    const fields = (t.form?.fields || []).map(f => {
+                        const ff = { name: f.name, label: f.label || f.name, source: f.source || 'stage' };
+                        if (ff.source === 'stage') ff.type = f.type || 'char';
+                        if (f.required) ff.required = true;
+                        return ff;
+                    });
+                    if (fields.length) o.form = { title: t.form?.title || t.label, fields };
+                    return o;
+                });
+                const out = {
+                    version: 1,
+                    model: this.meta.model,
+                    states,
+                    transitions,
+                };
+                if (this.definition.auto_start) out.auto_start = true;
+                return out;
+            },
+
+            buildPayload() {
+                return {
+                    name: this.meta.name,
+                    description: this.meta.description,
+                    model: this.meta.model,
+                    active: this.meta.active,
+                    definition: this.buildDefinition(),
+                };
+            },
+
+            async save() {
+                this.saving = true;
+                try {
+                    const url = this.workflowId ? '/api/workflow/' + this.workflowId : '/api/workflow';
+                    const r = await fetch(url, {
+                        method: this.workflowId ? 'PUT' : 'POST',
+                        headers: this.jsonHeaders(),
+                        credentials: 'same-origin',
+                        body: JSON.stringify(this.buildPayload()),
+                    });
+                    if (!r.ok) throw new Error(await r.text());
+                    const d = await r.json();
+                    if (!this.workflowId && d.id) {
+                        window.location.href = '/web/workflow/' + d.id + '/build';
+                        return;
+                    }
+                    window.pvToast && window.pvToast('Workflow saved.', { variant: 'success' });
+                } catch (e) {
+                    window.pvAlert && window.pvAlert('Save failed: ' + e.message, { variant: 'danger' });
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            jsonHeaders() {
+                return {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                };
+            },
+        };
+    }
+    const register = () => Alpine.data('pvWorkflowBuilder', factory);
+    if (typeof Alpine !== 'undefined') register();
+    else document.addEventListener('alpine:init', register);
+})();
+</script>
+{% endblock %}

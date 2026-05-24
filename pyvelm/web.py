@@ -1846,6 +1846,296 @@ def create_app(
             render_report_builder_page(env, report_rec=recs, current_path=str(request.url.path))
         )
 
+    # ---- workflow designer & runtime API ----
+
+    def _require_workflow_editor(env: Environment) -> None:
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if "workflow.definition" not in registry:
+            raise HTTPException(status_code=404, detail="Workflow module not installed")
+        try:
+            env.check_access("workflow.definition", "write")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+
+    @app.get("/web/workflow/inbox", response_class=HTMLResponse)
+    def web_workflow_inbox(request: Request, env: Environment = Depends(get_env)):
+        from .render import render_workflow_inbox_page
+
+        if env.uid is None:
+            return _login_redirect(request)
+        return HTMLResponse(
+            render_workflow_inbox_page(env, current_path=str(request.url.path))
+        )
+
+    @app.get(
+        "/web/workflow/instances/{instance_id}/transition/{transition_key}",
+        response_class=HTMLResponse,
+    )
+    def web_workflow_transition_form(
+        instance_id: int,
+        transition_key: str,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import render_workflow_transition_form
+
+        if env.uid is None:
+            return _auth_required_response(request)
+        html = render_workflow_transition_form(env, instance_id, transition_key)
+        if html is None:
+            raise HTTPException(status_code=404, detail="Transition not available")
+        return HTMLResponse(html)
+
+    @app.post(
+        "/web/workflow/instances/{instance_id}/transition/{transition_key}",
+        response_class=HTMLResponse,
+    )
+    async def web_workflow_transition_submit(
+        instance_id: int,
+        transition_key: str,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        from .render import render_workflow_transition_form
+        from .workflow.engine import WorkflowEngine
+        from .workflow.schema import WorkflowDefinitionError
+
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "workflow.instance" not in env.registry:
+            raise HTTPException(status_code=404, detail="Workflow not installed")
+        Instance = env["workflow.instance"]
+        inst = Instance.search([("id", "=", instance_id)], limit=1)
+        if not inst:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        inst.ensure_one()
+        form = await request.form()
+        values = {
+            k: v for k, v in form.items()
+            if k not in ("_csrf",) and not str(k).startswith("_")
+        }
+        try:
+            with env.transaction():
+                WorkflowEngine.apply_transition(env, inst, transition_key, values)
+        except WorkflowDefinitionError as exc:
+            return HTMLResponse(
+                render_workflow_transition_form(
+                    env,
+                    instance_id,
+                    transition_key,
+                    form_error=str(exc),
+                    values=values,
+                )
+                or "",
+                status_code=422,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        if request.headers.get("X-PV-Dialog") == "1":
+            return Response(
+                status_code=204,
+                headers={
+                    "HX-Trigger": json.dumps({"pv-dialog-saved": {"ok": True}}),
+                },
+            )
+        return RedirectResponse(request.headers.get("Referer") or "/web/admin", status_code=303)
+
+    @app.get("/web/workflow/build", response_class=HTMLResponse)
+    def web_workflow_build(request: Request, env: Environment = Depends(get_env)):
+        from .render import render_workflow_builder_page
+
+        if env.uid is None:
+            return _login_redirect(request)
+        try:
+            env.check_access("workflow.definition", "create")
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="Cannot create workflows")
+        return HTMLResponse(
+            render_workflow_builder_page(env, workflow_rec=None, current_path=str(request.url.path))
+        )
+
+    @app.get("/web/workflow/{workflow_id}/build", response_class=HTMLResponse)
+    def web_workflow_build_edit(
+        workflow_id: int, request: Request, env: Environment = Depends(get_env),
+    ):
+        from .render import render_workflow_builder_page
+
+        if env.uid is None:
+            return _login_redirect(request)
+        Definition = env["workflow.definition"]
+        recs = Definition.search([("id", "=", workflow_id)], limit=1)
+        if not recs:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        try:
+            env.check_access("workflow.definition", "write")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        return HTMLResponse(
+            render_workflow_builder_page(env, workflow_rec=recs, current_path=str(request.url.path))
+        )
+
+    @app.get("/api/workflow/models")
+    def api_workflow_models(env: Environment = Depends(get_env)):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .reports.fields_api import list_readable_models
+
+        return list_readable_models(env)
+
+    @app.get("/api/workflow/fields")
+    def api_workflow_fields(model: str, env: Environment = Depends(get_env)):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .workflow.service import list_model_fields
+
+        return list_model_fields(env, model)
+
+    @app.get("/api/workflow/groups")
+    def api_workflow_groups(env: Environment = Depends(get_env)):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .workflow.service import list_groups
+
+        return list_groups(env)
+
+    @app.get("/api/workflow/users")
+    def api_workflow_users(env: Environment = Depends(get_env)):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .workflow.service import list_users
+
+        return list_users(env)
+
+    @app.post("/api/workflow")
+    async def api_workflow_create(request: Request, env: Environment = Depends(get_env)):
+        import json as _json
+
+        from .workflow.schema import WorkflowDefinitionError, validate_definition
+
+        _require_workflow_editor(env)
+        body = await request.json()
+        defn = body.get("definition") or {}
+        validate_definition(defn, registry)
+        Definition = env["workflow.definition"]
+        rec = Definition.create({
+            "name": body.get("name", "Untitled workflow"),
+            "description": body.get("description") or False,
+            "model": body.get("model") or defn.get("model"),
+            "definition": _json.dumps(defn, indent=2),
+            "active": bool(body.get("active", True)),
+        })
+        return {"id": rec.id}
+
+    @app.put("/api/workflow/{workflow_id}")
+    async def api_workflow_update(
+        workflow_id: int, request: Request, env: Environment = Depends(get_env),
+    ):
+        from .workflow.schema import WorkflowDefinitionError
+        from .workflow.service import save_definition
+
+        _require_workflow_editor(env)
+        Definition = env["workflow.definition"]
+        recs = Definition.search([("id", "=", workflow_id)], limit=1)
+        if not recs:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        recs.ensure_one()
+        body = await request.json()
+        defn = body.get("definition")
+        if defn is None:
+            raise HTTPException(status_code=400, detail="definition required")
+        try:
+            save_definition(
+                env,
+                recs,
+                {
+                    "name": body.get("name", recs.name),
+                    "description": body.get("description", recs.description),
+                    "model": body.get("model", recs.model),
+                    "active": body.get("active", recs.active),
+                },
+                defn,
+            )
+        except WorkflowDefinitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        return {"id": recs.id}
+
+    @app.post("/api/workflow/instances/start")
+    async def api_workflow_start(request: Request, env: Environment = Depends(get_env)):
+        from .workflow.engine import WorkflowDefinitionError, WorkflowEngine
+
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        body = await request.json()
+        model = body.get("model")
+        res_id = int(body.get("res_id") or 0)
+        if not model or not res_id:
+            raise HTTPException(status_code=400, detail="model and res_id required")
+        try:
+            env.check_access(model, "read")
+            record = env[model].browse(res_id)
+            WorkflowEngine.start(env, record)
+        except WorkflowDefinitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        return {"ok": True}
+
+    @app.post("/api/workflow/instances/{instance_id}/transition")
+    async def api_workflow_transition(
+        instance_id: int, request: Request, env: Environment = Depends(get_env),
+    ):
+        from .workflow.engine import WorkflowEngine
+        from .workflow.schema import WorkflowDefinitionError
+
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        Instance = env["workflow.instance"]
+        inst = Instance.search([("id", "=", instance_id)], limit=1)
+        if not inst:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        inst.ensure_one()
+        body = await request.json()
+        try:
+            WorkflowEngine.apply_transition(
+                env,
+                inst,
+                body.get("transition", ""),
+                body.get("values") or {},
+            )
+        except WorkflowDefinitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        return {"ok": True, "state": inst.state}
+
+    @app.post("/api/workflow/approvals/{approval_id}/act")
+    async def api_workflow_approval_act(
+        approval_id: int, request: Request, env: Environment = Depends(get_env),
+    ):
+        from .workflow.engine import WorkflowDefinitionError, WorkflowEngine
+
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        Approval = env["workflow.approval"]
+        appr = Approval.search([("id", "=", approval_id)], limit=1)
+        if not appr:
+            raise HTTPException(status_code=404, detail="Approval not found")
+        appr.ensure_one()
+        body = await request.json()
+        try:
+            WorkflowEngine.approve(
+                env,
+                appr,
+                approved=bool(body.get("approved", True)),
+                comment=body.get("comment") or "",
+            )
+        except WorkflowDefinitionError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        return {"ok": True}
+
     # ---- admin dashboard ----
 
     @app.get("/web/admin", response_class=HTMLResponse)

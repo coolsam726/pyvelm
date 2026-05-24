@@ -2470,6 +2470,17 @@ def render_form_page(
                     ),
                 }
             )
+    workflow_ctx = None
+    if (
+        mode == "display"
+        and record_or_none is not None
+        and record_or_none._ids
+        and "workflow.instance" in env.registry
+    ):
+        from pyvelm.workflow.service import form_context as workflow_form_context
+
+        workflow_ctx = workflow_form_context(env, view.model, record_or_none.id)
+
     record_pager = None
     if mode in ("display", "edit") and record_or_none is not None and record_or_none._ids:
         record_pager = _record_pager(
@@ -2495,6 +2506,7 @@ def render_form_page(
         sections=sections,
         form_error=form_error,
         header_actions=header_actions,
+        workflow_context=workflow_ctx,
         record_pager=record_pager,
         list_nav_query=encode_list_nav_query(
             list_module, list_name,
@@ -4559,6 +4571,122 @@ def render_report_builder_page(
         {"label": page_title, "href": None},
     ]
     template = _env.get_template("report_builder.html")
+    return template.render(
+        page_title=page_title,
+        alpine_config=alpine_cfg,
+        **ctx,
+    )
+
+
+def render_workflow_transition_form(
+    env,
+    instance_id: int,
+    transition_key: str,
+    *,
+    errors: dict | None = None,
+    form_error: str | None = None,
+    values: dict | None = None,
+) -> str | None:
+    """HTMX fragment for a workflow transition stage form (PvDialog body)."""
+    from pyvelm.workflow.engine import WorkflowEngine
+
+    if "workflow.instance" not in env.registry:
+        return None
+    Instance = env["workflow.instance"]
+    inst = Instance.search([("id", "=", instance_id)], limit=1)
+    if not inst:
+        return None
+    inst.ensure_one()
+    tr_ui = next(
+        (
+            t
+            for t in WorkflowEngine.available_transitions(env, inst)
+            if t.get("key") == transition_key
+        ),
+        None,
+    )
+    if tr_ui is None:
+        return None
+    post_url = f"/web/workflow/instances/{instance_id}/transition/{transition_key}"
+    template = _env.get_template("workflow_transition_form.html")
+    return template.render(
+        transition_label=tr_ui["label"],
+        transition_key=transition_key,
+        instance_id=instance_id,
+        form_fields=tr_ui.get("form_fields") or [],
+        post_url=post_url,
+        values=values or {},
+        errors=errors or {},
+        form_error=form_error,
+    )
+
+
+def render_workflow_inbox_page(env, current_path: str | None = None) -> str:
+    from pyvelm.workflow.inbox import list_inbox_items
+
+    items = list_inbox_items(env)
+    ctx = layout_context(env, current_path, leaf_label="My approvals")
+    ctx["breadcrumbs"] = [
+        {"label": "Home", "href": "/web/admin"},
+        {"label": "Workflows", "href": "/web/views/workflow/workflow_definition.list"},
+        {"label": "My approvals", "href": None},
+    ]
+    template = _env.get_template("workflow_inbox.html")
+    return template.render(items=items, **ctx)
+
+
+def render_workflow_builder_page(
+    env, workflow_rec=None, current_path: str | None = None,
+) -> str:
+    """Visual workflow designer — create or edit."""
+    import json as _json
+
+    from pyvelm.reports.fields_api import list_readable_models
+    from pyvelm.workflow.engine import parse_definition
+    from pyvelm.workflow.service import list_groups, list_model_fields, list_users
+
+    page_title = "New workflow"
+    alpine_cfg: dict = {
+        "workflowId": None,
+        "meta": {"name": "", "description": "", "model": "", "active": True},
+        "definition": {
+            "version": 1,
+            "model": "",
+            "states": [
+                {"key": "draft", "label": "Draft", "initial": True, "_uid": "w1"},
+                {"key": "done", "label": "Done", "final": True, "_uid": "w2"},
+            ],
+            "transitions": [],
+        },
+        "models": list_readable_models(env),
+        "groups": list_groups(env),
+        "users": list_users(env),
+        "recordFields": [],
+    }
+    if workflow_rec is not None:
+        workflow_rec.ensure_one()
+        page_title = workflow_rec.name
+        defn = parse_definition(workflow_rec.definition)
+        alpine_cfg["workflowId"] = workflow_rec.id
+        alpine_cfg["meta"] = {
+            "name": workflow_rec.name,
+            "description": workflow_rec.description or "",
+            "model": workflow_rec.model,
+            "active": bool(workflow_rec.active),
+        }
+        alpine_cfg["definition"] = defn
+        if defn.get("auto_start"):
+            alpine_cfg["definition"]["auto_start"] = True
+        if workflow_rec.model:
+            alpine_cfg["recordFields"] = list_model_fields(env, workflow_rec.model)
+
+    ctx = layout_context(env, current_path, leaf_label=page_title)
+    ctx["breadcrumbs"] = [
+        {"label": "Home", "href": "/web/admin"},
+        {"label": "Workflows", "href": "/web/views/workflow/workflow_definition.list"},
+        {"label": page_title, "href": None},
+    ]
+    template = _env.get_template("workflow_builder.html")
     return template.render(
         page_title=page_title,
         alpine_config=alpine_cfg,

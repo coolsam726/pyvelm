@@ -693,6 +693,8 @@ class BaseModel(metaclass=MetaModel):
         # Fire on_create automation rules after the record is fully set up.
         from .automation import AutomationEngine
         AutomationEngine.fire(self.env, self._name, "on_create", new_record)
+        from .workflow.runtime import maybe_auto_start_workflow
+        maybe_auto_start_workflow(self.env, new_record)
         return new_record
 
     def write(self, vals: dict[str, Any]) -> None:

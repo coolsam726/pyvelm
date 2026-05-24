@@ -1,0 +1,45 @@
+{# HTMX fragment loaded into PvDialog for workflow transition stage forms. #}
+<form class="space-y-4"
+      hx-post="{{ post_url }}"
+      hx-target="closest [data-pv-form-shell]"
+      hx-swap="innerHTML">
+    {% if form_error %}
+    <div class="px-3 py-2 rounded-md bg-danger-soft border border-fg-danger/30 text-fg-danger text-sm">
+        {{ form_error }}
+    </div>
+    {% endif %}
+
+    {% for ff in form_fields %}
+    <label class="block text-sm">
+        <span class="font-medium text-heading">{{ ff.label or ff.name }}</span>
+        {% if ff.required %}<span class="text-fg-danger">*</span>{% endif %}
+        {% set val = values.get(ff.name, '') %}
+        {% if ff.type == 'text' or (ff.source == 'stage' and ff.type == 'text') %}
+        <textarea name="{{ ff.name }}" rows="3"
+                  class="mt-1 w-full text-sm rounded-md border border-default px-3 py-2
+                         {% if errors.get(ff.name) %}border-fg-danger{% endif %}"
+                  {% if ff.required %}required{% endif %}>{{ val }}</textarea>
+        {% else %}
+        <input type="text" name="{{ ff.name }}" value="{{ val }}"
+               class="mt-1 w-full text-sm rounded-md border border-default px-3 py-2
+                      {% if errors.get(ff.name) %}border-fg-danger{% endif %}"
+               {% if ff.required %}required{% endif %}>
+        {% endif %}
+        {% if errors.get(ff.name) %}
+        <p class="mt-1 text-xs text-fg-danger">{{ errors[ff.name] }}</p>
+        {% endif %}
+    </label>
+    {% endfor %}
+
+    <div class="flex justify-end gap-2 pt-2 border-t border-default">
+        <button type="button"
+                onclick="window.PvDialog && window.PvDialog.close()"
+                class="px-3 py-1.5 text-sm rounded-md border border-default hover:bg-neutral-secondary">
+            Cancel
+        </button>
+        <button type="submit"
+                class="px-3 py-1.5 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90">
+            Continue
+        </button>
+    </div>
+</form>

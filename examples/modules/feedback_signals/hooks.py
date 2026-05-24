@@ -150,6 +150,10 @@ def _recompute_all_signals(env) -> None:
 
 def sync(env) -> None:
     _ensure_acl(env)
+    from feedback_signals.workflow_seed import backfill_intake_workflows, seed_feedback_workflow
+
+    seed_feedback_workflow(env)
+    backfill_intake_workflows(env)
     created = _seed_samples(env)
     if created:
         _mark_demo_verified(env)

@@ -13,7 +13,7 @@ from pyvelm.types import View
 VIEWS: list[View] = [
     list_view(
         "partner.list", "res.partner",
-        fields=["name", "code", "company_id", "age", "birth_date", "country_id", "active"],
+        fields=["name", "workflow_state_label", "code", "company_id", "age", "birth_date", "country_id", "active"],
         form_view="partner.form",
     ),
 

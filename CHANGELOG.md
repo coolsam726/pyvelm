@@ -7,6 +7,43 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.6.0] — 2026-05-23
+
+Visual approval workflows on any model — designer, runtime bar, inbox, and
+stage forms. See [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md) and
+[docs/workflow.md](docs/workflow.md).
+
+### Added
+
+- **Workflow module (0.2.0)** — state machines with transitions, multi-step
+  approvals (any / all / sequential), stage forms, and tasks on any model.
+- **Visual designer** — `/web/workflow/build` for states, transitions, approval
+  rules, and stage-form fields (record or stage-scoped).
+- **Runtime workflow bar** — status bar, start/transition buttons, and inline
+  approve/reject on record forms.
+- **My approvals inbox** — `/web/workflow/inbox` for pending sign-offs.
+- **Auto-start** — optional workflow start on record `create()`.
+- **Escalation cron** — overdue approval handler seeded every 15 minutes.
+- **`pyvelm/workflow` package** — JSON definition schema, engine, service,
+  inbox helpers, and install-time backfill for auto-start.
+- **Examples** — partner onboarding workflow (partners + workflow modules);
+  feedback intake review workflow (Feedback Signals sync hook).
+- **Docs** — [docs/workflow.md](docs/workflow.md).
+
+### Changed
+
+- Workflow confirms and stage forms use the draggable **`PvDialog`** chrome
+  (same component as `pvConfirm` / inline form dialogs).
+
+### Fixed
+
+- **`X-PV-Dialog` header** — dialog HTMX requests now tag correctly so
+  successful saves close the floating dialog (`$refs.content` fix).
+- **Module load order** — partner workflow extension lives in the partners
+  example, not core workflow (avoids `_inherit` before partners load).
+- **Workflow engine** — safe recordset access via `_first()` instead of
+  subscripting empty search results.
+
 ## [0.5.0] — 2026-05-23
 
 Per-company branding, declarative dashboards, date/datetime/time pickers, list
