@@ -100,6 +100,11 @@ class CronJob(BaseModel):
         if not self.action_id:
             raise RuntimeError(f"Cron {self.name!r} has no action_id")
         action = env["ir.actions.server"].browse(self.action_id.id)
+        if not action.target_model_available():
+            raise RuntimeError(
+                f"Cron {self.name!r}: action {action.name!r} targets "
+                f"{action.model!r}, which is not installed"
+            )
         prev_bypass = env._acl_bypass
         env._acl_bypass = True
         try:
@@ -141,6 +146,30 @@ class CronJob(BaseModel):
                     continue
 
                 action = env["ir.actions.server"].browse(job.action_id.id)
+                if not action.target_model_available():
+                    import sys
+                    print(
+                        f"[cron] {job.name!r} skipped: action {action.name!r} "
+                        f"targets {action.model!r}, which is not installed",
+                        file=sys.stderr,
+                    )
+                    # Drop known smoke-test rows so the warning does not repeat.
+                    if job.name == "Test cron":
+                        with env.transaction():
+                            job.unlink()
+                        if action.name == "Cron tick":
+                            with env.transaction():
+                                action.unlink()
+                        continue
+                    interval_n = job.interval_number or 1
+                    interval_t = job.interval_type or "hours"
+                    delta_fn = _INTERVAL_DELTAS.get(interval_t)
+                    updates: dict = {"lastcall": now}
+                    if delta_fn:
+                        updates["nextcall"] = (nextcall or now) + delta_fn(interval_n)
+                    with env.transaction():
+                        job.write(updates)
+                    continue
                 try:
                     action.run()
                     executed.append(job.name)

@@ -21,7 +21,7 @@
     {% endif %}
 
     <div class="flex flex-wrap items-center justify-between gap-2">
-        <div>
+        <div class="min-w-0 flex-1">
             <span class="text-2xs font-semibold uppercase tracking-wider text-body-subtle">Workflow</span>
             {% if workflow_context.started %}
             <p class="text-sm font-medium text-heading mt-0.5">
@@ -40,7 +40,7 @@
             </p>
             {% endif %}
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2 shrink-0 justify-end">
             {% if not workflow_context.started and workflow_context.can_start %}
             <button type="button" @click="start()"
                     class="px-3 py-1.5 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90">
@@ -61,15 +61,18 @@
     <div class="border-t border-default pt-3 space-y-2">
         <p class="text-sm font-medium text-heading">Pending your approval</p>
         {% for ap in workflow_context.pending_approvals %}
-        <div class="flex gap-2">
-            <button type="button" @click="approve({{ ap.id }}, true)"
+        <div class="flex flex-wrap gap-2 items-center">
+            <span class="text-sm text-body">{{ ap.transition_label }}</span>
+            <button type="button" @click="approveById({{ ap.id }}, true)"
                     class="px-2 py-1 text-sm rounded bg-success-soft text-success-strong">Approve</button>
-            <button type="button" @click="approve({{ ap.id }}, false)"
+            <button type="button" @click="approveById({{ ap.id }}, false)"
                     class="px-2 py-1 text-sm rounded bg-danger-soft text-fg-danger">Reject</button>
         </div>
         {% endfor %}
     </div>
     {% endif %}
+
+    {% include "_workflow_timeline.html" %}
 </div>
 
 <script>
@@ -78,6 +81,7 @@
         return {
             instanceId: ctx.instance_id,
             transitions: ctx.transitions || [],
+            pendingApprovals: ctx.pending_approvals || [],
             resModel: {{ (view.model if view is defined else '""') | tojson }},
             resId: {{ (record_id if record_id is defined else none) | tojson }},
 
@@ -132,9 +136,17 @@
                 else window.pvAlert && window.pvAlert(await r.text(), { variant: 'danger' });
             },
 
-            async approve(id, approved) {
+            async approveById(id, approved) {
+                const ap = this.pendingApprovals.find(a => a.id === id);
+                return this.approve(id, approved, ap && ap.transition_label);
+            },
+
+            async approve(id, approved, transitionLabel) {
+                const label = transitionLabel || 'this request';
                 const ok = await window.pvConfirm(
-                    approved ? 'Approve this request?' : 'Reject this request?',
+                    approved
+                        ? `Approve «${label}»? The record advances to the next workflow step (see status bar).`
+                        : `Reject «${label}»?`,
                     {
                         title: approved ? 'Approve' : 'Reject',
                         variant: approved ? 'success' : 'danger',

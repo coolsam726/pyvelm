@@ -2,7 +2,19 @@
 
 from typing import Any
 
-from pyvelm import BaseModel, Boolean, Char, Date, Datetime, Float, Integer, Text, Time, depends
+from pyvelm import (
+    BaseModel,
+    Boolean,
+    Char,
+    Date,
+    Datetime,
+    Float,
+    Integer,
+    Text,
+    Time,
+    depends,
+)
+from pyvelm.mail import MailThread
 
 from feedback_signals.background_analysis import (
     schedule_llm_analysis,
@@ -16,23 +28,23 @@ from feedback_signals.interpret import (
 from feedback_signals.signals_cache import analyze_record_once
 
 
-class FeedbackIntake(BaseModel):
+class FeedbackIntake(MailThread, BaseModel):
     """One feedback moment: story first, optional rating, computed insight."""
 
     _name = "feedback.intake"
     _rec_name = "surface"
 
     # --- Capture: narrative before judgment ---------------------------------
-    surface = Char(required=True, string="Where")
-    story_goal = Text(string="What were you trying to do?")
+    surface = Char(required=True, string="Where", tracking=True)
+    story_goal = Text(string="What were you trying to do?", tracking=True)
     story_outcome = Text(string="What happened?")
-    story_blocker = Text(string="What got in the way? (optional)")
+    story_blocker = Text(string="What got in the way? (optional)", tracking=True)
     explicit_rating = Integer(string="Stars (optional)")
 
     # --- When (Flowbite date / datetime / time widgets on admin form) -----
     incident_date = Date(string="Incident date")
     follow_up_at = Datetime(string="Follow-up call")
-    callback_time = Time(string="Callback window")
+    callback_time = Time(string="Callback window", tracking=True)
 
     # --- Behavioral context (normally collected silently) -------------------
     effort_seconds = Integer(string="Time on task (sec)", default=0)
@@ -41,11 +53,9 @@ class FeedbackIntake(BaseModel):
 
     # --- Derived signals (stored for list/sort) -----------------------------
     text_sentiment = Float(
-        compute="_compute_signals", store=True, string="Sentiment score"
+        compute="_compute_signals", store=True, string="Sentiment score", tracking=True
     )
-    sentiment_readout = Char(
-        compute="_compute_signals", store=True, string="Sentiment"
-    )
+    sentiment_readout = Char(compute="_compute_signals", store=True, string="Sentiment")
     tone_label = Char(compute="_compute_signals", store=True, string="Tone")
     emotion_tags = Char(compute="_compute_signals", store=True, string="Emotions")
     topic_hints = Char(compute="_compute_signals", store=True, string="Topics")
@@ -61,14 +71,16 @@ class FeedbackIntake(BaseModel):
     confidence_readout = Char(
         compute="_compute_signals", store=True, string="Confidence"
     )
-    insight_summary = Char(compute="_compute_signals", store=True, string="Insight")
+    insight_summary = Char(
+        compute="_compute_signals", store=True, string="Insight", tracking=True
+    )
     analysis_source = Char(
-        compute="_compute_signals", store=True, string="Analyzer"
+        compute="_compute_signals", store=True, string="Analyzer", tracking=True
     )
     active = Boolean(default=True)
 
     # --- Human verification (gold labels for few-shot / export) ---------------
-    signals_verified = Boolean(string="Verified by human", default=False)
+    signals_verified = Boolean(string="Verified by human", default=False, tracking=True)
     verified_tone = Char(string="Verified tone")
     verified_emotions = Char(string="Verified emotions")
     verified_topics = Char(string="Verified topics")

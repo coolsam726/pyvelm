@@ -5,13 +5,13 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.6.0](releases/v0.6.0.md) (2026-05-23) — Visual **Workflows**
-with designer, runtime bar, approvals inbox, and stage forms. See
-[releases](releases/v0.6.0.md) and the
+**Latest release:** [v0.7.0](releases/v0.7.0.md) (2026-05-23) — Form **chatter**,
+**field tracking**, and workflow **history** timeline. See
+[releases](releases/v0.7.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.6.0
+pip install pyvelm==0.7.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -53,6 +53,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.7.0](releases/v0.7.0.md) | Form **chatter** (notes, email, attachments), **`tracking=True`** fields, workflow history |
 | [v0.6.0](releases/v0.6.0.md) | **[Workflows](workflow.md)** — designer, runtime bar, approvals inbox, stage forms |
 | [v0.5.0](releases/v0.5.0.md) | Per-company theme, dashboards, datetime pickers, Feedback Signals example |
 | [v0.4.0](releases/v0.4.0.md) | **[Report Builder](report-builder.md)** — drill-down fields, formatting, order by, export |

@@ -99,4 +99,4 @@ def test_workflow_start_and_transition(workflow_env):
     pending = Approval.search([("instance_id", "=", inst.id), ("status", "=", "pending")])
     assert pending
     WorkflowEngine.approve(env, next(iter(pending)), approved=True)
-    assert inst.state == "review"
+    assert inst.state == "approved"

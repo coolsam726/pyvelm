@@ -12,3 +12,4 @@ DATA: list[str] = [
 # loader has a sane authenticated identity to run as. See
 # base/hooks.py.
 INSTALL_HOOK: str = "base.hooks:install"
+SYNC_HOOK: str = "base.hooks:sync"

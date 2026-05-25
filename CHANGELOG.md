@@ -7,6 +7,44 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.7.0] — 2026-05-23
+
+Mail-thread chatter on record forms, Odoo-style field tracking, and workflow
+history timeline. See [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
+
+### Added
+
+- **Form chatter (Activity panel)** — `MailThread` models get a right-hand
+  activity column on display forms: message feed (newest first), filter chips
+  (All / Notes / Emails / Changes), **Log note** and **Send email** composer,
+  file attachments on messages (`POST /web/chatter/post`, `GET /web/chatter/panel`).
+- **Field tracking** — `tracking=True` / `tracking=False` on fields; `write()`
+  posts `mail.message` rows with `subtype=mail_tracking` on `MailThread` models.
+- **Workflow history timeline** — vertical timeline on the workflow bar from
+  workflow chatter and pending approvals.
+- **Form activity layout** — `.pv-form-split` grid: main fields left, workflow +
+  chatter right on large screens; stacks on small screens.
+- **`pyvelm/mail_chatter.py`**, **`pyvelm/mail_tracking.py`** — chatter context,
+  posting, and tracking helpers.
+- **Tests** — `test_mail_chatter`, `test_mail_tracking`, `test_workflow_history`.
+
+### Changed
+
+- **Workflow UI** — transition confirms and stage forms use **`PvDialog`** instead
+  of native `<dialog>`; approve/reject via `approveById()` (fixes Alpine/`tojson`).
+- **Partner onboarding** — submit transition lands on **Approved**; workflow
+  definition re-synced on partners module sync.
+- **Examples** — `tracking=True` on CRM leads, partners, and feedback intake fields.
+
+### Fixed
+
+- **Cron smoke test** — skip/delete jobs when target model is missing from the
+  registry; purge leftover `Test cron` rows on base sync.
+- **Workflow inbox** — form links use `_form_view_for_model` (no invalid `active`
+  on `ir.ui.view`).
+- **Graph view** — `model_cls` assigned in `render_graph_page`.
+- **Chatter Alpine** — `pvChatter` component and HTMX `initTree` for composer tabs.
+
 ## [0.6.0] — 2026-05-23
 
 Visual approval workflows on any model — designer, runtime bar, inbox, and

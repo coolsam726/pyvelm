@@ -41,6 +41,10 @@ On record forms with an active workflow:
 - **Start workflow** — manual start when auto-start is off
 - **Transition buttons** — open a stage form when configured
 - **Approve / Reject** — for pending approvals assigned to you
+- **Workflow history** — vertical timeline on the form (chatter log lines with
+  subtype `workflow`; pending approvals shown at the end). On large screens the
+  activity column (workflow + general chatter when the model uses `MailThread`)
+  sits to the right of the form; on small screens it stacks below the main fields.
 
 ## Cron
 
@@ -51,8 +55,8 @@ Install/sync the workflow module to seed it.
 
 **Partner onboarding** (`res.partner`) — seeded by the workflow module on install.
 The **partners** example module adds chatter and a **Workflow** list column when both
-are installed. Create a partner → **Draft** → **Submit for approval** → approve from
-the form or inbox → **Under review** → **Mark approved**.
+are installed. Create a partner → **Draft** → **Submit for approval** → approving moves
+to **Approved**. Records already stuck in **Under review** can use **Mark approved**.
 
 **Feedback intake review** (`feedback.intake`) — seeded when you install/sync
 **Feedback signals** (if the workflow module is present). New intakes auto-start

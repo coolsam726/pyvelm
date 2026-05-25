@@ -38,6 +38,10 @@ class ServerAction(BaseModel):
     # Python source executed for action_type == "code".
     code = Text()
 
+    def target_model_available(self) -> bool:
+        """True when this action's target model is loaded in the registry."""
+        return self.model in self.env.registry
+
     def run(self, records=None) -> None:
         """Execute this action against *records*.
 

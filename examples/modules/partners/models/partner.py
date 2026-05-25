@@ -15,10 +15,10 @@ class Partner(BaseModel):
     _name = "res.partner"
     _company_scoped = True
 
-    name = Char(required=True, string="Name")
+    name = Char(required=True, string="Name", tracking=True)
     age = Integer()
     birth_date = Date(string="Birth date")
-    active = Boolean(default=True)
+    active = Boolean(default=True, tracking=True)
     # Added in 0.2.0. Fresh installs create the column from this
     # declaration; upgrades from 0.1.0 get it via migrations/0_1_to_0_2.py
     # (ALTER TABLE ADD COLUMN + backfill).
@@ -26,7 +26,7 @@ class Partner(BaseModel):
     country_id = Many2one("res.country", ondelete="SET NULL")
     parent_id = Many2one("res.partner", ondelete="SET NULL")
     child_ids = One2many("res.partner", inverse_name="parent_id")
-    tag_ids = Many2many("res.tag")
+    tag_ids = Many2many("res.tag", tracking=True)
     company_id = Many2one("res.company", ondelete="SET NULL")
 
     age_bucket = Char(compute="_compute_age_bucket", store=True)

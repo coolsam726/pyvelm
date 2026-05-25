@@ -1,11 +1,13 @@
-# Project context — pyvelm v0.6.0
+# Project context — pyvelm v0.7.0
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.7.0 (released 2026-05-23)** — Form **chatter** (Activity panel), **`tracking=True`**
+field changes, workflow **history** timeline, form activity layout. See
+[CHANGELOG.md](CHANGELOG.md) and [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
 **v0.6.0 (released 2026-05-23)** — Visual **Workflows**: designer, runtime bar,
 approvals inbox, stage forms, auto-start, escalation cron. See
-[CHANGELOG.md](CHANGELOG.md), [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md),
-and [docs/workflow.md](docs/workflow.md).
+[docs/releases/v0.6.0.md](docs/releases/v0.6.0.md) and [docs/workflow.md](docs/workflow.md).
 **v0.5.0 (released 2026-05-23)** — Per-company theme, declarative dashboards,
 date/datetime/time pickers, list column picker, account profile, Feedback Signals
 example. See [CHANGELOG.md](CHANGELOG.md) and [docs/releases/v0.5.0.md](docs/releases/v0.5.0.md).

@@ -2368,6 +2368,18 @@ def _record_pager(
     }
 
 
+def _model_has_mail_thread(env, model_name: str) -> bool:
+    """True when *model_name* inherits :class:`~pyvelm.mail.MailThread`."""
+    if model_name not in env.registry:
+        return False
+    from pyvelm.mail import MailThread
+
+    try:
+        return issubclass(env.registry[model_name], MailThread)
+    except TypeError:
+        return False
+
+
 def _record_title(record_or_none, view_model: str, mode: str) -> str:
     """Best-effort short title for the form header."""
     if mode == "new" or record_or_none is None:
@@ -2481,6 +2493,21 @@ def render_form_page(
 
         workflow_ctx = workflow_form_context(env, view.model, record_or_none.id)
 
+    chatter_ctx = None
+    if (
+        mode == "display"
+        and record_or_none is not None
+        and record_or_none._ids
+    ):
+        from pyvelm.mail_chatter import form_chatter_context
+
+        chatter_ctx = form_chatter_context(
+            env,
+            view.model,
+            record_or_none.id,
+            enabled=_model_has_mail_thread(env, view.model),
+        )
+
     record_pager = None
     if mode in ("display", "edit") and record_or_none is not None and record_or_none._ids:
         record_pager = _record_pager(
@@ -2507,6 +2534,7 @@ def render_form_page(
         form_error=form_error,
         header_actions=header_actions,
         workflow_context=workflow_ctx,
+        chatter_context=chatter_ctx,
         record_pager=record_pager,
         list_nav_query=encode_list_nav_query(
             list_module, list_name,
@@ -2514,6 +2542,33 @@ def render_form_page(
         ),
         **ctx,
     )
+
+
+def render_chatter_panel(
+    env,
+    res_model: str,
+    res_id: int,
+    *,
+    filter_key: str = "all",
+    composer_mode: str = "note",
+    error: str | None = None,
+) -> str:
+    """HTMX fragment: chatter log + composer for one record."""
+    from pyvelm.mail_chatter import form_chatter_context
+
+    ctx = form_chatter_context(
+        env,
+        res_model,
+        res_id,
+        enabled=_model_has_mail_thread(env, res_model),
+        filter_key=filter_key,
+        composer_mode=composer_mode,
+    )
+    if ctx is None:
+        return ""
+    if error:
+        ctx = {**ctx, "error": error}
+    return _env.get_template("_chatter_panel.html").render(chatter_context=ctx)
 
 
 # ---- kanban view rendering ----
@@ -2878,6 +2933,7 @@ def render_graph_page(
     # Build field lists for toolbar dropdowns.
     from .fields import Boolean, Date, Datetime, Float, Integer, Many2one
 
+    model_cls = env.registry[view.model]
     groupable_fields: list[dict] = []
     measurable_fields: list[dict] = [{"value": "__count", "label": "Count"}]
     for fname, field in model_cls._fields.items():

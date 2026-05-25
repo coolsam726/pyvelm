@@ -1500,7 +1500,7 @@ def main():
 
                 tick_action = wf_env["ir.actions.server"].create({
                     "name": "Cron tick",
-                    "model": "res.partner",
+                    "model": "res.users",
                     "action_type": "code",
                     "code": "pass",
                 })
@@ -1527,6 +1527,12 @@ def main():
                 ran2 = CronJob.run_due(wf_env)
                 assert "Test cron" not in ran2, ran2
                 print("cron: future job skipped OK")
+
+                # Remove test rows so they do not pollute shared dev databases.
+                with wf_env.transaction():
+                    cron.unlink()
+                    tick_action.unlink()
+                print("cron: test job cleaned up OK")
 
                 # pyvelm.cli._tick mirrors what the background runner
                 # calls on every loop iteration: open a connection from

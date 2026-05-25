@@ -196,12 +196,16 @@ class WorkflowEngine:
         record = env[instance.res_model].browse(instance.res_id)
         if not approved:
             reject_to = tr.get("reject_to") or (tr.get("from") or ["draft"])[0]
+            reject_label = _state_label(defn, reject_to)
             instance.write({
                 "state": reject_to,
                 "pending_transition": False,
                 "state_updated_at": datetime.utcnow(),
             })
-            _post_chatter(env, record, f"Approval rejected — returned to «{reject_to}»")
+            _post_chatter(
+                env, record,
+                f"Approval rejected — returned to «{reject_label}»",
+            )
             return instance
 
         if not _approvals_complete(env, instance, tr):
@@ -213,10 +217,7 @@ class WorkflowEngine:
             "pending_transition": False,
             "state_updated_at": datetime.utcnow(),
         })
-        _post_chatter(
-            env, record,
-            f"Approved — moved to «{tr['to']}»",
-        )
+        _post_chatter(env, record, _approval_complete_message(defn, tr))
         return instance
 
     @staticmethod
@@ -253,6 +254,29 @@ def _transition_by_key(defn: dict, key: str) -> dict:
         if tr.get("key") == key:
             return tr
     raise WorkflowDefinitionError(f"Unknown transition {key!r}")
+
+
+def _state_label(defn: dict, state_key: str) -> str:
+    for st in defn.get("states") or []:
+        if st.get("key") == state_key:
+            return st.get("label", state_key)
+    return state_key
+
+
+def _is_final_state(defn: dict, state_key: str) -> bool:
+    for st in defn.get("states") or []:
+        if st.get("key") == state_key:
+            return bool(st.get("final"))
+    return False
+
+
+def _approval_complete_message(defn: dict, tr: dict) -> str:
+    """Chatter line when an approval transition completes (not a partial sign-off)."""
+    to_label = _state_label(defn, tr["to"])
+    tr_label = tr.get("label", tr.get("key", "request"))
+    if _is_final_state(defn, tr["to"]):
+        return f"Approved — now at «{to_label}»"
+    return f"«{tr_label}» approved — now at «{to_label}»"
 
 
 def _transition_ui(tr: dict) -> dict:

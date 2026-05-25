@@ -52,15 +52,10 @@ def list_inbox_items(env) -> list[dict[str, Any]]:
 
 def _record_form_href(env, res_model: str, res_id: int) -> str | None:
     """Best-effort link to a form view for the business record."""
-    if "ir.ui.view" not in env.registry:
+    from pyvelm.render import _form_view_for_model
+
+    lookup = _form_view_for_model(env, res_model)
+    if not lookup:
         return None
-    View = env["ir.ui.view"]
-    views = View.search([
-        ("model", "=", res_model),
-        ("view_type", "=", "form"),
-        ("active", "=", True),
-    ], order="priority desc", limit=1)
-    if not views:
-        return None
-    v = next(iter(views))
-    return f"/web/views/{v.module}/{v.name}/record/{res_id}"
+    module, name = lookup
+    return f"/web/views/{module}/{name}/record/{res_id}"

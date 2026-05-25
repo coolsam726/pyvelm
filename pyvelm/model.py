@@ -714,6 +714,22 @@ class BaseModel(metaclass=MetaModel):
         before_m2m_peers = {
             fname: self._snapshot_m2m_peers(fname) for fname in m2m_vals
         }
+        from . import mail_tracking
+
+        tracked_cols = mail_tracking.tracked_field_names(
+            self.__class__, column_vals
+        )
+        tracked_m2m = mail_tracking.tracked_field_names(
+            self.__class__, m2m_vals
+        )
+        tracking_before = (
+            mail_tracking.snapshot_before_write(
+                self, tracked_cols, tracked_m2m
+            )
+            if (tracked_cols or tracked_m2m)
+            and mail_tracking.model_has_mail_thread(self.__class__)
+            else None
+        )
         if related_vals:
             self._apply_related_vals(related_vals)
         if column_vals:
@@ -741,6 +757,10 @@ class BaseModel(metaclass=MetaModel):
             new_peers = set(field.normalize_ids(value))
             affected = before_m2m_peers.get(fname, set()) | new_peers
             self._invalidate_symmetric_m2m(fname, affected)
+        if tracking_before is not None:
+            mail_tracking.post_write_tracking(
+                self, column_vals, m2m_vals, tracking_before
+            )
         changed = list(column_vals) + list(m2m_vals)
         if changed:
             self.env.notify_changed(self._name, list(self._ids), changed)

@@ -1,0 +1,13 @@
+{# Activity column (right on lg+): workflow + future chatter. #}
+<aside class="pv-form-activity-aside space-y-4
+              {% if split_layout is defined and split_layout %}
+              lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:overscroll-contain
+              {% endif %}"
+       aria-label="Activity">
+    {% if workflow_context and workflow_context.has_workflow %}
+    {% include "_workflow_bar.html" %}
+    {% endif %}
+    {% if chatter_context and chatter_context.enabled %}
+    {% include "_chatter_panel.html" %}
+    {% endif %}
+</aside>

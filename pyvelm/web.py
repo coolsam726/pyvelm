@@ -1846,6 +1846,93 @@ def create_app(
             render_report_builder_page(env, report_rec=recs, current_path=str(request.url.path))
         )
 
+    @app.get("/web/chatter/panel", response_class=HTMLResponse)
+    def web_chatter_panel(
+        request: Request,
+        model: str = Query(...),
+        res_id: int = Query(...),
+        filter: str = Query("all", alias="filter"),
+        mode: str = Query("note"),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .render import render_chatter_panel
+
+        return HTMLResponse(
+            render_chatter_panel(
+                env,
+                model.strip(),
+                res_id,
+                filter_key=filter,
+                composer_mode=mode,
+            )
+        )
+
+    @app.post("/web/chatter/post", response_class=HTMLResponse)
+    async def web_chatter_post(
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .mail_chatter import _normalize_filter, _parse_attachment_ids, post_chatter_message
+        from .render import render_chatter_panel
+
+        form = await request.form()
+        model = (form.get("model") or "").strip()
+        body = (form.get("body") or "").strip()
+        action = (form.get("action") or "note").strip().lower()
+        filter_key = _normalize_filter(form.get("filter"))
+        composer_mode = "email" if action == "email" else "note"
+        recipient = (form.get("recipient_email") or "").strip()
+        subject = (form.get("subject") or "").strip()
+        att_raw = form.getlist("attachment_ids") if hasattr(form, "getlist") else []
+        if not att_raw and form.get("attachment_ids"):
+            att_raw = [form.get("attachment_ids")]
+        attachment_ids = _parse_attachment_ids(att_raw)
+        try:
+            res_id = int(form.get("res_id"))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid record id") from exc
+        if not model:
+            raise HTTPException(status_code=400, detail="model is required")
+        try:
+            with env.transaction():
+                post_chatter_message(
+                    env,
+                    model,
+                    res_id,
+                    body,
+                    action=action,
+                    recipient_email=recipient,
+                    subject=subject,
+                    attachment_ids=attachment_ids,
+                )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except ValueError as exc:
+            return HTMLResponse(
+                render_chatter_panel(
+                    env,
+                    model,
+                    res_id,
+                    filter_key=filter_key,
+                    composer_mode=composer_mode,
+                    error=str(exc),
+                ),
+                status_code=422,
+            )
+        return HTMLResponse(
+            render_chatter_panel(
+                env,
+                model,
+                res_id,
+                filter_key=filter_key,
+                composer_mode=composer_mode,
+            )
+        )
+
     # ---- workflow designer & runtime API ----
 
     def _require_workflow_editor(env: Environment) -> None:

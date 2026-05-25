@@ -14,3 +14,4 @@ DATA: list[str] = [
     "views/menu.py",
 ]
 INSTALL_HOOK: str = "workflow.hooks:install"
+SYNC_HOOK: str = "workflow.hooks:sync"

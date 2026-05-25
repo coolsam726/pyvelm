@@ -61,6 +61,7 @@ def form_context(env, res_model: str, res_id: int) -> dict[str, Any] | None:
             "can_start": True,
             "auto_start": bool(defn.get("auto_start")),
             "statusbar": _statusbar_from_defn(defn, current_key=None),
+            "timeline": [],
         }
 
     defn = parse_definition(inst.definition_id.definition)
@@ -78,17 +79,27 @@ def form_context(env, res_model: str, res_id: int) -> dict[str, Any] | None:
             ("status", "=", "pending"),
         ]):
             if env.uid == 1:
-                pending_approvals.append(_approval_ui(appr))
+                pending_approvals.append(_approval_ui(appr, defn))
                 continue
             try:
                 from .engine import _user_may_act_on_approval
                 if _user_may_act_on_approval(env, appr, env.uid):
-                    pending_approvals.append(_approval_ui(appr))
+                    pending_approvals.append(_approval_ui(appr, defn))
             except Exception:  # noqa: BLE001
                 pass
 
     states_list = defn.get("states") or []
     statusbar = _statusbar_from_defn(defn, current_key=inst.state)
+
+    from .history import record_timeline
+
+    timeline = record_timeline(
+        env,
+        res_model,
+        res_id,
+        instance_id=inst.id,
+        definition_json=inst.definition_id.definition,
+    )
 
     return {
         "has_workflow": True,
@@ -102,6 +113,7 @@ def form_context(env, res_model: str, res_id: int) -> dict[str, Any] | None:
         "can_start": False,
         "auto_start": bool(defn.get("auto_start")),
         "statusbar": statusbar,
+        "timeline": timeline,
     }
 
 
@@ -149,10 +161,16 @@ def backfill_auto_start(env, model_name: str) -> int:
     return count
 
 
-def _approval_ui(appr) -> dict:
+def _approval_ui(appr, defn: dict) -> dict:
+    tr_label = appr.transition_key or ""
+    for tr in defn.get("transitions") or []:
+        if tr.get("key") == appr.transition_key:
+            tr_label = tr.get("label", appr.transition_key)
+            break
     return {
         "id": appr.id,
         "transition_key": appr.transition_key,
+        "transition_label": tr_label,
         "requester": appr.requester_id.name if appr.requester_id else "",
     }
 

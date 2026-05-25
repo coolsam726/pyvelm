@@ -93,6 +93,42 @@ def install(env):
     _seed_rate_fetcher(env)
 
 
+def sync(env):
+    """Runs on Apps Sync — housekeeping that should not require reinstall."""
+    _purge_smoke_test_cron(env)
+
+
+def _purge_smoke_test_cron(env) -> None:
+    """Remove cron rows left by ``examples/basic.py`` Stage 6 (pre-0.6 cleanup).
+
+    Those tests used to create ``Test cron`` / ``Cron tick`` targeting
+    ``res.partner`` without deleting them, which spams the cron runner on
+    databases that do not load the partners example module.
+    """
+    if "ir.cron" not in env.registry or "ir.actions.server" not in env.registry:
+        return
+    Cron = env["ir.cron"]
+    Action = env["ir.actions.server"]
+    prev = env._acl_bypass
+    env._acl_bypass = True
+    try:
+        for cron in Cron.search([("name", "=", "Test cron")]):
+            action = cron.action_id
+            with env.transaction():
+                cron.unlink()
+            if action:
+                action.ensure_one()
+                if action.name == "Cron tick":
+                    with env.transaction():
+                        action.unlink()
+        for action in Action.search([("name", "=", "Cron tick")]):
+            action.ensure_one()
+            with env.transaction():
+                action.unlink()
+    finally:
+        env._acl_bypass = prev
+
+
 def _seed_currencies(env):
     """Idempotently seed a small list of currencies + opening rates.
 

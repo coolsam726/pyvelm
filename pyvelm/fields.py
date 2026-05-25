@@ -76,10 +76,12 @@ class Field:
         store: bool | None = None,
         related: str | None = None,
         readonly: bool = False,
+        tracking: bool = False,
     ) -> None:
         self.string = string
         self.required = required
         self.default = default
+        self.tracking = bool(tracking)
         self.name: str | None = None
         self.model_name: str | None = None
         self._column_override = column
@@ -267,6 +269,7 @@ class Char(Field):
         choices: list | None = None,
         related: str | None = None,
         readonly: bool = False,
+        tracking: bool = False,
     ):
         super().__init__(
             string=string,
@@ -277,6 +280,7 @@ class Char(Field):
             store=store,
             related=related,
             readonly=readonly,
+            tracking=tracking,
         )
         self.size = size
         # `choices` constrains the value to a small enumeration. Items
@@ -463,6 +467,7 @@ class Many2one(Field):
         column: str | None = None,
         related: str | None = None,
         readonly: bool = False,
+        tracking: bool = False,
     ) -> None:
         super().__init__(
             string=string,
@@ -471,6 +476,7 @@ class Many2one(Field):
             column=column,
             related=related,
             readonly=readonly,
+            tracking=tracking,
         )
         self.comodel_name = comodel_name
         self.ondelete = ondelete.upper()
@@ -545,6 +551,7 @@ class One2many(Field):
         string: str | None = None,
         related: str | None = None,
         readonly: bool = False,
+        tracking: bool = False,
     ) -> None:
         super().__init__(
             string=string,
@@ -552,6 +559,7 @@ class One2many(Field):
             default=None,
             related=related,
             readonly=readonly,
+            tracking=tracking,
         )
         self.comodel_name = comodel_name
         self.inverse_name = inverse_name
@@ -624,6 +632,7 @@ class Many2many(Field):
         column2: str | None = None,
         related: str | None = None,
         readonly: bool = False,
+        tracking: bool = False,
     ) -> None:
         super().__init__(
             string=string,
@@ -631,6 +640,7 @@ class Many2many(Field):
             default=None,
             related=related,
             readonly=readonly,
+            tracking=tracking,
         )
         self.comodel_name = comodel_name
         self._relation_override = relation

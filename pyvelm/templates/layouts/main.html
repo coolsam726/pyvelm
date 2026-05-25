@@ -968,6 +968,16 @@
         document.addEventListener('DOMContentLoaded', () => pvInjectCsrfFields());
         document.body.addEventListener('htmx:afterSwap', e => {
             pvInjectCsrfFields(e.target);
+            // Re-init Alpine on HTMX fragments (chatter panel, attachment widget, …).
+            const tgt = e.detail.target;
+            if (tgt && window.Alpine) {
+                const chatter = tgt.id === 'pv-chatter-root'
+                    ? tgt
+                    : (tgt.querySelector && tgt.querySelector('#pv-chatter-root'));
+                if (chatter) {
+                    window.Alpine.initTree(chatter);
+                }
+            }
         });
 
         // Flowbite date pickers + unified datetime popups — re-init after HTMX swaps.
@@ -1575,6 +1585,11 @@
                     },
                 });
             },
+        }));
+
+        // ── Record form chatter composer (log note / send email tabs) ──
+        Alpine.data('pvChatter', (mode) => ({
+            mode: mode === 'email' ? 'email' : 'note',
         }));
 
         // ── Attachment uploader ──

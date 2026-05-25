@@ -19,7 +19,7 @@ _DEMO_PARTNER_WORKFLOW = {
             "key": "submit",
             "label": "Submit for approval",
             "from": ["draft"],
-            "to": "review",
+            "to": "approved",
             "kind": "approval",
             "approval": {
                 "strategy": "any",
@@ -87,16 +87,35 @@ def install(env):
         })
 
     Definition = env["workflow.definition"]
-    if not Definition.search([("name", "=", "Partner onboarding")]):
-        Definition.create({
-            "name": "Partner onboarding",
-            "description": "Sample approval flow for business partners.",
-            "model": "res.partner",
-            "definition": json.dumps(_DEMO_PARTNER_WORKFLOW, indent=2),
-            "active": True,
-        })
+    _upsert_partner_workflow(Definition)
 
     _seed_escalation_cron(env)
+
+
+def sync(env):
+    """Refresh bundled demo definitions (e.g. after workflow JSON changes)."""
+    if "workflow.definition" in env.registry:
+        _upsert_partner_workflow(env["workflow.definition"])
+    _seed_escalation_cron(env)
+
+
+def _upsert_partner_workflow(Definition) -> None:
+    payload = {
+        "name": "Partner onboarding",
+        "description": "Sample approval flow for business partners.",
+        "model": "res.partner",
+        "definition": json.dumps(_DEMO_PARTNER_WORKFLOW, indent=2),
+        "active": True,
+    }
+    rec = Definition.search([("name", "=", "Partner onboarding")], limit=1)
+    if rec:
+        rec.write({
+            "description": payload["description"],
+            "definition": payload["definition"],
+            "active": payload["active"],
+        })
+    else:
+        Definition.create(payload)
 
 
 def _seed_escalation_cron(env):
