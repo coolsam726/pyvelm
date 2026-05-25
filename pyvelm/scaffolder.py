@@ -205,5 +205,7 @@ Or without docker:
 
 Add a module:
   pyvelm new my_module
+  pyvelm db autogen my_module    # after you add models
+  pyvelm db migrate              # install/upgrade (also runs in compose)
 """.rstrip()
     print(msg, file=sys.stderr)

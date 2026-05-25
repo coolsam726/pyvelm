@@ -1,40 +1,81 @@
-"""Additive schema-migration autogen.
+"""Schema diff between declared models and the live database.
 
-Compares the loaded model declarations against the live DB schema and
-emits a migration file for new columns / tables. Orphan columns (DB
-has them, no field declares them) are surfaced as commented-out
-``DROP COLUMN`` statements so they need human review.
+Compares owned models to Postgres (via ``information_schema``) and reports
+anything that warrants a migration or manual DDL — Odoo-style model-driven
+detection, not only "column name missing".
 
-NOT NULL handling
------------------
-``ADD COLUMN ... NOT NULL`` fails in Postgres when the table already
-has rows (no implicit default). The autogen therefore **strips
-NOT NULL** from every ADD COLUMN it emits — newly-added columns are
-always nullable. For ``required=True`` fields, a ``# TODO`` line is
-appended near the statement so the operator remembers to backfill
-and re-tighten with ``ALTER TABLE ... ALTER COLUMN ... SET NOT NULL``
-once the data is filled in. ``CREATE TABLE`` keeps NOT NULL because
-the table is empty by construction.
+**Applied on install/upgrade/migrate** (``apply_schema_diff``)
 
-Out of scope — keep these hand-written:
+* New tables and new columns (additive DDL).
+* ``SET NOT NULL`` when the model field is required and the column has no NULL rows.
+* ``DROP NOT NULL`` when the model field is optional and the column is still strict.
 
-* Column renames (autogen would emit drop + add, losing data).
-* Type changes (would need ``USING`` clauses).
-* Seeded-row renames / data backfills (e.g. the "ECB rate fetcher"
-  → "Currency Rate Sync from ECB" migration).
-* Many2many junction tables (handled by the ORM at install time via
-  ``_setup_relation_tables``).
+**Detected but not auto-applied**
+
+* ``SET NOT NULL`` while NULL rows still exist (backfill in a migration script first).
+* SQL type drift (need ``USING``).
+* Orphan columns (in DB, not on model).
+
+**Still hand-written**
+
+* Column renames (shows as orphan + new column).
+* M2M junction tables (ORM creates at install).
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field as _dc_field
 from typing import TYPE_CHECKING
 
-from .fields import Many2many, One2many
+from .fields import Field, Many2many, One2many
 
 if TYPE_CHECKING:
     from .env import Environment
+
+
+# Map Postgres udt_name / data_type to the type strings used in field DDL.
+# System columns: always NOT NULL in DDL; never report nullability drift.
+_SKIP_ALTERATION_COLUMNS = frozenset({"id"})
+
+_PG_TYPE_NORMALIZE: dict[str, str] = {
+    "int4": "integer",
+    "int8": "bigint",
+    "float8": "double precision",
+    "bool": "boolean",
+    "text": "text",
+    "varchar": "text",
+    "bpchar": "text",
+    "timestamp": "timestamp",
+    "timestamptz": "timestamp",
+    "date": "date",
+    "time": "time",
+    "timetz": "time",
+}
+
+
+@dataclass(frozen=True)
+class ColumnSchema:
+    nullable: bool
+    type_spec: str
+
+
+@dataclass(frozen=True)
+class SchemaAlteration:
+    """A model/DB mismatch on an existing column."""
+
+    table: str
+    column: str
+    kind: str
+    detail: str
+
+    def cli_line(self) -> str:
+        prefix = f"  ~ {self.table}.{self.column}:"
+        if self.kind == "set_not_null":
+            return f"{prefix} model required=True, DB allows NULL — {self.detail}"
+        if self.kind == "drop_not_null":
+            return f"{prefix} model optional, DB is NOT NULL — {self.detail}"
+        if self.kind == "type":
+            return f"{prefix} type mismatch — {self.detail}"
+        return f"{prefix} {self.kind} — {self.detail}"
 
 
 @dataclass
@@ -42,35 +83,50 @@ class Diff:
     """Structured delta between declared models and the DB."""
 
     new_tables: list[tuple[str, str]] = _dc_field(default_factory=list)
-    """List of (table_name, full CREATE TABLE ddl)."""
-
     new_columns: list[tuple[str, str, str, bool]] = _dc_field(default_factory=list)
-    """List of (table_name, column_name, ALTER TABLE ddl, was_required).
-
-    ``was_required`` is True when the field carries ``required=True`` —
-    the rendered DDL has its NOT NULL stripped (additive-safe) but the
-    flag drives a ``# TODO: backfill + SET NOT NULL`` comment so the
-    operator remembers to finish the job.
-    """
-
     orphan_columns: list[tuple[str, str]] = _dc_field(default_factory=list)
-    """List of (table_name, column_name) — DB has them, no field does."""
+    alterations: list[SchemaAlteration] = _dc_field(default_factory=list)
 
     @property
     def is_empty(self) -> bool:
-        return not (self.new_tables or self.new_columns or self.orphan_columns)
+        return not (
+            self.new_tables
+            or self.new_columns
+            or self.orphan_columns
+            or self.alterations
+        )
 
 
-# ---- diff ------------------------------------------------------------
+def _field_type_spec(field: Field) -> str:
+    """Normalized SQL type string for a stored field declaration."""
+    return _normalize_type_name(getattr(field, "sql_type", "text"))
+
+
+def _normalize_type_name(type_name: str) -> str:
+    key = (type_name or "text").strip().lower()
+    return _PG_TYPE_NORMALIZE.get(key, key)
+
+
+def _normalize_pg_column(udt_name: str, data_type: str) -> str:
+    udt = (udt_name or "").strip().lower()
+    if udt in _PG_TYPE_NORMALIZE:
+        return _PG_TYPE_NORMALIZE[udt]
+    return (data_type or udt or "text").strip().lower()
+
+
+def _types_match(expected: str, actual: str) -> bool:
+    if expected == actual:
+        return True
+    # Char/Text both land as text in pyvelm + Postgres.
+    if expected == "text" and actual in ("text", "character varying", "varchar"):
+        return True
+    if actual == "text" and expected in ("text", "character varying", "varchar"):
+        return True
+    return False
 
 
 def compute_diff(env: "Environment", module: str) -> Diff:
-    """Diff the live DB schema against the models owned by ``module``.
-
-    Only models registered as owned by the module (via the loader's
-    ``registry._model_module`` map) are considered — inherited
-    extensions are the originating module's responsibility.
-    """
+    """Diff the live DB schema against models owned by ``module``."""
     diff = Diff()
     reg = env.registry
     owned = sorted(
@@ -79,41 +135,71 @@ def compute_diff(env: "Environment", module: str) -> Diff:
     for model_name in owned:
         cls = reg[model_name]
         table = cls._table
-        expected: dict[str, str] = {}
+        expected: dict[str, tuple[Field, str]] = {}
         for f in cls._fields.values():
             if not f.is_stored:
                 continue
             if isinstance(f, (One2many, Many2many)):
                 continue
-            expected[f.column] = f.column_ddl()
-        actual = _existing_columns(env, table)
+            expected[f.column] = (f, f.column_ddl())
+        actual = _fetch_table_columns(env, table)
         if actual is None:
-            # Table missing entirely — emit CREATE TABLE with all
-            # currently-declared columns. Mirrors `_setup_table`.
-            col_ddls = ['"id" SERIAL PRIMARY KEY'] + list(expected.values())
+            col_ddls = ['"id" SERIAL PRIMARY KEY'] + [
+                ddl for _, ddl in expected.values()
+            ]
             ddl = (
                 f'CREATE TABLE IF NOT EXISTS "{table}" '
                 f'({", ".join(col_ddls)})'
             )
             diff.new_tables.append((table, ddl))
             continue
-        for col, col_ddl in expected.items():
-            if col in actual:
+        for col, (field_obj, col_ddl) in expected.items():
+            if col not in actual:
+                was_required = bool(
+                    field_obj and getattr(field_obj, "required", False)
+                )
+                safe_ddl = col_ddl.rstrip()
+                if safe_ddl.upper().endswith("NOT NULL"):
+                    safe_ddl = safe_ddl[: -len("NOT NULL")].rstrip()
+                stmt = (
+                    f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS {safe_ddl}'
+                )
+                diff.new_columns.append((table, col, stmt, was_required))
                 continue
-            # Strip trailing NOT NULL — adding NOT NULL columns to a
-            # populated table fails without a DEFAULT. The TODO comment
-            # rendered below reminds the operator to backfill + tighten.
-            field_obj = next(
-                (f for f in cls._fields.values()
-                 if f.is_stored and f.column == col),
-                None,
+            db_col = actual[col]
+            if col in _SKIP_ALTERATION_COLUMNS:
+                continue
+            wants_required = bool(
+                field_obj and getattr(field_obj, "required", False)
             )
-            was_required = bool(field_obj and getattr(field_obj, "required", False))
-            safe_ddl = col_ddl.rstrip()
-            if safe_ddl.upper().endswith("NOT NULL"):
-                safe_ddl = safe_ddl[: -len("NOT NULL")].rstrip()
-            stmt = f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS {safe_ddl}'
-            diff.new_columns.append((table, col, stmt, was_required))
+            if wants_required and db_col.nullable:
+                diff.alterations.append(
+                    SchemaAlteration(
+                        table,
+                        col,
+                        "set_not_null",
+                        "backfill NULLs, then SET NOT NULL",
+                    )
+                )
+            elif not wants_required and not db_col.nullable:
+                diff.alterations.append(
+                    SchemaAlteration(
+                        table,
+                        col,
+                        "drop_not_null",
+                        "ALTER COLUMN DROP NOT NULL",
+                    )
+                )
+            expected_type = _field_type_spec(field_obj)
+            if not _types_match(expected_type, db_col.type_spec):
+                diff.alterations.append(
+                    SchemaAlteration(
+                        table,
+                        col,
+                        "type",
+                        f"model {expected_type!r}, DB {db_col.type_spec!r}",
+                    )
+                )
         for col in actual:
             if col == "id":
                 continue
@@ -122,22 +208,28 @@ def compute_diff(env: "Environment", module: str) -> Diff:
     return diff
 
 
-def _existing_columns(env, table: str) -> set[str] | None:
-    """Return the set of column names for ``table``, or None if the
-    table doesn't exist at all (distinguishes "no rows" from "no
-    table" — both look the same on the columns query)."""
+def _fetch_table_columns(env, table: str) -> dict[str, ColumnSchema] | None:
+    """Column name → schema snapshot, or ``None`` if the table is missing."""
     rows = env.conn.execute(
-        "SELECT column_name FROM information_schema.columns "
-        "WHERE table_name = %s",
+        "SELECT column_name, is_nullable, udt_name, data_type "
+        "FROM information_schema.columns "
+        "WHERE table_schema = current_schema() AND table_name = %s",
         (table,),
     ).fetchall()
     if rows:
-        return {r[0] for r in rows}
+        out: dict[str, ColumnSchema] = {}
+        for name, is_nullable, udt_name, data_type in rows:
+            out[name] = ColumnSchema(
+                nullable=(is_nullable == "YES"),
+                type_spec=_normalize_pg_column(udt_name, data_type),
+            )
+        return out
     exists = env.conn.execute(
-        "SELECT 1 FROM information_schema.tables WHERE table_name = %s",
+        "SELECT 1 FROM information_schema.tables "
+        "WHERE table_schema = current_schema() AND table_name = %s",
         (table,),
     ).fetchone()
-    return set() if exists else None
+    return {} if exists else None
 
 
 # ---- rendering -------------------------------------------------------
@@ -157,7 +249,7 @@ def render_migration(
     out.append(_summary(diff))
     out.append("")
     out.append("Idempotent: every ADD / CREATE uses IF NOT EXISTS.")
-    out.append("Drops are commented out — uncomment after reviewing.")
+    out.append("Type / NOT NULL / DROP changes are commented — review first.")
     out.append('"""')
     out.append("")
     out.append("")
@@ -178,6 +270,26 @@ def render_migration(
                 f'ALTER TABLE "{table}" ALTER COLUMN "{col}" SET NOT NULL'
             )
             out.append(f"    # env.conn.execute({_q(tighten)})")
+    for alt in diff.alterations:
+        out.append("")
+        out.append(f"    # {alt.table}.{alt.column}: {alt.kind} — {alt.detail}")
+        if alt.kind == "set_not_null":
+            stmt = (
+                f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" '
+                f"SET NOT NULL"
+            )
+            out.append(f"    # env.conn.execute({_q(stmt)})")
+        elif alt.kind == "drop_not_null":
+            stmt = (
+                f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" '
+                f"DROP NOT NULL"
+            )
+            out.append(f"    # env.conn.execute({_q(stmt)})")
+        elif alt.kind == "type":
+            out.append(
+                f"    # e.g. ALTER TABLE \"{alt.table}\" ALTER COLUMN "
+                f"\"{alt.column}\" TYPE <new_type> USING ..."
+            )
     if diff.orphan_columns:
         out.append("")
         out.append("    # Orphan columns — review before uncommenting:")
@@ -195,19 +307,28 @@ def _summary(diff: Diff) -> str:
         parts.append(f"{len(diff.new_tables)} new table(s)")
     if diff.new_columns:
         parts.append(f"{len(diff.new_columns)} new column(s)")
+    if diff.alterations:
+        kinds = {}
+        for a in diff.alterations:
+            kinds[a.kind] = kinds.get(a.kind, 0) + 1
+        labels = []
+        if kinds.get("type"):
+            labels.append(f"{kinds['type']} type")
+        if kinds.get("set_not_null"):
+            labels.append(f"{kinds['set_not_null']} NOT NULL tighten")
+        if kinds.get("drop_not_null"):
+            labels.append(f"{kinds['drop_not_null']} NOT NULL relax")
+        parts.append(", ".join(labels) + " change(s)")
     if diff.orphan_columns:
         parts.append(f"{len(diff.orphan_columns)} orphan column(s)")
     return "Changes: " + ", ".join(parts) + "."
 
 
 def _q(s: str) -> str:
-    """Emit a Python single-quoted string literal. SQL identifiers /
-    keywords are ASCII so we don't worry about non-printables."""
     if "'" not in s:
         return f"'{s}'"
     if '"' not in s:
         return f'"{s}"'
-    # Last resort: escape single quotes.
     return "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
@@ -215,11 +336,6 @@ def _q(s: str) -> str:
 
 
 def next_minor_version(version: tuple[int, ...]) -> tuple[int, ...]:
-    """``(0, 16, 0) → (0, 17, 0)``; ``(0, 16) → (0, 17)``.
-
-    Pads with zeros if shorter than (major, minor); otherwise just
-    increments the minor component in place.
-    """
     parts = list(version)
     while len(parts) < 2:
         parts.append(0)
@@ -232,11 +348,6 @@ def next_minor_version(version: tuple[int, ...]) -> tuple[int, ...]:
 def migration_filename(
     from_version: tuple[int, ...], to_version: tuple[int, ...]
 ) -> str:
-    """``(0, 16) → (0, 17)`` ↦ ``"0_16_to_0_17.py"``.
-
-    Trailing zeros are dropped to match the project convention
-    (``0_15_to_0_16.py``, not ``0_15_0_to_0_16_0.py``).
-    """
     def _join(v: tuple[int, ...]) -> str:
         parts = list(v)
         while len(parts) > 2 and parts[-1] == 0:
@@ -252,14 +363,22 @@ def parse_version(s: str) -> tuple[int, ...]:
 
 @dataclass
 class ApplyResult:
-    """Outcome of applying a schema diff in-process (no migration file)."""
-
     new_tables: int = 0
     new_columns: int = 0
+    set_not_null: int = 0
+    drop_not_null: int = 0
+    skipped_not_null: int = 0
+    skipped_not_null_cols: list[str] = _dc_field(default_factory=list)
 
     @property
     def is_empty(self) -> bool:
-        return self.new_tables == 0 and self.new_columns == 0
+        return (
+            self.new_tables == 0
+            and self.new_columns == 0
+            and self.set_not_null == 0
+            and self.drop_not_null == 0
+            and self.skipped_not_null == 0
+        )
 
     def summary(self) -> str:
         if self.is_empty:
@@ -269,25 +388,69 @@ class ApplyResult:
             parts.append(f"{self.new_tables} table(s)")
         if self.new_columns:
             parts.append(f"{self.new_columns} column(s)")
-        return "schema: " + ", ".join(parts)
+        if self.set_not_null:
+            parts.append(f"{self.set_not_null} NOT NULL")
+        if self.drop_not_null:
+            parts.append(f"{self.drop_not_null} relaxed")
+        if self.skipped_not_null_cols:
+            cols = ", ".join(self.skipped_not_null_cols)
+            parts.append(f"NOT NULL pending on {cols} (NULL rows — backfill)")
+        elif self.skipped_not_null:
+            parts.append(
+                f"{self.skipped_not_null} NOT NULL pending (NULL rows — backfill)"
+            )
+        return "schema: " + ", ".join(parts) + "."
+
+
+def count_null_rows(env: "Environment", table: str, column: str) -> int:
+    """How many rows have NULL in *column* (blocks ``SET NOT NULL``)."""
+    row = env.conn.execute(
+        f'SELECT COUNT(*) FROM "{table}" WHERE "{column}" IS NULL'
+    ).fetchone()
+    return int(row[0]) if row else 0
+
+
+def _column_has_nulls(env: "Environment", table: str, column: str) -> bool:
+    return count_null_rows(env, table, column) > 0
+
+
+def _apply_nullability(
+    env: "Environment", diff: Diff, result: ApplyResult
+) -> None:
+    for alt in diff.alterations:
+        if alt.kind == "set_not_null":
+            if _column_has_nulls(env, alt.table, alt.column):
+                result.skipped_not_null += 1
+                n = count_null_rows(env, alt.table, alt.column)
+                result.skipped_not_null_cols.append(
+                    f"{alt.table}.{alt.column} ({n} NULL)"
+                )
+                continue
+            env.conn.execute(
+                f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" '
+                f"SET NOT NULL"
+            )
+            result.set_not_null += 1
+        elif alt.kind == "drop_not_null":
+            env.conn.execute(
+                f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" '
+                f"DROP NOT NULL"
+            )
+            result.drop_not_null += 1
 
 
 def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
-    """Apply additive DDL from ``compute_diff`` immediately.
-
-    Used on Apps **Upgrade / Sync** so operators need not hand-run
-    ``pyvelm db autogen`` for every column addition. Idempotent
-    (``IF NOT EXISTS``). Does not write a migration file.
-    """
+    """Apply model/DB drift: additive DDL plus safe nullability changes."""
     diff = compute_diff(env, module)
     result = ApplyResult(
         new_tables=len(diff.new_tables),
         new_columns=len(diff.new_columns),
     )
-    if diff.is_empty:
-        return result
     for _, ddl in diff.new_tables:
         env.conn.execute(ddl)
     for _table, _col, stmt, _was_required in diff.new_columns:
         env.conn.execute(stmt)
+    # Re-diff so new columns can receive SET NOT NULL in the same pass.
+    diff = compute_diff(env, module)
+    _apply_nullability(env, diff, result)
     return result

@@ -1346,19 +1346,26 @@ def main():
                 assert not deleted, "delete-via-parent-form did not unlink"
             print("o2m inline edit: create + update + delete commit via parent save OK")
 
-            # Partner child_ids: inline table on edit (auto when comodel
-            # has a list view; partners declares widget="table" too).
-            # Reuse `alice` from the HTTP block above — name is "Alice X"
-            # by now, not the original "Alice".
+            # Partner child_ids: dialog table on edit (widget="dialog").
             r_p = client.get(
                 f"/web/views/partners/partner.form/record/{alice['id']}/edit"
             )
             assert r_p.status_code == 200, r_p.text
-            assert "data-pv-o2m-root" in r_p.text, (
-                "partner child_ids should render inline-o2m table on edit"
+            assert "data-pv-dialog" in r_p.text, (
+                "partner child_ids should use dialog table on edit"
             )
-            assert "data-pv-o2m-add" in r_p.text
-            print("o2m inline edit: partner child_ids table on edit OK")
+            assert "data-pv-o2m-root" not in r_p.text
+            print("o2m dialog edit: partner child_ids table on edit OK")
+
+            # Inline O2m still available via widget="inline" (currency rates).
+            r_cur = client.get(
+                "/web/views/admin/currency.form/record/1/edit"
+            )
+            if r_cur.status_code == 200 and "rate_ids" in r_cur.text:
+                assert "data-pv-o2m-root" in r_cur.text, (
+                    "rate_ids with widget=inline should render inline-o2m"
+                )
+                print("o2m inline edit: currency rate_ids table OK")
 
             # Admin can create a group via the JSON API (ACL grant is active).
             r = client.post(

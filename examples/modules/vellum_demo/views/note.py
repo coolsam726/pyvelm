@@ -30,7 +30,7 @@ VIEWS: list[View] = [
             section(
                 "comments",
                 "Comments",
-                [field("comment_ids", widget="table")],
+                [field("comment_ids", widget="dialog")],
             ),
             section("metadata", "Record info", ["created_at", "updated_at"]),
         ],

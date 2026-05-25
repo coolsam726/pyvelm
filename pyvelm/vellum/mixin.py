@@ -17,9 +17,6 @@ from .collection import filter_recordset, where_recordset, wrap
 from .events import fire as fire_vellum_event
 from .query import QueryBuilder
 from .relations import BelongsTo, BelongsToMany, HasMany, HasOne
-from .timestamps import apply_timestamp_vals
-
-
 def finalize_vellum_model(cls) -> None:
     """Post-metaclass setup for Vellum models (timestamps, mass assignment, metadata)."""
     if Vellum not in getattr(cls, "__mro__", ()) or not getattr(cls, "_name", None):
@@ -28,9 +25,9 @@ def finalize_vellum_model(cls) -> None:
         return
     _detect_field_method_collisions(cls)
     validate_mass_assignment_config(cls)
-    from .timestamps import install_vellum_timestamps
+    from pyvelm.timestamps import install_timestamps
 
-    install_vellum_timestamps(cls)
+    install_timestamps(cls)
     apply_vellum_mass_assignment_defaults(cls)
     install_vellum_metadata(cls)
     cls._vellum_finalized = True
@@ -44,9 +41,8 @@ class Vellum:
         class Post(Vellum, BaseModel):
             _name = "blog.post"
 
-    Automatic Laravel-style ``created_at`` / ``updated_at`` timestamps are
-    enabled by default (``_timestamps = True``). Set ``_timestamps = False`` to
-    disable.
+    Inherits framework automatic ``created_at`` / ``updated_at`` from
+    :class:`~pyvelm.model.BaseModel` (``_timestamps = True`` by default).
 
     For SQL queries at runtime, prefer ``env.query("blog.post")`` so you
     always use the registry class after ``_inherit`` merges. ``Post.query(env)``
@@ -65,7 +61,6 @@ class Vellum:
         cls = self.__class__
         vals = filter_mass_assignment(cls, dict(vals))
         vals = apply_mutators(cls, self.env, vals)
-        vals = apply_timestamp_vals(cls, vals, updating=False)
         empty = cls(self.env, ())
         fire_vellum_event(cls, "creating", empty, vals=vals)
         fire_vellum_event(cls, "saving", empty, vals=vals)
@@ -80,7 +75,6 @@ class Vellum:
         cls = self.__class__
         vals = filter_mass_assignment(cls, dict(vals))
         vals = apply_mutators(cls, self.env, vals)
-        vals = apply_timestamp_vals(cls, vals, updating=True)
         fire_vellum_event(cls, "updating", self)
         fire_vellum_event(cls, "saving", self)
         super().write(vals)

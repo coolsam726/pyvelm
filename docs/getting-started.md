@@ -111,10 +111,18 @@ tasks/
 The stub uses generic names (`Entry`, `entries`) — customise them
 freely.
 
-Restart the app (`docker compose restart app` or your service
-manager). The Apps page lists `tasks` in the catalog. Click
-**Install**. The sidebar gains a **tasks** group with an **Entries**
-leaf inside it.
+Apply schema and register the module:
+
+```bash
+pyvelm db migrate
+# or: docker compose up   # runs migrate, then app + cron
+```
+
+The Apps page lists `tasks` in the catalog. After migrate it should show
+**Installed**; otherwise click **Install**. The sidebar gains a **tasks**
+group once menus are synced.
+
+For model changes later, see [Migrations workflow](migrations.md).
 
 See the [CLI reference](cli.md#pyvelm-new) for the full command
 shape, including the `--in <path>` override when you're working

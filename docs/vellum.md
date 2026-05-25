@@ -197,6 +197,11 @@ they reach the ORM.
 
 ## Automatic timestamps
 
+All :class:`~pyvelm.model.BaseModel` subclasses get `created_at` and
+`updated_at` from the framework (see [Declaring models](models.md#automatic-timestamps)).
+Vellum models use the same columns and additionally default
+``_guarded`` so mass assignment cannot override them.
+
 Vellum models maintain Laravel-style `created_at` and `updated_at` columns
 (UTC, stored as naive `timestamp`). Both are set on create; only `updated_at`
 changes on write. Disable with `_timestamps = False`, or customize column names

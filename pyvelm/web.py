@@ -36,21 +36,43 @@ from .fields import Many2many, Many2one, One2many
 from .registry import Registry
 
 
-def _form_list_nav(request: Request) -> dict[str, str | None]:
-    """List-view query params carried on form URLs for prev/next navigation."""
+def _form_parent_nav(request: Request) -> dict:
+    """Parent-view query params on form URLs (ref, bc stack, filters)."""
     q = request.query_params
-    list_key = (q.get("list") or "").strip()
-    list_module: str | None = None
-    list_name: str | None = None
-    if "/" in list_key:
-        list_module, list_name = list_key.split("/", 1)
+    ref_key = (q.get("ref") or q.get("list") or "").strip()
+    ref_module: str | None = None
+    ref_name: str | None = None
+    if "/" in ref_key:
+        ref_module, ref_name = ref_key.split("/", 1)
+    page_raw = q.get("page", "")
+    page_size_raw = q.get("page_size", "")
+    try:
+        page = int(page_raw) if page_raw != "" else None
+    except ValueError:
+        page = None
+    try:
+        page_size = int(page_size_raw) if page_size_raw != "" else None
+    except ValueError:
+        page_size = None
+    from .render import parse_bc_param
+
+    bc_stack = parse_bc_param(q.get("bc"))
     return {
-        "list_module": list_module or None,
-        "list_name": list_name or None,
+        "list_module": ref_module or None,
+        "list_name": ref_name or None,
         "list_search": q.get("search") or "",
         "list_order": q.get("order") or "",
         "list_filters": q.get("filters") or "",
+        "group_by": q.get("group_by") or "",
+        "page": page,
+        "page_size": page_size,
+        "bc_stack": bc_stack,
     }
+
+
+def _form_list_nav(request: Request) -> dict:
+    """Backward-compatible alias for :func:`_form_parent_nav`."""
+    return _form_parent_nav(request)
 
 
 def _display_value(record) -> str:
@@ -461,6 +483,7 @@ def create_app(
         if env.uid is None:
             return _login_redirect(request)
         from .render import (
+            parse_bc_param,
             render_dashboard_page,
             render_graph_page,
             render_kanban_page,
@@ -469,6 +492,7 @@ def create_app(
 
         rec = _load_view(env, module, name)
         path = str(request.url.path)
+        bc_stack = parse_bc_param(request.query_params.get("bc"))
         if rec.view_type == "dashboard":
             return HTMLResponse(
                 render_dashboard_page(rec, env, current_path=path)
@@ -484,11 +508,25 @@ def create_app(
                     order=order,
                     filters=filters,
                     group_by=group_by,
+                    bc_stack=bc_stack,
                     current_path=path,
                 )
             )
         if rec.view_type == "kanban":
-            return HTMLResponse(render_kanban_page(rec, env, current_path=path))
+            return HTMLResponse(
+                render_kanban_page(
+                    rec,
+                    env,
+                    page=page,
+                    page_size=page_size,
+                    search=search,
+                    order=order,
+                    filters=filters,
+                    group_by=group_by,
+                    bc_stack=bc_stack,
+                    current_path=path,
+                )
+            )
         if rec.view_type == "graph":
             return HTMLResponse(
                 render_graph_page(
@@ -524,6 +562,7 @@ def create_app(
     def web_view_rows(
         module: str,
         name: str,
+        request: Request,
         page: int = Query(default=0, ge=0),
         page_size: int = Query(default=10, ge=1, le=200),
         search: str = Query(default=""),
@@ -535,25 +574,41 @@ def create_app(
         """HTML fragment endpoint used by HTMX `load more` swaps."""
         if env.uid is None:
             raise HTTPException(status_code=401, detail="Authentication required")
-        from .render import render_list_rows
+        from .render import parse_bc_param, render_kanban_rows, render_list_rows
 
         rec = _load_view(env, module, name)
-        if rec.view_type != "list":
-            raise HTTPException(
-                status_code=501,
-                detail=f"Renderer for view_type {rec.view_type!r} not yet shipped",
+        bc_stack = parse_bc_param(request.query_params.get("bc"))
+        if rec.view_type == "list":
+            return HTMLResponse(
+                render_list_rows(
+                    rec,
+                    env,
+                    page=page,
+                    page_size=page_size,
+                    search=search,
+                    order=order,
+                    filters=filters,
+                    group_by=group_by,
+                    bc_stack=bc_stack,
+                )
             )
-        return HTMLResponse(
-            render_list_rows(
-                rec,
-                env,
-                page=page,
-                page_size=page_size,
-                search=search,
-                order=order,
-                filters=filters,
-                group_by=group_by,
+        if rec.view_type == "kanban":
+            return HTMLResponse(
+                render_kanban_rows(
+                    rec,
+                    env,
+                    page=page,
+                    page_size=page_size,
+                    search=search,
+                    order=order,
+                    filters=filters,
+                    group_by=group_by,
+                    bc_stack=bc_stack,
+                )
             )
+        raise HTTPException(
+            status_code=501,
+            detail=f"Renderer for view_type {rec.view_type!r} not yet shipped",
         )
 
     def _coerce_json_vals(model_name: str, vals: dict) -> dict:
@@ -903,6 +958,76 @@ def create_app(
                 rec = Model.browse(rid)
                 if Model.search([("id", "=", rid)]):
                     rec.write({seq_field: (position + 1) * 10})
+        return Response(status_code=204)
+
+    @app.post("/web/records/{module}/{name}/kanban/move")
+    async def web_kanban_move(
+        module: str,
+        name: str,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        """Persist a grouped kanban drag-drop.
+
+        Body: ``{group_by, column_key, ids: […]}`` where ``ids`` is the
+        destination column's card order (top to bottom). Updates the
+        grouping field for every card in the column and, when the view
+        arch declares ``sequence``, rewrites sequence values.
+        """
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .render import (
+            _kanban_group_write_value,
+            _kanban_resolve_group_field,
+        )
+        from .views import resolve_arch
+
+        view = _load_view(env, module, name)
+        if view.view_type != "kanban":
+            raise HTTPException(
+                status_code=400,
+                detail=f"{module}/{name} is not a kanban view.",
+            )
+        arch = resolve_arch(view)
+        try:
+            payload = await request.json()
+            group_by = str(payload.get("group_by", ""))
+            column_key = payload.get("column_key")
+            ids = [int(i) for i in payload.get("ids", [])]
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Malformed payload")
+
+        try:
+            group_field = _kanban_resolve_group_field(view, arch, group_by)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not group_field:
+            raise HTTPException(
+                status_code=400,
+                detail="Kanban is not grouped; drag-drop is unavailable.",
+            )
+
+        Model = env[view.model]
+        cls = env.registry[view.model]
+        if group_field not in cls._fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{view.model} has no field {group_field!r}",
+            )
+
+        seq_field = arch.get("sequence")
+        if seq_field and seq_field not in cls._fields:
+            seq_field = None
+
+        group_val = _kanban_group_write_value(cls, group_field, column_key)
+        with env.transaction():
+            for position, rid in enumerate(ids):
+                if not Model.search([("id", "=", rid)]):
+                    continue
+                vals = {group_field: group_val}
+                if seq_field:
+                    vals[seq_field] = (position + 1) * 10
+                Model.browse(rid).write(vals)
         return Response(status_code=204)
 
     @app.post("/web/records/{module}/{name}", response_class=HTMLResponse)

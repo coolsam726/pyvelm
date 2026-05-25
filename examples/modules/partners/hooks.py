@@ -8,6 +8,21 @@ downstream modules grant access to) can read them.
 """
 
 
+def _backfill_partner_codes(env) -> None:
+    """Idempotent: fill ``code`` from name + id (same as ``0_1_to_0_2`` migration)."""
+    if "res.partner" not in env.registry:
+        return
+    Partner = env["res.partner"]
+    for partner in Partner.search([("code", "=", None)]):
+        prefix = (partner.name or "?")[:3].upper()
+        partner.code = f"{prefix}-{partner.id}"
+
+
+def sync(env):
+    """Runs before schema apply on upgrade/migrate — backfill then SET NOT NULL."""
+    _backfill_partner_codes(env)
+
+
 def install(env):
     Access = env["ir.model.access"]
     Group = env["res.groups"]

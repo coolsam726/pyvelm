@@ -66,11 +66,11 @@ reverse proxy:
   `psycopg_pool.ConnectionPool` — set Postgres's `max_connections`
   to at least `workers × pool_max_size`, plus headroom for psql
   sessions and migrations.
-- **First-boot install.** `examples/serve.py` calls
-  `loader.load_and_install` inside `_build_app()` so every worker
-  runs the install pass on startup. That's idempotent today but the
-  better pattern at scale is a one-shot install command run before
-  workers boot. Listed in the open work.
+- **First-boot install.** Run **`pyvelm db migrate`** once per deploy before
+  workers start (see [Migrations](migrations.md)). Scaffolded
+  `docker-compose.yml` includes a one-shot `migrate` service; `app` waits for
+  it. `app/serve.py` still calls `load_and_install` on boot as a safety net
+  (idempotent).
 - **Static assets.** `/web/static/*` is served by Starlette today —
   fine for small deployments. Production setups should put a CDN or
   the reverse proxy in front, serving `pyvelm/static/dist/`

@@ -13,6 +13,7 @@ Subcommands:
 | [`pyvelm cron`](#pyvelm-cron) | Run the background cron + mail-dispatcher worker. |
 | [`pyvelm init <name>`](#pyvelm-init) | Scaffold a new pyvelm project. |
 | [`pyvelm new <module>`](#pyvelm-new) | Drop a runnable module skeleton into a project. |
+| [`pyvelm db …`](#pyvelm-db) | Schema diff, autogen migrations, migrate, status. |
 | [`pyvelm list`](#artisan-style-commands) | List module commands (`make:module`, your own, …). |
 | [`pyvelm make:…`](#artisan-style-commands) | Run an Artisan-style command — see [Console commands](console.md). |
 
@@ -161,14 +162,35 @@ Add code with generators (same as `pyvelm make:module`):
 ```bash
 pyvelm make:model tasks.todo --module=tasks
 pyvelm make:view tasks.todo --module=tasks
+# Builds list + form from the model's fields (sections, toggle, dialog relations).
+# Use --minimal for a name-only stub; --force to overwrite.
 pyvelm make:menu --view=todo.list --module=tasks
 ```
 
 After scaffolding you typically:
 
 1. Run `pyvelm db autogen tasks` (or `--with-views` to auto-create views).
-2. Restart the app (`docker compose restart app`).
-3. Open `/web/apps`, find the new module, click **Install**.
+2. Run `pyvelm db migrate` (or `docker compose up` — runs migrate before app).
+3. Open `/web/apps` to confirm the module is installed, or click **Install** if
+   you skipped migrate.
+
+See [Migrations workflow](migrations.md) for the full loop.
+
+## `pyvelm db`
+
+Schema and module-install utilities. All subcommands need `PYVELM_DSN` and the
+same module roots as `app/serve.py` (`pyvelm.toml` + `PYVELM_MODULE_ROOTS`).
+
+```bash
+pyvelm db diff tasks              # print additive schema delta
+pyvelm db autogen tasks           # write migrations/0_x_to_0_y.py + bump VERSION
+pyvelm db autogen tasks --with-views
+pyvelm db migrate                 # install/upgrade every discovered module
+pyvelm db status                  # ir_module vs on-disk versions
+```
+
+**`db migrate`** is the deploy hook: run once before gunicorn workers start.
+Scaffolded Docker projects run it automatically via a `migrate` service.
 
 ### Where the module lands
 

@@ -18,50 +18,137 @@ if TYPE_CHECKING:
 _SCaffold_ROOT = Path(__file__).parent / "scaffolds"
 
 
+def _load_dotenv_for_scaffold() -> None:
+    try:
+        from dotenv import find_dotenv, load_dotenv
+
+        path = find_dotenv(usecwd=True)
+        if path:
+            load_dotenv(path)
+    except ImportError:
+        pass
+
+
+def modules_root_candidates(explicit: Path | None = None) -> list[Path]:
+    """Directories to scan for addons (``pyvelm.toml``, then ``PYVELM_MODULE_ROOTS``)."""
+    if explicit is not None:
+        return [explicit.resolve()]
+    _load_dotenv_for_scaffold()
+    from .cli import _default_module_roots
+
+    out: list[Path] = []
+    seen: set[str] = set()
+    marker_root = find_modules_root()
+    if marker_root is not None:
+        key = str(marker_root.resolve())
+        out.append(marker_root)
+        seen.add(key)
+    for r in _default_module_roots():
+        resolved = r.resolve()
+        if not resolved.is_dir():
+            continue
+        key = str(resolved)
+        if key not in seen:
+            out.append(resolved)
+            seen.add(key)
+    return out
+
+
+def infer_module_for_model(model_name: str, roots: list[Path]) -> str:
+    """Resolve owning module from a technical model name (e.g. ``vellum.demo.comment``)."""
+    from . import loader
+    from .registry import Registry
+
+    specs = loader.discover(roots)
+    registry = Registry()
+    for spec in loader.resolve_order(specs):
+        loader._load_models(spec, registry)
+    if model_name in registry._model_module:
+        return registry._model_module[model_name]
+    if "." not in model_name:
+        matches = [
+            m for m in registry._model_module if m.endswith("." + model_name)
+        ]
+        if len(matches) == 1:
+            return registry._model_module[matches[0]]
+    raise ValueError(
+        f"Model {model_name!r} is not registered under {roots!r}. "
+        f"Pass --module=<name> or check PYVELM_MODULE_ROOTS."
+    )
+
+
 def resolve_module(
     module: str | None,
     *,
+    model_name: str | None = None,
     modules_root: Path | None = None,
 ) -> tuple[str, Path, Path]:
     """Return ``(module_name, modules_root, module_path)`` or raise ValueError."""
-    root = modules_root or find_modules_root()
-    if root is None:
+    candidates = modules_root_candidates(modules_root)
+    if not candidates:
         raise ValueError(
-            "Couldn't find pyvelm.toml — run from a project root or "
-            "pass --modules-root=."
+            "Couldn't find module roots — add pyvelm.toml, set "
+            "PYVELM_MODULE_ROOTS in .env, or pass --modules-root=."
         )
     mod_name = module
+    if mod_name is None and model_name:
+        mod_name = infer_module_for_model(model_name, candidates)
     if mod_name is None:
-        cwd = Path.cwd().resolve()
-        try:
-            rel = cwd.relative_to(root.resolve())
-            if rel.parts:
-                mod_name = rel.parts[0]
-        except ValueError:
-            pass
+        for root in candidates:
+            cwd = Path.cwd().resolve()
+            try:
+                rel = cwd.relative_to(root.resolve())
+                if rel.parts and valid_name(rel.parts[0]):
+                    mod_name = rel.parts[0]
+                    break
+            except ValueError:
+                continue
     if not mod_name or not valid_name(mod_name):
         raise ValueError(
-            "Pass --module=<name> or run from inside app/modules/<module>/."
+            "Pass --module=<name>, a full model name (e.g. vellum.demo.comment), "
+            "or run from inside <modules-root>/<module>/."
         )
-    mod_path = root / mod_name
-    if not (mod_path / "__pyvelm__.py").is_file():
-        raise ValueError(f"Module not found: {mod_path}")
-    return mod_name, root, mod_path
+    for root in candidates:
+        mod_path = root / mod_name
+        if (mod_path / "__pyvelm__.py").is_file():
+            return mod_name, root, mod_path
+    raise ValueError(
+        f"Module {mod_name!r} not found under: "
+        + ", ".join(str(r) for r in candidates)
+    )
+
+
+def normalize_model_for_views(
+    model_name: str,
+    module_name: str,
+    registry: Registry | None = None,
+) -> tuple[str, str, str]:
+    """Return ``(view_file_stem, view_name_stem, technical_model_name)``."""
+    technical = model_name
+    if registry is not None and model_name in registry:
+        technical = model_name
+    elif "." not in model_name:
+        technical = f"{module_name}.{model_name}"
+    if registry is not None and technical not in registry:
+        raise ValueError(
+            f"Model {technical!r} is not loaded — run from the project root or "
+            f"set PYVELM_MODULE_ROOTS."
+        )
+    view_file_stem = technical.split(".")[-1]
+    parts = technical.split(".")
+    if parts and parts[0] == module_name:
+        rest = parts[1:]
+    else:
+        rest = parts[1:] if len(parts) > 1 else parts
+    view_name_stem = "_".join(rest) if rest else view_file_stem
+    if not valid_name(view_file_stem.replace(".", "_")):
+        raise ValueError(f"Invalid model suffix {view_file_stem!r}.")
+    return view_file_stem, view_name_stem, technical
 
 
 def model_stem(model_name: str, module_name: str) -> str:
-    """``inventory.product`` → ``product``; validates module prefix."""
-    if "." not in model_name:
-        model_name = f"{module_name}.{model_name}"
-    prefix, stem = model_name.split(".", 1)
-    if prefix != module_name:
-        raise ValueError(
-            f"Model {model_name!r} must start with module name {module_name!r} "
-            f"(e.g. {module_name}.product)."
-        )
-    if not valid_name(stem.replace(".", "_")):
-        raise ValueError(f"Invalid model suffix {stem!r}.")
-    return stem
+    """Legacy helper — view file stem (last segment of the technical name)."""
+    return normalize_model_for_views(model_name, module_name)[0]
 
 
 def class_name_from_stem(stem: str) -> str:
@@ -149,7 +236,9 @@ def generate_model(
     model_name = f"{module_name}.{stem}"
     target = module_path / "models" / f"{stem}.py"
     if target.exists() and not force:
-        raise FileExistsError(str(target))
+        raise FileExistsError(
+            f"{target} already exists — pass --force to overwrite."
+        )
     (module_path / "models").mkdir(exist_ok=True)
     template = (
         "snippets/model_vellum.py.template" if vellum else "snippets/model.py.template"
@@ -167,10 +256,178 @@ def generate_model(
     return target
 
 
+def load_registry_for_module(
+    module_name: str,
+    *,
+    modules_root: Path | None = None,
+) -> Registry | None:
+    """Load the module and its dependencies into a registry for introspection."""
+    from . import loader
+    from .registry import Registry
+
+    # Always discover all addon roots so ``depends`` (e.g. ``base``) resolve.
+    roots = modules_root_candidates(None)
+    specs = loader.discover(roots)
+    if module_name not in specs:
+        return None
+    registry = Registry()
+    for spec in loader.resolve_order(specs):
+        loader._load_models(spec, registry)
+        if spec.name == module_name:
+            return registry
+    return None
+
+
+_SKIP_VIEW_FIELDS = frozenset(
+    {
+        "id",
+        "display_name",
+        "create_uid",
+        "write_uid",
+        "create_date",
+        "write_date",
+    }
+)
+
+
+def _field_view_ref(fname: str, field: Any) -> str:
+    """One list/form field entry as Python source."""
+    from .fields import Boolean, Many2many, One2many
+
+    if isinstance(field, Boolean):
+        return f'field("{fname}", widget="toggle")'
+    if isinstance(field, (One2many, Many2many)):
+        return f'field("{fname}", widget="dialog")'
+    return f'"{fname}"'
+
+
+def _ordered_stored_fields(cls) -> list[tuple[str, Any]]:
+    """Stored fields in stable order (``name`` first when present)."""
+    from .fields import Many2many, One2many
+
+    scalars: list[tuple[str, Any]] = []
+    relations: list[tuple[str, Any]] = []
+    timestamps: list[tuple[str, Any]] = []
+    ts_names = set(_timestamp_field_names(cls))
+
+    for fname, field in cls._fields.items():
+        if fname in _SKIP_VIEW_FIELDS:
+            continue
+        if isinstance(field, (One2many, Many2many)):
+            relations.append((fname, field))
+            continue
+        if not field.is_stored:
+            continue
+        if fname in ts_names:
+            timestamps.append((fname, field))
+        else:
+            scalars.append((fname, field))
+
+    def _sort_key(item: tuple[str, Any]) -> tuple[int, str]:
+        fname = item[0]
+        if fname == "name":
+            return (0, fname)
+        if fname == "active":
+            return (1, fname)
+        return (2, fname)
+
+    scalars.sort(key=_sort_key)
+    relations.sort(key=lambda x: x[0])
+    timestamps.sort(key=lambda x: x[0])
+    return scalars + relations + timestamps
+
+
+def build_view_scaffold_from_model(
+    registry: Registry,
+    model_name: str,
+    *,
+    max_list_fields: int = 12,
+) -> tuple[list[str], list[tuple[str, str, list[str]]]]:
+    """Build list field lines and form sections from a registered model.
+
+    Returns ``(list_lines, [(section_id, title, field_lines), ...])``.
+    """
+    if model_name not in registry:
+        raise ValueError(
+            f"Model {model_name!r} is not loaded — check the module name and "
+            f"that models are importable."
+        )
+    from .fields import Many2many, One2many
+
+    cls = registry[model_name]
+    ordered = _ordered_stored_fields(cls)
+    ts_set = set(_timestamp_field_names(cls))
+    scalars = [
+        (f, fld)
+        for f, fld in ordered
+        if f not in ts_set and not isinstance(fld, (One2many, Many2many))
+    ]
+    relations = [(f, fld) for f, fld in ordered if isinstance(fld, (One2many, Many2many))]
+    timestamps = [(f, fld) for f, fld in ordered if f in ts_set]
+
+    list_names: list[str] = []
+    for fname, field in scalars:
+        if len(list_names) >= max_list_fields:
+            break
+        list_names.append(_field_view_ref(fname, field))
+    for fname, field in relations:
+        if len(list_names) >= max_list_fields:
+            break
+        list_names.append(_field_view_ref(fname, field))
+    for fname, field in timestamps:
+        if len(list_names) >= max_list_fields:
+            break
+        if _field_view_ref(fname, field) not in list_names:
+            list_names.append(_field_view_ref(fname, field))
+
+    if not list_names:
+        if "name" in cls._fields:
+            list_names = ['"name"']
+        else:
+            list_names = ['"id"']
+
+    sections: list[tuple[str, str, list[str]]] = []
+    if scalars:
+        title = _title_from_model(model_name)
+        sections.append(
+            (
+                "main",
+                title,
+                [_field_view_ref(f, fld) for f, fld in scalars],
+            )
+        )
+    if relations:
+        sections.append(
+            (
+                "relations",
+                "Relations",
+                [_field_view_ref(f, fld) for f, fld in relations],
+            )
+        )
+    if timestamps:
+        sections.append(
+            (
+                "metadata",
+                "Record info",
+                [_field_view_ref(f, fld) for f, fld in timestamps],
+            )
+        )
+    if not sections:
+        sections.append(("main", _title_from_model(model_name), list_names))
+
+    return list_names, sections
+
+
+def _title_from_model(model_name: str) -> str:
+    """``inventory.product`` → ``Product``."""
+    stem = model_name.split(".")[-1]
+    return " ".join(part.capitalize() for part in stem.split("_") if part)
+
+
 def _timestamp_field_names(cls) -> list[str]:
     """Timestamp columns to show on list/form views when enabled."""
     try:
-        from pyvelm.vellum.timestamps import (
+        from pyvelm.timestamps import (
             created_at_column,
             updated_at_column,
             uses_timestamps,
@@ -186,62 +443,24 @@ def _timestamp_field_names(cls) -> list[str]:
     return names
 
 
-def _field_refs_for_model(registry: Registry | None, model_name: str) -> tuple[list[str], list[str], list[str]]:
-    """Pick stored fields for starter list/form views.
-
-    Returns ``(list_fields, form_fields, form_timestamp_fields)``.
-    """
-    if registry is None or model_name not in registry:
-        return ["name"], ["name"], []
-    from .fields import Many2many, One2many
-
-    cls = registry[model_name]
-    skip = {
-        "id",
-        "create_uid",
-        "write_uid",
-        "create_date",
-        "write_date",
-        "created_at",
-        "updated_at",
-    }
-    list_names: list[str] = []
-    form_names: list[str] = []
-    for fname, field in cls._fields.items():
-        if fname in skip or not field.is_stored:
-            continue
-        if isinstance(field, (One2many, Many2many)):
-            continue
-        list_names.append(fname)
-        form_names.append(fname)
-        if len(list_names) >= 8:
-            break
-    if "name" in cls._fields and "name" not in list_names:
-        list_names.insert(0, "name")
-        form_names.insert(0, "name")
-    if not list_names:
-        list_names = form_names = ["name"] if "name" in cls._fields else ["id"]
-    timestamp_names = _timestamp_field_names(cls)
-    for ts in timestamp_names:
-        if ts not in list_names:
-            list_names.append(ts)
-    return list_names, form_names, timestamp_names
+def _minimal_view_fields(model_name: str) -> tuple[list[str], list[tuple[str, str, list[str]]]]:
+    """Fallback when ``--from-model`` is off or the model is not loaded."""
+    title = _title_from_model(model_name)
+    return ['"name"'], [("main", title, ['"name"'])]
 
 
-def _format_field_list(names: list[str]) -> str:
-    lines = [f'            "{n}",' for n in names]
-    return "\n".join(lines)
+def _format_field_list(lines: list[str]) -> str:
+    return "\n".join(f"            {line}," for line in lines)
 
 
-def _format_timestamp_section(timestamp_fields: list[str]) -> str:
-    if not timestamp_fields:
-        return ""
-    body = _format_field_list(timestamp_fields)
-    return (
-        "            section(\"metadata\", \"Record info\", [\n"
-        f"{body}\n"
-        "            ]),\n"
-    )
+def _format_form_sections(sections: list[tuple[str, str, list[str]]]) -> str:
+    blocks: list[str] = []
+    for sid, title, field_lines in sections:
+        inner = _format_field_list(field_lines)
+        blocks.append(
+            f'            section("{sid}", "{title}", [\n{inner}\n            ]),'
+        )
+    return "\n".join(blocks)
 
 
 def generate_views(
@@ -251,31 +470,47 @@ def generate_views(
     *,
     registry: Registry | None = None,
     force: bool = False,
+    from_model: bool = True,
 ) -> Path:
     """Write ``views/<stem>.py`` and add to manifest ``DATA``."""
-    stem = model_stem(model_name, module_name)
-    model_name = f"{module_name}.{stem}"
-    target = module_path / "views" / f"{stem}.py"
+    file_stem, view_stem, technical = normalize_model_for_views(
+        model_name, module_name, registry
+    )
+    target = module_path / "views" / f"{file_stem}.py"
     if target.exists() and not force:
-        raise FileExistsError(str(target))
+        raise FileExistsError(
+            f"{target} already exists — pass --force to overwrite."
+        )
     (module_path / "views").mkdir(exist_ok=True)
-    list_fields, form_fields, timestamp_fields = _field_refs_for_model(registry, model_name)
+    if from_model:
+        if registry is None:
+            registry = load_registry_for_module(module_name)
+        if registry is None:
+            raise ValueError(
+                f"Cannot introspect {model_name!r}: module {module_name!r} was not "
+                f"found under PYVELM_MODULE_ROOTS. Pass --minimal for a stub view, "
+                f"or fix module roots."
+            )
+        list_fields, form_sections = build_view_scaffold_from_model(
+            registry, technical
+        )
+    else:
+        list_fields, form_sections = _minimal_view_fields(technical)
     body = _read_template(
         "snippets/view.py.template",
         {
             "module": module_name,
-            "model": model_name,
-            "stem": stem,
+            "model": technical,
+            "stem": view_stem,
             "list_fields": _format_field_list(list_fields),
-            "form_fields": _format_field_list(form_fields),
-            "timestamp_section": _format_timestamp_section(timestamp_fields),
-            "title": stem.replace("_", " ").title(),
+            "form_sections": _format_form_sections(form_sections),
+            "title": _title_from_model(technical),
         },
     )
     target.write_text(body, encoding="utf-8")
     append_manifest_data(
         module_path / "__pyvelm__.py",
-        f"views/{stem}.py",
+        f"views/{file_stem}.py",
     )
     return target
 

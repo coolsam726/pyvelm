@@ -2,61 +2,110 @@
 {% block title %}{{ page_title }} — pyvelm{% endblock %}
 {% block page_title %}{{ page_title }}{% endblock %}
 
+{% block page_actions %}
+{% if form_view_name %}
+<a href="/web/views/{{ view.module }}/{{ form_view_name }}/new"
+   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+          rounded-md bg-fg-brand hover:opacity-90 transition-opacity">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+    </svg>
+    New
+</a>
+{% endif %}
+{% endblock %}
+
 {% block content %}
+{% if list_controls %}
+<script>
+    window._pvListCfg = {
+        module: {{ view.module | tojson }},
+        name: {{ view.name | tojson }},
+        search: {{ search | tojson }},
+        order: {{ order | tojson }},
+        filters: {{ filters | tojson }},
+        groupBy: {{ group_by | tojson }},
+        page: {{ page }},
+        pageSize: {{ page_size }},
+        fieldNames: {{ headers | map(attribute='name') | list | tojson }},
+        headers: {{ headers | tojson }},
+        sequenceField: {{ sequence_field | tojson }},
+        swapTarget: '#pv-kanban-container',
+        showColumns: false,
+        bc: {{ bc_param | tojson }},
+    };
+</script>
+<div x-data="pvList(window._pvListCfg)" class="space-y-3">
+
+    {% if view_switcher %}
+    <div class="mb-0">
+        {% include "_view_switcher.html" %}
+    </div>
+    {% endif %}
+
+    {% set show_columns = false %}
+    {% set page_size_label = 'Cards' %}
+    {% include "_pv_search_toolbar.html" %}
+
+    <div x-show="groupBy" x-cloak class="flex items-center gap-1.5">
+        <span class="text-2xs text-body-subtle uppercase tracking-wider">Grouped by</span>
+        <span class="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded
+                     bg-warning-soft text-warning-strong text-xs font-medium">
+            <span x-text="groupByLabel()"></span>
+            <button @click="setGroupBy(null)" type="button"
+                    aria-label="Remove grouping"
+                    class="ml-0.5 p-0.5 rounded hover:bg-warning-strong/20 transition-colors">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </span>
+    </div>
+
+    <div id="pv-kanban-container">
+        {% if kanban_draggable and group_field %}
+        <div x-data="pvKanbanBoard({
+                module: {{ view.module | tojson }},
+                name: {{ view.name | tojson }},
+                groupBy: {{ group_field | tojson }},
+                sequenceField: {{ sequence_field | tojson }},
+            })">
+            {% include "kanban_body.html" %}
+        </div>
+        {% else %}
+            {% include "kanban_body.html" %}
+        {% endif %}
+        {% if not grouped %}
+        <div id="pv-pagination" class="flex items-center justify-between text-xs text-body-subtle pt-3">
+            {% include "list_pagination.html" %}
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% include "_pv_list_alpine.html" %}
+{% if kanban_draggable and group_field %}
+{% include "_pv_kanban_alpine.html" %}
+{% endif %}
+
+{% else %}
 {% if view_switcher %}
 <div class="mb-3">
     {% include "_view_switcher.html" %}
 </div>
 {% endif %}
-<div class="flex gap-4 overflow-x-auto pb-4">
-    {% for col in columns %}
-    <section class="flex-none w-72 bg-neutral-tertiary/70 rounded-xl p-3">
-        <header class="flex items-center justify-between mb-3 px-1">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-body-subtle">
-                {{ col.label }}
-            </h3>
-            <span class="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full
-                         bg-neutral-primary text-2xs font-medium text-body">
-                {{ col.count }}
-            </span>
-        </header>
-        <div class="space-y-2">
-            {% for card in col.cards %}
-            <{% if card.link %}a href="{{ card.link }}"{% else %}div{% endif %}
-                class="block bg-neutral-primary border border-default rounded-lg p-3 shadow-sm
-                       hover:shadow-md hover:border-fg-brand/40 transition
-                       {% if card.link %}cursor-pointer{% endif %}"
-                data-record-id="{{ card.id }}">
-                {% if card.title %}
-                <div class="font-semibold text-sm text-heading">{{ card.title }}</div>
-                {% endif %}
-                {% if card.subtitle %}
-                <div class="text-xs text-body-subtle mt-0.5">{{ card.subtitle }}</div>
-                {% endif %}
-                {% if card.fields %}
-                <div class="mt-2 space-y-1">
-                    {% for f in card.fields %}
-                    <div class="text-xs">
-                        <span class="text-body-subtle">{{ f.label }}:</span>
-                        <span class="text-body">{{ f.html }}</span>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-                {% if card.badges %}
-                <div class="mt-2 flex flex-wrap gap-1">
-                    {% for b in card.badges %}
-                    <span class="inline-flex items-center text-xs">{{ b.html }}</span>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </{% if card.link %}a{% else %}div{% endif %}>
-            {% endfor %}
-            {% if not col.cards %}
-            <p class="text-xs text-body-subtle text-center py-4">No records</p>
-            {% endif %}
-        </div>
-    </section>
-    {% endfor %}
+{% if kanban_draggable and group_field %}
+<div x-data="pvKanbanBoard({
+        module: {{ view.module | tojson }},
+        name: {{ view.name | tojson }},
+        groupBy: {{ group_field | tojson }},
+        sequenceField: {{ sequence_field | tojson }},
+    })">
+    {% include "kanban_body.html" %}
 </div>
+{% include "_pv_kanban_alpine.html" %}
+{% else %}
+{% include "kanban_body.html" %}
+{% endif %}
+{% endif %}
 {% endblock %}

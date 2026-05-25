@@ -1,0 +1,164 @@
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('pvKanbanBoard', (cfg) => ({
+        module: cfg.module,
+        name: cfg.name,
+        groupBy: cfg.groupBy,
+        sequenceField: cfg.sequenceField || null,
+        _draggedCard: null,
+        _fromZone: null,
+        _dropCommitted: false,
+        _bound: false,
+
+        init() {
+            if (this._bound) return;
+            this._bound = true;
+            this.$el.addEventListener('dragstart', (e) => {
+                const handle = e.target.closest('[data-pv-kanban-handle]');
+                if (handle && this.$el.contains(handle)) this.onDragStart(e, handle);
+            });
+            this.$el.addEventListener('dragend', (e) => this.onDragEnd(e));
+            this.$el.addEventListener('dragover', (e) => {
+                const zone = e.target.closest('[data-pv-kanban-dropzone]');
+                if (zone && this.$el.contains(zone)) this.onDragOver(e, zone);
+            });
+            this.$el.addEventListener('drop', (e) => {
+                const zone = e.target.closest('[data-pv-kanban-dropzone]');
+                if (zone && this.$el.contains(zone)) this.onDrop(e, zone);
+            });
+            this.$el.addEventListener('dragleave', (e) => {
+                const zone = e.target.closest('[data-pv-kanban-dropzone]');
+                if (zone && !zone.contains(e.relatedTarget)) {
+                    zone.classList.remove('bg-brand-soft/30');
+                }
+            });
+        },
+
+        onDragStart(e, handle) {
+            const card = handle.closest('[data-pv-kanban-card]');
+            if (!card) return;
+            this._draggedCard = card;
+            this._fromZone = card.closest('[data-pv-kanban-dropzone]');
+            this._dropCommitted = false;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', card.dataset.recordId || '');
+            card.classList.add('opacity-40', 'ring-2', 'ring-fg-brand/30');
+        },
+
+        onDragEnd() {
+            if (this._draggedCard) {
+                this._draggedCard.classList.remove('opacity-40', 'ring-2', 'ring-fg-brand/30');
+            }
+            if (!this._dropCommitted && this._draggedCard) {
+                const zone = this._draggedCard.closest('[data-pv-kanban-dropzone]');
+                if (zone) this.commitColumn(zone);
+            }
+            this._draggedCard = null;
+            this._fromZone = null;
+        },
+
+        onDragOver(e, zone) {
+            if (!this._draggedCard) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            zone.classList.add('bg-brand-soft/30');
+
+            const card = e.target.closest('[data-pv-kanban-card]');
+            if (card && card !== this._draggedCard && zone.contains(card)) {
+                const rect = card.getBoundingClientRect();
+                const above = (e.clientY - rect.top) < (rect.height / 2);
+                zone.insertBefore(
+                    this._draggedCard,
+                    above ? card : card.nextSibling,
+                );
+            } else if (!zone.contains(this._draggedCard)) {
+                zone.appendChild(this._draggedCard);
+            }
+        },
+
+        onDrop(e, zone) {
+            e.preventDefault();
+            zone.classList.remove('bg-brand-soft/30');
+            this._dropCommitted = true;
+            this.commitColumn(zone);
+        },
+
+        columnKey(zone) {
+            const col = zone.closest('[data-pv-kanban-column]');
+            if (!col) return null;
+            try {
+                return JSON.parse(col.dataset.columnKey || 'null');
+            } catch (err) {
+                return null;
+            }
+        },
+
+        columnIds(zone) {
+            return Array.from(zone.querySelectorAll('[data-pv-kanban-card]'))
+                .map(el => Number(el.dataset.recordId))
+                .filter(id => !Number.isNaN(id));
+        },
+
+        updateColumnCount(zone) {
+            const col = zone.closest('[data-pv-kanban-column]');
+            if (!col) return;
+            const countEl = col.querySelector('[data-pv-kanban-count]');
+            const n = zone.querySelectorAll('[data-pv-kanban-card]').length;
+            if (countEl) countEl.textContent = String(n);
+            const empty = zone.querySelector('[data-pv-kanban-empty]');
+            if (empty) empty.style.display = n ? 'none' : '';
+        },
+
+        async commitColumn(zone) {
+            if (!this._draggedCard) return;
+            const ids = this.columnIds(zone);
+            const columnKey = this.columnKey(zone);
+            const fromZone = this._fromZone;
+            zone.classList.remove('bg-brand-soft/30');
+            try {
+                const r = await fetch(
+                    `/web/records/${this.module}/${this.name}/kanban/move`,
+                    {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                        },
+                        body: JSON.stringify({
+                            group_by: this.groupBy,
+                            column_key: columnKey,
+                            ids,
+                        }),
+                    },
+                );
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                this.updateColumnCount(zone);
+                if (fromZone && fromZone !== zone) {
+                    this.updateColumnCount(fromZone);
+                }
+            } catch (err) {
+                window.pvAlert && window.pvAlert(
+                    `Could not save card move: ${err.message}`,
+                    { variant: 'danger', title: 'Kanban update failed' },
+                );
+                this.reload();
+            }
+        },
+
+        reload() {
+            const listRoot = this.$el.closest('[x-data]');
+            if (listRoot) {
+                try {
+                    const listData = Alpine.$data(listRoot);
+                    if (listData && typeof listData.load === 'function') {
+                        listData.load();
+                        return;
+                    }
+                } catch (e) { /* pvList root may differ */ }
+            }
+            window.location.reload();
+        },
+    }));
+});
+</script>

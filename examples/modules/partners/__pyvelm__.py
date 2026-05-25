@@ -9,3 +9,4 @@ DATA: list[str] = [
     "views/menu.py",
 ]
 INSTALL_HOOK: str = "partners.hooks:install"
+SYNC_HOOK: str = "partners.hooks:sync"

@@ -5,6 +5,12 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator
 from .domain import domain_to_sql
 from .fields import Char, Field, Integer, Many2one, finalize_related_field
 from .registry import active_registry
+from .timestamps import (
+    apply_timestamp_vals,
+    inject_timestamp_fields,
+    is_system_timestamp_field,
+    resolve_timestamps_enabled,
+)
 
 
 def _rec_name_field(cls) -> str | None:
@@ -25,7 +31,7 @@ def _inject_id(model_name: str, fields: dict[str, Field]) -> None:
     """Primary key — always present in ``_fields`` and dependency paths."""
     if "id" in fields:
         return
-    field = Integer(string="ID", readonly=True)
+    field = Integer(string="ID", readonly=True, required=True)
     field.bind(model_name, "id")
     fields["id"] = field
 
@@ -100,6 +106,13 @@ class MetaModel(type):
         if _name_val:
             _inject_id(_name_val, fields)
             _inject_display_name(_name_val, fields)
+            if resolve_timestamps_enabled(namespace, bases):
+                inject_timestamp_fields(
+                    _name_val,
+                    fields,
+                    created_at=namespace.get("_CREATED_AT", "created_at"),
+                    updated_at=namespace.get("_UPDATED_AT", "updated_at"),
+                )
 
         cls._fields = fields
         for f in fields.values():
@@ -111,6 +124,10 @@ class MetaModel(type):
             for f in fields.values():
                 f.model_name = cls._name
             _install_auto_fields(cls, namespace, fields)
+            if resolve_timestamps_enabled(namespace, bases):
+                from .timestamps import install_timestamps
+
+                install_timestamps(cls)
             _bind_compute_fields(cls, fields, namespace)
             active_registry().register(cls)
         return cls
@@ -159,6 +176,17 @@ class MetaModel(type):
                 merged[attr_name] = attr_value
         _inject_id(existing._name, merged)
         _inject_display_name(existing._name, merged)
+        if resolve_timestamps_enabled(namespace, bases):
+            inject_timestamp_fields(
+                existing._name,
+                merged,
+                created_at=namespace.get(
+                    "_CREATED_AT", getattr(existing, "_CREATED_AT", "created_at")
+                ),
+                updated_at=namespace.get(
+                    "_UPDATED_AT", getattr(existing, "_UPDATED_AT", "updated_at")
+                ),
+            )
         cls._fields = merged
         for f in merged.values():
             finalize_related_field(cls, f)
@@ -170,6 +198,10 @@ class MetaModel(type):
             f.model_name = existing._name
 
         _install_auto_fields(cls, namespace, merged)
+        if resolve_timestamps_enabled(namespace, bases):
+            from .timestamps import install_timestamps
+
+            install_timestamps(cls)
         _bind_compute_fields(cls, merged, namespace)
 
         # Replace registry entry with the extended class.
@@ -189,6 +221,9 @@ class BaseModel(metaclass=MetaModel):
     _table: str | None = None
     _fields: dict[str, Field] = {}
     _company_scoped: bool = False  # set True to auto-inject company_id
+    _timestamps: bool = True  # auto ``created_at`` / ``updated_at`` on CRUD
+    _CREATED_AT: str = "created_at"
+    _UPDATED_AT: str = "updated_at"
     # Field whose value feeds the default ``display_name`` compute (when
     # the model does not override ``_compute_display_name``). Defaults to
     # ``"name"``; set to another field name, or ``False`` to use only id.
@@ -388,11 +423,7 @@ class BaseModel(metaclass=MetaModel):
                 raise ValueError(f"Unknown field {fname!r} on {self._name}")
             field = self._fields[fname]
             if field.readonly:
-                try:
-                    from pyvelm.vellum.timestamps import is_vellum_timestamp_field
-                except ImportError:
-                    is_vellum_timestamp_field = lambda _c, _f: False  # noqa: E731
-                if not is_vellum_timestamp_field(self.__class__, fname):
+                if not is_system_timestamp_field(self.__class__, fname):
                     raise ValueError(
                         f"{self._name}.{fname} is readonly and cannot be written."
                     )
@@ -628,6 +659,7 @@ class BaseModel(metaclass=MetaModel):
 
     def create(self, vals: dict[str, Any]) -> "BaseModel":
         self.env.check_access(self._name, "create")
+        vals = apply_timestamp_vals(self.__class__, vals, updating=False)
         column_vals, m2m_vals, related_vals = self._split_vals(vals)
         # Auto-inject company_id from env for company-scoped models when
         # the caller hasn't provided one explicitly.
@@ -701,6 +733,7 @@ class BaseModel(metaclass=MetaModel):
         if not self._ids:
             return
         self.env.check_access(self._name, "write")
+        vals = apply_timestamp_vals(self.__class__, vals, updating=True)
         column_vals, m2m_vals, related_vals = self._split_vals(vals)
         inv_index = self.env.registry._o2m_inverse_index
         m2o_to_snap = [

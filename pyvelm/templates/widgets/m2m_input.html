@@ -8,6 +8,7 @@
        initial         list of {"id": int, "label": str} for currently linked
                        records (one per record in the M2m)
        readonly        bool
+       dialog_only     bool — chips + dialog buttons; no inline typeahead
 #}
 <div class="pv-m2m"
      x-data='pvM2m({{ ({
@@ -17,6 +18,7 @@
         "formViewUrl": form_view_url,
         "initial": initial,
         "readonly": readonly,
+        "dialogOnly": dialog_only,
      }) | tojson }})'
      @click.outside="open = false"
      @keydown.escape.prevent.stop="open = false">
@@ -63,6 +65,7 @@
         </template>
 
         <input type="text"
+               x-show="!dialogOnly"
                x-ref="input"
                x-model="query"
                :readonly="readonly"
@@ -78,7 +81,43 @@
                       focus:outline-none focus:ring-0">
     </div>
 
-    <div x-show="open" x-cloak x-transition.opacity.duration.100ms
+    <div x-show="dialogOnly && !readonly" class="flex flex-wrap items-center gap-2">
+        <button type="button"
+                x-show="formViewUrl"
+                @click="createAndEdit()"
+                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium
+                       text-fg-brand bg-brand-soft hover:bg-brand-softer transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+            </svg>
+            Create new
+        </button>
+        <button type="button"
+                @click="linkOpen = true; open = true; $nextTick(() => { searchNow(); $refs.linkInput?.focus(); })"
+                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium
+                       text-body bg-neutral-secondary border border-default
+                       hover:bg-neutral-tertiary transition-colors">
+            Link existing…
+        </button>
+    </div>
+
+    <div x-show="dialogOnly && linkOpen && !readonly" class="mt-2">
+        <input type="text"
+               x-ref="linkInput"
+               x-model="query"
+               @input.debounce.200ms="searchNow()"
+               @keydown.arrow-down.prevent="moveCursor(1)"
+               @keydown.arrow-up.prevent="moveCursor(-1)"
+               @keydown.enter.prevent="onEnter()"
+               @keydown.escape.prevent.stop="linkOpen = false; open = false"
+               placeholder="Search to link…"
+               autocomplete="off"
+               class="w-full px-3 py-2 text-sm rounded-lg border border-default bg-neutral-primary
+                      text-body placeholder:text-body-subtle
+                      focus:border-fg-brand focus:ring-2 focus:ring-fg-brand/40">
+    </div>
+
+    <div x-show="open && (!dialogOnly || linkOpen)" x-cloak x-transition.opacity.duration.100ms
          class="relative">
         <div class="absolute left-0 right-0 top-1 z-30
                     bg-neutral-primary border border-default rounded-md shadow-lg

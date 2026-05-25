@@ -8,6 +8,7 @@ DEPENDS: list[str] = ["base", "vellum"]
 DATA: list[str] = [
     "views/note.py",
     "views/menu.py",
+    "views/comment.py",
 ]
 INSTALL_HOOK: str = "vellum_demo.hooks:install"
 SYNC_HOOK: str = "vellum_demo.hooks:sync"

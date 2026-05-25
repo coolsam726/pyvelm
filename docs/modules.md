@@ -222,6 +222,8 @@ always include it. `pyvelm-cron` prepends it automatically.
 
 ## Bumping versions and writing migrations
 
+End-to-end workflow (diff → autogen → migrate → deploy): **[Migrations](migrations.md)**.
+
 When you change a model's fields (or want to seed new data), bump
 `VERSION` in the manifest:
 

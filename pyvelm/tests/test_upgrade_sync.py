@@ -45,6 +45,13 @@ class ApplySchemaDiffTests(unittest.TestCase):
         self.assertTrue(r.is_empty)
         self.assertEqual(r.summary(), "schema unchanged")
 
+    def test_result_not_empty_when_not_null_applied(self):
+        from pyvelm.db_autogen import ApplyResult
+
+        r = ApplyResult(set_not_null=1)
+        self.assertFalse(r.is_empty)
+        self.assertIn("NOT NULL", r.summary())
+
 
 class ReloadModelsRegistryTests(unittest.TestCase):
     def test_reload_models_activates_registry(self):

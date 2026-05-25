@@ -9,6 +9,7 @@ class DemoComment(Vellum, BaseModel):
     note_id = fields.Many2one("vellum.demo.note", required=True, ondelete="CASCADE")
     body = fields.Text()
     active = fields.Boolean(default=True)
+    sequence = fields.Integer(default=10)
 
     @depends("body")
     def _compute_body_length(self):

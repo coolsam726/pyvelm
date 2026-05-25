@@ -39,6 +39,14 @@ from .registry import Registry
 IR_MODULE_TABLE = "ir_module"
 
 
+def parse_module_roots_env(value: str) -> list[Path]:
+    """Parse ``PYVELM_MODULE_ROOTS`` — comma- or colon-separated paths."""
+    import re
+
+    parts = re.split(r"[:,]", value or "")
+    return [Path(p.strip()) for p in parts if p.strip()]
+
+
 @dataclass
 class ModuleSpec:
     name: str
@@ -653,6 +661,10 @@ def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
                 _setup_module_schema(spec, env)
                 if current < spec.version:
                     _run_migrations(spec, env, current, spec.version)
+                # Sync before schema apply so hooks can backfill data
+                # required for SET NOT NULL (e.g. nullable legacy columns).
+                if spec.sync_hook is not None:
+                    spec.sync_hook(env)
                 applied = db_autogen.apply_schema_diff(env, spec.name)
                 schema_note = applied.summary()
                 env.conn.execute(
@@ -669,8 +681,6 @@ def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
             _sync_views(spec, env)
             _sync_view_inherits(spec, env)
             _sync_menus(spec, env)
-            if current is not None and spec.sync_hook is not None:
-                spec.sync_hook(env)
             results.append(
                 {
                     "name": spec.name,

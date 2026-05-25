@@ -4,23 +4,11 @@ An Odoo-style ERP framework in Python, built from first principles. The point
 isn't to reinvent Odoo — it's to keep the core ideas visible so the design
 trade-offs stay legible while the framework grows.
 
-Status: **Stage 5 Slice A complete.** Access control + HTTP Basic
-auth land on top of Stage 4's full UI: `res.groups`, `res.users`
-(bcrypt), `ir.model.access`, `ir.rule` enforce per-model CRUD perms
-and AND-inject row-level filters into every search. Anonymous reads
-are denied unless a `group_id=None` grant exists; HTTP Basic against
-`res.users.login` populates `env.uid`; superuser at uid=1 bypasses.
-On top of Stage 4 (three view types, mutations, inheritance,
-TypedDicts), Stage 3 (module loader, migrations), and Stage 2 (ORM
-with all four relational field types, computed fields, dotted-path
-traversal) — all on PostgreSQL via psycopg 3. View inheritance is dict-merge with
-Odoo XPath-position parity, addressing into list `fields` *and*
-form `sections[*].fields`. A two-mode widget registry dispatches
-rendering by `(field_type, hint, mode)`. Built on Stage 3 (module
-loader, transactional install/upgrade, hand-written migrations) and
-Stage 2 (ORM with all four relational field types, computed fields,
-dotted-path traversal in both `@depends` and domains) — all on
-PostgreSQL via psycopg 3.
+Status: **v0.9.0** — full-stack ERP framework on PostgreSQL (psycopg 3):
+ORM + module loader, list/form/kanban/graph/pivot UI (HTMX), session
+auth + ACL + record rules, multi-company, workflows, report builder,
+mail/chatter, white-label branding, schema autogen, and `pyvelm init` for
+greenfield projects. See [CHANGELOG.md](CHANGELOG.md) and [CONTEXT.md](CONTEXT.md).
 
 ## Quickstart
 
@@ -73,8 +61,9 @@ invalidation, and the singleton guard.
 
 ## What's deliberately not here yet
 
-Things deferred with eyes open, not by accident: LRU/eviction on `env.cache`,
-auto-generated schema diffs (migrations are hand-written),
-Odoo-style M2M command tuples, transaction boundaries beyond psycopg
-autocommit, schema migrations, module loading. See
-[CONTEXT.md](CONTEXT.md) for the rationale.
+Things deferred with eyes open, not by accident: M2M command tuples,
+i18n, cache eviction / rollback with transactions, down-migrations,
+shared rate limiting across workers, nested dialogs. Module loading,
+session auth, additive schema autogen (`pyvelm db autogen`), and
+`env.transaction()` for install/web mutations **are** shipped. See
+[CONTEXT.md](CONTEXT.md) for the full deferred vs shipped list.

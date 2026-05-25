@@ -82,6 +82,7 @@ nav:
       - Building UIs: views.md
       - Extending views: inheritance.md
       - Modules: modules.md
+      - Migrations: migrations.md
       - Report Builder: report-builder.md
       - Workflows: workflow.md
       - White-label branding: branding.md

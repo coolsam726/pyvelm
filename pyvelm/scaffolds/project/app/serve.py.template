@@ -34,7 +34,7 @@ APP_MODULE_ROOT = HERE / "modules"
 
 def _collect_module_roots() -> list:
     """Framework builtins + this app's ``app/modules/`` + optional
-    ``PYVELM_MODULE_ROOTS`` (colon-separated, used by Docker cron)."""
+    ``PYVELM_MODULE_ROOTS`` (comma- or colon-separated, used by Docker cron)."""
     roots: list = list(BUILTIN_MODULE_ROOTS)
     seen = {str(Path(r).resolve()) for r in roots}
     for candidate in (APP_MODULE_ROOT,):
@@ -43,8 +43,9 @@ def _collect_module_roots() -> list:
             if key not in seen:
                 roots.append(candidate)
                 seen.add(key)
-    extra = os.environ.get("PYVELM_MODULE_ROOTS", "")
-    for part in extra.split(":"):
+    from pyvelm.loader import parse_module_roots_env
+
+    for part in parse_module_roots_env(os.environ.get("PYVELM_MODULE_ROOTS", "")):
         part = part.strip()
         if not part:
             continue

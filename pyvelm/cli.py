@@ -7,6 +7,8 @@ A single ``pyvelm`` command dispatches subcommands:
     pyvelm new <module>        Drop a runnable module skeleton into a project.
     pyvelm db diff <module>    Print the schema delta for a module.
     pyvelm db autogen <module> Write an additive migration file.
+    pyvelm db migrate          Install/upgrade all modules (deploy hook).
+    pyvelm db status           Installed vs on-disk module versions.
     pyvelm list                List Artisan-style module commands.
     pyvelm make:module …       Scaffold a module (see docs/console.md).
 
@@ -18,7 +20,7 @@ Configuration is env-driven (CLI flags override). Most apps set
 these in their ``.env``:
 
     PYVELM_DSN              Postgres DSN. Required for ``cron``/``db``.
-    PYVELM_MODULE_ROOTS     Extra colon-separated module directories.
+    PYVELM_MODULE_ROOTS     Extra module dirs (comma or colon separated).
                             ``cron``/``db`` also auto-detect ``modules_root``
                             from ``pyvelm.toml`` in cwd or a parent.
     PYVELM_CRON_INTERVAL    Seconds between cron ticks. Default 60.
@@ -34,7 +36,6 @@ import time
 from pathlib import Path
 
 import psycopg
-from dotenv import load_dotenv
 from psycopg_pool import ConnectionPool
 
 from .env import Environment
@@ -45,7 +46,7 @@ log = logging.getLogger("pyvelm.cron")
 
 
 def _parse_roots(value: str) -> list[Path]:
-    return [Path(p) for p in (value or "").split(":") if p]
+    return loader.parse_module_roots_env(value)
 
 
 def _default_module_roots() -> list[Path]:
@@ -278,11 +279,12 @@ def _run_new(args: argparse.Namespace) -> None:
 def _add_db_subcommand(subs) -> None:
     db = subs.add_parser(
         "db",
-        help="Schema utilities (diff, autogen-migration).",
+        help="Schema utilities (diff, autogen, migrate, status).",
         description=(
             "Inspect or update the DB schema against the loaded module "
-            "registry. `diff` prints what's missing; `autogen` writes a "
-            "migration file. Both require PYVELM_DSN."
+            "registry. `diff` / `autogen` draft migrations; `migrate` "
+            "runs install/upgrade for all discovered modules; `status` "
+            "lists versions. Requires PYVELM_DSN."
         ),
     )
     db_subs = db.add_subparsers(
@@ -332,6 +334,29 @@ def _add_db_subcommand(subs) -> None:
     )
     auto_p.set_defaults(func=_run_db_autogen)
 
+    mig_p = db_subs.add_parser(
+        "migrate",
+        help=(
+            "Install or upgrade every discovered module (same as boot "
+            "load_and_install). Use before starting app workers."
+        ),
+    )
+    mig_p.add_argument(
+        "--roots", nargs="*", default=None,
+        help="Extra module roots (default: pyvelm.toml + PYVELM_MODULE_ROOTS).",
+    )
+    mig_p.set_defaults(func=_run_db_migrate)
+
+    st_p = db_subs.add_parser(
+        "status",
+        help="Show installed ir_module versions vs on-disk manifests.",
+    )
+    st_p.add_argument(
+        "--roots", nargs="*", default=None,
+        help="Extra module roots (default: pyvelm.toml + PYVELM_MODULE_ROOTS).",
+    )
+    st_p.set_defaults(func=_run_db_status)
+
 
 def _build_db_env_and_spec(args):
     """Common bootstrap for db subcommands.
@@ -369,19 +394,37 @@ def _run_db_diff(args: argparse.Namespace) -> None:
     env, _spec, conn = _build_db_env_and_spec(args)
     try:
         diff = db_autogen.compute_diff(env, args.module)
+        if diff.is_empty:
+            print(f"{args.module}: no schema changes.")
+            return
+        print(f"{args.module}: {db_autogen._summary(diff)}")
+        for table, _ddl in diff.new_tables:
+            print(f"  + table {table}")
+        for table, col, _stmt, was_required in diff.new_columns:
+            tag = " (required — needs backfill)" if was_required else ""
+            print(f"  + column {table}.{col}{tag}")
+        for alt in diff.alterations:
+            print(alt.cli_line())
+            if alt.kind == "set_not_null":
+                nulls = db_autogen.count_null_rows(env, alt.table, alt.column)
+                if nulls:
+                    print(
+                        f"      → db migrate will NOT apply SET NOT NULL yet: "
+                        f"{nulls} row(s) have NULL in {alt.table}.{alt.column}"
+                    )
+                    print(
+                        "      → backfill those rows (migration script or SQL), "
+                        "then run pyvelm db migrate again"
+                    )
+                else:
+                    print(
+                        f"      → no NULL rows; pyvelm db migrate should apply "
+                        f"SET NOT NULL on {alt.table}.{alt.column}"
+                    )
+        for table, col in diff.orphan_columns:
+            print(f"  - orphan {table}.{col}")
     finally:
         conn.close()
-    if diff.is_empty:
-        print(f"{args.module}: no schema changes.")
-        return
-    print(f"{args.module}: {db_autogen._summary(diff)}")
-    for table, _ddl in diff.new_tables:
-        print(f"  + table {table}")
-    for table, col, _stmt, was_required in diff.new_columns:
-        tag = " (required — needs backfill)" if was_required else ""
-        print(f"  + column {table}.{col}{tag}")
-    for table, col in diff.orphan_columns:
-        print(f"  - orphan {table}.{col}")
 
 
 def _run_db_autogen(args: argparse.Namespace) -> None:
@@ -438,6 +481,63 @@ def _run_db_autogen(args: argparse.Namespace) -> None:
     print(f"Bumped VERSION: {cur_version} → {new_version}")
     if diff.is_empty:
         print("(Migration body is a no-op — review whether you really need it.)")
+
+
+def _run_db_migrate(args: argparse.Namespace) -> None:
+    """Discover modules, load models, install/upgrade — one-shot deploy hook."""
+    dsn = os.environ.get("PYVELM_DSN")
+    if not dsn:
+        sys.exit("PYVELM_DSN not set")
+    roots = _resolve_module_roots(args)
+    specs = loader.discover(roots)
+    ordered = loader.resolve_order(specs)
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        reg = Registry()
+        env = Environment(conn, registry=reg)
+        for spec in ordered:
+            loader._load_models(spec, reg)
+        results = loader.install(ordered, env)
+    print(f"Migrated {len(ordered)} module(s):")
+    for row in results:
+        parts = [row["name"]]
+        if row.get("schema"):
+            parts.append(row["schema"])
+        if row.get("views"):
+            parts.append(row["views"])
+        if row.get("menus"):
+            parts.append(row["menus"])
+        print("  " + " — ".join(parts))
+
+
+def _run_db_status(args: argparse.Namespace) -> None:
+    """Compare ``ir_module`` rows to discovered manifests."""
+    dsn = os.environ.get("PYVELM_DSN")
+    if not dsn:
+        sys.exit("PYVELM_DSN not set")
+    roots = _resolve_module_roots(args)
+    specs = loader.discover(roots)
+    ordered = loader.resolve_order(specs)
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        reg = Registry()
+        env = Environment(conn, registry=reg)
+        installed: dict[str, str] = {}
+        try:
+            rows = env.conn.execute(
+                'SELECT "name", "version" FROM "ir_module"'
+            ).fetchall()
+            installed = {str(r[0]): str(r[1]) for r in rows}
+        except Exception:
+            pass
+    for spec in ordered:
+        disk = spec.version_str
+        db_ver = installed.get(spec.name)
+        if db_ver is None:
+            state = "not installed"
+        elif db_ver == disk:
+            state = "ok"
+        else:
+            state = f"upgrade ({db_ver} → {disk})"
+        print(f"  {spec.name:20} {disk:12}  {state}")
 
 
 # ---------------------------------------------------------------------------
@@ -578,9 +678,18 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _load_dotenv() -> None:
+    """Load ``.env`` from cwd or any parent (same search as ``find_dotenv``)."""
+    from dotenv import find_dotenv, load_dotenv
+
+    path = find_dotenv(usecwd=True)
+    if path:
+        load_dotenv(path)
+
+
 def main() -> None:
     """``pyvelm`` entry point — subcommand dispatch."""
-    load_dotenv(".env")
+    _load_dotenv()
     argv = sys.argv[1:]
     if argv and _try_dispatch_module_command(argv):
         return
@@ -606,7 +715,7 @@ def cron_main() -> None:
     existing docker-compose files and systemd units survive a
     pyvelm upgrade without edits.
     """
-    load_dotenv(".env")
+    _load_dotenv()
     parser = argparse.ArgumentParser(
         prog="pyvelm-cron",
         description=(

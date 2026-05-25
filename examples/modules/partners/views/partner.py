@@ -29,7 +29,10 @@ VIEWS: list[View] = [
             section(
                 "relations",
                 "Relations",
-                ["tag_ids", field("child_ids", widget="table")],
+                [
+                    field("tag_ids", widget="dialog"),
+                    field("child_ids", widget="dialog"),
+                ],
             ),
         ],
     ),

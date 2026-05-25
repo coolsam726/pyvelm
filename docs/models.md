@@ -206,6 +206,27 @@ class Partner(BaseModel):
             r.display_name = f"{r.name} [{code}]" if code else r.name
 ```
 
+## Automatic timestamps
+
+Every :class:`~pyvelm.model.BaseModel` gets ``created_at`` and ``updated_at``
+(readonly ``Datetime`` columns, UTC stored as naive ``timestamp``). Both are
+set on create; only ``updated_at`` changes on write.
+
+```python
+class Partner(BaseModel):
+    _name = "res.partner"
+    _timestamps = False  # opt out (legacy tables, import-only models)
+    name = Char()
+```
+
+Customize column names with ``_CREATED_AT`` / ``_UPDATED_AT``. New columns appear
+on **Apps → Upgrade** or ``pyvelm db migrate`` (additive DDL). Forms render
+timestamp fields as read-only in edit mode.
+
+[Vellum](vellum.md) models inherit the same behavior and default
+``_guarded = ["id", "created_at", "updated_at"]`` so API callers cannot spoof
+them.
+
 ## Computed fields
 
 A field becomes "computed" when you point it at a method via

@@ -1,0 +1,85 @@
+{% if kanban_draggable %}
+<div data-pv-kanban-card
+     data-record-id="{{ card.id }}"
+     class="flex gap-2 bg-neutral-primary border border-default rounded-lg p-2 shadow-sm
+            hover:shadow-md hover:border-fg-brand/40 transition group/card">
+    <span data-pv-kanban-handle
+          draggable="true"
+          class="shrink-0 inline-flex items-center justify-center w-6 h-6 mt-0.5 rounded
+                 cursor-grab active:cursor-grabbing text-body-subtle/60
+                 hover:text-fg-brand hover:bg-neutral-tertiary"
+          aria-label="Drag card"
+          @click.stop>
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+             viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5"/>
+        </svg>
+    </span>
+    <div class="min-w-0 flex-1">
+        {% if card.link %}
+        <a href="{{ card.link }}"
+           class="block {% if card.link %}cursor-pointer{% endif %}">
+        {% else %}
+        <div class="block">
+        {% endif %}
+            {% if card.title %}
+            <div class="font-semibold text-sm text-heading">{{ card.title }}</div>
+            {% endif %}
+            {% if card.subtitle %}
+            <div class="text-xs text-body-subtle mt-0.5">{{ card.subtitle }}</div>
+            {% endif %}
+            {% if card.fields %}
+            <div class="mt-2 space-y-1">
+                {% for f in card.fields %}
+                <div class="text-xs">
+                    <span class="text-body-subtle">{{ f.label }}:</span>
+                    <span class="text-body">{{ f.html }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if card.badges %}
+            <div class="mt-2 flex flex-wrap gap-1">
+                {% for b in card.badges %}
+                <span class="inline-flex items-center text-xs">{{ b.html }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% if card.link %}
+        </a>
+        {% else %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<{% if card.link %}a href="{{ card.link }}"{% else %}div{% endif %}
+    class="block bg-neutral-primary border border-default rounded-lg p-3 shadow-sm
+           hover:shadow-md hover:border-fg-brand/40 transition
+           {% if card.link %}cursor-pointer{% endif %}"
+    data-record-id="{{ card.id }}">
+    {% if card.title %}
+    <div class="font-semibold text-sm text-heading">{{ card.title }}</div>
+    {% endif %}
+    {% if card.subtitle %}
+    <div class="text-xs text-body-subtle mt-0.5">{{ card.subtitle }}</div>
+    {% endif %}
+    {% if card.fields %}
+    <div class="mt-2 space-y-1">
+        {% for f in card.fields %}
+        <div class="text-xs">
+            <span class="text-body-subtle">{{ f.label }}:</span>
+            <span class="text-body">{{ f.html }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% if card.badges %}
+    <div class="mt-2 flex flex-wrap gap-1">
+        {% for b in card.badges %}
+        <span class="inline-flex items-center text-xs">{{ b.html }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+</{% if card.link %}a{% else %}div{% endif %}>
+{% endif %}

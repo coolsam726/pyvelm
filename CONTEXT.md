@@ -1,10 +1,18 @@
-# Project context — pyvelm v0.7.0
+# Project context — pyvelm v0.9.0
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.9.0 (released 2026-05-25)** — **Kanban** (grid, filters, drag-drop), **schema
+diff/migrate**, **dialog** O2M/M2M widgets, **breadcrumb history** (`ref`/`bc`),
+framework **timestamps**, `make:view` from model. See
+[CHANGELOG.md](CHANGELOG.md) and [docs/releases/v0.9.0.md](docs/releases/v0.9.0.md).
+**v0.8.0 (released 2026-05-25)** — **White-label branding** per company (`res.company`
++ `PYVELM_*`), login/profile chrome, date/datetime picker fixes (no double calendar;
+floating popups in inline O2M tables). Base module **0.21.0**. See
+[CHANGELOG.md](CHANGELOG.md) and [docs/releases/v0.8.0.md](docs/releases/v0.8.0.md).
 **v0.7.0 (released 2026-05-23)** — Form **chatter** (Activity panel), **`tracking=True`**
 field changes, workflow **history** timeline, form activity layout. See
-[CHANGELOG.md](CHANGELOG.md) and [docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
+[docs/releases/v0.7.0.md](docs/releases/v0.7.0.md).
 **v0.6.0 (released 2026-05-23)** — Visual **Workflows**: designer, runtime bar,
 approvals inbox, stage forms, auto-start, escalation cron. See
 [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md) and [docs/workflow.md](docs/workflow.md).
@@ -56,31 +64,37 @@ For the design rationale and the deferred-items rationale, see
 - PostgreSQL from the start (psycopg 3, sync). Raw SQL by string concat
   for now; SQLAlchemy Core (not ORM) still on the table when migration
   auto-diff becomes interesting.
-- **UI stack: Tailwind CSS (Play CDN) + HTMX.** Major deviation from
-  Odoo's Bootstrap. Templates emit utility classes directly; the
-  framework ships no component-class CSS. JSON arch is the contract
-  for both the bundled HTMX renderer and any SPA built against the
-  JSON API.
+- **UI stack: Tailwind v4 + Flowbite (local build) + HTMX + Alpine.js.**
+  Major deviation from Odoo's Bootstrap. `npm run build` compiles
+  `pyvelm/static/dist/pyvelm.css` (checked in for clone-and-run). Templates
+  emit utility classes directly. JSON arch is the contract for both the
+  bundled HTMX renderer and any SPA built against the JSON API.
 - **No module-global registry.** `Registry` is a first-class object;
   models register into whichever registry is active (a contextvar). The
   loader sets it around each module's models import. Defining a model
   with no active registry raises — silent fallbacks make multi-registry
   bugs hard to find.
-- **Migrations are hand-written, one-way, per-module.** Auto-diff is
-  deferred; SemVer comparison is element-wise on a version tuple. The
-  installer is atomic per module (one transaction each).
+- **Migrations are hand-written, one-way, per-module.** SemVer comparison is
+  element-wise on a version tuple. Install/upgrade also runs additive
+  `db_autogen.apply_schema_diff` and `pyvelm db autogen` can draft migration
+  files — not a full Alembic/down-migration story. The installer is atomic per
+  module (`env.transaction()` per module in `loader.install`).
 
 ## Roadmap
 
 1. ✅ Declarative model layer + recordsets + CRUD/search.
 2. ✅ Relational fields + computed fields with `@depends`.
      ✅ Stage 2.5: dotted-path parser, M2o LEFT JOIN, O2m/M2m EXISTS.
-3. ⏭ Module loading + migrations + registry lifecycle.
+3. ✅ Module loading + migrations + registry lifecycle.
      ✅ Slice A: manifests, dep resolution, per-module install,
-        `ir_module` tracking, hand-written migrations, transactions.
-     ⏭ Slice B (deferred): module data (seed records beyond views),
-        auto-diff schema migrations (SQLAlchemy Core?), down-migrations
-        or formal rollback story.
+        `ir_module` tracking, hand-written migrations, `env.transaction()`.
+     ✅ Slice B (partial): `DATA` manifest loads `.py` data files
+        (VIEWS, VIEW_INHERITS, MENUS); `INSTALL_HOOK` / `SYNC_HOOK` for
+        seed logic; Apps **Install / Upgrade / Sync / Uninstall**;
+        additive schema via `_setup_table` + `db_autogen` on install/sync;
+        `pyvelm db diff` / `pyvelm db autogen` CLI.
+     ⏭ Still out of scope: `.json`/`.yaml` data files, down-migrations,
+        full SQLAlchemy-Core auto-diff engine, cache restore on rollback.
 4. ✅ Views (list/form/kanban) as data + generic UI endpoints. See
      CONTEXT history for the Slice A..B.6 sub-stages.
      ✅ Slice A: `ir.ui.view` records, `VIEWS` manifest key with
@@ -97,9 +111,7 @@ For the design rationale and the deferred-items rationale, see
      ✅ Slice B.2: HTMX + Jinja list renderer with widget registry
         (Char/Integer/Float/Boolean[+toggle]/Many2one/collections),
         `/web/views/{m}/{n}` full pages, `/web/records/{m}/{n}`
-        fragment endpoint with OOB load-more swap. UI stack uses
-        Tailwind CSS via Play CDN (major deviation from Odoo's
-        Bootstrap); widgets emit utility classes directly.
+        fragment endpoint with OOB load-more swap.
      ✅ Slice B.3: mutation endpoints (POST/PATCH/DELETE on
         /api/records) + HTMX inline edit. Per-field edit-mode widgets,
         `parse_form_vals` for type coercion, row-level edit/save/
@@ -140,7 +152,7 @@ For the design rationale and the deferred-items rationale, see
         with optional `title`/`form_view`/`sequence` keys. `Menu`
         TypedDict added. All example data files (partners, crm,
         admin, base) rewritten to use builders.
-5. ⏭ ACL: groups, model permissions, record rules (domain-based row security).
+5. ✅ ACL: groups, model permissions, record rules (domain-based row security).
      ✅ Slice A: res.groups, res.users (bcrypt), ir.model.access,
         ir.rule. HTTP Basic auth in `pyvelm.web`. Superuser bypass at
         uid=1. Demo seeds Admin + Partner Manager + record rule.
@@ -153,7 +165,7 @@ For the design rationale and the deferred-items rationale, see
         session cookie first; HTTP Basic auth is the secondary fallback
         (machine clients still work unchanged).  Base module bumped to
         (0, 4, 0).
-     ✅ Slice C: admin module. New `examples/modules/admin` depends on
+     ✅ Slice C: admin module (`pyvelm/modules/admin`) depends on
         `base`; ships list+form views for all four ACL models
         (res.groups, res.users, ir.model.access, ir.rule) via a `DATA`
         file. Install hook grants Admin full CRUD on those models.
@@ -230,43 +242,84 @@ For the design rationale and the deferred-items rationale, see
      ✅ `pvCombo` searchable combobox; list `record_href` / `create_href`
         for custom open/create URLs.
      Docs: [docs/report-builder.md](docs/report-builder.md).
+9. ✅ Greenfield projects — `pyvelm init` (Docker + `app/serve.py` +
+     `pyvelm.toml`), `pyvelm new` / `make:module`, bundled scaffolds.
+     [docs/getting-started.md](docs/getting-started.md) walks a new app
+     from install to first custom module.
+10. ✅ Graph & pivot views — ApexCharts graph; cross-tab pivot;
+     `/api/graph/data`, `/api/pivot/data`.
+11. ✅ Multi-company — `env.company_id`, company switcher, model-level
+     `_company_scoped` filter (applies to superuser when scope is set);
+     login pre-sets `pyvelm_company` cookie (0.7.0 cleanup).
+12. ✅ Visual workflow module (0.6.0) — designer, runtime bar, approvals
+     inbox, stage forms, auto-start, escalation cron. Optional `workflow`
+     module; see [docs/workflow.md](docs/workflow.md).
+13. ✅ Form chatter + tracking (0.7.0) — Activity panel, `tracking=True`,
+     workflow history timeline. `pyvelm/mail_chatter.py`, `mail_tracking.py`.
+14. ✅ Attachments, dashboards, mail outbox, Vellum ORM veneer — see
+     CHANGELOG 0.2.0–0.5.0 and shipped-features log below.
+
+## Greenfield readiness (v0.8.0)
+
+The framework is ready for a **new project trial**: scaffold with
+`pyvelm init`, add modules with `pyvelm new`, install from **Apps**, seed
+ACL in `hooks.py`, hand-write migrations when the schema changes. The
+`examples/` tree remains the reference implementation; it is not what
+`init` ships (fresh installs start with `base` + `admin` only).
+
+**Migrations:** use [docs/migrations.md](docs/migrations.md) — `pyvelm db diff` /
+`autogen` / `migrate` / `status`; Docker scaffold runs `db migrate` before app.
+
+Operational caveats for production pilots are listed under
+[Still deferred](#still-deferred) — mostly multi-worker ergonomics and
+API ergonomics, not missing core CRUD/UI/security.
 
 ## Deliberately deferred (will bite us, fix when they do)
 
-- `env.cache` has no LRU or eviction. Fine until working sets get large.
-- Old-value invalidation on O2m/M2m: when a child moves from parent A to
-  parent B, only B's dependent computes get invalidated; A's stay stale
-  until the next read. Needs read-before-write in `model.write`.
-- M2M command tuples (`[(0,_,vals)]`, `[(4,id)]`) — current write is
-  replace-only.
-- Stored compute backfill on schema add (real migrations are Stage 3).
-- No transaction boundaries beyond psycopg autocommit.
-- SQL by string concat (works because inputs are controlled at every call
-  site; domain values flow through parameterized binds).
+| Gap | Status |
+|-----|--------|
+| `env.cache` LRU / eviction | Still open — one env per request, working set usually bounded. |
+| Cache restore on `env.transaction()` rollback | Still open — DB rolls back; session cache is not snapshotted. |
+| M2M command tuples `[(0,_,vals), (4,id), …]` | Still open — Many2many write is **replace-only** (`fields.py`). |
+| Stored compute backfill on new stored fields | Still open — hand-written migration or manual recompute when needed. |
+| Universal CRUD in one transaction | Partial — `env.transaction()` + savepoints used by `loader.install` and key `/web` mutations; ad-hoc ORM calls outside a transaction still autocommit per statement. |
+| SQL string-built queries | By design — domain values use parameterized binds; table/column names from registry metadata. |
+| i18n / translations | Still open — no gettext layer. |
+| Down-migrations / formal rollback | Still open — one-way migrations only. |
+| Shared login rate limit across gunicorn workers | Still open — per-worker window; proxy-side limiter recommended ([docs/deployment.md](docs/deployment.md)). |
+| One-shot deploy migrate | **`pyvelm db migrate`** + optional Compose `migrate` service — see [docs/migrations.md](docs/migrations.md). Workers may still idempotently `load_and_install` on boot. |
+| Nested / stacked `PvDialog` instances | Still open — single floating dialog. |
 
-## Current release — v0.4.0
+**Fixed since older CONTEXT drafts (no longer deferred):**
 
-Report Builder is the headline of v0.4.0. Install the optional **`reports`**
-module from **Apps → Report Builder** (depends on `base` + `admin`). The
-compiler lives in `pyvelm/reports/`; models and menus in
-`pyvelm/modules/reports/`.
+- **O2m inverse cache on reparent** — `write()` snapshots `before_m2o` and
+  `_invalidate_relational_caches` clears the old parent's One2many tuple
+  (`model.py`).
+- **Module `DATA` files** — loader `_load_data_files` + sync on upgrade.
+- **Additive schema on sync** — `db_autogen.apply_schema_diff` after migrations.
+- **Session login + CSRF + rate limit** — shipped in auth hardening wave.
+- **Double datepicker / clipped pickers in inline tables** — fixed in v0.8.0
+  (`pvInitDatepickers`, floating datetime panel).
 
-### Known v1 limits
+## Current release — v0.8.0
 
-- **Summary group-by** — drill-down picker is root-model fields only; no
-  `partner_id.country_id`-style group paths yet.
-- **Detail columns** — non-stored / computed fields are rejected at validate
-  time (stored columns only).
-- **Demo** — no seeded sample report in `vellum_demo` yet.
+**White-label branding** is the headline. Configure on **Settings → Companies**
+or via `PYVELM_*` env vars; see [docs/branding.md](docs/branding.md).
 
-### Next focus options
+Also in this release: scoped date/datetime picker init, body-mounted floating
+popups for inline O2M edit, `pvColorPicker` / profile URL widget fixes, shared
+topnav brand on account pages. **Upgrade:** sync **base** to **0.21.0**
+(migrations `0_19→0_20`, `0_20→0_21`).
 
-- Report builder polish (summary group-by drill-down, computed columns,
-  `vellum_demo` sample report).
-- Expand `pyvelm/tests/test_reports.py` coverage; optional `docs/api/` stub
-  for `pyvelm.reports`.
-- Broader deferred items — see [Still deferred](#still-deferred) under the
-  v0.2.0 release summary.
+Prior headline releases: **v0.7.0** chatter/tracking, **v0.6.0** visual workflows,
+**v0.5.0** theme/dashboards/datetime pickers, **v0.4.0** report builder — see
+[CHANGELOG.md](CHANGELOG.md).
+
+### Report builder — known limits (unchanged)
+
+- Summary group-by drill-down: root-model fields only (no `partner_id.country_id` paths).
+- Detail columns: stored fields only at validate time.
+- No seeded sample report in `vellum_demo` yet.
 
 ## Shipped features log (pre-v0.3.0)
 
@@ -1013,10 +1066,8 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
 
 ### Still deferred
 
-Cache snapshot on transaction rollback, O2m/M2m caching +
-old-value snapshotting, m2o result caching beyond in-flight
-requests, shared-store rate limiter for multi-worker deployments,
-nested/stacked dialogs (current dialog is single-instance),
-one-shot "run migrations once before workers start" entrypoint,
-label formatting via field widgets on chart axes (e.g. Monetary
-with company currency symbol). None pressing.
+See [Deliberately deferred (will bite us, fix when they do)](#deliberately-deferred-will-bite-us-fix-when-they-do)
+for the canonical list. Additional polish items called out in release
+notes: m2o search result caching beyond in-flight requests, Monetary
+axis labels on graph views, raw SQL edits to M2M junction tables bypassing
+ORM invalidation.

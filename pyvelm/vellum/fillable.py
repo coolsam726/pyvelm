@@ -19,7 +19,7 @@ def apply_vellum_mass_assignment_defaults(cls) -> None:
         return
     if getattr(cls, "_guarded", None) is not None:
         return
-    from .timestamps import timestamp_columns
+    from pyvelm.timestamps import timestamp_columns
 
     guarded = ["id", *timestamp_columns(cls)]
     cls._guarded = guarded

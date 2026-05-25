@@ -7,6 +7,43 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.9.0] — 2026-05-25
+
+Kanban boards, schema autogen, relational dialog UX, navigation history breadcrumbs,
+and framework timestamps. See [docs/releases/v0.9.0.md](docs/releases/v0.9.0.md).
+
+### Added
+
+- **Kanban** — Ungrouped boards use list-style search, filters, group-by, and
+  pagination; grouped boards support drag-and-drop across columns and sequence
+  reorder (`POST /web/records/…/kanban/move`, arch `sequence=`).
+- **Navigation history breadcrumbs** — `ref` + `bc` query params remember List →
+  Kanban → Form (Odoo-style); view switcher appends ancestors.
+- **Schema autogen** — `pyvelm db diff` / `pyvelm db migrate` detect drift and
+  apply safe DDL (including NOT NULL with NULL-row warnings); [docs/migrations.md](docs/migrations.md).
+- **Framework timestamps** — `created_at` / `updated_at` on all `BaseModel` records;
+  read-only on forms when system-managed.
+- **Relational widgets** — Default **dialog** editor for One2many / Many2many when
+  the comodel has a form view; `widget="inline"` / `widget="table"` for inline tables.
+- **View scaffolding** — `pyvelm make:view` generates list/form from the loaded model
+  (`.env` `PYVELM_MODULE_ROOTS`); `--minimal` / `--force` flags.
+- **Tests** — `test_kanban_drag`, `test_relational_widgets`, `test_timestamps`,
+  `test_db_autogen_constraints`, `test_scaffold_views`, `test_module_roots_env`.
+
+### Changed
+
+- **Partners / vellum_demo examples** — Dialog widgets for O2M/M2M; comment kanban
+  with `group_by` + `sequence`; partners `code` sync hook for migrate.
+- **List / kanban UI** — Shared search toolbar partial (`_pv_search_toolbar.html`);
+  kanban card drag handles; Alpine `pvKanbanBoard` component.
+
+### Fixed
+
+- **Kanban render** — `_arch` no longer passed into card renderer kwargs.
+- **`db diff`** — `connection is closed` when counting NULL rows for pending NOT NULL.
+- **`make:view`** — Resolves module roots from `.env`; loads full registry for
+  dependencies; clearer `--force` error.
+
 ## [0.8.0] — 2026-05-25
 
 White-label branding per company, login/profile chrome, and date/datetime picker

@@ -1,0 +1,477 @@
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('pvList', (cfg) => ({
+        module: cfg.module,
+        name: cfg.name,
+        // Free-text in-progress search (uncommitted typing).
+        searchInput: cfg.search || '',
+        order: cfg.order || '',
+        // chips is a list of `{field, op, value, label}` entries — the
+        // central representation for everything visible in the search
+        // bar (free-text + future Filter-By selections). Each chip
+        // becomes one domain leaf server-side. Free-text search lives
+        // as a chip with field=null so the user can drop it like any
+        // other filter.
+        chips: (() => {
+            const out = [];
+            // Free-text search comes in via the dedicated `search=` URL
+            // param so deep links keep working; synthesize a chip for it
+            // so the new UI shows it consistently with field filters.
+            const s = (cfg.search || '').trim();
+            if (s) out.push({
+                field: null, op: 'ilike', value: s, label: `Search: "${s}"`,
+            });
+            try {
+                const fieldChips = JSON.parse(cfg.filters || '[]');
+                if (Array.isArray(fieldChips)) out.push(...fieldChips);
+            } catch (e) {}
+            return out;
+        })(),
+        page: cfg.page || 0,
+        pageSize: cfg.pageSize || 10,
+        fieldNames: cfg.fieldNames || [],
+        headers: cfg.headers || [],
+        sequenceField: cfg.sequenceField || null,
+        swapTarget: cfg.swapTarget || '#pv-table-container',
+        showColumns: cfg.showColumns !== false,
+        // Single-value: currently grouped column, or null.
+        groupBy: cfg.groupBy || null,
+        bc: cfg.bc || '',
+        // Dropdown state.
+        panelOpen: false,
+        columnsOpen: false,
+        visibleColumns: {},
+        // Which Filter By field is currently expanded inside the
+        // dropdown (only one at a time).
+        openFilterField: null,
+        // Per-field state for the Many2one inline picker.
+        m2oQuery: {},
+        m2oResults: {},
+        loading: false,
+        // Column reorder state. Persisted to localStorage keyed by
+        // (module, view_name). When set, applies on every table render.
+        get _orderKey() { return `pv-list-order-${this.module}-${this.name}`; },
+        get _columnsKey() { return `pv-list-cols-${this.module}-${this.name}`; },
+
+        initColumnVisibility() {
+            const defaults = {};
+            (this.headers || []).forEach(h => {
+                defaults[h.name] = h.visible_default !== false;
+            });
+            this.visibleColumns = { ...defaults };
+            try {
+                const raw = localStorage.getItem(this._columnsKey);
+                if (!raw) return;
+                const stored = JSON.parse(raw);
+                if (stored && typeof stored === 'object') {
+                    for (const [name, on] of Object.entries(stored)) {
+                        if (name in this.visibleColumns) {
+                            this.visibleColumns[name] = !!on;
+                        }
+                    }
+                }
+            } catch (e) {}
+        },
+        isColumnVisible(name) {
+            return this.visibleColumns[name] !== false;
+        },
+        toggleColumn(name) {
+            const next = !this.isColumnVisible(name);
+            if (!next && this.visibleColumnCount() <= 1) {
+                return;
+            }
+            this.visibleColumns[name] = next;
+            try {
+                localStorage.setItem(this._columnsKey, JSON.stringify(this.visibleColumns));
+            } catch (e) {}
+        },
+        visibleColumnCount() {
+            return (this.headers || []).filter(h => this.isColumnVisible(h.name)).length;
+        },
+        gutterColumnCount() {
+            return 1 + (this.sequenceField ? 1 : 0);
+        },
+
+        // The free-text "search" chip is the one with field===null.
+        // Helpers below add/replace it on input commits.
+        _searchChipIndex() {
+            return this.chips.findIndex(c => c.field === null);
+        },
+        get _searchValue() {
+            const i = this._searchChipIndex();
+            return i >= 0 ? this.chips[i].value : '';
+        },
+        get _params() {
+            // Split chips: the free-text chip (field===null) rides the
+            // dedicated `search=` param so the server's OR-across-Char
+            // search path stays in one place; the rest go in `filters=`
+            // as a list of `{field, op, value, label}` leaves.
+            const fieldChips = this.chips.filter(c => c.field !== null);
+            const p = new URLSearchParams({
+                search: this._searchValue,
+                order: this.order,
+                filters: fieldChips.length ? JSON.stringify(fieldChips) : '',
+                page: this.page,
+                page_size: this.pageSize,
+            });
+            if (this.groupBy) p.set('group_by', this.groupBy);
+            if (this.bc) p.set('bc', this.bc);
+            return p;
+        },
+        get _rowsUrl() {
+            return `/web/records/${this.module}/${this.name}?${this._params}`;
+        },
+
+        load() {
+            this.loading = true;
+            const newUrl = `/web/views/${this.module}/${this.name}?${this._params}`;
+            window.history.pushState({}, '', newUrl);
+            htmx.ajax('GET', this._rowsUrl, {
+                target: this.swapTarget,
+                swap: 'innerHTML',
+            }).then(() => {
+                this.loading = false;
+                if (this.swapTarget === '#pv-table-container') {
+                    this.applyColumnOrder();
+                }
+            }).catch(() => { this.loading = false; });
+        },
+
+        // ── Search input commit ──
+        // The debounced input writes into a `search` chip (creating
+        // or updating in place). Empty input drops the chip.
+        onSearchChange() {
+            const value = (this.searchInput || '').trim();
+            const i = this._searchChipIndex();
+            if (!value) {
+                if (i >= 0) this.chips.splice(i, 1);
+            } else {
+                const chip = {
+                    field: null,
+                    op: 'ilike',
+                    value,
+                    label: `Search: "${value}"`,
+                };
+                if (i >= 0) this.chips[i] = chip;
+                else this.chips.push(chip);
+            }
+            this.page = 0;
+            this.load();
+        },
+        clearSearch() {
+            this.searchInput = '';
+            this.onSearchChange();
+        },
+
+        // ── Chip management ──
+        removeChip(i) {
+            const chip = this.chips[i];
+            this.chips.splice(i, 1);
+            // Removing the free-text chip clears the input too.
+            if (chip && chip.field === null) this.searchInput = '';
+            this.page = 0;
+            this.load();
+        },
+        clearAll() {
+            this.chips = [];
+            this.searchInput = '';
+            this.groupBy = null;
+            this.page = 0;
+            this.load();
+        },
+
+        // ── Filter By dropdown ──
+        filterableHeaders() {
+            return this.headers.filter(
+                h => h.filter_kind === 'm2o' || h.filter_kind === 'boolean'
+            );
+        },
+        groupableHeaders() {
+            return this.headers.filter(
+                h => h.group_kind === 'm2o' || h.group_kind === 'boolean'
+            );
+        },
+        toggleFilterField(name) {
+            this.openFilterField = this.openFilterField === name ? null : name;
+        },
+        _findHeader(name) {
+            return this.headers.find(h => h.name === name);
+        },
+
+        // Add a chip from a Filter By selection. The chip carries a
+        // human-readable label so it can render in the bar; the server
+        // turns it into a domain leaf via _parse_filters.
+        addBooleanFilter(h, value) {
+            this.chips.push({
+                field: h.name,
+                op: '=',
+                value: value,
+                label: `${h.label}: ${value ? 'Yes' : 'No'}`,
+            });
+            this.openFilterField = null;
+            this.panelOpen = false;
+            this.page = 0;
+            this.load();
+        },
+        async searchM2o(h) {
+            const q = this.m2oQuery[h.name] || '';
+            try {
+                const r = await fetch(
+                    `/api/m2o/search?model=${encodeURIComponent(h.comodel)}&q=${encodeURIComponent(q)}`,
+                    { credentials: 'same-origin' }
+                );
+                if (!r.ok) throw new Error('fetch failed');
+                const data = await r.json();
+                this.m2oResults[h.name] = data.results || [];
+            } catch (e) {
+                this.m2oResults[h.name] = [];
+            }
+        },
+        addM2oFilter(h, opt) {
+            this.chips.push({
+                field: h.name,
+                op: '=',
+                value: opt.id,
+                label: `${h.label}: ${opt.label}`,
+            });
+            this.openFilterField = null;
+            this.panelOpen = false;
+            this.m2oQuery[h.name] = '';
+            this.m2oResults[h.name] = [];
+            this.page = 0;
+            this.load();
+        },
+
+        // ── Group By ──
+        setGroupBy(name) {
+            this.groupBy = name;
+            this.panelOpen = false;
+            this.page = 0;
+            this.load();
+        },
+        groupByLabel() {
+            const h = this._findHeader(this.groupBy);
+            return h ? h.label : this.groupBy;
+        },
+
+        toggleSort(field) {
+            if (this.order === field + ' ASC') {
+                this.order = field + ' DESC';
+            } else if (this.order === field + ' DESC') {
+                this.order = '';
+            } else {
+                this.order = field + ' ASC';
+            }
+            this.page = 0;
+            this.load();
+        },
+
+        goPage(p) {
+            this.page = p;
+            this.load();
+        },
+
+        // ── Column reorder via native HTML5 drag-and-drop. ──
+        // We store a list of field names in localStorage; on every
+        // render we permute the column DOM nodes (thead cells + each
+        // tbody row's cells + the filter row) accordingly. The Actions
+        // column stays at the end (it isn't draggable).
+
+        savedOrder() {
+            try {
+                const raw = localStorage.getItem(this._orderKey);
+                if (!raw) return null;
+                const arr = JSON.parse(raw);
+                return Array.isArray(arr) ? arr : null;
+            } catch (e) { return null; }
+        },
+        persistOrder(arr) {
+            try { localStorage.setItem(this._orderKey, JSON.stringify(arr)); }
+            catch (e) {}
+        },
+        applyColumnOrder() {
+            const order = this.savedOrder();
+            if (!order || !order.length) return;
+            const table = this.$root.querySelector('[data-pv-list-table]');
+            if (!table) return;
+            // Build the per-row reorder function once.
+            const reorder = (row) => {
+                if (!row) return;
+                const cells = Array.from(row.children);
+                const byField = new Map();
+                let trailing = null;  // Actions cell — no data-field; always last.
+                cells.forEach(c => {
+                    const f = c.getAttribute('data-field');
+                    if (f) byField.set(f, c);
+                    else trailing = c;
+                });
+                // Append in saved-order; any field not in the saved list
+                // gets appended after, preserving its current order.
+                const seen = new Set();
+                order.forEach(f => {
+                    const c = byField.get(f);
+                    if (c) { row.appendChild(c); seen.add(f); }
+                });
+                cells.forEach(c => {
+                    const f = c.getAttribute('data-field');
+                    if (f && !seen.has(f)) row.appendChild(c);
+                });
+                if (trailing) row.appendChild(trailing);
+            };
+            // Reorder all known rows.
+            reorder(table.querySelector('[data-pv-header-row]'));
+            table.querySelectorAll('tbody > tr').forEach(reorder);
+        },
+        captureCurrentOrder() {
+            const table = this.$root.querySelector('[data-pv-list-table]');
+            if (!table) return [];
+            const hdr = table.querySelector('[data-pv-header-row]');
+            if (!hdr) return [];
+            return Array.from(hdr.children)
+                .map(c => c.getAttribute('data-field'))
+                .filter(Boolean);
+        },
+
+        // Drag-and-drop handlers. Bound on a delegated dragstart at
+        // the table level; the dragged element is identified by the
+        // `data-field` attribute on its <th>.
+        initDragReorder() {
+            const tbl = this.$root.querySelector('[data-pv-list-table]');
+            if (!tbl) return;
+            let draggedField = null;
+
+            tbl.addEventListener('dragstart', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (!th) return;
+                draggedField = th.getAttribute('data-field');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', draggedField);
+            });
+            tbl.addEventListener('dragover', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (!th || !draggedField) return;
+                e.preventDefault();
+                th.setAttribute('data-pv-drag-over', 'true');
+            });
+            tbl.addEventListener('dragleave', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (th) th.removeAttribute('data-pv-drag-over');
+            });
+            tbl.addEventListener('drop', (e) => {
+                const th = e.target.closest('th[data-field][draggable="true"]');
+                if (!th || !draggedField) return;
+                e.preventDefault();
+                th.removeAttribute('data-pv-drag-over');
+                const targetField = th.getAttribute('data-field');
+                if (targetField === draggedField) { draggedField = null; return; }
+                const order = this.captureCurrentOrder();
+                const from = order.indexOf(draggedField);
+                const to = order.indexOf(targetField);
+                if (from < 0 || to < 0) { draggedField = null; return; }
+                order.splice(to, 0, order.splice(from, 1)[0]);
+                this.persistOrder(order);
+                this.applyColumnOrder();
+                draggedField = null;
+            });
+        },
+
+        // ── Row drag-reorder (sequence-field driven) ──
+        // Native HTML5 drag events on the row's handle cell. We
+        // capture the source row id on dragstart, decide insert-
+        // position on drop, mutate the DOM optimistically, then
+        // POST the new ordering to the server. Server failure rolls
+        // back to the persisted order via a full table refresh.
+        initRowReorder() {
+            if (!this.sequenceField) return;
+            const tbl = this.$root.querySelector('[data-pv-list-table]');
+            if (!tbl) return;
+            let draggedRow = null;
+            tbl.addEventListener('dragstart', e => {
+                const h = e.target.closest('[data-pv-row-handle]');
+                if (!h) return;
+                draggedRow = h.closest('tr[data-record-id]');
+                if (!draggedRow) return;
+                e.dataTransfer.effectAllowed = 'move';
+                draggedRow.classList.add('opacity-40');
+            });
+            tbl.addEventListener('dragend', () => {
+                if (draggedRow) draggedRow.classList.remove('opacity-40');
+                draggedRow = null;
+            });
+            tbl.addEventListener('dragover', e => {
+                if (!draggedRow) return;
+                const target = e.target.closest('tr[data-record-id]');
+                if (!target || target === draggedRow) return;
+                e.preventDefault();
+                const rect = target.getBoundingClientRect();
+                const above = (e.clientY - rect.top) < (rect.height / 2);
+                target.parentNode.insertBefore(
+                    draggedRow,
+                    above ? target : target.nextSibling,
+                );
+            });
+            tbl.addEventListener('drop', e => {
+                if (!draggedRow) return;
+                e.preventDefault();
+                draggedRow.classList.remove('opacity-40');
+                this.commitRowReorder();
+                draggedRow = null;
+            });
+        },
+
+        async commitRowReorder() {
+            const tbl = this.$root.querySelector('[data-pv-list-table]');
+            if (!tbl) return;
+            const ids = Array.from(
+                tbl.querySelectorAll('tbody tr[data-record-id]')
+            ).map(tr => Number(tr.getAttribute('data-record-id')));
+            try {
+                const r = await fetch(
+                    `/web/records/${this.module}/${this.name}/reorder`,
+                    {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                        },
+                        body: JSON.stringify({ ids }),
+                    }
+                );
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            } catch (e) {
+                window.pvAlert &&
+                    window.pvAlert(`Could not save new order: ${e.message}`,
+                                   { variant: 'danger', title: 'Reorder failed' });
+                // Reload to drop the optimistic mutation.
+                this.load();
+            }
+        },
+
+        init() {
+            this.initColumnVisibility();
+            // Rehydrate the in-progress search input from the active
+            // search chip, if any — so a deep-link reload shows the
+            // user's query inside the bar rather than only as a chip.
+            this.searchInput = this._searchValue;
+            // Defer one tick so the initial server-rendered HTML is in
+            // the DOM before we permute it.
+            this.$nextTick(() => {
+                this.$refs.listSearchInput?.focus({ preventScroll: true });
+                this.applyColumnOrder();
+                this.initDragReorder();
+                this.initRowReorder();
+            });
+            // Re-apply column order + re-bind drag handlers after
+            // every HTMX swap, since the <table> element itself is
+            // recreated by list_table.html.
+            this.$el.addEventListener('htmx:afterSwap', () => {
+                this.applyColumnOrder();
+                this.initDragReorder();
+                this.initRowReorder();
+            });
+        },
+    }));
+});
+</script>
+

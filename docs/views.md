@@ -115,6 +115,11 @@ fixes the offending field and saves again.
 
 Forms in edit and new mode opt into **autosave on link clicks**: if
 you've typed something into a form and then click any sidebar or
+When you open a record from a list or kanban view, the breadcrumb
+trail remembers where you came from (including view-switcher history:
+List → Kanban → Form shows both ancestors). Search, filters, and
+group-by state are restored when you click back.
+
 breadcrumb entry, the framework saves the form first and only
 follows the link on success. Cancel and Save buttons inside the
 form bypass the interceptor on purpose — they own their own flows.
@@ -139,75 +144,87 @@ Edit-mode Many2one fields render as a searchable combobox:
 - **Keyboard nav** — ↑/↓ move the cursor, Enter selects (or fires
   Create), Esc closes.
 
-### Many2many chip editor
+### Relational fields: `widget="dialog"` vs `widget="inline"`
 
-Edit-mode Many2many fields render selected records as removable
-chips with an inline search input to add more. Search hits the same
-`/api/m2o/search` endpoint. Selected ids are filtered out of the
-dropdown so a record can't be added twice. Clearing every chip
-posts an empty marker so the server knows the value was emptied (vs.
-"not submitted").
+For **One2many** and **Many2many** on parent forms, pick how users
+edit related records:
 
-### One2many inline table
+| `widget` | One2many | Many2many |
+|----------|----------|-----------|
+| **`dialog`** (default when the comodel has a form view) | Read-only table; **Add** / row click open the floating dialog. Child saves on its own form — not bundled into the parent Save. | Chips + **Create new** / **Link existing…**; create/edit in the dialog. |
+| **`inline`** or **`table`** (alias) | Full-width **inline table**: edit cells on the parent form, **Add a line**, delete rows; all changes commit on parent Save. | Chip editor with inline typeahead search (previous default). |
 
-A One2many field renders as a full-width **inline table** when either:
+```python
+section(
+    "relations",
+    "Relations",
+    [
+        field("tag_ids", widget="dialog"),
+        field("child_ids", widget="dialog"),
+        field("rate_ids", widget="inline"),  # small child rows — keep on parent form
+    ],
+)
+```
 
-- you declare `widget="table"` on the field, or
-- the comodel has a list view (auto-detected — no extra config needed)
+If the comodel has **no** form view yet, One2many falls back to a
+chip summary and Many2many falls back to the inline chip search.
 
-Otherwise it falls back to the chip cluster. In **edit** / **new** mode the
-table is fully editable: add rows, edit cells in place, delete rows, and
-(optionally) drag-reorder when the comodel list view sets `sequence`.
-Changes commit with the parent form's Save — no per-row round trips.
+### Many2many — dialog mode
 
-Explicit `widget="table"` example:
+Selected records appear as chips. **Create new** opens the comodel
+form in the dialog; **Link existing…** opens a search field to pick
+records. Edit/remove use the chip actions. Same `/api/m2o/search` and
+hidden inputs as the inline editor.
+
+### Many2many — inline mode
+
+`widget="inline"`: removable chips plus an always-visible typeahead
+input (no dialog-only buttons).
+
+### One2many — dialog mode
+
+When the comodel has a form view, the default is a read-only table
+(matching the comodel list columns). Rows and **Add** open the dialog;
+the inverse FK is prefilled on `/new`:
+
+```
+/web/views/<module>/<view>/new?<inverse_name>=<parent_id>
+```
+
+After the child form saves, the parent table refreshes
+(`data-pv-dialog-refresh`).
+
+### One2many — inline table
+
+`widget="inline"` or `widget="table"`: editable grid on the parent
+form. In **edit** / **new** mode each row is inputs keyed by
+`<o2m_name>[<idx>][<sub_field>]`, with `_op` / `id` markers. **Add a
+line** clones a template row; delete marks `_op=delete`. On parent
+Save, `harvest_o2m_commands` applies create/update/delete inside the
+parent transaction. Drag-reorder works when the comodel list view
+sets `sequence`.
+
+Example (currency exchange rates — many small rows):
 
 ```python
 form_view("currency.form", "res.currency",
     sections=[
         section("main",  "Currency", ["code", "name", "symbol", "rounding"]),
         section("rates", "Exchange rates",
-                [field("rate_ids", widget="table")]),
+                [field("rate_ids", widget="inline")]),
     ])
 ```
 
-The table uses the comodel's list view fields (or every stored scalar
-if no list view is installed). In **display** mode, rows open the
-comodel form in the draggable dialog; in **edit** mode, use **Add row**
-for inline creation. You can still open a child in the dialog via the
-M2o "Create and edit" affordance inside a cell.
-
-Display-mode "Add" (dialog path) prefills the inverse FK:
-
-```
-/web/views/<module>/<view>/new?<inverse_name>=<parent_id>
-```
-
-`/new` accepts arbitrary field-name query params and uses them as
-defaults for the new record — useful any time you want to deep-link
-into a partially-filled form.
-
-In **display mode** rows are read-only links to the child form. In
-**edit mode** each row becomes a horizontal strip of inline inputs
-keyed by `<o2m_name>[<idx>][<sub_field>]`, plus a hidden
-`<o2m_name>[<idx>][_op]` marker (`create` / `update` / `delete`) and
-a hidden `<o2m_name>[<idx>][id]` for existing rows. An "Add row"
-button clones a `<template>` row with a fresh index; a per-row
-delete button flips the row's `_op` to `delete` and visually marks
-it.
-
-On the parent's save POST, `harvest_o2m_commands` reassembles those
-nested keys into commands and `apply_o2m_commands` applies them
-inside the parent's transaction (new rows get the inverse FK
-auto-set to the parent's id). A failed save renders the same edit
-view back with per-row errors stamped on namespaced keys, so the
-user doesn't lose typed input.
-
 ## Kanban views
 
-A kanban view groups records into columns and renders each one as a
-card. Useful for sales pipelines, ticket boards, anything with
-stages.
+A kanban view renders each record as a card. With `group_by`, cards
+are arranged in columns (one per distinct field value) — useful for
+sales pipelines, ticket boards, anything with stages. Cards can be
+dragged between columns (updating the grouping field) and reordered
+when the arch declares a `sequence` integer field. Without
+`group_by`, cards appear in a responsive grid with the same search,
+filter, group-by, and pagination toolbar as a list view (field
+metadata is taken from a sibling list view when one exists).
 
 ```python
 from pyvelm.builders import kanban_view, card, field
@@ -222,6 +239,7 @@ kanban_view(
         badges=[field("priority"), "stage"],
     ),
     group_by="stage",                    # one column per distinct value
+    sequence="sequence",                 # drag-reorder within/across columns
     form_view="lead.form",               # cards link to this form
 )
 ```

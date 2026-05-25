@@ -1,0 +1,39 @@
+{% if grouped %}
+<div class="flex gap-4 overflow-x-auto pb-4" data-pv-kanban-board>
+    {% for col in columns %}
+    <section class="flex-none w-72 bg-neutral-tertiary/70 rounded-xl p-3"
+             data-pv-kanban-column
+             data-column-key="{{ col.key | tojson }}">
+        <header class="flex items-center justify-between mb-3 px-1">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-body-subtle">
+                {{ col.label }}
+            </h3>
+            <span class="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full
+                         bg-neutral-primary text-2xs font-medium text-body"
+                  data-pv-kanban-count>
+                {{ col.count }}
+            </span>
+        </header>
+        <div class="space-y-2 min-h-[3rem] rounded-lg transition-colors"
+             data-pv-kanban-dropzone>
+            {% for card in col.cards %}
+            {% include "_kanban_card.html" %}
+            {% endfor %}
+            {% if not col.cards %}
+            <p class="text-xs text-body-subtle text-center py-4 pointer-events-none"
+               data-pv-kanban-empty>No records</p>
+            {% endif %}
+        </div>
+    </section>
+    {% endfor %}
+</div>
+{% else %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    {% for card in cards %}
+    {% include "_kanban_card.html" %}
+    {% endfor %}
+    {% if not cards %}
+    <p class="col-span-full text-sm text-body-subtle text-center py-8">No records</p>
+    {% endif %}
+</div>
+{% endif %}

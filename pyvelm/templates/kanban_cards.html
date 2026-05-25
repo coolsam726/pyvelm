@@ -1,0 +1,12 @@
+{# HTMX fragment: replaces #pv-kanban-container innerHTML. #}
+{% include "kanban_body.html" %}
+
+{% if list_controls and not grouped %}
+<div id="pv-pagination" class="flex items-center justify-between text-xs text-body-subtle pt-3">
+    {% include "list_pagination.html" %}
+</div>
+{% endif %}
+
+<span id="pv-count-label" hx-swap-oob="true">
+    {{ subtitle }}
+</span>

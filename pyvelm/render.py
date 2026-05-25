@@ -301,13 +301,38 @@ def _render_m2o(value, spec, field):
     )
 
 
-def _o2m_use_table(spec: dict) -> bool:
-    """Whether this O2m field should render as an inline table.
+def _relational_widget(spec: dict) -> str | None:
+    """Normalize ``widget`` for O2m/M2m field specs."""
+    w = spec.get("widget")
+    if w == "table":
+        return "inline"
+    return w
 
-    Explicit ``widget="table"`` always wins; otherwise we auto-pick
-    the table when the comodel has a list view (``_list_view_url`` is
-    set by :func:`_enrich_specs_for_edit`)."""
-    return spec.get("widget") == "table" or bool(spec.get("_list_view_url"))
+
+def _o2m_use_inline_edit(spec: dict) -> bool:
+    """Editable inline table on the parent form (``widget="inline"``)."""
+    return _relational_widget(spec) in ("inline", "table")
+
+
+def _o2m_show_table(spec: dict) -> bool:
+    """Read-only table of related rows (dialog opens on click)."""
+    w = _relational_widget(spec)
+    if w == "inline":
+        return True
+    if w == "dialog":
+        return bool(spec.get("_form_view_url"))
+    # Default: dialog table when a comodel form exists; else chips.
+    return bool(spec.get("_form_view_url"))
+
+
+def _m2m_use_dialog_editor(spec: dict) -> bool:
+    """Chip list + dialog create/edit; no inline typeahead search."""
+    w = _relational_widget(spec)
+    if w == "inline":
+        return False
+    if w == "dialog":
+        return True
+    return bool(spec.get("_form_view_url"))
 
 
 def _render_m2m_chips(value, spec, field, *, max_visible: int = 3) -> Markup:
@@ -372,8 +397,8 @@ def _render_collection(value, spec, field):
 
 @widget(One2many)
 def _render_o2m_field(value, spec, field):
-    """Display-mode O2m: inline table when a list view exists, else chips."""
-    if _o2m_use_table(spec):
+    """Display-mode O2m: table (dialog on row click) or chips."""
+    if _o2m_show_table(spec):
         return _render_o2m_table(value, spec, field)
     return _render_collection(value, spec, field)
 
@@ -1166,16 +1191,21 @@ def _value_for_widget(env, field: Field, value):
 
 @widget(Many2many, mode="edit")
 def _edit_m2m(value, spec, field):
-    """Chip-editor for Many2many fields.
+    """Many2many editor — inline search (default) or dialog-only mode."""
+    return _render_m2m_editor(value, spec, field, dialog_only=False)
 
-    Renders the partial at `widgets/m2m_input.html` which mounts the
-    `pvM2m` Alpine component. Pre-populated with one chip per related
-    record (id + display label). On save the form posts one
-    `<input type="hidden" name="<fname>" value="<id>">` per chip plus
-    an empty marker so the server-side parser can tell "cleared" from
-    "not submitted".
-    """
+
+@widget(Many2many, hint="dialog", mode="edit")
+def _edit_m2m_dialog(value, spec, field):
+    return _render_m2m_editor(value, spec, field, dialog_only=True)
+
+
+def _render_m2m_editor(value, spec, field, *, dialog_only: bool) -> Markup:
+    """Chip editor via ``widgets/m2m_input.html`` / ``pvM2m``."""
     from .web import _display_value
+
+    if not dialog_only and _m2m_use_dialog_editor(spec):
+        dialog_only = True
 
     env = spec.get("_env") or (value.env if hasattr(value, "env") else None)
     if env is None:
@@ -1196,15 +1226,18 @@ def _edit_m2m(value, spec, field):
             form_view_url=spec.get("_form_view_url"),
             initial=initial,
             readonly=bool(spec.get("readonly")),
+            dialog_only=dialog_only,
         )
     )
 
 
 @widget(One2many, mode="edit")
 def _edit_o2m_field(value, spec, field):
-    """Edit-mode O2m: inline table when a list view exists, else chips."""
-    if _o2m_use_table(spec):
+    """Edit-mode O2m: inline table (``widget=\"inline\"``) or dialog table."""
+    if _o2m_use_inline_edit(spec):
         return _edit_o2m_table(value, spec, field)
+    if _o2m_show_table(spec):
+        return _render_o2m_table(value, spec, field)
     return _render_collection(value, spec, field)
 
 
@@ -1948,10 +1981,10 @@ def parse_form_vals(model_cls, form_data, env=None) -> tuple[dict, dict]:
         if not field.is_stored:
             continue
         try:
-            from pyvelm.vellum.timestamps import is_vellum_timestamp_field
+            from pyvelm.timestamps import is_system_timestamp_field
         except ImportError:
-            is_vellum_timestamp_field = lambda _c, _f: False  # noqa: E731
-        if is_vellum_timestamp_field(model_cls, fname):
+            is_system_timestamp_field = lambda _c, _f: False  # noqa: E731
+        if is_system_timestamp_field(model_cls, fname):
             continue
         if isinstance(field, Datetime) and (
             fname in form_data
@@ -2076,11 +2109,11 @@ def _form_section_html(
         hint = spec.get("widget")
         ro = spec_readonly(spec, field)
         try:
-            from pyvelm.vellum.timestamps import is_vellum_timestamp_field
+            from pyvelm.timestamps import is_system_timestamp_field
         except ImportError:
-            is_vellum_timestamp_field = lambda _c, _f: False  # noqa: E731
+            is_system_timestamp_field = lambda _c, _f: False  # noqa: E731
         render_mode = mode
-        if mode == "edit" and is_vellum_timestamp_field(model_cls, fname):
+        if mode == "edit" and is_system_timestamp_field(model_cls, fname):
             render_mode = "display"
         renderer = find_renderer(field, hint, mode=render_mode)
 
@@ -2133,7 +2166,9 @@ def _form_section_html(
         }
         # Wide cells span both grid columns. O2m tables are full-width
         # so the embedded `<table>` isn't squished into half the form.
-        is_wide = isinstance(field, One2many) and _o2m_use_table(spec)
+        is_wide = isinstance(field, One2many) and (
+            _o2m_use_inline_edit(spec) or _o2m_show_table(spec)
+        )
         field_error = errors.get(fname)
         if field_error is None and isinstance(field, One2many):
             prefix = f"{fname}["
@@ -2225,6 +2260,69 @@ def _view_title(view, arch: dict) -> str:
 _RECORD_NAV_CAP = 5000
 
 
+def parse_bc_param(bc: str | None) -> list[tuple[str, str]]:
+    """Parse ``bc=mod/view,mod2/view2`` into an ordered ancestor stack."""
+    if not bc or not str(bc).strip():
+        return []
+    out: list[tuple[str, str]] = []
+    for part in str(bc).split(","):
+        part = part.strip()
+        if "/" not in part:
+            continue
+        module, name = part.split("/", 1)
+        if module and name:
+            out.append((module, name))
+    return out
+
+
+def format_bc_param(stack: list[tuple[str, str]]) -> str:
+    """Encode a breadcrumb ancestor stack for URL query params."""
+    return ",".join(f"{m}/{n}" for m, n in stack)
+
+
+def encode_view_nav_query(
+    ref_module: str | None,
+    ref_name: str | None,
+    *,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+    group_by: str = "",
+    page: int | None = None,
+    page_size: int | None = None,
+    bc_stack: list[tuple[str, str]] | None = None,
+) -> str:
+    """Query string carrying the parent view and nav history onto form URLs.
+
+    * ``ref`` — immediate parent view (``module/viewname``, any view type).
+    * ``bc`` — comma-separated ancestor chain (oldest first), Odoo-style.
+    * ``list`` — legacy alias of ``ref`` when the parent is a list view.
+    """
+    params: dict[str, str] = {}
+    if ref_module and ref_name:
+        ref = f"{ref_module}/{ref_name}"
+        params["ref"] = ref
+    bc = format_bc_param(bc_stack or [])
+    if bc:
+        params["bc"] = bc
+    if search:
+        params["search"] = search
+    if order:
+        params["order"] = order
+    if filters:
+        params["filters"] = filters
+    if group_by:
+        params["group_by"] = group_by
+    if page is not None and page > 0:
+        params["page"] = str(page)
+    if page_size is not None:
+        params["page_size"] = str(page_size)
+    if ref_module and ref_name:
+        # Legacy alias — form nav parser still accepts ``list=``.
+        params["list"] = params["ref"]
+    return urlencode(params)
+
+
 def encode_list_nav_query(
     list_module: str | None,
     list_name: str | None,
@@ -2232,18 +2330,23 @@ def encode_list_nav_query(
     search: str = "",
     order: str = "",
     filters: str = "",
+    group_by: str = "",
+    page: int | None = None,
+    page_size: int | None = None,
+    bc_stack: list[tuple[str, str]] | None = None,
 ) -> str:
-    """Query string carrying list-view context onto form URLs."""
-    params: dict[str, str] = {}
-    if list_module and list_name:
-        params["list"] = f"{list_module}/{list_name}"
-    if search:
-        params["search"] = search
-    if order:
-        params["order"] = order
-    if filters:
-        params["filters"] = filters
-    return urlencode(params)
+    """Query string carrying list/kanban context onto form URLs."""
+    return encode_view_nav_query(
+        list_module,
+        list_name,
+        search=search,
+        order=order,
+        filters=filters,
+        group_by=group_by,
+        page=page,
+        page_size=page_size,
+        bc_stack=bc_stack,
+    )
 
 
 def _list_view_domain_and_order(
@@ -2274,31 +2377,12 @@ def _list_view_domain_and_order(
     return domain, safe_ord
 
 
-def _load_list_view(env, list_module: str | None, list_name: str | None, model: str):
-    """Resolve the list view used for prev/next; fall back to any list on *model*."""
-    if list_module and list_name and "ir.ui.view" in env.registry:
-        View = env["ir.ui.view"]
-        matches = View.search(
-            [
-                ("module", "=", list_module),
-                ("name", "=", list_name),
-                ("view_type", "=", "list"),
-            ],
-            limit=1,
-        )
-        if matches:
-            rec = matches
-            rec.ensure_one()
-            if rec.model == model:
-                return rec
-    lookup = _list_view_for_model(env, model)
-    if not lookup:
-        return None
-    mod, name = lookup
-    if "ir.ui.view" not in env.registry:
+def _load_ui_view(env, module: str | None, name: str | None):
+    """Load ``ir.ui.view`` by module + name (any view type)."""
+    if not module or not name or "ir.ui.view" not in env.registry:
         return None
     matches = env["ir.ui.view"].search(
-        [("module", "=", mod), ("name", "=", name), ("view_type", "=", "list")],
+        [("module", "=", module), ("name", "=", name)],
         limit=1,
     )
     if not matches:
@@ -2306,6 +2390,81 @@ def _load_list_view(env, list_module: str | None, list_name: str | None, model: 
     rec = matches
     rec.ensure_one()
     return rec
+
+
+def _load_ref_view(
+    env,
+    ref_module: str | None,
+    ref_name: str | None,
+    model: str,
+):
+    """Resolve the parent view for form prev/next; fall back to any list."""
+    if ref_module and ref_name:
+        rec = _load_ui_view(env, ref_module, ref_name)
+        if rec is not None and rec.model == model:
+            return rec
+    lookup = _list_view_for_model(env, model)
+    if not lookup:
+        return None
+    mod, name = lookup
+    return _load_ui_view(env, mod, name)
+
+
+def _load_list_view(env, list_module: str | None, list_name: str | None, model: str):
+    """Resolve a list view for prev/next; fall back to any list on *model*."""
+    rec = _load_ref_view(env, list_module, list_name, model)
+    if rec is not None and rec.view_type == "list":
+        return rec
+    lookup = _list_view_for_model(env, model)
+    if not lookup:
+        return None
+    mod, name = lookup
+    rec = _load_ui_view(env, mod, name)
+    if rec is not None and rec.view_type == "list":
+        return rec
+    return None
+
+
+def _ref_view_domain_and_order(
+    ref_view,
+    env,
+    *,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+    group_by: str = "",
+) -> tuple[list, str]:
+    """Domain + ORDER BY for record pager following a list or kanban parent."""
+    from .views import resolve_arch
+
+    arch = resolve_arch(ref_view)
+    model_cls = env.registry[ref_view.model]
+
+    if ref_view.view_type == "kanban":
+        fields_spec = _kanban_fields_spec(ref_view, arch, env)
+        domain: list = []
+        if search:
+            domain.extend(_build_search_domain(model_cls, fields_spec, search))
+        domain.extend(_parse_filters(model_cls, fields_spec, filters))
+        seq_field = arch.get("sequence")
+        if seq_field and seq_field in model_cls._fields:
+            safe_ord = f'"{seq_field}" ASC, "id" ASC'
+        elif order:
+            safe_ord = _safe_order(fields_spec, order)
+        else:
+            safe_ord = '"id" ASC'
+        return domain, safe_ord
+
+    if ref_view.view_type == "list":
+        return _list_view_domain_and_order(
+            ref_view,
+            env,
+            search=search,
+            order=order,
+            filters=filters,
+        )
+
+    return [], '"id" ASC'
 
 
 def _record_pager(
@@ -2321,18 +2480,21 @@ def _record_pager(
     list_search: str = "",
     list_order: str = "",
     list_filters: str = "",
+    group_by: str = "",
+    bc_stack: list[tuple[str, str]] | None = None,
 ) -> dict | None:
-    """Prev/next URLs following the list view's search, filters, and sort."""
-    list_view = _load_list_view(env, list_module, list_name, model)
-    if list_view is None:
+    """Prev/next URLs following the parent view's search, filters, and sort."""
+    ref_view = _load_ref_view(env, list_module, list_name, model)
+    if ref_view is None:
         return None
 
-    domain, safe_ord = _list_view_domain_and_order(
-        list_view,
+    domain, safe_ord = _ref_view_domain_and_order(
+        ref_view,
         env,
         search=list_search,
         order=list_order,
         filters=list_filters,
+        group_by=group_by,
     )
     Model = env[model]
     recs = Model.search(domain, order=safe_ord, limit=_RECORD_NAV_CAP)
@@ -2341,12 +2503,14 @@ def _record_pager(
         return None
 
     idx = ids.index(record_id)
-    nav_qs = encode_list_nav_query(
-        list_view.module,
-        list_view.name,
+    nav_qs = encode_view_nav_query(
+        ref_view.module,
+        ref_view.name,
         search=list_search,
         order=list_order,
         filters=list_filters,
+        group_by=group_by,
+        bc_stack=bc_stack,
     )
     suffix = "/edit" if mode == "edit" else ""
     base = f"/web/views/{form_module}/{form_name}/record"
@@ -2408,6 +2572,10 @@ def render_form_page(
     list_search: str = "",
     list_order: str = "",
     list_filters: str = "",
+    group_by: str = "",
+    page: int | None = None,
+    page_size: int | None = None,
+    bc_stack: list[tuple[str, str]] | None = None,
     errors: dict | None = None,
     submitted: dict | None = None,
     form_error: str | None = None,
@@ -2443,23 +2611,21 @@ def render_form_page(
     # Title lives in the layout heading only — breadcrumbs stop at the list.
     ctx = {} if body_only else layout_context(env, current_path)
     if not body_only:
-        list_bc = _list_breadcrumb_for_model(
+        ref_module = list_module
+        ref_name = list_name
+        ctx["breadcrumbs"] = build_form_breadcrumbs(
+            ctx.get("menu") or [],
             env,
-            view.model,
-            ctx.get("menu"),
-            list_module=list_module,
-            list_name=list_name,
-            list_search=list_search,
-            list_order=list_order,
-            list_filters=list_filters,
+            ref_module=ref_module,
+            ref_name=ref_name,
+            bc_stack=bc_stack,
+            search=list_search,
+            order=list_order,
+            filters=list_filters,
+            group_by=group_by,
+            page=page,
+            page_size=page_size,
         )
-        if list_bc:
-            ctx["breadcrumbs"] = build_breadcrumbs(
-                ctx["menu"],
-                current_path,
-                parent_href=list_bc["href"],
-                parent_label=list_bc["label"],
-            )
         ctx["subtitle"] = f"{view.model} · {mode}"
     # Resolve header actions: substitute {id} with the current record's
     # id (display-mode only; new/edit records can't take row-level
@@ -2525,6 +2691,8 @@ def render_form_page(
             list_search=list_search,
             list_order=list_order,
             list_filters=list_filters,
+            group_by=group_by,
+            bc_stack=bc_stack,
         )
     return template.render(
         view=view,
@@ -2539,9 +2707,16 @@ def render_form_page(
         workflow_context=workflow_ctx,
         chatter_context=chatter_ctx,
         record_pager=record_pager,
-        list_nav_query=encode_list_nav_query(
-            list_module, list_name,
-            search=list_search, order=list_order, filters=list_filters,
+        list_nav_query=encode_view_nav_query(
+            list_module,
+            list_name,
+            search=list_search,
+            order=list_order,
+            filters=list_filters,
+            group_by=group_by,
+            page=page,
+            page_size=page_size,
+            bc_stack=bc_stack,
         ),
         **ctx,
     )
@@ -2602,6 +2777,53 @@ def _render_field_bare(record, fname: str) -> Markup:
     return renderer(value, {"name": fname}, field)
 
 
+def _kanban_group_field_kind(model_cls, group_field: str) -> str:
+    """Return ``m2o``, ``boolean``, or ``scalar`` for a kanban column key."""
+    from .fields import Boolean, Many2one
+
+    field = model_cls._fields.get(group_field)
+    if isinstance(field, Many2one):
+        return "m2o"
+    if isinstance(field, Boolean):
+        return "boolean"
+    return "scalar"
+
+
+def _kanban_sort_records(records, arch: dict, model_cls) -> list:
+    """Order records by arch ``sequence`` when declared on the model."""
+    seq = arch.get("sequence")
+    if seq and seq in model_cls._fields:
+        return sorted(
+            records,
+            key=lambda r: (getattr(r, seq, None) or 0, r.id),
+        )
+    return list(records)
+
+
+def _kanban_resolve_group_field(view, arch, payload_group_by: str) -> str | None:
+    """Return the active grouping field for drag-drop (arch or URL)."""
+    arch_group = arch.get("group_by")
+    if arch_group:
+        if payload_group_by and payload_group_by != arch_group:
+            raise ValueError(
+                f"group_by {payload_group_by!r} does not match arch {arch_group!r}"
+            )
+        return arch_group
+    return payload_group_by or None
+
+
+def _kanban_group_write_value(model_cls, group_field: str, column_key) -> object:
+    """Map a JSON column key to a value suitable for ``write()``."""
+    from .fields import Boolean, Many2one
+
+    field = model_cls._fields[group_field]
+    if isinstance(field, Many2one):
+        return column_key if column_key else False
+    if isinstance(field, Boolean):
+        return bool(column_key)
+    return column_key
+
+
 def _group_records(recordset, group_by_attr: str, env) -> list[dict]:
     """Bucket recordset by group_by_attr value. Returns
     `[{key, label, records}, ...]` preserving first-seen order."""
@@ -2629,87 +2851,413 @@ def _group_records(recordset, group_by_attr: str, env) -> list[dict]:
     return list(groups.values())
 
 
-def render_kanban_page(view, env, *, current_path: str | None = None) -> str:
+def _kanban_fields_spec_from_card(arch: dict) -> list:
+    """Build minimal field specs from kanban card layout."""
+    card = arch.get("card") or {}
+    names: list[str] = []
+    for attr in ("title", "subtitle"):
+        v = card.get(attr)
+        if v and isinstance(v, str) and v not in names:
+            names.append(v)
+    for spec in (card.get("fields") or []) + (card.get("badges") or []):
+        n = _field_spec_name(spec)
+        if n not in names:
+            names.append(n)
+    return [{"name": n} for n in names]
+
+
+def _kanban_fields_spec(view, arch, env) -> list:
+    """Field specs for kanban search/filter/group — prefer a sibling list view."""
+    if "ir.ui.view" not in env.registry:
+        return _kanban_fields_spec_from_card(arch)
+    from .views import resolve_arch
+
+    View = env["ir.ui.view"]
+    for domain in (
+        [("module", "=", view.module), ("model", "=", view.model), ("view_type", "=", "list")],
+        [("model", "=", view.model), ("view_type", "=", "list")],
+    ):
+        matches = View.search(domain, limit=1, order='"priority" ASC, "id" ASC')
+        if matches:
+            matches.ensure_one()
+            list_arch = resolve_arch(matches)
+            fields = list_arch.get("fields")
+            if fields:
+                return list(fields)
+    return _kanban_fields_spec_from_card(arch)
+
+
+def _kanban_card_kw(view, arch, form_view: str | None) -> dict:
+    card = arch.get("card", {})
+    return dict(
+        title_attr=card.get("title"),
+        subtitle_attr=card.get("subtitle"),
+        fields_spec=list(card.get("fields", [])),
+        badges_spec=list(card.get("badges", [])),
+        form_view=form_view,
+        view=view,
+    )
+
+
+def _kanban_build_layout(
+    recs,
+    *,
+    grouped: bool,
+    group_field: str | None,
+    card_kw: dict,
+    arch: dict,
+    env,
+) -> tuple[list[dict], list[dict]]:
+    columns: list[dict] = []
+    flat_cards: list[dict] = []
+    if grouped and group_field:
+        model_cls = env.registry[recs._name]
+        for grp in _group_records(recs, group_field, env):
+            ordered = _kanban_sort_records(grp["records"], arch, model_cls)
+            cards = _kanban_cards_for_records(ordered, **card_kw)
+            columns.append(
+                {
+                    "label": grp["label"],
+                    "key": grp["key"],
+                    "count": len(ordered),
+                    "cards": cards,
+                }
+            )
+    else:
+        flat_cards = _kanban_cards_for_records(recs, **card_kw)
+    return columns, flat_cards
+
+
+def _kanban_fetch(
+    view,
+    arch,
+    env,
+    *,
+    page: int,
+    page_size: int,
+    search: str,
+    order: str,
+    filters: str,
+    url_group_by: str,
+) -> dict:
+    """Resolve domain, grouping, and record slice for a kanban view."""
+    arch_group_by = arch.get("group_by")
+    list_controls = not arch_group_by
+    model_cls = env.registry[view.model]
+    Model = env[view.model]
+    form_view = arch.get("form_view")
+
+    seq_field = arch.get("sequence")
+    if seq_field and seq_field not in model_cls._fields:
+        seq_field = None
+
+    if not list_controls:
+        order = (
+            f'"{seq_field}" ASC, "id" ASC'
+            if seq_field
+            else '"id" ASC'
+        )
+        recs = Model.search([], order=order)
+        return {
+            "list_controls": False,
+            "grouped": True,
+            "group_field": arch_group_by,
+            "recs": recs,
+            "total": len(recs),
+            "total_pages": 1,
+            "page": 0,
+            "page_size": page_size,
+            "headers": [],
+            "search": "",
+            "order": "",
+            "filters": "",
+            "group_by": "",
+            "form_view": form_view,
+            "sequence_field": seq_field,
+        }
+
+    fields_spec = _kanban_fields_spec(view, arch, env)
+    headers = _field_headers(model_cls, fields_spec)
+    domain: list = []
+    if search:
+        domain.extend(_build_search_domain(model_cls, fields_spec, search))
+    domain.extend(_parse_filters(model_cls, fields_spec, filters))
+    safe_group_by = (
+        url_group_by
+        if any(
+            h["name"] == url_group_by and h["group_kind"] != "none" for h in headers
+        )
+        else ""
+    )
+    group_field = safe_group_by or None
+    grouped = bool(group_field)
+    safe_ord = _safe_order(fields_spec, order)
+    total = Model.search_count(domain)
+
+    if grouped:
+        _GROUP_CAP = 500
+        if seq_field:
+            safe_ord = f'"{seq_field}" ASC, "id" ASC'
+        recs = Model.search(domain, limit=_GROUP_CAP, order=safe_ord)
+        total_pages = 1
+        page = 0
+    else:
+        offset = page * page_size
+        recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+
+    return {
+        "list_controls": True,
+        "grouped": grouped,
+        "group_field": group_field,
+        "recs": recs,
+        "total": total,
+        "total_pages": total_pages,
+        "page": page,
+        "page_size": page_size,
+        "headers": headers,
+        "search": search,
+        "order": order,
+        "filters": filters,
+        "group_by": safe_group_by,
+        "form_view": form_view,
+        "sequence_field": seq_field,
+    }
+
+
+def _kanban_subtitle(*, total: int, grouped: bool, columns_count: int) -> str:
+    rec_label = f"{total} record{'s' if total != 1 else ''}"
+    if grouped:
+        return (
+            f"{rec_label} · {columns_count} column"
+            f"{'s' if columns_count != 1 else ''}"
+        )
+    return rec_label
+
+
+def _kanban_cards_for_records(
+    records,
+    *,
+    title_attr,
+    subtitle_attr,
+    fields_spec,
+    badges_spec,
+    form_view,
+    view,
+    nav_query: str = "",
+) -> list[dict]:
+    """Build card dicts for kanban template rendering."""
+    cards = []
+    for rec in records:
+        link = None
+        if form_view:
+            link = f"/web/views/{view.module}/{form_view}/record/{rec.id}"
+            if nav_query:
+                link = f"{link}?{nav_query}"
+        cards.append(
+            {
+                "id": rec.id,
+                "title": (
+                    _render_field_bare(rec, title_attr)
+                    if title_attr
+                    else Markup("")
+                ),
+                "subtitle": (
+                    _render_field_bare(rec, subtitle_attr)
+                    if subtitle_attr
+                    else Markup("")
+                ),
+                "fields": [_render_field_label(rec, s) for s in fields_spec],
+                "badges": [_render_field_label(rec, s) for s in badges_spec],
+                "link": link,
+            }
+        )
+    return cards
+
+
+def _render_kanban_content(
+    view,
+    arch,
+    env,
+    *,
+    page: int,
+    page_size: int,
+    search: str,
+    order: str,
+    filters: str,
+    url_group_by: str,
+    bc_stack: list[tuple[str, str]] | None = None,
+) -> dict:
+    """Shared kanban fetch + card layout for full page and HTMX fragments."""
+    state = _kanban_fetch(
+        view,
+        arch,
+        env,
+        page=page,
+        page_size=page_size,
+        search=search,
+        order=order,
+        filters=filters,
+        url_group_by=url_group_by,
+    )
+    card_kw = _kanban_card_kw(view, arch, state["form_view"])
+    nav_query = encode_view_nav_query(
+        view.module,
+        view.name,
+        search=search,
+        order=order,
+        filters=filters,
+        group_by=state.get("group_by") or url_group_by,
+        page=page,
+        page_size=page_size,
+        bc_stack=bc_stack,
+    )
+    card_kw["nav_query"] = nav_query
+    group_field = state["group_field"] or arch.get("group_by")
+    model_cls = env.registry[view.model]
+    columns, flat_cards = _kanban_build_layout(
+        state["recs"],
+        grouped=state["grouped"],
+        group_field=group_field,
+        card_kw=card_kw,
+        arch=arch,
+        env=env,
+    )
+    page_title = _view_title(view, arch)
+    sequence_field = state.get("sequence_field") or arch.get("sequence")
+    if sequence_field and sequence_field not in model_cls._fields:
+        sequence_field = None
+    kanban_draggable = bool(state["grouped"] and group_field)
+    return {
+        "view": view,
+        "grouped": state["grouped"],
+        "list_controls": state["list_controls"],
+        "columns": columns,
+        "cards": flat_cards,
+        "total": state["total"],
+        "page": state["page"],
+        "page_size": state["page_size"],
+        "total_pages": state["total_pages"],
+        "search": state["search"],
+        "order": state["order"],
+        "filters": state["filters"],
+        "group_by": state["group_by"],
+        "headers": state["headers"],
+        "group_field": group_field,
+        "group_field_kind": (
+            _kanban_group_field_kind(model_cls, group_field)
+            if group_field
+            else None
+        ),
+        "sequence_field": sequence_field,
+        "kanban_draggable": kanban_draggable,
+        "form_view_name": state["form_view"],
+        "page_title": page_title,
+        "subtitle": _kanban_subtitle(
+            total=state["total"],
+            grouped=state["grouped"],
+            columns_count=len(columns),
+        ),
+    }
+
+
+def render_kanban_page(
+    view,
+    env,
+    *,
+    page: int = 0,
+    page_size: int = 10,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+    group_by: str = "",
+    bc_stack: list[tuple[str, str]] | None = None,
+    current_path: str | None = None,
+) -> str:
     """Render a kanban view: cards optionally grouped into columns.
 
-    Arch shape:
-        {"card": {"title": "<attr>", "subtitle": "<attr>",
-                  "fields": [...], "badges": [...]},
-         "group_by": "<attr>"  (optional),
-         "form_view": "<view_name>"  (optional, makes cards clickable)}
+    When the arch omits ``group_by``, the board uses the same search,
+    filter, URL group-by, and pagination controls as a list view. A
+    fixed arch ``group_by`` keeps the classic column board (all records).
     """
     from .views import resolve_arch
 
     arch = resolve_arch(view)
-    card = arch.get("card", {})
-    group_by = arch.get("group_by")
-    form_view = arch.get("form_view")
-
-    Model = env[view.model]
-    recs = Model.search([], order='"id" ASC')
-
-    if group_by:
-        groups = _group_records(recs, group_by, env)
-    else:
-        groups = [{"key": None, "label": "All", "records": list(recs)}]
-
-    title_attr = card.get("title")
-    subtitle_attr = card.get("subtitle")
-    fields_spec = list(card.get("fields", []))
-    badges_spec = list(card.get("badges", []))
-
-    columns = []
-    for grp in groups:
-        cards = []
-        for rec in grp["records"]:
-            cards.append(
-                {
-                    "id": rec.id,
-                    "title": (
-                        _render_field_bare(rec, title_attr)
-                        if title_attr
-                        else Markup("")
-                    ),
-                    "subtitle": (
-                        _render_field_bare(rec, subtitle_attr)
-                        if subtitle_attr
-                        else Markup("")
-                    ),
-                    "fields": [_render_field_label(rec, s) for s in fields_spec],
-                    "badges": [_render_field_label(rec, s) for s in badges_spec],
-                    "link": (
-                        f"/web/views/{view.module}/{form_view}/record/{rec.id}"
-                        if form_view
-                        else None
-                    ),
-                }
-            )
-        columns.append(
-            {
-                "label": grp["label"],
-                "key": grp["key"],
-                "count": len(grp["records"]),
-                "cards": cards,
-            }
-        )
-
-    page_title = _view_title(view, arch)
+    ctx = _render_kanban_content(
+        view,
+        arch,
+        env,
+        page=page,
+        page_size=page_size,
+        search=search,
+        order=order,
+        filters=filters,
+        url_group_by=group_by,
+        bc_stack=bc_stack,
+    )
     template = _env.get_template("kanban.html")
     return template.render(
-        view=view,
-        columns=columns,
-        total=len(recs),
-        page_title=page_title,
-        subtitle=(
-            f"{len(recs)} record{'s' if len(recs) != 1 else ''}"
-            f" · {len(columns)} column{'s' if len(columns) != 1 else ''}"
+        **ctx,
+        view_switcher=_other_views_for_model(
+            env,
+            view,
+            bc_stack=bc_stack,
+            search=search,
+            order=order,
+            filters=filters,
+            group_by=group_by,
+            page=page,
+            page_size=page_size,
         ),
-        view_switcher=_other_views_for_model(env, view),
-        **layout_context(env, current_path),
+        bc_param=format_bc_param(bc_stack or []),
+        **layout_context(env, current_path, leaf_label=ctx["page_title"]),
     )
 
 
-def _other_views_for_model(env, view) -> list[dict]:
+def render_kanban_rows(
+    view,
+    env,
+    *,
+    page: int = 0,
+    page_size: int = 10,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+    group_by: str = "",
+    bc_stack: list[tuple[str, str]] | None = None,
+) -> str:
+    """Kanban card grid / columns fragment for HTMX toolbar swaps."""
+    from .views import resolve_arch
+
+    arch = resolve_arch(view)
+    ctx = _render_kanban_content(
+        view,
+        arch,
+        env,
+        page=page,
+        page_size=page_size,
+        search=search,
+        order=order,
+        filters=filters,
+        url_group_by=group_by,
+        bc_stack=bc_stack,
+    )
+    template = _env.get_template("kanban_cards.html")
+    return template.render(**ctx)
+
+
+def _other_views_for_model(
+    env,
+    view,
+    *,
+    bc_stack: list[tuple[str, str]] | None = None,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+    group_by: str = "",
+    page: int | None = None,
+    page_size: int | None = None,
+) -> list[dict]:
     """List sibling views of the same module+model for the view-switcher.
 
     Returns one entry per sibling (and the current view) shaped as
@@ -2745,11 +3293,43 @@ def _other_views_for_model(env, view) -> list[dict]:
             "list": "List", "kanban": "Kanban",
             "graph": "Graph", "pivot": "Pivot",
         }.get(view_type, view_type.title())
+        active = view.view_type == view_type
+        href = f"/web/views/{view.module}/{name}"
+        if not active:
+            new_bc = list(bc_stack or [])
+            new_bc.append((view.module, view.name))
+            qs = encode_view_nav_query(
+                None,
+                None,
+                search=search,
+                order=order,
+                filters=filters,
+                group_by=group_by,
+                page=page,
+                page_size=page_size,
+                bc_stack=new_bc,
+            )
+            if qs:
+                href = f"{href}?{qs}"
+        elif bc_stack or search or order or filters or group_by:
+            qs = encode_view_nav_query(
+                None,
+                None,
+                search=search,
+                order=order,
+                filters=filters,
+                group_by=group_by,
+                page=page,
+                page_size=page_size,
+                bc_stack=bc_stack,
+            )
+            if qs:
+                href = f"{href}?{qs}"
         out.append({
             "label": label,
             "view_type": view_type,
-            "href": f"/web/views/{view.module}/{name}",
-            "active": view.view_type == view_type,
+            "href": href,
+            "active": active,
         })
     return out
 
@@ -3588,6 +4168,7 @@ def render_list_page(
     order: str = "",
     filters: str = "",
     group_by: str = "",
+    bc_stack: list[tuple[str, str]] | None = None,
     current_path: str | None = None,
 ) -> str:
     """Full HTML page for a list view: heading, toolbar, sortable DataTable
@@ -3654,8 +4235,16 @@ def render_list_page(
         total_pages = max(1, (total + page_size - 1) // page_size)
 
     page_title = _view_title(view, arch)
-    list_nav_query = encode_list_nav_query(
-        view.module, view.name, search=search, order=order, filters=filters
+    list_nav_query = encode_view_nav_query(
+        view.module,
+        view.name,
+        search=search,
+        order=order,
+        filters=filters,
+        group_by=safe_group_by,
+        page=page,
+        page_size=page_size,
+        bc_stack=bc_stack,
     )
     template = _env.get_template("list.html")
     return template.render(
@@ -3678,7 +4267,18 @@ def render_list_page(
         list_nav_query=list_nav_query,
         page_title=page_title,
         subtitle=f"{total} record{'s' if total != 1 else ''}",
-        view_switcher=_other_views_for_model(env, view),
+        view_switcher=_other_views_for_model(
+            env,
+            view,
+            bc_stack=bc_stack,
+            search=search,
+            order=order,
+            filters=filters,
+            group_by=safe_group_by,
+            page=page,
+            page_size=page_size,
+        ),
+        bc_param=format_bc_param(bc_stack or []),
         **layout_context(env, current_path, leaf_label=page_title),
     )
 
@@ -3693,6 +4293,7 @@ def render_list_rows(
     order: str = "",
     filters: str = "",
     group_by: str = "",
+    bc_stack: list[tuple[str, str]] | None = None,
 ) -> str:
     """Table body fragment + oob pagination — used by HTMX control swaps."""
     from .views import resolve_arch
@@ -3743,8 +4344,16 @@ def render_list_rows(
         rows = _build_rows(view, recs, fields_spec)
         total_pages = max(1, (total + page_size - 1) // page_size)
 
-    list_nav_query = encode_list_nav_query(
-        view.module, view.name, search=search, order=order, filters=filters
+    list_nav_query = encode_view_nav_query(
+        view.module,
+        view.name,
+        search=search,
+        order=order,
+        filters=filters,
+        group_by=safe_group_by,
+        page=page,
+        page_size=page_size,
+        bc_stack=bc_stack,
     )
     template = _env.get_template("list_rows.html")
     return template.render(
@@ -4855,6 +5464,49 @@ def _label_for_href(menu_tree: list, href: str, fallback: str) -> str:
     return fallback
 
 
+def _view_breadcrumb(
+    env,
+    module: str,
+    name: str,
+    menu_tree: list | None = None,
+    *,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+    group_by: str = "",
+    page: int | None = None,
+    page_size: int | None = None,
+    bc_stack: list[tuple[str, str]] | None = None,
+    link_query: bool = True,
+) -> dict | None:
+    """Return ``{label, href}`` for any registered view."""
+    ui_view = _load_ui_view(env, module, name)
+    if ui_view is None:
+        return None
+    href = f"/web/views/{module}/{name}"
+    if link_query:
+        qs = encode_view_nav_query(
+            module,
+            name,
+            search=search,
+            order=order,
+            filters=filters,
+            group_by=group_by,
+            page=page,
+            page_size=page_size,
+            bc_stack=bc_stack,
+        )
+        if qs:
+            href = f"{href}?{qs}"
+    from .views import resolve_arch
+
+    fallback = _view_title(ui_view, resolve_arch(ui_view))
+    label = _label_for_href(
+        menu_tree or [], f"/web/views/{module}/{name}", fallback
+    )
+    return {"label": label, "href": href}
+
+
 def _list_breadcrumb_for_model(
     env,
     model_name: str,
@@ -4865,30 +5517,72 @@ def _list_breadcrumb_for_model(
     list_search: str = "",
     list_order: str = "",
     list_filters: str = "",
+    group_by: str = "",
+    page: int | None = None,
+    page_size: int | None = None,
+    bc_stack: list[tuple[str, str]] | None = None,
 ) -> dict | None:
-    """Return ``{label, href}`` for the model's list view, if any."""
-    list_view = _load_list_view(env, list_module, list_name, model_name)
-    if list_view is None:
+    """Return ``{label, href}`` for the parent view (list, kanban, …)."""
+    ref_view = _load_ref_view(env, list_module, list_name, model_name)
+    if ref_view is None:
         return None
-    module = list_view.module
-    name = list_view.name
-    href = f"/web/views/{module}/{name}"
-    qs = encode_list_nav_query(
-        list_module or module,
-        list_name or name,
+    return _view_breadcrumb(
+        env,
+        ref_view.module,
+        ref_view.name,
+        menu_tree,
         search=list_search,
         order=list_order,
         filters=list_filters,
+        group_by=group_by,
+        page=page,
+        page_size=page_size,
+        bc_stack=bc_stack,
     )
-    if qs:
-        href = f"{href}?{qs}"
-    fallback = _humanize_model(model_name)
-    if "ir.ui.view" in env.registry:
-        from .views import resolve_arch
 
-        fallback = _view_title(list_view, resolve_arch(list_view))
-    label = _label_for_href(menu_tree or [], f"/web/views/{module}/{name}", fallback)
-    return {"label": label, "href": href}
+
+def build_form_breadcrumbs(
+    menu_tree: list,
+    env,
+    *,
+    ref_module: str | None = None,
+    ref_name: str | None = None,
+    bc_stack: list[tuple[str, str]] | None = None,
+    search: str = "",
+    order: str = "",
+    filters: str = "",
+    group_by: str = "",
+    page: int | None = None,
+    page_size: int | None = None,
+    leaf_label: str | None = None,
+) -> list[dict]:
+    """Odoo-style trail: Home → …ancestors… → parent view → optional record."""
+    crumbs: list[dict] = [{"label": "Home", "href": "/web/admin"}]
+    for mod, view_name in bc_stack or []:
+        entry = _view_breadcrumb(
+            env, mod, view_name, menu_tree, link_query=False
+        )
+        if entry:
+            crumbs.append(entry)
+    if ref_module and ref_name:
+        parent = _view_breadcrumb(
+            env,
+            ref_module,
+            ref_name,
+            menu_tree,
+            search=search,
+            order=order,
+            filters=filters,
+            group_by=group_by,
+            page=page,
+            page_size=page_size,
+            bc_stack=bc_stack,
+        )
+        if parent:
+            crumbs.append(parent)
+    if leaf_label:
+        crumbs.append({"label": leaf_label, "href": None})
+    return crumbs
 
 
 def build_breadcrumbs(

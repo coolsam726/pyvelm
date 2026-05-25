@@ -57,7 +57,16 @@ from typing import Any, Literal, TypedDict, Union
 # flag typos like ``widget="toogle"`` at edit time. Extending the
 # registry with a new hint means adding the string here too.
 
-WidgetHint = Literal["toggle"]
+WidgetHint = Literal[
+    "toggle",
+    # Relational (One2many / Many2many) — edit UX on parent forms:
+    # ``dialog`` (default when a comodel form view exists): chips or
+    # read-only table; create/edit in the floating dialog.
+    # ``inline`` / ``table``: editable inline table (O2m) or chip search (M2m).
+    "dialog",
+    "inline",
+    "table",
+]
 
 
 # ---- field references inside arch ---------------------------------
@@ -175,6 +184,7 @@ class ArchKanban(TypedDict, total=False):
     title: str
     card: ArchKanbanCard
     group_by: str
+    sequence: str
     form_view: str
 
 

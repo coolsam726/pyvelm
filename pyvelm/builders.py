@@ -335,6 +335,7 @@ def kanban_view(
     *,
     card: ArchKanbanCard | None = None,
     group_by: str | None = None,
+    sequence: str | None = None,
     form_view: str | None = None,
     title: str | None = None,
     priority: int = 16,
@@ -345,7 +346,7 @@ def kanban_view(
         name:       Unique view name (e.g. ``"partner.kanban"``).
         model:      Dotted model name (e.g. ``"res.partner"``).
         card:       A ``card(...)`` dict describing the card layout.
-        group_by:   Field name to group cards into columns.
+        group_by:   Field name to group cards into columns; omit for a flat card grid.
         form_view:  Name of a form view each card links to.
         title:      Board heading (e.g. ``"Partner Board"``).
         priority:   Inheritance chain priority (default 16).
@@ -365,6 +366,8 @@ def kanban_view(
         arch["card"] = card
     if group_by is not None:
         arch["group_by"] = group_by
+    if sequence is not None:
+        arch["sequence"] = sequence
     if form_view is not None:
         arch["form_view"] = form_view
     result: KanbanView = {

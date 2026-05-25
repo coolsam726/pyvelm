@@ -1,9 +1,9 @@
 """Views for ``{{model}}``."""
 
-from pyvelm.builders import form_view, list_view, section
+from pyvelm.builders import field, form_view, list_view, section
+from pyvelm.types import View
 
-
-VIEWS = [
+VIEWS: list[View] = [
     list_view(
         "{{stem}}.list",
         "{{model}}",
@@ -17,9 +17,7 @@ VIEWS = [
         "{{stem}}.form",
         "{{model}}",
         sections=[
-            section("main", "{{title}}", [
-{{form_fields}}
-            ]),
-{{timestamp_section}}        ],
+{{form_sections}}
+        ],
     ),
 ]

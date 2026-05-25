@@ -8,6 +8,7 @@ from pyvelm import (
     Many2one,
     One2many,
     depends,
+    fields,
 )
 
 
@@ -22,14 +23,14 @@ class Partner(BaseModel):
     # Added in 0.2.0. Fresh installs create the column from this
     # declaration; upgrades from 0.1.0 get it via migrations/0_1_to_0_2.py
     # (ALTER TABLE ADD COLUMN + backfill).
-    code = Char()
+    code = Char(required=True, tracking=True)
     country_id = Many2one("res.country", ondelete="SET NULL")
     parent_id = Many2one("res.partner", ondelete="SET NULL")
     child_ids = One2many("res.partner", inverse_name="parent_id")
     tag_ids = Many2many("res.tag", tracking=True)
     company_id = Many2one("res.company", ondelete="SET NULL")
 
-    age_bucket = Char(compute="_compute_age_bucket", store=True)
+    age_bucket = fields.Char(compute="_compute_age_bucket", store=True)
 
     @depends("name", "country_id.code", "country_id.region_id.name")
     def _compute_display_name(self):

@@ -5,13 +5,13 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.7.0](releases/v0.7.0.md) (2026-05-23) — Form **chatter**,
-**field tracking**, and workflow **history** timeline. See
-[releases](releases/v0.7.0.md) and the
+**Latest release:** [v0.9.0](releases/v0.9.0.md) (2026-05-25) — **Kanban** boards,
+**schema diff/migrate**, **dialog** relational fields, and **breadcrumb history**.
+See [releases](releases/v0.9.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.7.0
+pip install pyvelm==0.9.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -53,6 +53,8 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.9.0](releases/v0.9.0.md) | **Kanban** drag-drop, schema **db diff/migrate**, dialog O2M/M2M, breadcrumb **history** |
+| [v0.8.0](releases/v0.8.0.md) | **White-label branding**, date/datetime picker fixes |
 | [v0.7.0](releases/v0.7.0.md) | Form **chatter** (notes, email, attachments), **`tracking=True`** fields, workflow history |
 | [v0.6.0](releases/v0.6.0.md) | **[Workflows](workflow.md)** — designer, runtime bar, approvals inbox, stage forms |
 | [v0.5.0](releases/v0.5.0.md) | Per-company theme, dashboards, datetime pickers, Feedback Signals example |
@@ -143,7 +145,9 @@ they show patterns rather than being required.
 ```bash
 pyvelm init my_erp              # scaffold a project
 pyvelm make:module inventory     # empty module shell
-pyvelm db autogen my_module      # schema migration from models
+pyvelm db autogen my_module      # write migration file from models
+pyvelm db migrate               # install/upgrade all modules (deploy)
+pyvelm db status                # installed vs manifest versions
 pyvelm-cron --interval 60        # background cron + mail dispatcher
 ```
 
