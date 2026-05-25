@@ -926,7 +926,7 @@ def _edit_o2m_table(value, spec, field):
     )
 
     return Markup(
-        f'<div class="border border-default rounded-lg overflow-hidden" '
+        f'<div class="border border-default rounded-lg overflow-visible" '
         f'data-pv-o2m-root data-pv-o2m-name="{escape(oname)}" '
         f'data-pv-o2m-next="{next_idx}">'
         f'<table class="min-w-full divide-y divide-default">'
@@ -1248,11 +1248,12 @@ def _edit_image(value, spec, field):
 
 def _render_color_widget(value, spec, readonly: bool) -> Markup:
     partial = _env.get_template("widgets/color.html")
+    raw = "" if value is None else str(value).strip()
     return Markup(
         partial.render(
             name=spec["name"],
-            value=value or "",
-            value_json=json.dumps(value or ""),
+            value=raw,
+            value_json=json.dumps(raw),
             readonly=readonly,
         )
     )
@@ -1334,9 +1335,11 @@ from pyvelm.icons import register_jinja_globals as _register_icon_globals
 
 def register_shell_globals(jinja_env) -> None:
     """Register shared Jinja globals for framework and module template envs."""
+    from pyvelm.branding import default_brand_globals
+
     _register_icon_globals(jinja_env)
-    jinja_env.globals.setdefault("company_primary_color", "")
-    jinja_env.globals.setdefault("company_theme_style", "")
+    for key, val in default_brand_globals().items():
+        jinja_env.globals.setdefault(key, val)
 
 
 register_shell_globals(_env)
@@ -1350,9 +1353,9 @@ def merge_template_context(
     if env is not None:
         ctx.update(extra)
         return ctx
-    from pyvelm.theme import company_theme_context
+    from pyvelm.branding import branding_context
 
-    ctx = company_theme_context(None)
+    ctx = branding_context(None)
     ctx.update(extra)
     return ctx
 
@@ -3889,10 +3892,10 @@ def render_login_page(
     csrf_token: str = "",
     env=None,
 ) -> str:
-    from pyvelm.theme import company_theme_context
+    from pyvelm.branding import branding_context
 
     template = _env.get_template("login.html")
-    ctx = company_theme_context(env) if env is not None else {}
+    ctx = branding_context(env) if env is not None else branding_context(None)
     ctx.update(
         {
             "error": error,
@@ -4963,7 +4966,7 @@ def layout_context(
         finally:
             bypass_env._acl_bypass = False
 
-    from pyvelm.theme import company_theme_context
+    from pyvelm.branding import branding_context
 
     menu_tree = _menu(env, current_path)
     return {
@@ -4975,7 +4978,7 @@ def layout_context(
         "companies": companies,
         "current_company_id": env.company_id,
         "current_company_name": current_company_name,
-        **company_theme_context(env),
+        **branding_context(env),
         # Default crumbs derived from the menu. Pages that want a
         # different leaf label (e.g. the record name on a form view)
         # pass `leaf_label`; renderers can override `breadcrumbs`

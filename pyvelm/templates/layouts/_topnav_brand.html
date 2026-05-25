@@ -1,0 +1,14 @@
+{# Top bar brand (no sidebar): same logo + app name styling as sidebar header. #}
+<div class="flex items-center gap-2.5 min-w-0 flex-1">
+    <div class="shrink-0 min-w-0 max-w-[14rem]">
+        {% set brand_mark_variant = 'topnav' %}
+        {% set brand_subtitle = none %}
+        {% include "layouts/_brand_mark.html" %}
+    </div>
+    {% if topnav_page_title is defined and topnav_page_title %}
+    <span class="text-body-subtle/40 shrink-0 hidden sm:inline" aria-hidden="true">/</span>
+    <h1 class="text-sm font-semibold text-heading tracking-tight truncate min-w-0">
+        {{ topnav_page_title }}
+    </h1>
+    {% endif %}
+</div>

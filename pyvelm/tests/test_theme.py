@@ -53,6 +53,23 @@ def test_apply_request_scope_reads_company_cookie():
     assert scoped.company_id == 42
 
 
+def test_color_widget_initializes_from_stored_hex():
+    from pyvelm.render import _render_color_widget
+
+    html = str(_render_color_widget("#10b981", {"name": "primary_color"}, False))
+    assert "pvColorPicker" in html
+    assert 'pvColorPicker("#10b981")' in html
+    assert 'name="primary_color"' in html
+    assert 'x-data="{ hex:' not in html
+
+
+def test_color_widget_empty_does_not_force_default_in_form_field():
+    from pyvelm.render import _render_color_widget
+
+    html = str(_render_color_widget("", {"name": "primary_color"}, False))
+    assert 'pvColorPicker("")' in html
+
+
 def test_main_layout_loads_company_theme_after_stylesheet():
     """Company overrides must follow pyvelm.css or default indigo wins."""
     from pathlib import Path

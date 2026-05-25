@@ -1,0 +1,8 @@
+{# Light + dark logo images. Set ``logo_class`` before include. Expects ``b``. #}
+{% if b and b.has_logo %}
+{% set _cls = logo_class if logo_class is defined else 'h-7 w-auto max-w-[8rem] rounded-lg object-contain shrink-0' %}
+<img src="{{ b.logo_url_light }}" alt=""
+     class="{{ _cls }} dark:hidden">
+<img src="{{ b.logo_url_dark }}" alt=""
+     class="{{ _cls }} hidden dark:block">
+{% endif %}

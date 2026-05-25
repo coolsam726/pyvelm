@@ -97,8 +97,8 @@ VIEWS: list[View] = [
 
     # ---- res.company ----
     list_view("company.list", "res.company",
-              fields=["name", "currency_id", "timezone", "primary_color",
-                      field("active", widget="toggle")]),
+              fields=["name", "app_name", "currency_id", "timezone",
+                      "primary_color", field("active", widget="toggle")]),
 
     form_view("company.form", "res.company",
               sections=[
@@ -106,8 +106,19 @@ VIEWS: list[View] = [
                       "name",
                       "currency_id",
                       "timezone",
-                      field("primary_color", widget="color"),
                       field("active", widget="toggle"),
+                  ]),
+                  section("branding", "Branding & white-label", [
+                      "app_name",
+                      "app_tagline",
+                      field("logo_url", widget="image"),
+                      field("logo_url_dark", widget="image"),
+                      field("favicon_url", widget="image"),
+                      field("primary_color", widget="color"),
+                      "copyright_text",
+                      "support_email",
+                      "support_url",
+                      field("show_powered_by", widget="toggle"),
                   ]),
               ]),
 

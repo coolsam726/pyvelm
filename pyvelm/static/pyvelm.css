@@ -275,9 +275,20 @@
     }
 }
 
+/* Flowbite date dropdown (body-mounted) — above inline tables and dialogs. */
+.datepicker-dropdown.active,
+.datepicker-picker.active {
+    z-index: 120 !important;
+}
+
 /* Datetime popup — one flat panel (calendar + time + actions). */
 .pv-datetime-panel {
     padding: 0;
+}
+
+.pv-datetime-panel--floating {
+    position: fixed;
+    z-index: 120;
 }
 
 .pv-datetime-panel .pv-datetime-calendar {

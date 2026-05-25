@@ -7,6 +7,36 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.8.0] — 2026-05-25
+
+White-label branding per company, login/profile chrome, and date/datetime picker
+fixes for inline tables. See [docs/releases/v0.8.0.md](docs/releases/v0.8.0.md).
+
+### Added
+
+- **White-label branding** — `res.company` fields (`app_name`, `app_tagline`,
+  `logo_url`, `logo_url_dark`, `favicon_url`, `copyright_text`, support links,
+  `show_powered_by`) with `PYVELM_*` env fallbacks; `pyvelm/branding.py` and layout
+  partials; company form **Branding** section in admin.
+- **Base migrations** — `0_19_to_0_20.py`, `0_20_to_0_21.py`; base module **0.21.0**.
+- **Docs** — [docs/branding.md](docs/branding.md).
+- **Tests** — `test_branding.py`.
+
+### Changed
+
+- **Login / password / profile** — branded logo, tagline, and footer; topnav brand on
+  account pages without sidebar.
+- **Admin menu** — dashboard and menu entries use branding context.
+
+### Fixed
+
+- **Datetime picker** — no double calendar on HTMX re-init; popup floats above inline
+  O2M tables and list rows (`pv_datetime_picker.js`, scoped `pvInitDatepickers`).
+- **Date picker z-index** — Flowbite dropdown above clipped table cells.
+- **Color picker** — `pvColorPicker` fixes Alpine `x-data` quoting on company edit.
+- **Profile avatar URL** — image widget uses `type="text"` for attachment paths.
+- **Topnav include** — `topnav_page_title` set before `_topnav_brand.html` include.
+
 ## [0.7.0] — 2026-05-23
 
 Mail-thread chatter on record forms, Odoo-style field tracking, and workflow

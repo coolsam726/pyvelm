@@ -12,17 +12,61 @@ m = Menus("admin")
 MENUS: list[Menu] = [
     m.group("settings", "Settings", icon="cog-6-tooth", sequence=80),
     m.item("settings.users", "Users", parent="settings", view="user.list", sequence=10),
-    m.item("settings.groups", "Groups", parent="settings", view="group.list", sequence=20),
-    m.item("settings.companies", "Companies", parent="settings", view="company.list", sequence=30),
-    m.item("settings.currencies", "Currencies", parent="settings", view="currency.list", sequence=35),
-
+    m.item(
+        "settings.groups", "Groups", parent="settings", view="group.list", sequence=20
+    ),
+    m.item(
+        "settings.companies",
+        "Companies",
+        parent="settings",
+        view="company.list",
+        sequence=30,
+    ),
+    m.item(
+        "settings.currencies",
+        "Currencies",
+        parent="settings",
+        view="currency.list",
+        sequence=35,
+    ),
     m.group("security", "Security", icon="shield-check", sequence=90),
-    m.item("security.access", "Model access", parent="security", view="access.list", sequence=10),
-    m.item("security.rules", "Record rules", parent="security", view="rule.list", sequence=20),
-
+    m.item(
+        "security.access",
+        "Model access",
+        parent="security",
+        view="access.list",
+        sequence=10,
+    ),
+    m.item(
+        "security.rules",
+        "Record rules",
+        parent="security",
+        view="rule.list",
+        sequence=20,
+    ),
     m.group("workflows", "Workflows", icon="bolt", sequence=100),
-    m.item("workflows.actions", "Server actions", parent="workflows", view="action.list", sequence=10),
-    m.item("workflows.automation", "Automation", parent="workflows", view="automation.list", sequence=20),
-    m.item("workflows.cron", "Cron jobs", parent="workflows", view="cron.list", sequence=30),
-    m.item("workflows.messages", "Messages", parent="workflows", view="message.list", sequence=40),
+    m.item(
+        "workflows.actions",
+        "Server actions",
+        parent="workflows",
+        view="action.list",
+        sequence=10,
+    ),
+    m.item(
+        "workflows.automation",
+        "Automation",
+        parent="workflows",
+        view="automation.list",
+        sequence=20,
+    ),
+    m.item(
+        "workflows.cron", "Cron jobs", parent="workflows", view="cron.list", sequence=30
+    ),
+    m.item(
+        "workflows.messages",
+        "Messages",
+        parent="workflows",
+        view="message.list",
+        sequence=40,
+    ),
 ]

@@ -84,6 +84,7 @@ nav:
       - Modules: modules.md
       - Report Builder: report-builder.md
       - Workflows: workflow.md
+      - White-label branding: branding.md
       - Security: security.md
       - Deployment: deployment.md
       - CLI reference: cli.md

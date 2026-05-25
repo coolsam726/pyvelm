@@ -19,7 +19,7 @@ VIEWS: list[View] = [
         "home",
         title="Dashboard",
         subtitle="Framework configuration and security.",
-        columns=3,
+        columns=4,
         widgets=[
             stat_widget(
                 "active_users",
@@ -34,11 +34,26 @@ VIEWS: list[View] = [
                 model="res.company",
                 href="/web/views/admin/company.list",
             ),
+            stat_widget(
+                "groups",
+                title="Groups",
+                model="res.groups",
+                href="/web/views/admin/groups.list",
+                colspan=1,
+            ),
+            stat_widget(
+                "active_currencies",
+                title="Active currencies",
+                model="res.currency",
+                domain=[("active", "=", True)],
+                href="/web/views/admin/currency.list",
+                colspan=1,
+            ),
             chart_widget(
                 "users_by_status",
-                title="Users by status",
+                title="Users by company",
                 model="res.users",
-                groupby="active",
+                groupby="company_id",
                 measure="__count",
                 chart="pie",
             ),
@@ -47,6 +62,7 @@ VIEWS: list[View] = [
                 title="Recent users",
                 view="user.list",
                 limit=8,
+                colspan=2,
                 order="id DESC",
             ),
             link_widget(

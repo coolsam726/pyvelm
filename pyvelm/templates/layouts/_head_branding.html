@@ -1,0 +1,4 @@
+{# Favicon and document title helpers — expects ``brand`` in context. #}
+{% if brand and brand.has_favicon %}
+<link rel="icon" href="{{ brand.favicon_url }}">
+{% endif %}

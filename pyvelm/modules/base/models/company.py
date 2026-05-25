@@ -32,3 +32,15 @@ class Company(BaseModel):
     # this company active, the UI overrides the default primary palette.
     # Empty → framework default (indigo in tailwind.css).
     primary_color = Char(string="Primary color")
+
+    # White-label chrome (sidebar, login, footer). Empty fields fall back to
+    # ``PYVELM_*`` environment variables — see ``pyvelm.branding``.
+    app_name = Char(string="Application name")
+    app_tagline = Char(string="Tagline")
+    logo_url = Char(string="Logo URL (light)")
+    logo_url_dark = Char(string="Logo URL (dark)")
+    favicon_url = Char(string="Favicon URL")
+    copyright_text = Char(string="Copyright")
+    support_email = Char(string="Support email")
+    support_url = Char(string="Support URL")
+    show_powered_by = Boolean(default=True, string="Show powered by pyvelm")

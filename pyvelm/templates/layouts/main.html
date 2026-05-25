@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}pyvelm{% endblock %}</title>
+    <title>{% block title %}{% if brand is defined %}{{ brand.app_name }}{% else %}pyvelm{% endif %}{% endblock %}</title>
 
     {% include "layouts/_head_init.html" %}
+    {% include "layouts/_head_branding.html" %}
 
     {# Inter is the body font in pyvelm.css. Loaded from Google Fonts so
        the build pipeline doesn't have to ship font files. #}
@@ -122,22 +123,8 @@
 
     {# Brand — logo, app name, and current page (sidebar mode only). #}
     <div class="px-4 min-h-[60px] flex items-center justify-between gap-2 border-b border-default/60">
-        <a href="/web/apps"
-           class="flex items-center gap-2.5 min-w-0 flex-1 text-heading hover:opacity-90 transition">
-            <div class="w-7 h-7 rounded-lg bg-fg-brand flex items-center justify-center shrink-0">
-                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor"
-                     viewBox="0 0 24 24" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                          d="M3.75 7.5L12 3l8.25 4.5M3.75 7.5v9L12 21l8.25-4.5v-9M3.75 7.5L12 12m0 0l8.25-4.5M12 12v9"/>
-                </svg>
-            </div>
-            <div class="min-w-0">
-                <span class="font-semibold text-heading text-sm tracking-tight block">pyvelm</span>
-                {% if self.page_title() %}
-                <span class="text-xs text-body-subtle truncate block mt-0.5">{{ self.page_title() }}</span>
-                {% endif %}
-            </div>
-        </a>
+        {% set brand_subtitle = self.page_title() if self.page_title() else none %}
+        {% include "layouts/_brand_mark.html" %}
         <button @click="sidebarOpen = false" aria-label="Close sidebar"
                 class="md:hidden p-1 rounded-md text-body-subtle hover:text-heading hover:bg-neutral-secondary">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
@@ -230,28 +217,11 @@
         {% if use_sidebar %}
         <div class="flex-1 min-w-0" aria-hidden="true"></div>
         {% else %}
-        {# Topnav-only shell: logo, app name, current page — nothing else in the bar. #}
-        <div class="flex items-center gap-2.5 min-w-0 flex-1">
-            <a href="/web/apps" aria-label="pyvelm apps"
-               class="shrink-0 text-heading hover:opacity-90 transition">
-                <div class="w-7 h-7 rounded-lg bg-fg-brand flex items-center justify-center">
-                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor"
-                         viewBox="0 0 24 24" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                              d="M3.75 7.5L12 3l8.25 4.5M3.75 7.5v9L12 21l8.25-4.5v-9M3.75 7.5L12 12m0 0l8.25-4.5M12 12v9"/>
-                    </svg>
-                </div>
-            </a>
-            <span class="text-base font-semibold text-heading tracking-tight shrink-0">pyvelm</span>
-            <span class="text-body-subtle/40 shrink-0 hidden sm:inline" aria-hidden="true">/</span>
-            <h1 class="text-base font-medium text-heading tracking-tight truncate min-w-0">
-                {{ self.page_title() }}
-            </h1>
-        </div>
+        {% set topnav_page_title = self.page_title() %}
+        {% include "layouts/_topnav_brand.html" %}
         {% endif %}
 
-        {% if use_sidebar %}
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 shrink-0">
 
             {# Company switcher. #}
             {% if companies %}
@@ -374,7 +344,6 @@
             </div>
             {% endif %}
         </div>
-        {% endif %}
     </header>
 
     {# Flash slot reserved — used for future toast/notification injection. #}
@@ -448,6 +417,8 @@
     <main class="flex-1 px-4 md:px-6 py-5 overflow-auto">
         {% block content %}{% endblock %}
     </main>
+
+    {% include "layouts/_footer_branding.html" %}
 </div>
 
 {# ───── Toast stack ───── #}
@@ -980,17 +951,14 @@
             }
         });
 
-        // Flowbite date pickers + unified datetime popups — re-init after HTMX swaps.
-        function pvInitDatepickers() {
-            if (typeof window.initDatepickers === 'function') {
-                window.initDatepickers();
-            }
-        }
+        // Date + datetime pickers — scoped init avoids double calendars (see pv_datetime_picker.js).
         function pvInitPickers() {
             if (typeof window.pvInitDatetimePickers === 'function') {
                 window.pvInitDatetimePickers();
             }
-            pvInitDatepickers();
+            if (typeof window.pvInitDatepickers === 'function') {
+                window.pvInitDatepickers();
+            }
         }
         document.addEventListener('DOMContentLoaded', pvInitPickers);
         document.body.addEventListener('htmx:afterSwap', () => pvInitPickers());
@@ -1591,6 +1559,18 @@
         Alpine.data('pvChatter', (mode) => ({
             mode: mode === 'email' ? 'email' : 'note',
         }));
+
+        // ── Company primary colour (Char + widget="color") ──
+        // ``initial`` is a JSON-encoded string from the server (may be "").
+        Alpine.data('pvColorPicker', (initial) => {
+            const hex = (initial != null && String(initial).trim()) ? String(initial).trim() : '';
+            return {
+                hex,
+                get pickerHex() {
+                    return this.hex || '#6366f1';
+                },
+            };
+        });
 
         // ── Attachment uploader ──
         // Mounted by `widgets/attachment.html`. Each existing

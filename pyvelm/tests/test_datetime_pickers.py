@@ -45,7 +45,8 @@ def test_render_datetime_picker_unified_popup():
     assert "data-pv-datetime-picker" in html
     assert "data-pv-datetime-trigger" in html
     assert "data-pv-datetime-inline" in html
-    assert "inline-datepicker" in html
+    assert "inline-datepicker" not in html
+    assert "data-datepicker-format" in html
     assert "pv-datetime-panel" in html
     assert 'data-date="2026-04-17"' in html
     assert 'data-pv-datetime-time' in html

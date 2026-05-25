@@ -4,6 +4,8 @@
  */
 (function () {
     const PLACEHOLDER_CLASS = "text-body-subtle";
+    const FLOAT_MIN_WIDTH = 272;
+    const FLOAT_Z = 120;
 
     function pad(n) {
         return String(n).padStart(2, "0");
@@ -41,7 +43,9 @@
     function initInlineDatepicker(inlineEl) {
         if (!inlineEl || inlineEl.datepicker || !window.Datepicker) return null;
         const format =
-            inlineEl.getAttribute("datepicker-format") || "yyyy-mm-dd";
+            inlineEl.getAttribute("data-datepicker-format") ||
+            inlineEl.getAttribute("datepicker-format") ||
+            "yyyy-mm-dd";
         return new window.Datepicker(inlineEl, { format, inline: true });
     }
 
@@ -82,6 +86,7 @@
 
         let draft = parseHidden(hidden.value);
         let outsideListener = null;
+        let floatReposition = null;
 
         function refreshDisplay() {
             const iso = hidden.value;
@@ -111,21 +116,87 @@
             }
         }
 
-        function closePanel() {
+        function detachFloatListeners() {
+            if (!floatReposition) return;
+            window.removeEventListener("resize", floatReposition);
+            window.removeEventListener("scroll", floatReposition, true);
+            floatReposition = null;
+        }
+
+        function positionFloatingPanel() {
+            const rect = trigger.getBoundingClientRect();
+            const gap = 4;
+            let top = rect.bottom + gap;
+            let left = rect.left;
+            panel.style.zIndex = String(FLOAT_Z);
+            const pw = panel.offsetWidth || FLOAT_MIN_WIDTH;
+            const ph = panel.offsetHeight || 320;
+            if (left + pw > window.innerWidth - 8) {
+                left = Math.max(8, window.innerWidth - pw - 8);
+            }
+            if (top + ph > window.innerHeight - 8) {
+                const above = rect.top - gap - ph;
+                if (above >= 8) top = above;
+            }
+            panel.style.top = `${top}px`;
+            panel.style.left = `${left}px`;
+            panel.style.minWidth = `${Math.max(rect.width, FLOAT_MIN_WIDTH)}px`;
+        }
+
+        function floatPanel() {
+            if (panel.parentNode !== document.body) {
+                document.body.appendChild(panel);
+            }
+            panel.classList.add("pv-datetime-panel--floating");
+            positionFloatingPanel();
+        }
+
+        function dockPanel() {
+            detachFloatListeners();
             panel.classList.add("hidden");
+            panel.classList.remove("pv-datetime-panel--floating");
+            panel.style.top = "";
+            panel.style.left = "";
+            panel.style.minWidth = "";
+            panel.style.zIndex = "";
+            if (panel.parentNode !== wrapper) {
+                wrapper.appendChild(panel);
+            }
+        }
+
+        function isPickerClick(target) {
+            return (
+                target &&
+                typeof target.closest === "function" &&
+                (target.closest(".datepicker-picker") ||
+                    target.closest(".datepicker-dropdown"))
+            );
+        }
+
+        function closePanel() {
+            dockPanel();
             trigger.setAttribute("aria-expanded", "false");
             detachOutsideClick();
         }
 
         function openPanel() {
+            floatPanel();
             panel.classList.remove("hidden");
             trigger.setAttribute("aria-expanded", "true");
             initInlineDatepicker(inlineEl);
             if (draft.date) setInlineDate(inlineEl, draft.date);
             if (timeInput) timeInput.value = draft.time || "00:00";
+            positionFloatingPanel();
+
+            floatReposition = () => positionFloatingPanel();
+            window.addEventListener("resize", floatReposition);
+            window.addEventListener("scroll", floatReposition, true);
 
             outsideListener = (ev) => {
-                if (!wrapper.contains(ev.target)) closePanel();
+                const t = ev.target;
+                if (wrapper.contains(t) || panel.contains(t)) return;
+                if (isPickerClick(t)) return;
+                closePanel();
             };
             document.addEventListener("click", outsideListener, true);
         }
@@ -188,6 +259,27 @@
             if (ev.key === "Escape") closePanel();
         });
     }
+
+    /** Date-only fields: init Flowbite once per input; skip datetime popups. */
+    window.pvInitDatepickers = function (root) {
+        const scope = root || document;
+        if (!window.Datepicker) return;
+        scope
+            .querySelectorAll("[data-pv-datepicker] [datepicker]")
+            .forEach((el) => {
+                if (!el || el.datepicker) return;
+                const buttons = el.hasAttribute("datepicker-buttons");
+                const autohide = el.hasAttribute("datepicker-autohide");
+                const format =
+                    el.getAttribute("datepicker-format") || "yyyy-mm-dd";
+                new window.Datepicker(el, {
+                    buttons,
+                    autohide,
+                    format,
+                    container: document.body,
+                });
+            });
+    };
 
     window.pvInitDatetimePickers = function (root) {
         const scope = root || document;

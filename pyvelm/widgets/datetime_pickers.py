@@ -170,12 +170,12 @@ def render_datetime_picker(
         f"{_CALENDAR_ICON}</div>"
         f'<div class="absolute inset-y-0 end-0 flex items-center pe-3 pointer-events-none z-10">'
         f"{_CLOCK_ICON}</div>"
-        f'<div class="hidden absolute z-50 mt-1 start-0 min-w-[17rem] rounded-lg '
+        f'<div class="hidden min-w-[17rem] rounded-lg '
         f'border border-default bg-neutral-primary shadow-lg overflow-hidden '
         f'pv-datetime-panel" '
         f'data-pv-datetime-panel role="dialog" aria-label="Pick date and time">'
-        f'<div class="pv-datetime-calendar" data-pv-datetime-inline inline-datepicker '
-        f'datepicker-format="{_DATE_FORMAT}"{data_date}></div>'
+        f'<div class="pv-datetime-calendar" data-pv-datetime-inline '
+        f'data-datepicker-format="{_DATE_FORMAT}"{data_date}></div>'
         f'<div class="pv-datetime-footer">'
         f'<div class="pv-datetime-time-row">'
         f'<span class="text-sm font-medium text-body-subtle shrink-0">Time</span>'

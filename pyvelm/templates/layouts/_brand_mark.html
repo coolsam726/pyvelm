@@ -1,0 +1,27 @@
+{# Logo + application name. Optional ``brand_subtitle`` for current page.
+``brand_mark_variant``: ``sidebar`` (default) or ``topnav`` (no flex-1 on link). #}
+{% set b = brand if brand is defined else none %}
+{% set _bm_variant = brand_mark_variant if brand_mark_variant is defined else 'sidebar' %}
+{% if b %}
+<a href="/web/apps" class="flex items-center gap-2.5 min-w-0 text-heading hover:opacity-90 transition
+          {% if _bm_variant == 'sidebar' %}flex-1{% else %}max-w-full{% endif %}" aria-label="{{ b.app_name }} home">
+    {% if b.has_logo %}
+    {% set logo_class = 'h-13 w-auto max-w-[8rem] rounded-lg object-contain shrink-0' %}
+    {% include "layouts/_brand_logo.html" %}
+    {% else %}
+    <div class="size-10 rounded-lg bg-fg-brand flex items-center justify-center shrink-0">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"
+            aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                d="M3.75 7.5L12 3l8.25 4.5M3.75 7.5v9L12 21l8.25-4.5v-9M3.75 7.5L12 12m0 0l8.25-4.5M12 12v9" />
+        </svg>
+    </div>
+    {% endif %}
+    <div class="min-w-0">
+        <span class="font-semibold text-heading text-sm tracking-tight block truncate">{{ b.app_name }}</span>
+        {% if brand_subtitle is defined and brand_subtitle %}
+        <span class="text-xs text-body-subtle truncate block mt-0.5">{{ brand_subtitle }}</span>
+        {% endif %}
+    </div>
+</a>
+{% endif %}

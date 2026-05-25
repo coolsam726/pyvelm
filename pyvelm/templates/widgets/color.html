@@ -2,9 +2,10 @@
 {% if readonly %}
 <p class="text-sm text-heading font-mono">{{ value or '—' }}</p>
 {% else %}
-<div class="flex flex-wrap items-center gap-3" x-data="{ hex: {{ value_json | safe }} || '#6366f1' }">
+<div class="flex flex-wrap items-center gap-3" x-data='pvColorPicker({{ value_json | safe }})'>
     <input type="color"
-           x-model="hex"
+           :value="pickerHex"
+           @input="hex = $event.target.value"
            class="h-10 w-14 rounded-md border border-default bg-neutral-primary cursor-pointer p-0.5"
            aria-label="Pick colour">
     <input type="text" name="{{ name }}" x-model="hex"

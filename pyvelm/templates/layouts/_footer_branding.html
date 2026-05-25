@@ -1,0 +1,26 @@
+{# App footer — copyright, support links, optional powered-by. #}
+{% set b = brand if brand is defined else none %}
+{% if b and (b.copyright or b.support_email or b.support_url or b.show_powered_by) %}
+<footer class="px-4 md:px-6 py-4 border-t border-default text-2xs text-body-subtle shrink-0">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div class="min-w-0">
+            {% if b.copyright %}
+            <p class="truncate">{{ b.copyright }}</p>
+            {% endif %}
+        </div>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0">
+            {% if b.support_email %}
+            <a href="mailto:{{ b.support_email }}"
+               class="text-fg-brand hover:underline">{{ b.support_email }}</a>
+            {% endif %}
+            {% if b.support_url %}
+            <a href="{{ b.support_url }}" target="_blank" rel="noopener noreferrer"
+               class="text-fg-brand hover:underline">Support</a>
+            {% endif %}
+            {% if b.show_powered_by %}
+            <span class="text-body-subtle/60">Powered by pyvelm</span>
+            {% endif %}
+        </div>
+    </div>
+</footer>
+{% endif %}
