@@ -25,9 +25,9 @@ VIEWS: list[View] = [
                 "main",
                 "Comment",
                 [
-                    "body",
                     "note_id",
                     field("active", widget="toggle"),
+                    field("body", colspan='full'),
                 ],
             ),
             section(

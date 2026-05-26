@@ -310,6 +310,11 @@ VIEWS: list[View] = [
     form_view(
         "mail_template.form",
         "mail.template",
+        # 2-column form; body section drops to 1 column so the rich
+        # editor uses the full width. `body_html` is an Html field, so
+        # the renderer picks the HTML editor automatically — no
+        # `widget="html"` needed.
+        cols=2,
         sections=[
             section(
                 "main",
@@ -317,15 +322,11 @@ VIEWS: list[View] = [
                 [
                     "name",
                     field("model", widget="model"),
+                    field("subject", colspan="full"),
                     field("active", widget="toggle"),
-                    "subject",
                 ],
             ),
-            section(
-                "body",
-                "HTML body",
-                [field("body_html", widget="html")],
-            ),
+            section("body", "HTML body", ["body_html"], cols=1),
         ],
     ),
     # ---- mail.message ----

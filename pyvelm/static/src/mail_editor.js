@@ -31,7 +31,14 @@
  */
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import Link from '@tiptap/extension-link';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-color';
+import { Highlight } from '@tiptap/extension-highlight';
+import { TextAlign } from '@tiptap/extension-text-align';
+import { Image } from '@tiptap/extension-image';
+import { TaskList } from '@tiptap/extension-task-list';
+import { TaskItem } from '@tiptap/extension-task-item';
+import { Placeholder } from '@tiptap/extension-placeholder';
 import { EditorState } from '@codemirror/state';
 import {
     EditorView,
@@ -102,16 +109,35 @@ function buildTemplateCompletions(variables) {
     return completeFromList(entries);
 }
 
-function createTipTap(mountEl, { content, onUpdate }) {
+function createTipTap(mountEl, { content, onUpdate, onSelectionChange }) {
     mountEl.innerHTML = '';
     const initial = content?.trim() ? content : '<p></p>';
     const editor = new Editor({
         element: mountEl,
+        // Extension set matches TipTap's Simple Editor template. StarterKit
+        // v3 already bundles Bold/Italic/Underline/Strike/Code/Link/Heading/
+        // Lists/Blockquote/CodeBlock/HorizontalRule/Undo-Redo, so we only
+        // import the extras Simple Editor pulls in on top of it.
         extensions: [
-            StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-            Link.configure({
-                openOnClick: false,
-                HTMLAttributes: { rel: 'noopener noreferrer' },
+            StarterKit.configure({
+                heading: { levels: [1, 2, 3, 4] },
+                link: {
+                    openOnClick: false,
+                    HTMLAttributes: { rel: 'noopener noreferrer' },
+                },
+            }),
+            TextStyle,
+            Color,
+            Highlight.configure({ multicolor: true }),
+            TextAlign.configure({
+                types: ['heading', 'paragraph'],
+                alignments: ['left', 'center', 'right', 'justify'],
+            }),
+            Image.configure({ inline: false, allowBase64: false }),
+            TaskList,
+            TaskItem.configure({ nested: true }),
+            Placeholder.configure({
+                placeholder: 'Start writing your email…',
             }),
         ],
         content: initial,
@@ -124,6 +150,11 @@ function createTipTap(mountEl, { content, onUpdate }) {
             },
         },
         onUpdate: ({ editor: ed }) => onUpdate(ed.getHTML()),
+        // Selection moves don't change `getHTML()`, but the toolbar's
+        // active states (which mark is at the cursor?) need refreshing.
+        // Bump a reactive counter so Alpine re-evaluates :class bindings.
+        onSelectionUpdate: () => onSelectionChange?.(),
+        onTransaction: () => onSelectionChange?.(),
     });
     whenVisible(() => {
         if (!editor.isDestroyed) editor.commands.focus('end');
@@ -172,6 +203,9 @@ function createCodeMirror(mountEl, { content, onUpdate, getCompletions }) {
             drawSelection(),
             history(),
             html(),
+            // Soft-wrap long lines so authors don't have to horizontally
+            // scroll a long {{ object.some.long.path }} placeholder.
+            EditorView.lineWrapping,
             syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
             keymap.of([
                 ...defaultKeymap,
@@ -205,15 +239,32 @@ function registerAlpine() {
         name: 'body_html',
         readonly: false,
         mailModel: '',
+        // Stored subject from the record. Edit mode reads the live form
+        // input instead; display mode uses this since no input exists.
+        subject: '',
 
         // --- reactive model state ---
         html: '',
         tab: 'write',
+        // Bumped on every TipTap selection / transaction so :class
+        // bindings that call `isActive()` re-evaluate.
+        _selVersion: 0,
         variables: [],
         variablesLoading: false,
         varQuery: '',
         varPickerOpen: false,
         varCursor: 0,
+
+        // --- live-preview state (Preview tab only) ---
+        previewQuery: '',
+        previewPickerOpen: false,
+        previewLoading: false,
+        previewResults: [],
+        previewRecord: null, // {id, label} when a sample record is chosen
+        previewRendering: false,
+        previewRendered: null, // {subject, body_html, res_id} once rendered
+        previewError: '',
+        _previewSeq: 0, // monotonic to drop stale fetches
 
         // NOTE: there is no `tipTap` / `codeView` property here on purpose.
         // The instances live in the module-level EDITORS WeakMap so Alpine
@@ -226,6 +277,7 @@ function registerAlpine() {
             this.readonly = !!cfg.readonly;
             this.tab = this.readonly ? 'preview' : 'write';
             this.mailModel = cfg.mailModel || '';
+            this.subject = cfg.subject || '';
 
             getEds(this.$root); // ensure WeakMap entry exists
 
@@ -252,6 +304,14 @@ function registerAlpine() {
                     if (String(next) !== String(this.mailModel)) {
                         this.mailModel = String(next);
                         this.loadVariables();
+                        // Live-preview state is model-scoped; reset it so
+                        // the user doesn't try to render template-A's body
+                        // against model-B's record.
+                        this.previewRecord = null;
+                        this.previewResults = [];
+                        this.previewQuery = '';
+                        this.previewRendered = null;
+                        this.previewError = '';
                     }
                 });
             }
@@ -263,6 +323,11 @@ function registerAlpine() {
                         if (this.tab === 'write') this.ensureWrite();
                     });
                 });
+            } else if (this.mailModel) {
+                // Display mode lands directly on the Preview panel — render
+                // the stored body against the first available record so
+                // the user sees the live preview without an extra click.
+                this.$nextTick(() => this.renderPreview());
             }
         },
 
@@ -383,6 +448,137 @@ function registerAlpine() {
             }
         },
 
+        // --- live preview (Preview tab) ---
+
+        openPreviewPicker() {
+            if (!this.mailModel) return;
+            this.previewPickerOpen = true;
+            // Kick off an initial empty-query search so the user sees
+            // the first N records without having to type.
+            if (this.previewResults.length === 0 && !this.previewLoading) {
+                this.searchPreviewRecords();
+            }
+        },
+
+        async searchPreviewRecords() {
+            if (!this.mailModel) {
+                this.previewResults = [];
+                return;
+            }
+            const seq = ++this._previewSeq;
+            this.previewLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    model: this.mailModel,
+                    q: this.previewQuery || '',
+                    limit: '20',
+                });
+                const r = await fetch('/api/m2o/search?' + params, {
+                    credentials: 'same-origin',
+                });
+                if (seq !== this._previewSeq) return; // a newer query won
+                this.previewResults = r.ok
+                    ? (await r.json()).results || []
+                    : [];
+                this.previewPickerOpen = true;
+            } catch (err) {
+                if (seq === this._previewSeq) this.previewResults = [];
+            } finally {
+                if (seq === this._previewSeq) this.previewLoading = false;
+            }
+        },
+
+        pickPreviewRecord(r) {
+            this.previewRecord = r;
+            this.previewQuery = '';
+            this.previewPickerOpen = false;
+            // Auto-render on pick — that's the whole point of choosing.
+            this.renderPreview();
+        },
+
+        clearPreviewRecord() {
+            this.previewRecord = null;
+            this.previewQuery = '';
+            this.previewRendered = null;
+            this.previewError = '';
+        },
+
+        _readSubject() {
+            // Edit mode: read the live form input so the latest edit
+            // shows in the preview. Display mode: no input exists, so
+            // fall back to the value the server stamped into cfg.
+            const form = this.$root.closest('form');
+            if (form) {
+                const el = form.querySelector('input[name="subject"]');
+                if (el) return el.value || '';
+            }
+            return this.subject || '';
+        },
+
+        _csrfHeader() {
+            // The framework's CSRF middleware accepts an X-CSRF-Token
+            // header on unsafe methods. `window.pvCsrf` is wired in
+            // layouts/main.html; missing means cookie-less request, which
+            // the middleware exempts (so no header is fine).
+            try {
+                return typeof window.pvCsrf === 'function'
+                    ? window.pvCsrf()
+                    : '';
+            } catch {
+                return '';
+            }
+        },
+
+        async renderPreview() {
+            if (!this.mailModel) {
+                this.previewError = 'Pick a model on the form first.';
+                return;
+            }
+            // Make sure the active editor's contents are mirrored into
+            // `this.html` before we ship the draft.
+            this.syncAll();
+            this.previewRendering = true;
+            this.previewError = '';
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                };
+                const csrf = this._csrfHeader();
+                if (csrf) headers['X-CSRF-Token'] = csrf;
+                const r = await fetch('/api/mail/templates/preview', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers,
+                    body: JSON.stringify({
+                        model: this.mailModel,
+                        subject: this._readSubject(),
+                        body_html: this.html,
+                        res_id: this.previewRecord?.id ?? null,
+                    }),
+                });
+                if (!r.ok) {
+                    let detail = '';
+                    try {
+                        detail = (await r.json()).detail || '';
+                    } catch {
+                        detail = await r.text();
+                    }
+                    this.previewError =
+                        detail || `Render failed (HTTP ${r.status})`;
+                    this.previewRendered = null;
+                    return;
+                }
+                this.previewRendered = await r.json();
+            } catch (err) {
+                this.previewError =
+                    err && err.message ? err.message : 'Render failed';
+                this.previewRendered = null;
+            } finally {
+                this.previewRendering = false;
+            }
+        },
+
         insertVariable(item) {
             if (!item?.expr) return;
             const snippet = item.snippet || `{{ ${item.expr} }}`;
@@ -426,6 +622,12 @@ function registerAlpine() {
                     if (name === 'source') this.ensureSource(prev);
                 });
             });
+            // Auto-render the Preview tab once a model is available, so
+            // the admin lands on a real rendering rather than the raw
+            // client-side fallback.
+            if (name === 'preview' && this.mailModel) {
+                this.renderPreview();
+            }
         },
 
         ensureWrite(prevTab) {
@@ -439,6 +641,9 @@ function registerAlpine() {
                         content: this.html,
                         onUpdate: (v) => {
                             this.html = v;
+                        },
+                        onSelectionChange: () => {
+                            this._selVersion++;
                         },
                     });
                     this._setTipTap(ed);
@@ -509,21 +714,54 @@ function registerAlpine() {
 
         // --- toolbar ---
 
-        run(cmd) {
+        // Single string for *which* dropdown / popover is currently open;
+        // empty means none. One menu open at a time mirrors the Word
+        // ribbon, and the click-outside / setTab close paths only have to
+        // touch one variable.
+        openDropdown: '',
+        // Mirrors the Simple Editor palette: brand colors + warm/cool.
+        colorPalette: [
+            '#0F172A', '#475569', '#DC2626', '#F97316',
+            '#EAB308', '#16A34A', '#0EA5E9', '#7C3AED',
+        ],
+        highlightPalette: [
+            '#FEF08A', '#FECACA', '#BBF7D0', '#BFDBFE',
+            '#E9D5FF', '#FBCFE8', '#FED7AA', '#F1F5F9',
+        ],
+        isImageUploading: false,
+
+        run(cmd, arg) {
             const ed = this._tipTap();
             if (!ed || ed.isDestroyed) return;
+            // Each entry returns the chain after applying its command so
+            // .run() at the end commits the transaction atomically.
             const map = {
+                // marks
                 bold: (c) => c.toggleBold(),
                 italic: (c) => c.toggleItalic(),
+                underline: (c) => c.toggleUnderline(),
                 strike: (c) => c.toggleStrike(),
-                h1: (c) => c.toggleHeading({ level: 1 }),
-                h2: (c) => c.toggleHeading({ level: 2 }),
+                code: (c) => c.toggleCode(),
+                // headings — `arg` is the level (1..4); 0 / undefined = paragraph
+                heading: (c) =>
+                    arg ? c.toggleHeading({ level: arg }) : c.setParagraph(),
+                // lists
                 bullet: (c) => c.toggleBulletList(),
                 ordered: (c) => c.toggleOrderedList(),
+                task: (c) => c.toggleTaskList(),
+                // blocks
                 blockquote: (c) => c.toggleBlockquote(),
+                codeBlock: (c) => c.toggleCodeBlock(),
+                hr: (c) => c.setHorizontalRule(),
+                // alignment
+                alignLeft: (c) => c.setTextAlign('left'),
+                alignCenter: (c) => c.setTextAlign('center'),
+                alignRight: (c) => c.setTextAlign('right'),
+                alignJustify: (c) => c.setTextAlign('justify'),
+                // history
                 undo: (c) => c.undo(),
                 redo: (c) => c.redo(),
-                clear: (c) => c.clearNodes().unsetAllMarks(),
+                clear: (c) => c.unsetAllMarks().clearNodes(),
             };
             const op = map[cmd];
             if (!op) return;
@@ -536,22 +774,187 @@ function registerAlpine() {
             this.html = ed.getHTML();
         },
 
+        // ---- popover commands (color / highlight) ----
+
+        setColor(hex) {
+            const ed = this._tipTap();
+            if (!ed || ed.isDestroyed) return;
+            try {
+                ed.chain().focus().setColor(hex).run();
+            } catch (err) {
+                console.warn('[pvHtmlEditor] setColor failed', err);
+            }
+            this.openDropdown = '';
+            this.html = ed.getHTML();
+        },
+
+        unsetColor() {
+            const ed = this._tipTap();
+            if (!ed || ed.isDestroyed) return;
+            ed.chain().focus().unsetColor().run();
+            this.openDropdown = '';
+            this.html = ed.getHTML();
+        },
+
+        setHighlight(hex) {
+            const ed = this._tipTap();
+            if (!ed || ed.isDestroyed) return;
+            try {
+                ed.chain().focus().toggleHighlight({ color: hex }).run();
+            } catch (err) {
+                console.warn('[pvHtmlEditor] setHighlight failed', err);
+            }
+            this.openDropdown = '';
+            this.html = ed.getHTML();
+        },
+
+        unsetHighlight() {
+            const ed = this._tipTap();
+            if (!ed || ed.isDestroyed) return;
+            ed.chain().focus().unsetHighlight().run();
+            this.openDropdown = '';
+            this.html = ed.getHTML();
+        },
+
+        // ---- link (kept as a prompt for now; Simple Editor uses a popover,
+        // but for an email-template editor a one-tap prompt is plenty) ----
+
         insertLink() {
             const ed = this._tipTap();
             if (!ed || ed.isDestroyed) return;
-            const url = window.prompt('Link URL', 'https://');
-            if (!url) return;
+            const current = ed.getAttributes('link')?.href || '';
+            const url = window.prompt(
+                'Link URL (leave empty to remove)',
+                current || 'https://'
+            );
+            if (url === null) return; // cancelled
             try {
-                ed.chain()
-                    .focus()
-                    .extendMarkRange('link')
-                    .setLink({ href: url })
-                    .run();
+                if (!url.trim()) {
+                    ed.chain().focus().extendMarkRange('link').unsetLink().run();
+                } else {
+                    ed.chain()
+                        .focus()
+                        .extendMarkRange('link')
+                        .setLink({ href: url.trim() })
+                        .run();
+                }
             } catch (err) {
                 console.warn('[pvHtmlEditor] insertLink failed', err);
                 return;
             }
             this.html = ed.getHTML();
+        },
+
+        // ---- image upload (file picker → POST /api/attachment/upload) ----
+
+        triggerImageUpload() {
+            const input = this.$refs.imageFile;
+            if (input) {
+                input.value = ''; // re-trigger change for the same file
+                input.click();
+            }
+        },
+
+        async handleImageFile(event) {
+            const file = event.target?.files?.[0];
+            if (!file) return;
+            const ed = this._tipTap();
+            if (!ed || ed.isDestroyed) return;
+            this.isImageUploading = true;
+            try {
+                const fd = new FormData();
+                fd.append('file', file);
+                const headers = {};
+                const csrf = this._csrfHeader();
+                if (csrf) headers['X-CSRF-Token'] = csrf;
+                const r = await fetch('/api/attachment/upload', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers,
+                    body: fd,
+                });
+                if (!r.ok) {
+                    console.warn(
+                        '[pvHtmlEditor] image upload failed',
+                        r.status
+                    );
+                    return;
+                }
+                const data = await r.json();
+                const src = `/api/attachment/${data.id}/download`;
+                ed.chain()
+                    .focus()
+                    .setImage({ src, alt: data.name || '' })
+                    .run();
+                this.html = ed.getHTML();
+            } catch (err) {
+                console.warn('[pvHtmlEditor] image upload error', err);
+            } finally {
+                this.isImageUploading = false;
+            }
+        },
+
+        // ---- state queries used by the toolbar's :class bindings ----
+
+        isActive(name, attrs) {
+            // Touch the reactive counter so Alpine re-runs this expression
+            // whenever the cursor / selection moves (otherwise the toolbar
+            // would only update when `this.html` changes, missing typing
+            // and arrow-key moves).
+            void this._selVersion;
+            const ed = this._tipTap();
+            if (!ed || ed.isDestroyed) return false;
+            try {
+                return ed.isActive(name, attrs);
+            } catch {
+                return false;
+            }
+        },
+
+        currentHeadingLevel() {
+            void this._selVersion;
+            const ed = this._tipTap();
+            if (!ed || ed.isDestroyed) return 0;
+            for (const level of [1, 2, 3, 4]) {
+                if (ed.isActive('heading', { level })) return level;
+            }
+            return 0;
+        },
+
+        currentHeadingLabel() {
+            const lv = this.currentHeadingLevel();
+            return lv === 0 ? 'Normal text' : `Heading ${lv}`;
+        },
+
+        currentAlignLabel() {
+            if (this.isActive({ textAlign: 'center' })) return 'Center';
+            if (this.isActive({ textAlign: 'right' })) return 'Right';
+            if (this.isActive({ textAlign: 'justify' })) return 'Justify';
+            return 'Left';
+        },
+
+        currentListLabel() {
+            if (this.isActive('orderedList')) return 'Numbered';
+            if (this.isActive('taskList')) return 'Checklist';
+            if (this.isActive('bulletList')) return 'Bulleted';
+            return 'List';
+        },
+
+        // Ribbon dropdown plumbing — one menu open at a time.
+        toggleDropdown(name) {
+            this.openDropdown = this.openDropdown === name ? '' : name;
+        },
+
+        closeDropdowns() {
+            this.openDropdown = '';
+        },
+
+        // Fire a toolbar command AND close any open dropdown — used by
+        // the menu options so picking a heading / list / alignment
+        // dismisses the menu without an extra click.
+        runFromMenu(cmd, arg) {
+            this.run(cmd, arg);
+            this.openDropdown = '';
         },
 
         previewHtml() {

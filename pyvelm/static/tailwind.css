@@ -114,4 +114,39 @@
     --color-success-950: var(--color-green-950);
 }
 
+/* Per-section form grid.
+ *
+ * The section emits two custom properties (form_body.html):
+ *   --pv-cols    : authored column count (clamped 1-12), used from `lg`.
+ *   --pv-cols-md : clamped at `min(cols, 2)`, used from `md` to `<lg`.
+ *
+ * Below `md` we stack to 1 column. Each cell sets `--cell-span` and the
+ * effective span is `min(--cell-span, --pv-cols-effective)` so a wide
+ * cell (e.g. `colspan="full"`) shrinks to the row width at every
+ * breakpoint instead of creating implicit columns. The grid sits outside
+ * Tailwind's utility scanner so any `cols` value works without touching
+ * this file. */
+.pv-form-grid {
+    display: grid;
+    gap: 1rem 1.5rem;
+    --pv-cols-effective: 1;
+    grid-template-columns: repeat(var(--pv-cols-effective), minmax(0, 1fr));
+}
+
+@media (min-width: 768px) {
+    .pv-form-grid {
+        --pv-cols-effective: var(--pv-cols-md, 2);
+    }
+}
+
+@media (min-width: 1024px) {
+    .pv-form-grid {
+        --pv-cols-effective: var(--pv-cols, 2);
+    }
+}
+
+.pv-form-grid > * {
+    grid-column: span min(var(--cell-span, 1), var(--pv-cols-effective));
+}
+
 @import "./pyvelm.css";

@@ -96,6 +96,11 @@ class FieldRef(_FieldRefRequired, total=False):
     readonly: bool
     required: bool
     visible: bool
+    # Form-grid only: how many columns of the surrounding section this
+    # field's cell spans. ``"full"`` (or an integer >= the section's
+    # ``cols``) makes the cell occupy the full row. Ignored on list /
+    # kanban / graph / pivot.
+    colspan: Union[int, Literal["full"]]
 
 
 # Authoring form: string or dict.
@@ -128,10 +133,21 @@ class ArchList(_ArchListRequired, total=False):
     sequence: str
 
 
-class ArchSection(TypedDict):
+class _ArchSectionRequired(TypedDict):
     name: str
     title: str
     fields: list[FieldRefLike]
+
+
+class ArchSection(_ArchSectionRequired, total=False):
+    """One section of a form view.
+
+    ``name``, ``title`` and ``fields`` are required. ``cols`` overrides
+    the form-level column count for the fields rendered inside this
+    section (default: the form's ``cols``, which defaults to 2).
+    """
+
+    cols: int
 
 
 class ArchHeaderAction(TypedDict, total=False):
@@ -175,10 +191,14 @@ class ArchForm(_ArchFormRequired, total=False):
     - ``title`` — overrides the auto-generated page heading.
     - ``header_actions`` — list of buttons rendered next to Edit /
       Delete in display mode (e.g. "Run Now" on a cron form).
+    - ``cols`` — number of columns each section uses (default 2). Each
+      ``field(...)`` may set ``colspan`` to span multiple cells; a
+      section may override ``cols`` for its own block.
     """
 
     title: str
     header_actions: list[ArchHeaderAction]
+    cols: int
 
 
 class ArchKanbanCard(TypedDict, total=False):

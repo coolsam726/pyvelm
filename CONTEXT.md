@@ -1,7 +1,11 @@
-# Project context — pyvelm v0.10.0
+# Project context — pyvelm v0.11.0
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.11.0 (released 2026-05-26)** — **Email templates** (`mail.template`),
+**Html** field sanitizer, TipTap v3 + CodeMirror editor, live Jinja preview,
+form **cols** / **colspan** grid. Base **0.26.0**. See
+[CHANGELOG.md](CHANGELOG.md) and [docs/releases/v0.11.0.md](docs/releases/v0.11.0.md).
 **v0.10.0 (released 2026-05-26)** — **Policies** on ACL, **UI action/menu gating**,
 **access denied** page, **landing** + `PYVELM_HOME_URL`, **sudo**, **public
 attachments**, **User** group no longer re-added on sync. See
@@ -278,90 +282,14 @@ Operational caveats for production pilots are listed under
 [Still deferred](#still-deferred) — mostly multi-worker ergonomics and
 API ergonomics, not missing core CRUD/UI/security.
 
-## Handoff — Email templates (`mail.template`) — WIP (2026-05-26)
+## v0.11.0 — email templates (shipped)
 
-**Status:** Feature is **working end-to-end** (admin UI, rich editor, model
-picker, variable insert, Jinja render, `send_mail` queue). Last session fixed
-Alpine registration order and replaced inline variable chips with a searchable
-dropdown. **Not released** as its own version bump yet — ships on **base
-0.26.0** migration.
-
-### What was built
-
-| Area | Location / notes |
-|------|------------------|
-| **Model** | `pyvelm/mail_template.py` — `mail.template`: `name`, `model` (Char, technical name), `subject`, `body_html`, `active`. `render_preview(record)` / `send_mail(record, to=...)`. |
-| **Jinja render** | `pyvelm/mail_template_render.py` — sandboxed Jinja2, autoescape; legacy `${object.name}` → `{{ object.name }}`. Context: `object`, `user`, `company`, `ctx` via `build_mail_template_context()`. |
-| **Mail integration** | `pyvelm/mail.py` — `MailThread.send_mail(template, to=...)`, `mail.message` gains `body_is_html`, `template_id` (M2O). Outgoing SMTP sends HTML part when flagged. |
-| **Registration** | `pyvelm/modules/base/models/actions.py` imports `MailTemplate`. |
-| **Migration** | `pyvelm/modules/base/migrations/0_25_to_0_26.py` — ACL grant Admin CRUD on `mail.template`; schema sync adds table + message columns. **base `VERSION = (0, 26, 0)`**. |
-| **Policies** | `pyvelm/policies/management.py` lists `mail.template`. |
-| **Admin UI** | `pyvelm/modules/admin/views/acl.py` — `mail_template.list` / `mail_template.form`; `field("model", widget="model")`, `field("body_html", widget="html")`. |
-| **Menu** | `pyvelm/modules/admin/views/menu.py` — Settings → Workflows → **Email templates**. |
-| **Model picker widget** | `render.py` — `@widget(Char, hint="model")` / edit uses `widgets/combo_input.html` with `models_url="/api/mail/templates/models"` (async load via `pvCombo.loadModelsFromApi()` in `layouts/main.html`). |
-| **Variable metadata API** | `pyvelm/mail_template_fields.py` + routes in `pyvelm/web.py`: `GET /api/mail/templates/models`, `GET /api/mail/templates/variables?model=…` (object/user/company paths, depth 2 on object). |
-| **HTML editor** | npm bundle: `pyvelm/static/src/mail_editor.js` → `pyvelm/static/dist/mail_editor.js`. TipTap (Write) + CodeMirror 6 (HTML source) + Preview tab. Widget: `widget="html"` on `Text` → `widgets/html_editor.html`, config in `data-pv-config` (base64 JSON). |
-| **Variable UI** | Searchable **Insert variable** combobox in editor toolbar (not inline chips). If **>25** fields, user must type to search. CodeMirror autocomplete (Ctrl+Space) for `object.*` etc. |
-| **Tests** | `pyvelm/tests/test_mail_template.py` — Jinja/legacy syntax, `list_template_variables`, context build; optional PG test for `send_mail` + dispatch. |
-| **Docs** | `docs/api/mail.md` (if present — verify). |
-
-### Build / run (required after JS changes)
-
-```bash
-npm install
-npm run build:editor   # or npm run build
-pyvelm db migrate      # base → 0.26.0 for mail.template + message columns
-```
-
-Hard-refresh browser after static changes. Network should load
-`/web/static/dist/mail_editor.js` (local bundle, not CDN).
-
-### Script load order (critical — do not regress)
-
-`mail_editor.js` must register `Alpine.data('pvHtmlEditor', …)` **on
-`alpine:init`**, and the script must run **before** Alpine starts:
-
-- In `pyvelm/templates/layouts/main.html` **`<head>`**:
-  `mail_editor.js` **defer** → then `alpinejs` **defer** (HTMX defer before both).
-- **Do not** put `mail_editor.js` at end of `<body>` without defer after Alpine
-  has started — causes stale/missing methods on `pvHtmlEditor`.
-- `boot()` in `mail_editor.js` only uses `document.addEventListener('alpine:init', register)` + `window.__pvHtmlEditorRegistered` guard (no direct `registerAlpine()` when `window.Alpine` exists).
-
-### Known issues / UX notes (from user feedback)
-
-1. **Variable list size** — Many models produce a large field list; UI requires
-   typing to search when count > 25. Consider tightening API (scalars only,
-   depth 1) if autocomplete still feels noisy.
-2. **Cache** — Users may see `onVarQueryInput is not defined` if HTML template
-   updated but browser still has old `mail_editor.js` → hard refresh.
-3. **`render_preview`** on model exists but **no dedicated Preview-with-record**
-   UI in admin form yet (only static HTML preview tab of raw template).
-4. **TipTap + Jinja** — Write tab is WYSIWYG HTML; Jinja placeholders may be
-   altered by TipTap if edited in Design tab — prefer **HTML source** for heavy
-   `{{ }}` editing.
-
-### Not done / good next steps for another agent
-
-- [ ] Release notes / version bump (framework package + CHANGELOG) if shipping
-      outside WIP.
-- [ ] **Live template preview** with a sample record id (wire `render_preview`).
-- [ ] **Subject line** variable picker or shared insert UX (only body has editor).
-- [ ] Reduce variable API noise (optional query `?shallow=1` or cap depth).
-- [ ] Example module demo: partner welcome email calling `send_mail`.
-- [ ] ACL for non-admin roles if templates should be editable by functional users.
-- [ ] Stage 6 Slice 3 (message subtypes + followers) — still on roadmap.
-
-### Key code references
-
-```python
-# Send from app code
-partner.send_mail(template, to="a@b.com", ctx={"key": "val"})
-# or
-template.send_mail(partner, to="a@b.com")
-```
-
-Admin path: **Settings → Workflows → Email templates** (requires base 0.26.0 +
-migrate).
+See [docs/releases/v0.11.0.md](docs/releases/v0.11.0.md). Key paths:
+`mail_template.py`, `mail_template_render.py`, `mail_template_fields.py`,
+`html_sanitizer.py`, `static/src/mail_editor.js`, migration `0_25_to_0_26`.
+**Editor:** `mail_editor.js` loads in `<head>` **before** Alpine (`defer`).
+**Post-release polish ideas:** shallow variable API, subject-line insert UX,
+example `send_mail` in a demo module.
 
 ## Deliberately deferred (will bite us, fix when they do)
 
@@ -390,19 +318,15 @@ migrate).
 - **Double datepicker / clipped pickers in inline tables** — fixed in v0.8.0
   (`pvInitDatepickers`, floating datetime panel).
 
-## Current release — v0.8.0
+## Current release — v0.11.0
 
-**White-label branding** is the headline. Configure on **Settings → Companies**
-or via `PYVELM_*` env vars; see [docs/branding.md](docs/branding.md).
+**Email templates**, **`Html`** sanitizer, TipTap v3 + CodeMirror editor, live
+Jinja preview, form **cols** / **colspan**. **Upgrade:** `pip install -U pyvelm`,
+`pyvelm db migrate` (base **0.26.0**), `npm run build:editor` if hacking UI,
+hard-refresh browser.
 
-Also in this release: scoped date/datetime picker init, body-mounted floating
-popups for inline O2M edit, `pvColorPicker` / profile URL widget fixes, shared
-topnav brand on account pages. **Upgrade:** sync **base** to **0.21.0**
-(migrations `0_19→0_20`, `0_20→0_21`).
-
-Prior headline releases: **v0.7.0** chatter/tracking, **v0.6.0** visual workflows,
-**v0.5.0** theme/dashboards/datetime pickers, **v0.4.0** report builder — see
-[CHANGELOG.md](CHANGELOG.md).
+Prior headline releases: **v0.10.0** policies/gating, **v0.9.0** kanban/autogen,
+**v0.8.0** branding — see [CHANGELOG.md](CHANGELOG.md).
 
 ### Report builder — known limits (unchanged)
 

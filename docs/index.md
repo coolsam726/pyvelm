@@ -5,13 +5,13 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.10.0](releases/v0.10.0.md) (2026-05-26) — **Policies**,
-**UI access gating**, **landing page**, **sudo**, and **public attachments**.
-See [releases](releases/v0.10.0.md) and the
+**Latest release:** [v0.11.0](releases/v0.11.0.md) (2026-05-26) — **Email templates**,
+**Html** field sanitizer, **TipTap v3** rich editor, live Jinja **preview**,
+and responsive form **cols** / **colspan**. See [releases](releases/v0.11.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.10.0
+pip install pyvelm==0.11.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -53,6 +53,8 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.11.0](releases/v0.11.0.md) | **Email templates**, **Html** sanitizer, TipTap + CodeMirror editor, form **cols** / **colspan** |
+| [v0.10.0](releases/v0.10.0.md) | **Policies**, UI access gating, **landing page**, **sudo**, public attachments |
 | [v0.9.0](releases/v0.9.0.md) | **Kanban** drag-drop, schema **db diff/migrate**, dialog O2M/M2M, breadcrumb **history** |
 | [v0.8.0](releases/v0.8.0.md) | **White-label branding**, date/datetime picker fixes |
 | [v0.7.0](releases/v0.7.0.md) | Form **chatter** (notes, email, attachments), **`tracking=True`** fields, workflow history |

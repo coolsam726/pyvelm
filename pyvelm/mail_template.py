@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pyvelm import BaseModel, Boolean, Char, Text, depends
+from pyvelm import BaseModel, Boolean, Char, Html, depends
 
 from .mail_template_render import (
     build_mail_template_context,
@@ -37,7 +37,7 @@ class MailTemplate(BaseModel):
     name = Char(required=True)
     model = Char(required=True)  # technical model name, e.g. res.partner
     subject = Char(required=True)
-    body_html = Text(required=True)
+    body_html = Html(required=True)
     active = Boolean(default=True)
 
     @depends("name")
@@ -59,8 +59,10 @@ class MailTemplate(BaseModel):
         context = build_mail_template_context(
             self.env, model=self.model, record=record, extra=extra
         )
-        subject = render_mail_template_string(self.subject or "", context)
-        body = render_mail_template_string(self.body_html or "", context)
+        # Coerce through `str` so Pyright sees the descriptor result, not
+        # the class-level Char / Html instance.
+        subject = render_mail_template_string(str(self.subject or ""), context)
+        body = render_mail_template_string(str(self.body_html or ""), context)
         return subject, body
 
     def render_preview(

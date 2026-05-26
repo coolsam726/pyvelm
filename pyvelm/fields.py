@@ -310,6 +310,34 @@ class Text(Char):
     pass
 
 
+class Html(Text):
+    """Rich-text/HTML field. Stored as TEXT; sanitized on write.
+
+    The value is run through :func:`pyvelm.html_sanitizer.sanitize_html`
+    in ``to_python`` and ``to_sql_param`` so an unsafe payload never
+    reaches the database. The render layer picks the HTML editor widget
+    automatically for this field type — no ``widget="html"`` needed in
+    the view arch (still accepted for back-compat).
+
+    Use it for any column that holds operator-authored HTML: email
+    template bodies, rich chatter content, knowledge base articles.
+    """
+
+    def to_python(self, value):
+        if value is None or value is False or value == "":
+            return None
+        from .html_sanitizer import sanitize_html
+
+        return sanitize_html(str(value))
+
+    def to_sql_param(self, value):
+        if value is None or value is False or value == "":
+            return None
+        from .html_sanitizer import sanitize_html
+
+        return sanitize_html(str(value))
+
+
 class Integer(Field):
     sql_type = "integer"
     python_type = int

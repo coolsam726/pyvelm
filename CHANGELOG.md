@@ -7,6 +7,79 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.11.0] — 2026-05-26
+
+Email templates with sandboxed Jinja, sanitized **Html** field, MS Word-shaped
+TipTap rich editor, CodeMirror HTML source tab, live preview against any
+record of the template's model (in both edit and detail pages), and responsive
+form-view grid with `cols` + per-field `colspan`. See
+[docs/releases/v0.11.0.md](docs/releases/v0.11.0.md).
+
+### Added
+
+- **`mail.template`** — `pyvelm/mail_template.py`: `name`, `model`, `subject`,
+  `body_html` (Html), `active`. `render_preview()`, `send_mail()` queue rendered
+  HTML mail through `MailThread`. Admin UI at **Settings → Workflows → Email
+  templates**.
+- **`Html` field** — `pyvelm/fields.py` + `pyvelm/html_sanitizer.py`. Subclass of
+  `Text`; sanitizes on write (allowlisted tags/attrs, drops `<script>`/`<style>`,
+  strips `on*=` and `javascript:`, filters `style` for `expression()` / banned
+  URLs, drops `<input type="text">`-shaped payloads). Renders through the HTML
+  editor widget by default — no `widget="html"` needed.
+- **HTML editor widget** — `pyvelm/static/src/mail_editor.js` (esbuild →
+  `dist/mail_editor.js`). TipTap **v3** Write tab matching the official
+  "Simple Editor" template (StarterKit + TextStyle/Color/Highlight/TextAlign/
+  Image/TaskList/TaskItem/Placeholder), CodeMirror 6 HTML Source tab with line
+  wrapping + variable autocomplete, sanitized Preview tab.
+- **Word-style ribbon toolbar** — five labeled groups (Undo / Styles / Font /
+  Paragraph / Insert) with dropdown triggers for Heading, List, Align, and
+  Insert; live "current style" label on each trigger; color + highlight
+  swatch popovers.
+- **Live preview-with-record** — `POST /api/mail/templates/preview` renders the
+  current draft (subject + body_html) against an optional `res_id`; record
+  picker on the Preview tab; auto-renders on tab switch / on detail page load.
+- **Variable picker** — `GET /api/mail/templates/models` /
+  `GET /api/mail/templates/variables?model=…` (object / user / company /
+  custom-context paths, depth 2). Searchable dropdown in the editor toolbar
+  on the Source tab; CodeMirror autocomplete (Ctrl+Space).
+- **Form-view grid** — `arch["cols"]` (default 2) and per-section `cols`
+  override; `field(name, colspan=N)` or `colspan="full"`. Renderer +
+  `form_body.html` use CSS custom properties (`--pv-cols`, `--pv-cols-md`,
+  `--cell-span`) and `min()` clamping for clean responsive behavior:
+  **1 col on `< md`, `min(cols, 2)` on `md`, full `cols` on `lg+`**.
+- **`mail.message`** — new columns `body_is_html`, `template_id` (M2O →
+  `mail.template`); SMTP backend now sends HTML alternative when flagged.
+- **Tests** — `test_html_sanitizer.py` (14 cases: script/style/iframe stripping,
+  `javascript:` URLs, event handlers, CSS injection, mark/task-list/data-attr
+  allowlisting, input-type allowlist, Html field integration);
+  `test_mail_template.py` (Jinja syntax, legacy `${expr}` rewrite, variable
+  discovery, context build; optional Postgres send/dispatch).
+
+### Changed
+
+- **Base module → `0.26.0`** (migration `0_25_to_0_26`): creates `mail_template`
+  table, adds `mail_message.body_is_html` / `mail_message.template_id`, grants
+  Admin CRUD on `mail.template`.
+- **Form section grid** — no longer Tailwind `md:grid-cols-2`; switched to
+  `.pv-form-grid` with CSS custom properties so any `cols` value works without
+  pre-compiling Tailwind variants.
+- **TipTap stack** — upgraded from v2 to **v3.23**; dropped the standalone
+  `@tiptap/extension-link` (now bundled in StarterKit v3); added 8 extensions
+  for Simple Editor parity.
+
+### Fixed
+
+- **Editor toolbar / TipTap reactivity** — TipTap editor instances now live in a
+  module-level `WeakMap` keyed by `$root`, not on the Alpine component, so
+  Alpine's reactive Proxy never wraps the editor and ProseMirror's
+  transaction-identity check (`tr.before === this.doc`) stops failing with
+  "Applying a mismatched transaction".
+- **Toolbar focus race** — every toolbar button now uses `@mousedown.prevent`
+  so clicking Bold / H1 / list / etc. never blurs the editor.
+- **Source-tab edit loss** — `syncAll()` is tab-aware; switching Write ↔ Source
+  pushes the latest `this.html` into the destination editor and no longer
+  overwrites Source edits with stale Write HTML.
+
 ## [0.10.0] — 2026-05-26
 
 Policies, granular UI access gating, public landing page, configurable home URL,

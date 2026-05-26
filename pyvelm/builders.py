@@ -150,6 +150,7 @@ def field(
     label: str | None = None,
     readonly: bool | None = None,
     required: bool | None = None,
+    colspan: int | str | None = None,
     **extra: Any,
 ) -> FieldRef:
     """Build a field-spec dict.
@@ -161,6 +162,10 @@ def field(
     ``visible=False`` hides the column by default on list views; users
     can show it again from the Columns menu (preference is persisted).
 
+    ``colspan`` (form views only) — how many grid columns this cell
+    occupies in its section. Defaults to ``1``. Pass ``"full"`` (or any
+    integer ``>=`` the section's ``cols``) to span the whole row.
+
     Extra keyword arguments are forwarded as-is (e.g. custom
     ``filter_kind``/``group_kind`` attributes).
 
@@ -169,8 +174,8 @@ def field(
         field("active", widget="toggle")
         # → {"name": "active", "widget": "toggle"}
 
-        field("code", label="Partner code", readonly=True)
-        # → {"name": "code", "label": "Partner code", "readonly": True}
+        field("notes", colspan="full")
+        # → {"name": "notes", "colspan": "full"}
     """
     result: FieldRef = {"name": name}
     if widget is not None:
@@ -181,6 +186,8 @@ def field(
         result["readonly"] = readonly
     if required is not None:
         result["required"] = required
+    if colspan is not None:
+        result["colspan"] = colspan  # type: ignore[typeddict-item]
     result.update(extra)  # type: ignore[arg-type]
     return result
 
@@ -189,15 +196,23 @@ def section(
     name: str,
     title: str,
     fields: list[FieldRefLike],
+    *,
+    cols: int | None = None,
 ) -> ArchSection:
     """Build a form-view section dict.
+
+    ``cols`` overrides the form-level column count for this section's
+    fields. Omit to inherit the form's ``cols`` (default 2).
 
     Example::
 
         section("identity", "Identity", ["name", "code"])
-        section("profile",  "Profile",  ["age", field("active", widget="toggle")])
+        section("notes", "Notes", [field("body", colspan="full")], cols=1)
     """
-    return {"name": name, "title": title, "fields": fields}
+    result: ArchSection = {"name": name, "title": title, "fields": fields}
+    if cols is not None:
+        result["cols"] = cols
+    return result
 
 
 def card(
@@ -291,6 +306,7 @@ def form_view(
     *,
     title: str | None = None,
     header_actions: list[dict] | None = None,
+    cols: int | None = None,
     priority: int = 16,
 ) -> FormView:
     """Declare a ``view_type="form"`` view.
@@ -323,6 +339,8 @@ def form_view(
         arch["title"] = title
     if header_actions:
         arch["header_actions"] = list(header_actions)
+    if cols is not None:
+        arch["cols"] = cols
     result: FormView = {
         "name": name,
         "model": model,

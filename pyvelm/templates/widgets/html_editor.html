@@ -1,22 +1,25 @@
-{# Email template editor — requires /web/static/dist/mail_editor.js (npm run build:editor) #}
-{% if readonly %}
-<div class="pv-html-editor pv-html-editor--readonly"
-     x-data="pvHtmlEditor()" data-pv-config="{{ config_b64 }}" x-cloak>
-    <div class="pv-html-preview-pane border border-default rounded-lg p-5 bg-white min-h-[16rem] overflow-auto"
-         x-html="previewHtml()"></div>
-</div>
-{% else %}
+{# Email template editor — requires /web/static/dist/mail_editor.js (npm run build:editor).
+
+   One template serves both edit and display modes. Display (readonly) mode
+   simply hides the help line, tab strip, toolbar, Write/Source mounts and
+   the hidden form input, and the Preview panel is always visible. The
+   Alpine component (pvHtmlEditor) starts on tab='preview' when readonly
+   and auto-renders on init, so the detail page lands on the live record-
+   aware preview without any extra clicks. #}
 <div class="pv-html-editor"
+     :class="{ 'pv-html-editor--readonly': readonly }"
      x-data="pvHtmlEditor()" data-pv-config="{{ config_b64 }}"
      x-cloak>
 
-    <p class="text-xs text-body-subtle mb-3">
+    <p x-show="!readonly" class="text-xs text-body-subtle mb-3">
         <strong>Write</strong> — TipTap.
         <strong>HTML source</strong> — CodeMirror autocomplete (Ctrl+Space).
         Use <strong>Insert variable</strong> or type <code class="font-mono text-2xs">{% raw %}{{ object. }}{% endraw %}</code> in source.
     </p>
 
-    <div class="flex flex-wrap items-end gap-3 border-b border-default pb-2 mb-3">
+    {# Tab strip + variable picker. Only rendered in edit mode — display
+       mode is implicitly Preview-only. #}
+    <div x-show="!readonly" class="flex flex-wrap items-end gap-3 border-b border-default pb-2 mb-3">
         <div class="flex flex-wrap gap-1" role="tablist">
         {# Tab buttons: @mousedown.prevent keeps the editor selection intact so
            a click on "HTML source" or "Preview" doesn't trigger a ProseMirror
@@ -99,45 +102,349 @@
         </div>
     </div>
 
-    {# Panels stay in the DOM (x-show) so refs and editors stay mountable. #}
-    <div x-show="tab === 'write'">
-        {# All toolbar buttons use @mousedown.prevent so the editor never loses
-           focus on click. A blur fires a ProseMirror selection transaction
-           that, racing against our chain().focus().toggleX().run() call,
-           causes "Applying a mismatched transaction". Keeping focus removes
-           the race entirely. #}
-        <div class="flex flex-wrap gap-1 p-2 mb-0 rounded-t-lg border border-default border-b-0
-                    bg-neutral-secondary" role="toolbar">
-            <button type="button" class="pv-html-tb" title="Bold" @mousedown.prevent @click="run('bold')"><b>B</b></button>
-            <button type="button" class="pv-html-tb" title="Italic" @mousedown.prevent @click="run('italic')"><i>I</i></button>
-            <button type="button" class="pv-html-tb" title="Strike" @mousedown.prevent @click="run('strike')"><s>S</s></button>
-            <span class="w-px h-6 bg-default self-center mx-0.5" aria-hidden="true"></span>
-            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('h1')">H1</button>
-            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('h2')">H2</button>
-            <span class="w-px h-6 bg-default self-center mx-0.5" aria-hidden="true"></span>
-            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('bullet')">•</button>
-            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('ordered')">1.</button>
-            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('blockquote')">"</button>
-            <span class="w-px h-6 bg-default self-center mx-0.5" aria-hidden="true"></span>
-            <button type="button" class="pv-html-tb" @mousedown.prevent @click="insertLink()">Link</button>
-            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('undo')">↶</button>
-            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('redo')">↷</button>
+    {# Write tab — TipTap. Display mode skips this entirely.
+
+       Toolbar styled as an MS Word-shaped ribbon: labeled groups
+       separated by hairlines, with related actions consolidated into
+       dropdown triggers (Styles ▾, List ▾, Align ▾, Insert ▾) so the
+       row stays scannable.
+
+       Every interactive element uses @mousedown.prevent so the editor
+       never loses focus on click — a blur fires a ProseMirror selection
+       transaction that races our chain().focus().run() and aborts with
+       "Applying a mismatched transaction". #}
+    <div x-show="!readonly && tab === 'write'">
+        <div class="pv-html-toolbar" role="toolbar"
+             @click.outside="closeDropdowns()"
+             @keydown.escape.prevent.stop="closeDropdowns()">
+
+            {# ===== Group: Undo / Redo ===== #}
+            <div class="pv-tb-group">
+                <div class="pv-tb-group__row">
+                    <button type="button" class="pv-html-tb" title="Undo"
+                            @mousedown.prevent @click="run('undo')">↶</button>
+                    <button type="button" class="pv-html-tb" title="Redo"
+                            @mousedown.prevent @click="run('redo')">↷</button>
+                </div>
+                <span class="pv-tb-group__label">Undo</span>
+            </div>
+
+            {# ===== Group: Styles (Heading dropdown + Clear formatting) ===== #}
+            <div class="pv-tb-group">
+                <div class="pv-tb-group__row">
+                    <div class="relative">
+                        <button type="button" class="pv-tb-trigger"
+                                :class="currentHeadingLevel() !== 0 ? 'is-active' : ''"
+                                title="Paragraph style"
+                                @mousedown.prevent @click="toggleDropdown('heading')">
+                            <span x-text="currentHeadingLabel()"></span>
+                            <svg class="pv-tb-chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"/>
+                            </svg>
+                        </button>
+                        <div class="pv-tb-menu" x-show="openDropdown === 'heading'" x-cloak>
+                            <button type="button" class="pv-tb-menu__item"
+                                    :class="currentHeadingLevel() === 0 ? 'is-active' : ''"
+                                    @mousedown.prevent @click="runFromMenu('heading', 0)">
+                                <span class="pv-tb-menu__icon">¶</span>
+                                <span>Normal text</span>
+                            </button>
+                            <div class="pv-tb-divider"></div>
+                            <template x-for="lv in [1,2,3,4]" :key="lv">
+                                <button type="button" class="pv-tb-menu__item"
+                                        :class="currentHeadingLevel() === lv ? 'is-active' : ''"
+                                        @mousedown.prevent @click="runFromMenu('heading', lv)">
+                                    <span class="pv-tb-menu__icon" x-text="'H' + lv"></span>
+                                    <span :class="'pv-tb-menu__preview-h' + lv" x-text="'Heading ' + lv"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <button type="button" class="pv-html-tb" title="Clear formatting"
+                            @mousedown.prevent @click="run('clear')">⌫</button>
+                </div>
+                <span class="pv-tb-group__label">Styles</span>
+            </div>
+
+            {# ===== Group: Font (marks + color + highlight) ===== #}
+            <div class="pv-tb-group">
+                <div class="pv-tb-group__row">
+                    <button type="button" class="pv-html-tb" title="Bold (Ctrl+B)"
+                            :class="isActive('bold') ? 'is-active' : ''"
+                            @mousedown.prevent @click="run('bold')"><b>B</b></button>
+                    <button type="button" class="pv-html-tb" title="Italic (Ctrl+I)"
+                            :class="isActive('italic') ? 'is-active' : ''"
+                            @mousedown.prevent @click="run('italic')"><i>I</i></button>
+                    <button type="button" class="pv-html-tb" title="Underline (Ctrl+U)"
+                            :class="isActive('underline') ? 'is-active' : ''"
+                            @mousedown.prevent @click="run('underline')"><u>U</u></button>
+                    <button type="button" class="pv-html-tb" title="Strike"
+                            :class="isActive('strike') ? 'is-active' : ''"
+                            @mousedown.prevent @click="run('strike')"><s>S</s></button>
+                    <button type="button" class="pv-html-tb" title="Inline code"
+                            :class="isActive('code') ? 'is-active' : ''"
+                            @mousedown.prevent @click="run('code')">
+                        <span class="font-mono">{ }</span>
+                    </button>
+
+                    {# Color swatch popover #}
+                    <div class="relative">
+                        <button type="button" class="pv-html-tb" title="Text color"
+                                :class="isActive('textStyle') ? 'is-active' : ''"
+                                @mousedown.prevent @click="toggleDropdown('color')">
+                            <span style="text-decoration: underline; text-decoration-thickness: 2px;">A</span>
+                        </button>
+                        <div class="pv-tb-swatches" x-show="openDropdown === 'color'" x-cloak>
+                            <div class="pv-tb-swatch-grid">
+                                <template x-for="c in colorPalette" :key="c">
+                                    <button type="button" class="pv-tb-swatch"
+                                            :style="'background:' + c"
+                                            :title="c"
+                                            @mousedown.prevent @click="setColor(c)"></button>
+                                </template>
+                            </div>
+                            <button type="button" class="pv-tb-swatch-clear"
+                                    @mousedown.prevent @click="unsetColor()">Automatic</button>
+                        </div>
+                    </div>
+
+                    {# Highlight swatch popover #}
+                    <div class="relative">
+                        <button type="button" class="pv-html-tb" title="Text highlight"
+                                :class="isActive('highlight') ? 'is-active' : ''"
+                                @mousedown.prevent @click="toggleDropdown('highlight')">▮</button>
+                        <div class="pv-tb-swatches" x-show="openDropdown === 'highlight'" x-cloak>
+                            <div class="pv-tb-swatch-grid">
+                                <template x-for="c in highlightPalette" :key="c">
+                                    <button type="button" class="pv-tb-swatch"
+                                            :style="'background:' + c"
+                                            :title="c"
+                                            @mousedown.prevent @click="setHighlight(c)"></button>
+                                </template>
+                            </div>
+                            <button type="button" class="pv-tb-swatch-clear"
+                                    @mousedown.prevent @click="unsetHighlight()">No color</button>
+                        </div>
+                    </div>
+                </div>
+                <span class="pv-tb-group__label">Font</span>
+            </div>
+
+            {# ===== Group: Paragraph (list dropdown + align dropdown + blocks) ===== #}
+            <div class="pv-tb-group">
+                <div class="pv-tb-group__row">
+                    {# Lists dropdown #}
+                    <div class="relative">
+                        <button type="button" class="pv-tb-trigger" title="List"
+                                style="min-width: 6.5rem"
+                                :class="(isActive('bulletList') || isActive('orderedList') || isActive('taskList')) ? 'is-active' : ''"
+                                @mousedown.prevent @click="toggleDropdown('list')">
+                            <span x-text="currentListLabel()"></span>
+                            <svg class="pv-tb-chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"/>
+                            </svg>
+                        </button>
+                        <div class="pv-tb-menu" x-show="openDropdown === 'list'" x-cloak>
+                            <button type="button" class="pv-tb-menu__item"
+                                    :class="isActive('bulletList') ? 'is-active' : ''"
+                                    @mousedown.prevent @click="runFromMenu('bullet')">
+                                <span class="pv-tb-menu__icon">•</span><span>Bulleted</span>
+                            </button>
+                            <button type="button" class="pv-tb-menu__item"
+                                    :class="isActive('orderedList') ? 'is-active' : ''"
+                                    @mousedown.prevent @click="runFromMenu('ordered')">
+                                <span class="pv-tb-menu__icon">1.</span><span>Numbered</span>
+                            </button>
+                            <button type="button" class="pv-tb-menu__item"
+                                    :class="isActive('taskList') ? 'is-active' : ''"
+                                    @mousedown.prevent @click="runFromMenu('task')">
+                                <span class="pv-tb-menu__icon">☑</span><span>Checklist</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Alignment dropdown #}
+                    <div class="relative">
+                        <button type="button" class="pv-tb-trigger" title="Alignment"
+                                style="min-width: 5.5rem"
+                                @mousedown.prevent @click="toggleDropdown('align')">
+                            <span x-text="currentAlignLabel()"></span>
+                            <svg class="pv-tb-chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"/>
+                            </svg>
+                        </button>
+                        <div class="pv-tb-menu" x-show="openDropdown === 'align'" x-cloak>
+                            <button type="button" class="pv-tb-menu__item"
+                                    :class="isActive({ textAlign: 'left' }) ? 'is-active' : ''"
+                                    @mousedown.prevent @click="runFromMenu('alignLeft')">
+                                <span class="pv-tb-menu__icon">⇤</span><span>Left</span>
+                            </button>
+                            <button type="button" class="pv-tb-menu__item"
+                                    :class="isActive({ textAlign: 'center' }) ? 'is-active' : ''"
+                                    @mousedown.prevent @click="runFromMenu('alignCenter')">
+                                <span class="pv-tb-menu__icon">≡</span><span>Center</span>
+                            </button>
+                            <button type="button" class="pv-tb-menu__item"
+                                    :class="isActive({ textAlign: 'right' }) ? 'is-active' : ''"
+                                    @mousedown.prevent @click="runFromMenu('alignRight')">
+                                <span class="pv-tb-menu__icon">⇥</span><span>Right</span>
+                            </button>
+                            <button type="button" class="pv-tb-menu__item"
+                                    :class="isActive({ textAlign: 'justify' }) ? 'is-active' : ''"
+                                    @mousedown.prevent @click="runFromMenu('alignJustify')">
+                                <span class="pv-tb-menu__icon">☰</span><span>Justify</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="button" class="pv-html-tb" title="Blockquote"
+                            :class="isActive('blockquote') ? 'is-active' : ''"
+                            @mousedown.prevent @click="run('blockquote')">❝</button>
+                    <button type="button" class="pv-html-tb" title="Code block"
+                            :class="isActive('codeBlock') ? 'is-active' : ''"
+                            @mousedown.prevent @click="run('codeBlock')">
+                        <span class="font-mono text-xs">&lt;/&gt;</span>
+                    </button>
+                    <button type="button" class="pv-html-tb" title="Horizontal rule"
+                            @mousedown.prevent @click="run('hr')">─</button>
+                </div>
+                <span class="pv-tb-group__label">Paragraph</span>
+            </div>
+
+            {# ===== Group: Insert (link + image, fanned out from one trigger) ===== #}
+            <div class="pv-tb-group">
+                <div class="pv-tb-group__row">
+                    <div class="relative">
+                        <button type="button" class="pv-tb-trigger" title="Insert"
+                                style="min-width: 5.5rem"
+                                @mousedown.prevent @click="toggleDropdown('insert')">
+                            <span>Insert</span>
+                            <svg class="pv-tb-chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"/>
+                            </svg>
+                        </button>
+                        <div class="pv-tb-menu" x-show="openDropdown === 'insert'" x-cloak>
+                            <button type="button" class="pv-tb-menu__item"
+                                    :class="isActive('link') ? 'is-active' : ''"
+                                    @mousedown.prevent
+                                    @click="closeDropdowns(); insertLink()">
+                                <span class="pv-tb-menu__icon">🔗</span><span>Link</span>
+                            </button>
+                            <button type="button" class="pv-tb-menu__item"
+                                    :disabled="isImageUploading"
+                                    @mousedown.prevent
+                                    @click="closeDropdowns(); triggerImageUpload()">
+                                <span class="pv-tb-menu__icon">🖼</span>
+                                <span x-text="isImageUploading ? 'Uploading…' : 'Image'"></span>
+                            </button>
+                        </div>
+                    </div>
+                    <input type="file" x-ref="imageFile" accept="image/*"
+                           class="hidden" @change="handleImageFile($event)">
+                </div>
+                <span class="pv-tb-group__label">Insert</span>
+            </div>
         </div>
         <div x-ref="writeMount"
              class="pv-tiptap-mount border border-default rounded-b-lg bg-white min-h-[20rem]"></div>
     </div>
 
-    <div x-show="tab === 'source'">
+    {# Source tab — CodeMirror. Display mode skips this entirely. #}
+    <div x-show="!readonly && tab === 'source'">
         <div x-ref="sourceMount"
              class="pv-cm-mount border border-default rounded-lg overflow-hidden min-h-[22rem] bg-white"></div>
     </div>
 
-    <div x-show="tab === 'preview'">
-        <div class="pv-html-preview-pane min-h-[20rem] rounded-lg border border-default
+    {# Preview panel — always visible in display mode; tab-gated in edit
+       mode. The record picker is purely model-driven so the same UI works
+       in both modes (the component carries the stored subject in cfg so
+       the POST payload is correct even with no form input around). #}
+    <div x-show="readonly || tab === 'preview'">
+        <div x-show="mailModel" class="mb-3">
+            <div class="flex flex-wrap items-end gap-3 pv-preview-picker relative"
+                 @click.outside="previewPickerOpen = false">
+                <div class="flex-1 min-w-[14rem] max-w-md">
+                    <label class="block text-2xs font-medium text-body-subtle mb-1">
+                        Sample record
+                        <span class="ml-1 text-body-subtle/70 font-normal" x-text="mailModel"></span>
+                    </label>
+                    <div class="relative">
+                        <input type="text"
+                               x-ref="previewSearch"
+                               x-model="previewQuery"
+                               @focus="openPreviewPicker()"
+                               @input.debounce.250ms="searchPreviewRecords()"
+                               @keydown.escape.prevent.stop="previewPickerOpen = false"
+                               :placeholder="previewRecord ? previewRecord.label : 'Search records…'"
+                               autocomplete="off"
+                               class="w-full border border-default bg-neutral-primary rounded-md px-3 py-1.5
+                                      pr-8 text-xs text-heading focus:outline-none focus:ring-2
+                                      focus:ring-fg-brand focus:border-fg-brand">
+                        <button type="button"
+                                x-show="previewRecord"
+                                @mousedown.prevent
+                                @click="clearPreviewRecord()"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 text-body-subtle hover:text-fg-danger"
+                                aria-label="Clear selected record">×</button>
+                    </div>
+                    <div x-show="previewPickerOpen"
+                         x-cloak
+                         class="absolute z-30 left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto
+                                bg-neutral-primary border border-default rounded-md shadow-lg text-sm">
+                        <div x-show="previewLoading"
+                             class="px-3 py-2 text-xs text-body-subtle">Searching…</div>
+                        <template x-for="r in previewResults" :key="r.id">
+                            <button type="button"
+                                    @mousedown.prevent
+                                    @click="pickPreviewRecord(r)"
+                                    class="w-full text-left px-3 py-2 hover:bg-neutral-secondary
+                                           flex justify-between gap-3 text-xs">
+                                <span class="truncate" x-text="r.label"></span>
+                                <span class="text-body-subtle font-mono">#<span x-text="r.id"></span></span>
+                            </button>
+                        </template>
+                        <div x-show="!previewLoading && previewResults.length === 0"
+                             class="px-3 py-2 text-xs text-body-subtle">No matches.</div>
+                    </div>
+                </div>
+                <button type="button"
+                        @click="renderPreview()"
+                        :disabled="previewRendering"
+                        class="px-3 py-1.5 text-xs font-medium rounded-md border transition
+                               bg-fg-brand text-white border-fg-brand hover:opacity-90
+                               disabled:opacity-60 disabled:cursor-not-allowed">
+                    <span x-show="!previewRendering">Render</span>
+                    <span x-show="previewRendering">Rendering…</span>
+                </button>
+            </div>
+            <p x-show="previewError"
+               x-text="previewError"
+               class="mt-2 text-xs text-fg-danger"></p>
+        </div>
+
+        {# Rendered output: subject line + sanitized HTML body. When the
+           live preview hasn't run yet, fall back to the raw client-side
+           preview so the tab is never empty. #}
+        <template x-if="previewRendered">
+            <div class="space-y-3">
+                <div class="flex flex-wrap items-baseline gap-2 px-4 py-2 rounded-md
+                            bg-neutral-secondary border border-default">
+                    <span class="text-2xs font-semibold uppercase tracking-wider text-body-subtle">Subject</span>
+                    <span class="font-medium text-heading" x-text="previewRendered.subject || '(empty)'"></span>
+                </div>
+                <div class="pv-html-preview-pane min-h-[16rem] rounded-lg border border-default
+                            bg-white px-5 py-4 overflow-auto"
+                     x-html="previewRendered.body_html"></div>
+            </div>
+        </template>
+        <div x-show="!previewRendered"
+             class="pv-html-preview-pane min-h-[20rem] rounded-lg border border-default
                     bg-white px-5 py-4 overflow-auto"
              x-html="previewHtml()"></div>
     </div>
 
+    {# Hidden mirror of `this.html` for form submission. Display mode also
+       lives inside the form but autosave is disabled there and there's no
+       Save button, so the input is inert. #}
     <input type="hidden" name="{{ name }}" :value="html">
 </div>
-{% endif %}

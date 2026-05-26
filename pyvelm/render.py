@@ -39,6 +39,7 @@ from .fields import (
     Datetime,
     Field,
     Float,
+    Html,
     Integer,
     Many2many,
     Many2one,
@@ -1090,13 +1091,23 @@ def _edit_textarea(value, spec, field):
 
 
 def _render_html_editor_widget(value, spec, *, readonly: bool) -> Markup:
-    """Rich HTML editor with Design / Source / Preview tabs."""
+    """Rich HTML editor with Write / Source / Preview tabs.
+
+    The display-mode rendering reuses this same component so the
+    detail page can show the record-aware live preview, not just the
+    stored HTML. ``subject`` is carried in the config because the
+    detail page has no form input the editor could read from.
+    """
     partial = _env.get_template("widgets/html_editor.html")
     raw = "" if value is None else str(value)
     mail_model = ""
+    subject = ""
     record = spec.get("_record")
-    if record is not None and getattr(record, "model", None):
-        mail_model = str(record.model)
+    if record is not None:
+        if getattr(record, "model", None):
+            mail_model = str(record.model)
+        if getattr(record, "subject", None):
+            subject = str(record.subject)
     # Base64 in a data attribute — HTML/JSON must not live inside x-data
     # (embedded `"` in the template body truncates the attribute).
     payload = json.dumps(
@@ -1105,6 +1116,7 @@ def _render_html_editor_widget(value, spec, *, readonly: bool) -> Markup:
             "initial": raw,
             "readonly": readonly,
             "mailModel": mail_model,
+            "subject": subject,
         }
     ).encode()
     config_b64 = base64.b64encode(payload).decode("ascii")
@@ -1114,11 +1126,13 @@ def _render_html_editor_widget(value, spec, *, readonly: bool) -> Markup:
 
 
 @widget(Text, hint="html")
+@widget(Html)
 def _render_html_body(value, spec, field):
     return _render_html_editor_widget(value, spec, readonly=True)
 
 
 @widget(Text, hint="html", mode="edit")
+@widget(Html, mode="edit")
 def _edit_html_body(value, spec, field):
     if spec.get("readonly"):
         return _render_html_editor_widget(value, spec, readonly=True)
@@ -2146,6 +2160,30 @@ def parse_form_vals(model_cls, form_data, env=None) -> tuple[dict, dict]:
 # ---- form view rendering ----
 
 
+def _resolve_colspan(raw, cols: int) -> int:
+    """Clamp ``raw`` to ``[1, cols]``.
+
+    Accepts ``"full"`` (== cols), an int, or ``None`` (== 1). Anything
+    unparseable falls back to 1 so a typo in arch can't blow up render.
+    """
+    if raw is None:
+        return 1
+    if isinstance(raw, str):
+        if raw.lower() == "full":
+            return cols
+        try:
+            raw = int(raw)
+        except ValueError:
+            return 1
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return 1
+    if n < 1:
+        return 1
+    return min(n, cols)
+
+
 def _form_section_html(
     section_spec,
     record_or_none,
@@ -2156,13 +2194,16 @@ def _form_section_html(
     submitted: dict | None = None,
     prefill: dict | None = None,
     form_playback=None,
+    cols: int = 2,
 ) -> list[dict]:
     """Build the per-field HTML for one section.
 
-    Returns a list of cell dicts (`{name, label, required, error, html}`).
+    Returns a list of cell dicts (``{name, label, required, error, html,
+    colspan, wide}``). ``cols`` is the section's column count used to
+    clamp each cell's ``colspan`` (``"full"`` becomes ``cols``).
 
-    `errors` is the `{field_name: message}` map from a previous failed
-    save; `submitted` is the `vals` from that same attempt so the user
+    ``errors`` is the ``{field_name: message}`` map from a previous failed
+    save; ``submitted`` is the ``vals`` from that same attempt so the user
     doesn't lose what they typed in unrelated fields. Both default to
     empty.
     """
@@ -2190,10 +2231,17 @@ def _form_section_html(
                     "required": False,
                     "error": None,
                     "wide": True,
+                    "colspan": cols,
                     "html": html,
                 })
                 continue
-            cells.append({"name": fname, "label": fname, "html": Markup("")})
+            cells.append({
+                "name": fname,
+                "label": fname,
+                "html": Markup(""),
+                "colspan": _resolve_colspan(spec.get("colspan"), cols),
+                "wide": False,
+            })
             continue
         field = model_cls._fields[fname]
         label = spec.get("label") or field.string or fname
@@ -2255,11 +2303,21 @@ def _form_section_html(
             "_form_playback": form_playback,
             "readonly": ro,
         }
-        # Wide cells span both grid columns. O2m tables are full-width
-        # so the embedded `<table>` isn't squished into half the form.
-        is_wide = isinstance(field, One2many) and (
-            _o2m_use_inline_edit(spec) or _o2m_show_table(spec)
+        # Author-declared colspan wins. As a safety net, anything that
+        # embeds a table-like widget (O2m grid, HTML editor) defaults to
+        # full-width so the inner UI isn't squashed.
+        author_span = spec.get("colspan")
+        is_wide_default = (
+            isinstance(field, One2many)
+            and (_o2m_use_inline_edit(spec) or _o2m_show_table(spec))
+        ) or (
+            isinstance(field, Html)
+            or (isinstance(field, Text) and spec.get("widget") == "html")
         )
+        if author_span is None and is_wide_default:
+            cell_span = cols
+        else:
+            cell_span = _resolve_colspan(author_span, cols)
         field_error = errors.get(fname)
         if field_error is None and isinstance(field, One2many):
             prefix = f"{fname}["
@@ -2274,7 +2332,8 @@ def _form_section_html(
                 "required": getattr(field, "required", False),
                 "readonly": ro,
                 "error": field_error,
-                "wide": is_wide,
+                "wide": cell_span >= cols,
+                "colspan": cell_span,
                 "html": renderer(value, spec_with_rec, field),
             }
         )
@@ -2296,12 +2355,15 @@ def _form_sections(
     arch = resolve_arch(view)
     model_cls = env.registry[view.model]
     sections_spec = arch.get("sections", [])
+    form_cols = _resolve_form_cols(arch.get("cols"))
     out: list[dict] = []
     for spec in sections_spec:
+        section_cols = _resolve_form_cols(spec.get("cols"), default=form_cols)
         out.append(
             {
                 "name": spec.get("name"),
                 "title": spec.get("title") or spec.get("name", ""),
+                "cols": section_cols,
                 "cells": _form_section_html(
                     spec,
                     record_or_none,
@@ -2312,10 +2374,29 @@ def _form_sections(
                     submitted=submitted,
                     prefill=prefill,
                     form_playback=form_playback,
+                    cols=section_cols,
                 ),
             }
         )
     return out
+
+
+def _resolve_form_cols(raw, default: int = 2) -> int:
+    """Clamp a form/section ``cols`` value into the supported range.
+
+    Practical cap is 12 (Bootstrap-style); 1 is the minimum. Anything
+    unparseable falls back to ``default`` so a typo in arch doesn't
+    crash render.
+    """
+    if raw is None:
+        return default
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return default
+    if n < 1:
+        return 1
+    return min(n, 12)
 
 
 def _humanize_model(model_name: str, plural: bool = True) -> str:

@@ -1869,6 +1869,81 @@ def create_app(
         except (ValueError, PermissionError) as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
+    @app.post("/api/mail/templates/preview")
+    def api_mail_template_preview(
+        body: dict = Body(...),
+        env: Environment = Depends(get_env),
+    ):
+        """Render the **current draft** of a template against a record.
+
+        Body: ``{model, subject, body_html, res_id?, extra?}``.
+
+        We render the draft (not a stored ``mail.template`` row) so the
+        admin can preview unsaved edits live. ``res_id`` is optional —
+        when omitted, the renderer falls back to the first record of
+        ``model`` (or an empty recordset if none exist), so a brand-new
+        template still shows *something*.
+        """
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        try:
+            env.check_access("mail.template", "read")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+
+        model = str(body.get("model") or "").strip()
+        if not model:
+            raise HTTPException(status_code=400, detail="`model` is required")
+        if model not in registry:
+            raise HTTPException(status_code=400, detail=f"Unknown model {model!r}")
+
+        from .mail_template_render import (
+            build_mail_template_context,
+            render_mail_template_string,
+        )
+
+        subject_src = str(body.get("subject") or "")
+        body_src = str(body.get("body_html") or "")
+        extra = body.get("extra") if isinstance(body.get("extra"), dict) else None
+
+        Model = env[model]
+        record = Model
+        res_id_raw = body.get("res_id")
+        if res_id_raw not in ("", None):
+            try:
+                res_id = int(res_id_raw)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400, detail="`res_id` must be an integer"
+                ) from None
+            rec = Model.browse(res_id)
+            if not rec._ids:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No {model} record with id={res_id}",
+                )
+            record = rec
+        else:
+            sample = Model.search([], limit=1)
+            if sample._ids:
+                record = sample
+
+        try:
+            context = build_mail_template_context(
+                env, model=model, record=record, extra=extra
+            )
+            subject = render_mail_template_string(subject_src, context)
+            body_html = render_mail_template_string(body_src, context)
+        except ValueError as e:
+            # Render errors land here — surface as 422 so the editor can
+            # show them inline without confusing the user with a generic 500.
+            raise HTTPException(status_code=422, detail=str(e)) from e
+        return {
+            "subject": subject,
+            "body_html": body_html,
+            "res_id": record.id if getattr(record, "_ids", ()) else None,
+        }
+
     @app.get("/api/reports/fields")
     def api_reports_fields(model: str = Query(...), env: Environment = Depends(get_env)):
         if env.uid is None:

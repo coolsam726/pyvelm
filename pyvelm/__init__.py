@@ -4,7 +4,7 @@ from pathlib import Path as _Path
 # ``pyproject.toml`` — the release workflow refuses to publish if
 # they diverge, but the check is only enforced in CI; bump both
 # together when cutting a release.
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 
 from .depends import depends
 from .env import Environment
@@ -15,6 +15,7 @@ from .fields import (
     Datetime,
     Field,
     Float,
+    Html,
     Integer,
     Many2many,
     Many2one,
@@ -70,6 +71,7 @@ __all__ = [
     "Environment",
     "Field",
     "Float",
+    "Html",
     "Integer",
     "Many2many",
     "Many2one",

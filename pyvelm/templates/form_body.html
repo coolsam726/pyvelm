@@ -153,17 +153,29 @@ or (chatter_context and chatter_context.enabled)
             <form id="pyvelm-form" class="space-y-6" onsubmit="return false" {% if mode in ("edit", "new" ) %}
                 data-pv-autosave="{{ rec_url if mode == 'edit' else base }}" data-pv-autosave-method="POST" {% endif %}>
                 {% for section in sections %}
+                {# Per-section responsive grid via CSS custom properties — see
+                `.pv-form-grid` in static/tailwind.css. The section emits
+                `--pv-cols` (used from `lg`) and `--pv-cols-md` (used from
+                `md` to `<lg`, capped at min(cols, 2)). Cells emit
+                `--cell-span` and the global rule clamps each span to the
+                effective track count at the current breakpoint. #}
+                {% set section_cols = section.cols or 2 %}
+                {% set section_cols_md = section_cols if section_cols < 2 else 2 %}
                 <fieldset class="bg-neutral-primary border border-default rounded-xl p-6 shadow-sm">
                     {% if section.title %}
                     <legend class="px-2 text-xs font-semibold uppercase tracking-wider text-body-subtle">
                         {{ section.title }}
                     </legend>
                     {% endif %}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                    <div class="pv-form-grid"
+                         style="--pv-cols: {{ section_cols }}; --pv-cols-md: {{ section_cols_md }};">
                         {% for cell in section.cells %}
-                        <div data-field="{{ cell.name }}" {% if cell.error %}data-pv-field-error{% endif %} class="flex flex-col gap-1.5
-                            {% if cell.wide %}md:col-span-2{% endif %}
-                            {% if cell.error %}pv-cell-error{% endif %}">
+                        {% set cell_span = cell.colspan or (section_cols if cell.wide else 1) %}
+                        <div data-field="{{ cell.name }}"
+                             {% if cell.error %}data-pv-field-error{% endif %}
+                             class="flex flex-col gap-1.5 min-w-0
+                                {% if cell.error %}pv-cell-error{% endif %}"
+                             style="--cell-span: {{ cell_span }};">
                             <label class="block text-sm font-medium text-heading">
                                 {{ cell.label }}
                                 {% if mode in ("edit", "new") and cell.required %}
