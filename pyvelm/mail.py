@@ -87,7 +87,23 @@ class MailBackend(Protocol):
         body: str,
         from_addr: str | None = None,
         body_html: str | None = None,
+        cc: str | None = None,
+        bcc: str | None = None,
+        reply_to: str | None = None,
+        attachments: list | None = None,
     ) -> None: ...
+
+
+def _split_addresses(value: str | None) -> list[str]:
+    """Split a comma- or semicolon-separated address list, dropping blanks."""
+    if not value:
+        return []
+    parts = []
+    for chunk in str(value).replace(";", ",").split(","):
+        addr = chunk.strip()
+        if addr:
+            parts.append(addr)
+    return parts
 
 
 class ConsoleBackend:
@@ -106,13 +122,28 @@ class ConsoleBackend:
         body: str,
         from_addr: str | None = None,
         body_html: str | None = None,
+        cc: str | None = None,
+        bcc: str | None = None,
+        reply_to: str | None = None,
+        attachments: list | None = None,
     ) -> None:
+        extras = []
+        if cc:
+            extras.append(f"cc={cc}")
+        if bcc:
+            extras.append(f"bcc={bcc}")
+        if reply_to:
+            extras.append(f"reply-to={reply_to}")
+        if attachments:
+            extras.append(f"attachments={len(attachments)}")
+        extra_str = f" [{' '.join(extras)}]" if extras else ""
         log.info(
-            "[mail console] %s → %s | %s%s",
+            "[mail console] %s → %s | %s%s%s",
             from_addr or "<no-from>",
             to,
             subject or "(no subject)",
             " [html]" if body_html else "",
+            extra_str,
         )
         payload = body_html or body
         if payload:
@@ -163,23 +194,82 @@ class SmtpBackend:
         body: str,
         from_addr: str | None = None,
         body_html: str | None = None,
+        cc: str | None = None,
+        bcc: str | None = None,
+        reply_to: str | None = None,
+        attachments: list | None = None,
     ) -> None:
+        to_list = _split_addresses(to)
+        if not to_list:
+            raise ValueError("SmtpBackend: at least one To address is required")
+        cc_list = _split_addresses(cc)
+        bcc_list = _split_addresses(bcc)
+
         msg = EmailMessage()
         msg["Subject"] = subject or "(no subject)"
-        msg["To"] = to
         msg["From"] = from_addr or self.from_addr or "noreply@pyvelm"
+        msg["To"] = ", ".join(to_list)
+        if cc_list:
+            msg["Cc"] = ", ".join(cc_list)
+        if reply_to:
+            msg["Reply-To"] = reply_to
+        # Bcc is deliberately not added as a header — smtplib's envelope
+        # carries it instead, so recipients don't see the blind list.
+
         plain = body or ""
         if body_html:
             msg.set_content(plain or " ")
             msg.add_alternative(body_html, subtype="html")
         else:
             msg.set_content(plain)
+
+        for att in attachments or []:
+            data, name, ctype = _attachment_payload(att)
+            if data is None:
+                continue
+            maintype, _, subtype = ctype.partition("/")
+            if not subtype:
+                maintype, subtype = "application", "octet-stream"
+            msg.add_attachment(
+                data, maintype=maintype, subtype=subtype, filename=name
+            )
+
+        envelope = to_list + cc_list + bcc_list
         with smtplib.SMTP(self.host, self.port) as conn:
             if self.use_tls:
                 conn.starttls()
             if self.user and self.password:
                 conn.login(self.user, self.password)
-            conn.send_message(msg)
+            conn.send_message(msg, to_addrs=envelope)
+
+
+def _attachments_for_message(env, message_id: int) -> list:
+    """Return the ``ir.attachment`` records linked to one ``mail.message``."""
+    if "ir.attachment" not in env.registry:
+        return []
+    return list(
+        env["ir.attachment"].search(
+            [("res_model", "=", "mail.message"), ("res_id", "=", int(message_id))]
+        )
+    )
+
+
+def _attachment_payload(att) -> tuple[bytes | None, str, str]:
+    """Extract ``(bytes, filename, mimetype)`` from one ``ir.attachment``.
+
+    Returns ``(None, …)`` for URL-typed attachments or rows whose
+    payload couldn't be fetched — the SMTP loop skips those rather
+    than failing the whole send."""
+    name = getattr(att, "datas_fname", None) or getattr(att, "name", None) or "attachment"
+    mimetype = getattr(att, "mimetype", None) or "application/octet-stream"
+    fetch = getattr(att, "fetch_content", None)
+    if callable(fetch):
+        try:
+            data = fetch()
+        except Exception:  # noqa: BLE001
+            return None, name, mimetype
+        return (data if data else None), name, mimetype
+    return None, name, mimetype
 
 
 def _load_backend() -> tuple[MailBackend, str | None]:
@@ -229,7 +319,14 @@ class Message(BaseModel):
 
     # Outgoing-mail fields. Records without `recipient_email` stay
     # purely as log entries — the dispatcher never touches them.
+    # ``recipient_email`` and the two cc/bcc columns accept a single
+    # address or a comma-separated list ("a@x, b@y"); the SMTP backend
+    # splits them when building the envelope. Keeping the storage as
+    # plain text avoids pulling in a contact model just to address mail.
     recipient_email = Char()
+    recipient_cc = Text()
+    recipient_bcc = Text()
+    reply_to = Char()
     subject = Char()
     body_is_html = Boolean(default=False)
     template_id = Many2one("mail.template", ondelete="SET NULL")
@@ -289,6 +386,7 @@ class Message(BaseModel):
                 subject = msg.subject or (msg.body or "(no subject)")[:80]
                 body = msg.body or ""
                 is_html = bool(msg.body_is_html)
+                atts = _attachments_for_message(env, msg.id)
                 try:
                     backend.send(
                         to=msg.recipient_email,
@@ -296,6 +394,10 @@ class Message(BaseModel):
                         body="" if is_html else body,
                         body_html=body if is_html else None,
                         from_addr=default_from,
+                        cc=msg.recipient_cc or None,
+                        bcc=msg.recipient_bcc or None,
+                        reply_to=msg.reply_to or None,
+                        attachments=atts or None,
                     )
                 except Exception as exc:  # noqa: BLE001
                     failed += 1
@@ -399,6 +501,10 @@ class MailThread:
         message_type: str = "email",
         subtype: str = "",
         attachment_ids: list[int] | None = None,
+        cc: str | None = None,
+        bcc: str | None = None,
+        reply_to: str | None = None,
+        body_is_html: bool = False,
     ) -> "Message":
         """Log a message AND queue it for SMTP delivery.
 
@@ -421,7 +527,11 @@ class MailThread:
             "message_type": message_type,
             "date": datetime.utcnow(),
             "recipient_email": recipient_email,
+            "recipient_cc": (cc or None),
+            "recipient_bcc": (bcc or None),
+            "reply_to": (reply_to or None),
             "subject": subject or (body[:80] if body else ""),
+            "body_is_html": bool(body_is_html),
             "state": "outgoing",
         }
         if subtype:
@@ -437,6 +547,9 @@ class MailThread:
         template,
         *,
         to: str,
+        cc: str | None = None,
+        bcc: str | None = None,
+        reply_to: str | None = None,
         extra: dict | None = None,
         attachment_ids: list[int] | None = None,
     ) -> "Message":
@@ -446,6 +559,9 @@ class MailThread:
             return template.send_mail(
                 self,
                 to=to,
+                cc=cc,
+                bcc=bcc,
+                reply_to=reply_to,
                 extra=extra,
                 attachment_ids=attachment_ids,
             )
@@ -455,7 +571,13 @@ class MailThread:
         if not tpl._ids:
             raise ValueError(f"Unknown mail.template id={template!r}")
         return tpl.send_mail(
-            self, to=to, extra=extra, attachment_ids=attachment_ids
+            self,
+            to=to,
+            cc=cc,
+            bcc=bcc,
+            reply_to=reply_to,
+            extra=extra,
+            attachment_ids=attachment_ids,
         )
 
     def _send_rendered_mail(
@@ -464,6 +586,9 @@ class MailThread:
         subject: str,
         body_html: str,
         recipient_email: str,
+        cc: str | None = None,
+        bcc: str | None = None,
+        reply_to: str | None = None,
         template_id: int | None = None,
         attachment_ids: list[int] | None = None,
     ) -> "Message":
@@ -479,6 +604,9 @@ class MailThread:
             "message_type": "email",
             "date": datetime.utcnow(),
             "recipient_email": recipient_email,
+            "recipient_cc": (cc or None),
+            "recipient_bcc": (bcc or None),
+            "reply_to": (reply_to or None),
             "subject": subject or (body_html[:80] if body_html else ""),
             "state": "outgoing",
         }

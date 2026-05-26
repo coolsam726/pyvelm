@@ -85,6 +85,7 @@ nav:
       - Migrations: migrations.md
       - Report Builder: report-builder.md
       - Workflows: workflow.md
+      - Email composer: mail-compose.md
       - White-label branding: branding.md
       - Security: security.md
       - Deployment: deployment.md

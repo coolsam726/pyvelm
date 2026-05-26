@@ -7,6 +7,58 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.13.0] — 2026-05-27
+
+Rich **email composer** with templates, multi-recipient To / Cc / Bcc,
+Reply-To, attachments, and a one-click **Save as template**. Sends
+from any `MailThread` record via the chatter's new **Open rich
+composer** link, or programmatically through the extended
+`record.send_mail(..., cc=, bcc=, reply_to=)`. See
+[docs/releases/v0.13.0.md](docs/releases/v0.13.0.md).
+
+### Added
+
+- **Multi-recipient outgoing mail** — `mail.message` gains
+  `recipient_cc`, `recipient_bcc`, `reply_to` columns and accepts a
+  comma- or semicolon-separated `recipient_email` for multiple To
+  addresses. `SmtpBackend` / `ConsoleBackend` / `MailBackend` protocol
+  pass these through; the dispatcher pre-fetches `ir.attachment` rows
+  linked to each message and attaches them as MIME parts. Base bumped
+  to `(0, 27, 0)` (migration `0_26_to_0_27.py` is a documentation
+  breadcrumb — schema autogen adds the new nullable columns).
+- **`mail_compose` module** — new bundled module shipping
+  `mail.compose.message` plus its admin views, menu entry, and HTTP
+  endpoints (`/web/mail/compose/launch|apply-template|send|save-as-template`).
+  The composer auto-resolves "To" from common email-bearing fields on
+  the bound record, renders the picked template against `object =
+  <record>` on **Apply template**, supports Cc / Bcc / Reply-To and an
+  attachments picker, and includes a one-click **Save as template** to
+  clone the current draft into a new `mail.template`.
+- **Chatter integration** — the chatter panel's email tab now surfaces
+  a link to **Open rich composer (templates, Cc/Bcc, attachments)** for
+  any record whose model inherits `MailThread`, wired through the
+  existing `PvDialog` shell.
+
+### Changed
+
+- **Form `header_actions`** now render in `edit` mode in addition to
+  `display` mode. The buttons include the surrounding form fields via
+  `hx-include` when fired from edit mode, so action handlers see the
+  operator's in-flight changes.
+
+### Fixed
+
+- **`mail_compose` 0.1.0 → 0.1.1** — relax `NOT NULL` on
+  `mail_compose_message.recipient_to` so freshly-launched drafts save
+  when the auto-resolver finds no email on the bound record.
+  `action_send` remains the authoritative gate against dispatching an
+  empty To. Migration `0_1_0_to_0_1_1.py` drops the constraint on
+  existing installs.
+- **Cross-module menu parent** — `mail_compose`'s **Compose drafts**
+  menu now uses `parent=("admin", "workflows")` so the loader resolves
+  to the admin-owned `admin.workflows` group instead of a non-existent
+  `mail_compose.workflows`.
+
 ## [0.12.0] — 2026-05-26
 
 VSCode-style **`Code`** field type with per-language syntax highlighting, plus

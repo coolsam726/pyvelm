@@ -166,6 +166,17 @@
                            placeholder="Subject (optional)"
                            class="w-full text-sm rounded-md border border-default bg-neutral-primary
                                   text-body px-3 py-1.5 focus:ring-2 focus:ring-fg-brand/30">
+                    {% if chatter_context.compose_url %}
+                    <button type="button"
+                            class="inline-flex items-center gap-1 text-2xs text-fg-brand hover:underline"
+                            @click.prevent="window.PvDialog && window.PvDialog.open({
+                                url: '{{ chatter_context.compose_url }}',
+                                title: 'Compose email',
+                                onResult: () => location.reload(),
+                            })">
+                        Open rich composer (templates, Cc/Bcc, attachments) →
+                    </button>
+                    {% endif %}
                 </div>
             </template>
 

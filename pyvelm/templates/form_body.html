@@ -67,7 +67,7 @@ or (chatter_context and chatter_context.enabled)
                     {{ mode }}
                 </span>
                 <div class="flex items-center gap-2">
-                    {% if mode == "display" and record_id %}
+                    {% if mode in ("display", "edit") and record_id %}
                     {% for act in header_actions or [] %}
                     {% if act.full_page or (act.method == 'GET' and not act.url.startswith(base)) %}
                     <a href="{{ act.url }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
@@ -78,11 +78,14 @@ or (chatter_context and chatter_context.enabled)
                     <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
                            border border-default text-body rounded-md hover:bg-neutral-secondary transition" hx-{{
                         act.method | lower }}="{{ act.url }}" {% if act.confirm %}hx-confirm="{{ act.confirm }}" {%
-                        endif %} hx-target="closest [data-pv-form-shell]" hx-swap="innerHTML">
+                        endif %} {% if mode == "edit" %}hx-include="closest [data-pv-form-shell]" {% endif %}
+                        hx-target="closest [data-pv-form-shell]" hx-swap="innerHTML">
                         {{ act.label }}
                     </button>
                     {% endif %}
                     {% endfor %}
+                    {% endif %}
+                    {% if mode == "display" and record_id %}
                     {% if access.can_write %}
                     <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
                            rounded-md bg-fg-brand hover:opacity-90 transition" hx-get="{{ rec_edit_url }}"

@@ -2713,6 +2713,168 @@ def create_app(
             },
         )
 
+    # ---------------------------------------------------------------
+    # Email composer endpoints (mail_compose module)
+    # ---------------------------------------------------------------
+
+    def _compose_form_html(env, composer_id: int) -> str:
+        from .render import render_form_page
+
+        view = _load_view(env, "mail_compose", "mail_compose.form")
+        rec = env["mail.compose.message"].browse(composer_id)
+        if not rec._ids:
+            raise HTTPException(404, f"mail.compose.message({composer_id}) not found")
+        return render_form_page(view, rec, env, mode="edit", body_only=True)
+
+    @app.get("/web/mail/compose/launch", response_class=HTMLResponse)
+    def web_mail_compose_launch(
+        request: Request,
+        env: Environment = Depends(get_env),
+        model: str = "",
+        res_id: int = 0,
+        template_id: int = 0,
+        to: str = "",
+    ):
+        """Create a draft composer + return the form fragment.
+
+        Opens inside PvDialog (set ``hx-target=#pv-fdialog-body``) or as
+        a standalone page when navigated to directly.
+        """
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "mail.compose.message" not in env.registry:
+            raise HTTPException(404, "mail_compose module is not installed")
+        Compose = env.registry["mail.compose.message"]
+        composer = Compose.launch(
+            env,
+            model=model or None,
+            res_id=res_id or None,
+            template_id=template_id or None,
+            recipient_to=to,
+        )
+        return HTMLResponse(_compose_form_html(env, composer.id))
+
+    @app.post("/web/mail/compose/{composer_id}/apply-template", response_class=HTMLResponse)
+    async def web_mail_compose_apply_template(
+        composer_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        """Re-render the linked template into subject/body, then return the form."""
+        import json as _json
+
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "mail.compose.message" not in env.registry:
+            raise HTTPException(404, "mail_compose module is not installed")
+        composer = env["mail.compose.message"].browse(composer_id)
+        if not composer._ids:
+            raise HTTPException(404, f"mail.compose.message({composer_id}) not found")
+        # Persist any in-flight edits to template_id so the apply uses
+        # the operator's current selection, not whatever's in the DB.
+        form = await request.form()
+        tpl_raw = (form.get("template_id") or "").strip()
+        if tpl_raw:
+            try:
+                composer.write({"template_id": int(tpl_raw)})
+            except (TypeError, ValueError):
+                pass
+        try:
+            composer.action_apply_template()
+            message = "Template applied" if composer.template_id else "No template selected"
+        except Exception as exc:  # noqa: BLE001
+            message = f"Apply failed: {exc}"
+        return HTMLResponse(
+            _compose_form_html(env, composer.id),
+            headers={"HX-Trigger": _json.dumps({"pv-toast": message})},
+        )
+
+    @app.post("/web/mail/compose/{composer_id}/send", response_class=HTMLResponse)
+    async def web_mail_compose_send(
+        composer_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        """Queue the composer's content as outgoing mail."""
+        import json as _json
+
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "mail.compose.message" not in env.registry:
+            raise HTTPException(404, "mail_compose module is not installed")
+        composer = env["mail.compose.message"].browse(composer_id)
+        if not composer._ids:
+            raise HTTPException(404, f"mail.compose.message({composer_id}) not found")
+        # Pick up any unsaved form edits before sending — the user
+        # likely changed To/Subject/body after creating the draft.
+        form = await request.form()
+        updates: dict = {}
+        for key in (
+            "recipient_to",
+            "recipient_cc",
+            "recipient_bcc",
+            "reply_to",
+            "subject",
+            "body_html",
+        ):
+            val = form.get(key)
+            if val is not None:
+                updates[key] = val
+        tpl_raw = (form.get("template_id") or "").strip()
+        if tpl_raw:
+            try:
+                updates["template_id"] = int(tpl_raw)
+            except (TypeError, ValueError):
+                pass
+        if updates:
+            composer.write(updates)
+        try:
+            composer.action_send()
+            message = "Email queued for delivery"
+        except Exception as exc:  # noqa: BLE001
+            message = f"Send failed: {exc}"
+        return HTMLResponse(
+            _compose_form_html(env, composer.id),
+            headers={"HX-Trigger": _json.dumps({"pv-toast": message})},
+        )
+
+    @app.post("/web/mail/compose/{composer_id}/save-as-template", response_class=HTMLResponse)
+    async def web_mail_compose_save_as_template(
+        composer_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        """Clone the composer's content into a new ``mail.template``.
+
+        The template's name defaults to the composer subject — operators
+        rename it after creation if needed. Requires a bound ``model``.
+        """
+        import json as _json
+
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "mail.compose.message" not in env.registry:
+            raise HTTPException(404, "mail_compose module is not installed")
+        composer = env["mail.compose.message"].browse(composer_id)
+        if not composer._ids:
+            raise HTTPException(404, f"mail.compose.message({composer_id}) not found")
+        form = await request.form()
+        # Honour any subject the operator just typed but hasn't saved.
+        for key in ("subject", "body_html"):
+            val = form.get(key)
+            if val is not None:
+                composer.write({key: val})
+        name = (composer.subject or "Untitled template").strip() or "Untitled template"
+        try:
+            composer.action_save_as_template(name=name)
+            message = f"Saved as template {name!r}"
+        except Exception as exc:  # noqa: BLE001
+            message = f"Save failed: {exc}"
+        return HTMLResponse(
+            _compose_form_html(env, composer.id),
+            headers={"HX-Trigger": _json.dumps({"pv-toast": message})},
+        )
+
     @app.post("/web/switch-company")
     async def web_switch_company(
         request: Request,

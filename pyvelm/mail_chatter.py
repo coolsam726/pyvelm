@@ -202,6 +202,15 @@ def form_chatter_context(
         "attachments_enabled": "ir.attachment" in env.registry,
         "post_url": "/web/chatter/post",
         "panel_url": "/web/chatter/panel",
+        # Surface the rich composer entry point only when mail_compose
+        # is installed and the user can compose. URL builds a fresh
+        # draft pre-bound to this record (to/cc/bcc/template are filled
+        # in by the composer launch endpoint).
+        "compose_url": (
+            f"/web/mail/compose/launch?model={quote(res_model, safe='')}&res_id={res_id}"
+            if can_post and "mail.compose.message" in env.registry
+            else ""
+        ),
         "error": None,
     }
 

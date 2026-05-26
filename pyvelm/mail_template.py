@@ -89,6 +89,9 @@ class MailTemplate(BaseModel):
         record,
         *,
         to: str,
+        cc: str | None = None,
+        bcc: str | None = None,
+        reply_to: str | None = None,
         extra: dict[str, Any] | None = None,
         attachment_ids: list[int] | None = None,
     ):
@@ -108,6 +111,9 @@ class MailTemplate(BaseModel):
             subject=subject,
             body_html=body_html,
             recipient_email=str(to).strip(),
+            cc=(str(cc).strip() if cc else None),
+            bcc=(str(bcc).strip() if bcc else None),
+            reply_to=(str(reply_to).strip() if reply_to else None),
             template_id=self.id,
             attachment_ids=attachment_ids,
         )
