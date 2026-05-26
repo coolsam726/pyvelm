@@ -296,7 +296,14 @@ class Char(Field):
         )
 
     def to_python(self, value):
-        return None if value is None else str(value)
+        if value is None or value is False or value == "":
+            return None
+        return str(value)
+
+    def to_sql_param(self, value):
+        if value is None or value is False or value == "":
+            return None
+        return str(value)
 
 
 class Text(Char):

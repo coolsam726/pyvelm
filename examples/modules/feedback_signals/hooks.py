@@ -5,27 +5,9 @@ from datetime import date, datetime, time, timedelta
 
 
 def _ensure_acl(env) -> None:
-    Access = env["ir.model.access"]
-    Group = env["res.groups"]
-    admin = Group.search([("name", "=", "Admin")])
-    if not admin:
-        return
-    admin.ensure_one()
-    model = "feedback.intake"
-    name = f"Admin/{model}"
-    if Access.search([("name", "=", name)]):
-        return
-    Access.create(
-        {
-            "name": name,
-            "model": model,
-            "group_id": admin,
-            "perm_read": True,
-            "perm_write": True,
-            "perm_create": True,
-            "perm_unlink": True,
-        }
-    )
+    from pyvelm.security import grant_model_access
+
+    grant_model_access(env, "feedback.intake", admin="crud", user="read")
 
 
 def _seed_samples(env) -> int:

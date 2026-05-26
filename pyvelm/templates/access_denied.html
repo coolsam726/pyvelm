@@ -1,0 +1,49 @@
+{% extends "layouts/main.html" %}
+{% block title %}Access denied — {% if brand is defined %}{{ brand.app_name }}{% else %}pyvelm{% endif %}{% endblock %}
+{% block page_title %}Access denied{% endblock %}
+
+{# Clean, centered error — skip the breadcrumb / heading strip. #}
+{% block page_heading_region %}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-10">
+    <div class="bg-neutral-primary border border-default rounded-xl shadow-sm p-8 text-center space-y-5">
+        <div class="mx-auto w-14 h-14 rounded-full bg-danger-soft flex items-center justify-center">
+            <svg class="w-7 h-7 text-fg-danger" fill="none" stroke="currentColor"
+                 viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>
+            </svg>
+        </div>
+
+        <div class="space-y-1.5">
+            <h1 class="text-xl font-semibold text-heading">Access denied</h1>
+            <p class="text-sm text-body-subtle">
+                You don't have permission to view this page or perform this
+                action. If you think this is a mistake, contact your
+                administrator.
+            </p>
+        </div>
+
+        {% if detail %}
+        <p class="text-xs text-body-subtle/80 font-mono bg-neutral-secondary
+                  border border-default rounded-md px-3 py-2 break-words text-left">
+            {{ detail }}
+        </p>
+        {% endif %}
+
+        <div class="flex items-center justify-center gap-3 pt-1">
+            <a href="javascript:history.back()"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                      border border-default text-body rounded-md hover:bg-neutral-secondary transition">
+                Go back
+            </a>
+            <a href="{{ home_href | default('/web/admin') }}"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+                      rounded-md bg-fg-brand hover:opacity-90 transition">
+                {% if use_sidebar is defined and not use_sidebar %}Back to home{% else %}Back to dashboard{% endif %}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

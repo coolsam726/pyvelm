@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if brand is defined %}{{ brand.app_name }}{% else %}pyvelm{% endif %}</title>
+
+    {% include "layouts/_head_init.html" %}
+    {% include "layouts/_head_branding.html" %}
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="/web/static/dist/pyvelm.css">
+    {% include "layouts/_head_theme.html" %}
+</head>
+<body class="bg-neutral-secondary text-body min-h-screen flex flex-col font-sans antialiased">
+<div class="flex-1 flex flex-col">
+    <header class="px-6 md:px-10 py-5 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+            {% if brand is defined and brand.has_logo %}
+            {% set logo_class = 'h-10 w-auto max-w-[10rem] object-contain' %}
+            {% set b = brand %}
+            {% include "layouts/_brand_logo.html" %}
+            {% else %}
+            <div class="w-10 h-10 rounded-xl bg-fg-brand flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor"
+                     viewBox="0 0 24 24" stroke-width="2.5" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3.75 7.5L12 3l8.25 4.5M3.75 7.5v9L12 21l8.25-4.5v-9M3.75 7.5L12 12m0 0l8.25-4.5M12 12v9"/>
+                </svg>
+            </div>
+            {% endif %}
+            <span class="font-semibold text-heading text-lg truncate">
+                {% if brand is defined %}{{ brand.app_name }}{% else %}pyvelm{% endif %}
+            </span>
+        </div>
+        <a href="{{ sign_in_href }}"
+           class="text-sm font-medium text-fg-brand hover:underline shrink-0">
+            Sign in
+        </a>
+    </header>
+
+    <main class="flex-1 flex items-center justify-center px-6 pb-16">
+        <div class="w-full max-w-xl text-center space-y-8">
+            <div class="space-y-3">
+                <h1 class="text-3xl md:text-4xl font-bold text-heading tracking-tight">
+                    {{ headline }}
+                </h1>
+                <p class="text-base md:text-lg text-body-subtle max-w-md mx-auto">
+                    {{ tagline }}
+                </p>
+            </div>
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <a href="{{ get_started_href }}"
+                   class="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold
+                          text-white rounded-lg bg-fg-brand hover:opacity-90 transition w-full sm:w-auto">
+                    Get started
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/>
+                    </svg>
+                </a>
+                <a href="{{ sign_in_href }}"
+                   class="inline-flex items-center justify-center px-6 py-3 text-sm font-medium
+                          border border-default text-body rounded-lg hover:bg-neutral-primary transition
+                          w-full sm:w-auto">
+                    Sign in
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+{% if brand is defined and brand.show_powered_by %}
+<footer class="px-6 py-4 text-center text-xs text-body-subtle border-t border-default">
+    {% include "layouts/_footer_branding.html" %}
+</footer>
+{% endif %}
+</body>
+</html>

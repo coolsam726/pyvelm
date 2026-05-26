@@ -4,11 +4,12 @@ An Odoo-style ERP framework in Python, built from first principles. The point
 isn't to reinvent Odoo — it's to keep the core ideas visible so the design
 trade-offs stay legible while the framework grows.
 
-Status: **v0.9.0** — full-stack ERP framework on PostgreSQL (psycopg 3):
+Status: **v0.10.0** — full-stack ERP framework on PostgreSQL (psycopg 3):
 ORM + module loader, list/form/kanban/graph/pivot UI (HTMX), session
-auth + ACL + record rules, multi-company, workflows, report builder,
-mail/chatter, white-label branding, schema autogen, and `pyvelm init` for
-greenfield projects. See [CHANGELOG.md](CHANGELOG.md) and [CONTEXT.md](CONTEXT.md).
+auth + ACL + policies + record rules, multi-company, workflows, report
+builder, mail/chatter, white-label branding, schema autogen, landing page,
+and `pyvelm init` for greenfield projects. See [CHANGELOG.md](CHANGELOG.md)
+and [CONTEXT.md](CONTEXT.md).
 
 ## Quickstart
 

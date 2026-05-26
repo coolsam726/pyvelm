@@ -21,6 +21,7 @@ VIEWS: list[View] = [
                 "url": "/web/workflow/{id}/build",
                 "method": "GET",
                 "full_page": True,
+                "perm": "write",
             },
         ],
         sections=[

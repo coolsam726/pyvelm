@@ -34,6 +34,15 @@ def form_context(env, res_model: str, res_id: int) -> dict[str, Any] | None:
     """Workflow bar context for a record form, or None."""
     if "workflow.instance" not in env.registry:
         return None
+    readonly = False
+    try:
+        env.check_access("workflow.instance", "read")
+    except PermissionError:
+        # Read-only workflow bar: don't require broad workflow grants just to
+        # *see* status/history for a record the user is already allowed to view.
+        # Any action endpoints still enforce their own checks.
+        readonly = True
+        env = env.sudo()
 
     inst = WorkflowEngine.instance_for_record(env, res_model, res_id)
     if inst is None:
@@ -46,8 +55,9 @@ def form_context(env, res_model: str, res_id: int) -> dict[str, Any] | None:
 
             record = env[res_model].browse(res_id)
             if record:
-                maybe_auto_start_workflow(env, record)
-                inst = WorkflowEngine.instance_for_record(env, res_model, res_id)
+                if not readonly:
+                    maybe_auto_start_workflow(env, record)
+                    inst = WorkflowEngine.instance_for_record(env, res_model, res_id)
 
     if inst is None:
         defn_rec = WorkflowEngine.active_definition(env, res_model)
@@ -58,10 +68,11 @@ def form_context(env, res_model: str, res_id: int) -> dict[str, Any] | None:
             "has_workflow": True,
             "started": False,
             "definition_name": defn_rec.name,
-            "can_start": True,
+            "can_start": False if readonly else True,
             "auto_start": bool(defn.get("auto_start")),
             "statusbar": _statusbar_from_defn(defn, current_key=None),
             "timeline": [],
+            "readonly": readonly,
         }
 
     defn = parse_definition(inst.definition_id.definition)
@@ -85,10 +96,9 @@ def form_context(env, res_model: str, res_id: int) -> dict[str, Any] | None:
                 from .engine import _user_may_act_on_approval
                 if _user_may_act_on_approval(env, appr, env.uid):
                     pending_approvals.append(_approval_ui(appr, defn))
-            except Exception:  # noqa: BLE001
+            except (PermissionError, ValueError, TypeError):
                 pass
 
-    states_list = defn.get("states") or []
     statusbar = _statusbar_from_defn(defn, current_key=inst.state)
 
     from .history import record_timeline
@@ -101,6 +111,10 @@ def form_context(env, res_model: str, res_id: int) -> dict[str, Any] | None:
         definition_json=inst.definition_id.definition,
     )
 
+    transitions = []
+    if not readonly:
+        transitions = WorkflowEngine.available_transitions(env, inst)
+
     return {
         "has_workflow": True,
         "started": True,
@@ -108,12 +122,13 @@ def form_context(env, res_model: str, res_id: int) -> dict[str, Any] | None:
         "state": inst.state,
         "state_label": state_label,
         "pending_transition": inst.pending_transition or "",
-        "transitions": WorkflowEngine.available_transitions(env, inst),
+        "transitions": transitions,
         "pending_approvals": pending_approvals,
         "can_start": False,
         "auto_start": bool(defn.get("auto_start")),
         "statusbar": statusbar,
         "timeline": timeline,
+        "readonly": readonly,
     }
 
 

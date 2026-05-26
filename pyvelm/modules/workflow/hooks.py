@@ -65,26 +65,21 @@ _DEMO_PARTNER_WORKFLOW = {
 
 
 def install(env):
-    Access = env["ir.model.access"]
-    Group = env["res.groups"]
-    admin = Group.search([("name", "=", "Admin")])
-    admin.ensure_one()
+    # Keep access seeds consistent with the rest of the framework: Admin
+    # gets full CRUD, internal User typically gets read so list/form pages
+    # can render without throwing PermissionError on relational hops.
+    from pyvelm.security import grant_model_access
 
-    for model in (
-        "workflow.definition",
-        "workflow.instance",
-        "workflow.approval",
-        "workflow.task",
-    ):
-        Access.create({
-            "name": f"Admin/{model}",
-            "model": model,
-            "group_id": admin,
-            "perm_read": True,
-            "perm_write": True,
-            "perm_create": True,
-            "perm_unlink": True,
-        })
+    # Design-time workflow definitions remain admin-only.
+    grant_model_access(env, "workflow.definition", admin="crud", user=None)
+    # Runtime workflow: internal users reach the inbox via
+    # ``workflow.approval`` read; instance/task admin lists stay admin-only.
+    # Record pages still show workflow state via targeted sudo in the
+    # workflow service when the user lacks instance read.
+    grant_model_access(env, "workflow.instance", admin="crud", user=None)
+    grant_model_access(env, "workflow.approval", admin="crud", user="read")
+    grant_model_access(env, "workflow.task", admin="crud", user=None)
+    _drop_legacy_user_read_on(env, ("workflow.instance", "workflow.task"))
 
     Definition = env["workflow.definition"]
     _upsert_partner_workflow(Definition)
@@ -94,9 +89,27 @@ def install(env):
 
 def sync(env):
     """Refresh bundled demo definitions (e.g. after workflow JSON changes)."""
+    _drop_legacy_user_read_on(env, ("workflow.instance", "workflow.task"))
     if "workflow.definition" in env.registry:
         _upsert_partner_workflow(env["workflow.definition"])
     _seed_escalation_cron(env)
+
+
+def _drop_legacy_user_read_on(env, models: tuple[str, ...]) -> None:
+    """Remove obsolete ``User/…`` read rows left from older workflow ACL seeds."""
+    if "ir.model.access" not in env.registry:
+        return
+    from pyvelm.security import GROUP_USER, _group_by_name
+
+    grp = _group_by_name(env, GROUP_USER)
+    if not grp:
+        return
+    Access = env["ir.model.access"]
+    for model in models:
+        for row in Access.search(
+            [("name", "=", f"User/{model}"), ("group_id", "=", grp.id)]
+        ):
+            row.unlink()
 
 
 def _upsert_partner_workflow(Definition) -> None:

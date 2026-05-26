@@ -3,7 +3,7 @@
 {% set b = brand if brand is defined else none %}
 {% set _bm_variant = brand_mark_variant if brand_mark_variant is defined else 'sidebar' %}
 {% if b %}
-<a href="/web/apps" class="flex items-center gap-2.5 min-w-0 text-heading hover:opacity-90 transition
+<a href="{{ home_href | default('/web/admin') }}" class="flex items-center gap-2.5 min-w-0 text-heading hover:opacity-90 transition
           {% if _bm_variant == 'sidebar' %}flex-1{% else %}max-w-full{% endif %}" aria-label="{{ b.app_name }} home">
     {% if b.has_logo %}
     {% set logo_class = 'h-13 w-auto max-w-[8rem] rounded-lg object-contain shrink-0' %}

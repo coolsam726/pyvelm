@@ -67,6 +67,11 @@ class ModuleSpec:
     category: str = ""                 # grouping label, e.g. "CRM" or "Admin"
     author: str = ""                   # free-form
     icon: str = ""                     # raw inline SVG markup or empty
+    # Optional Apps-catalog visibility gate. When set, `/web/apps` hides this
+    # module unless the user passes the ACL + (optional) policy check.
+    catalog_access_model: str = ""
+    catalog_access_perm: str = ""
+    catalog_access_policy: str = ""
     # Filled during install from the data files.
     views: list[dict[str, Any]] = dc_field(default_factory=list)
     view_inherits: list[dict[str, Any]] = dc_field(default_factory=list)
@@ -146,6 +151,9 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
         category=getattr(mod, "CATEGORY", ""),
         author=getattr(mod, "AUTHOR", ""),
         icon=getattr(mod, "ICON", ""),
+        catalog_access_model=getattr(mod, "CATALOG_ACCESS_MODEL", ""),
+        catalog_access_perm=getattr(mod, "CATALOG_ACCESS_PERM", ""),
+        catalog_access_policy=getattr(mod, "CATALOG_ACCESS_POLICY", ""),
         command_refs=command_refs,
     )
 
@@ -619,6 +627,9 @@ def _sync_menus(spec: ModuleSpec, env: Environment) -> None:
             "href": m.get("href"),
             "icon": m.get("icon"),
             "active": m.get("active", True),
+            "access_model": m.get("access_model"),
+            "access_perm": m.get("access_perm"),
+            "access_policy": m.get("access_policy"),
         }
         existing = Menu.search([
             ("module", "=", spec.name),
@@ -710,6 +721,9 @@ def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
 def load_and_install(roots: list[Path | str], env: Environment) -> list[ModuleSpec]:
     """End-to-end: discover, resolve, load models, install. Returns the
     ordered ModuleSpecs that were processed."""
+    from pyvelm.policies import register_builtin_policies
+
+    register_builtin_policies()
     specs = discover(roots)
     ordered = resolve_order(specs)
     for spec in ordered:

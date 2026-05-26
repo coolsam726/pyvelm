@@ -303,6 +303,17 @@ class BaseModel(metaclass=MetaModel):
             ids = (ids,)
         return self.__class__(self.env, tuple(ids))
 
+    def sudo(self, flag: bool = True) -> "BaseModel":
+        """Return this recordset bound to a sudo env (see ``Environment.sudo``).
+
+        ``records.sudo()`` bypasses access checks and record rules for
+        operations on the returned recordset; the original is untouched.
+        ``records.sudo(False)`` returns an access-enforced recordset.
+
+            partner.sudo().write({"credit_limit": 0})
+        """
+        return self.__class__(self.env.sudo(flag), self._ids)
+
     # ------ DDL ------
 
     @classmethod

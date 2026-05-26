@@ -8,7 +8,8 @@ Usage::
 Requires PYVELM_DSN (copy .env.example to .env). Default mode is
 ``development``; Docker / gunicorn use ``production``.
 
-Open http://localhost:8000/login — admin / admin.
+Open http://localhost:8000/ (landing) or /login — admin / admin.
+Optional: PYVELM_HOME_URL=/ to use the site root as the signed-in home.
 
 Sidebar **Vellum demo** (notes, comments, soft deletes) and **Feedback signals**
 (narrative-first feedback analysis) load with this server.

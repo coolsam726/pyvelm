@@ -37,7 +37,7 @@ def _format_time(value, env) -> str:
         from pyvelm.render import _utc_to_local
 
         local = _utc_to_local(value, env) or value
-    except Exception:  # noqa: BLE001
+    except (ImportError, ValueError, TypeError):
         local = value
     return local.strftime("%Y-%m-%d %H:%M")
 
@@ -91,7 +91,7 @@ def _approval_event(appr, env, defn: dict) -> dict[str, Any]:
             g = appr.assignee_group_id
             g.ensure_one()
             assignee = g.name or ""
-        except Exception:  # noqa: BLE001
+        except (PermissionError, ValueError, TypeError):
             pass
 
     if appr.status == "pending":
@@ -153,18 +153,25 @@ def record_timeline(
         defn = parse_definition(definition_json)
 
     if "mail.message" in env.registry:
+        domain = [
+            ("model", "=", res_model),
+            ("res_id", "=", res_id),
+            ("subtype", "=", "workflow"),
+        ]
         try:
             env.check_access("mail.message", "read")
             Message = env["mail.message"]
-            msgs = Message.search([
-                ("model", "=", res_model),
-                ("res_id", "=", res_id),
-                ("subtype", "=", "workflow"),
-            ])
-            for msg in sorted(msgs, key=lambda m: m.date or datetime.min):
-                events.append(_message_event(msg, env))
+            msgs = Message.search(domain)
         except PermissionError:
-            pass
+            # Workflow history is part of the record UX; it should not require
+            # granting broad read access to *all* mail.message rows.
+            # Narrow sudo fallback: only fetch workflow-subtype messages for
+            # the specific record we're rendering.
+            Message = env.sudo()["mail.message"]
+            msgs = Message.search(domain)
+
+        for msg in sorted(msgs, key=lambda m: m.date or datetime.min):
+            events.append(_message_event(msg, env))
 
     pending_events: list[dict[str, Any]] = []
     approval_history: list[dict[str, Any]] = []

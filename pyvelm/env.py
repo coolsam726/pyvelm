@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .registry import Registry
+from .policy import eval_policy
 
 if TYPE_CHECKING:
     from pyvelm.vellum.query import QueryBuilder
@@ -107,15 +108,55 @@ class Environment:
         model_cls = self.registry[model_name]
         return QueryBuilder(model_cls=model_cls, env=self)
 
-    def with_context(self, **overrides) -> "Environment":
+    def _derive(self, *, context: dict, acl_bypass: bool) -> "Environment":
+        """Build a sibling env sharing conn + registry + value cache.
+
+        Recordsets are cheap views over an env, so deriving a new one is
+        how we vary a single axis (context, sudo) without disturbing the
+        caller's env. The cache is shared because it's keyed by
+        ``(model, id, field)`` only — access control is enforced at the
+        model boundary, not the cache, exactly as in Odoo.
+        """
         new = Environment(
             self.conn,
             registry=self.registry,
             uid=self.uid,
-            context={**self.context, **overrides},
+            context=context,
         )
         new.cache = self.cache
+        new._acl_bypass = acl_bypass
         return new
+
+    def with_context(self, **overrides) -> "Environment":
+        # Preserve the sudo flag so `env.sudo().with_context(...)` (and
+        # `.with_company(...)`) stay in sudo mode, matching Odoo.
+        return self._derive(
+            context={**self.context, **overrides},
+            acl_bypass=self._acl_bypass,
+        )
+
+    def sudo(self, flag: bool = True) -> "Environment":
+        """Return an env that bypasses ``ir.model.access`` + ``ir.rule``.
+
+        Mirrors Odoo's ``env.sudo()``. The returned env keeps the same
+        ``uid`` — audit trails and ``{"placeholder": "uid"}`` rules still
+        attribute to the real user — but every CRUD access check and
+        record-rule domain is skipped. ``sudo(False)`` returns an
+        enforced env.
+
+        Use it for trusted internal work that must read or write rows the
+        current user can't reach directly (cross-company lookups, system
+        bookkeeping). It's the supported replacement for poking
+        ``env._acl_bypass`` by hand::
+
+            companies = env.with_company(None).sudo()["res.company"].search([])
+
+        Idempotent: returns ``self`` when the flag already matches.
+        """
+        flag = bool(flag)
+        if bool(self._acl_bypass) == flag:
+            return self
+        return self._derive(context=dict(self.context), acl_bypass=flag)
 
     # ------ Company ------
 
@@ -179,28 +220,44 @@ class Environment:
         self._user_groups_cache = result
         return result
 
-    def check_access(self, model_name: str, perm: str) -> None:
-        """Raise PermissionError if the current user lacks `perm` on
-        `model_name`. No-op for superuser or while bypass is set.
+    def prime_current_user_cache(self) -> None:
+        """Load common fields for ``env.uid`` under ACL bypass.
 
-        `perm` is one of: read / write / create / unlink.
+        Values stay in the request cache so later reads (layout chrome,
+        profile, timezone) succeed even when the user lacks broad
+        ``res.users`` / ``res.groups`` grants. Idempotent per request.
         """
+        if self.uid is None or "res.users" not in self.registry:
+            return
+        prev = self._acl_bypass
+        self._acl_bypass = True
+        try:
+            users = self["res.users"].search([("id", "=", self.uid)], limit=1)
+            if not users:
+                return
+            user = users
+            user.ensure_one()
+            _ = user.name, user.login
+            if "avatar_url" in self.registry["res.users"]._fields:
+                _ = user.avatar_url
+            _ = user.company_id
+            if user.group_ids:
+                for group in user.group_ids:
+                    _ = group.name
+        finally:
+            self._acl_bypass = prev
+
+    def _access_granted(self, model_name: str, perm: str) -> bool:
+        """Return whether the current principal may perform *perm* on *model_name*."""
         if self.is_superuser() or self._acl_bypass:
-            return
+            return True
         if "ir.model.access" not in self.registry:
-            # ACL machinery not installed yet (e.g. early in install).
-            return
+            return True
         cache_key = (model_name, perm)
         cached = self._access_cache.get(cache_key)
-        if cached is True:
-            return
-        if cached is False:
-            raise PermissionError(
-                f"Access denied: {perm} on {model_name} (uid={self.uid})"
-            )
+        if cached is not None:
+            return bool(cached)
         Access = self["ir.model.access"]
-        # Bypass ACL on the access-table lookup itself — otherwise
-        # recursion. Same reason `user_group_ids` flips the bypass.
         prev = self._acl_bypass
         self._acl_bypass = True
         try:
@@ -209,37 +266,122 @@ class Environment:
                 (f"perm_{perm}", "=", True),
             ]
             if self.uid is None:
-                # Anonymous: only grants with group_id=None apply.
                 domain.append(("group_id", "=", None))
+                granted = bool(Access.search(domain, limit=1))
             else:
-                # Authenticated: any grant with group_id=None or in the
-                # user's groups applies. We split into two searches to
-                # avoid the `IN (NULL, ...)` SQL-NULL pitfall.
                 ids = self.user_group_ids
-                anyone = Access.search(domain + [("group_id", "=", None)],
-                                       limit=1)
+                anyone = Access.search(
+                    domain + [("group_id", "=", None)], limit=1
+                )
                 granted = bool(anyone)
                 if not granted and ids:
-                    grouped = Access.search(
-                        domain + [("group_id", "in", list(ids))], limit=1,
+                    granted = bool(
+                        Access.search(
+                            domain + [("group_id", "in", list(ids))],
+                            limit=1,
+                        )
                     )
-                    granted = bool(grouped)
-                self._access_cache[cache_key] = granted
-                if not granted:
-                    raise PermissionError(
-                        f"Access denied: {perm} on {model_name} "
-                        f"(uid={self.uid})"
-                    )
-                return
-            # Anonymous branch.
-            granted = bool(Access.search(domain, limit=1))
             self._access_cache[cache_key] = granted
-            if not granted:
-                raise PermissionError(
-                    f"Access denied: {perm} on {model_name} (anonymous)"
-                )
+            return granted
         finally:
             self._acl_bypass = prev
+
+    def has_access(self, model_name: str, perm: str) -> bool:
+        """Non-throwing access check — use in templates and UI gating."""
+        return self._access_granted(model_name, perm)
+
+    def access_flags(self, model_name: str) -> dict[str, bool]:
+        """CRUD booleans for *model_name* (read / write / create / unlink)."""
+        return {
+            p: self._access_granted(model_name, p)
+            for p in ("read", "write", "create", "unlink")
+        }
+
+    def check_access(self, model_name: str, perm: str) -> None:
+        """Raise PermissionError if the current user lacks `perm` on
+        `model_name`. No-op for superuser or while bypass is set.
+
+        `perm` is one of: read / write / create / unlink.
+        """
+        if self._access_granted(model_name, perm):
+            return
+        if self.uid is None:
+            raise PermissionError(
+                f"Access denied: {perm} on {model_name} (anonymous)"
+            )
+        raise PermissionError(
+            f"Access denied: {perm} on {model_name} (uid={self.uid})"
+        )
+
+    # ------ Policies (record-aware authorization) ------
+
+    def can(
+        self,
+        record_or_model: object,
+        action: str,
+        *,
+        perm: str | None = None,
+        model: str | None = None,
+        **kwargs: Any,
+    ) -> bool:
+        """Return whether *action* is allowed (policy + optional ACL ceiling).
+
+        - **perm**: optional ACL ceiling to require (e.g. "write").
+        - **model**: override model name when *record_or_model* isn't a recordset.
+
+        If no policy is registered for the model (or the method doesn't exist),
+        this falls back to the ACL ceiling check only (when *perm* is provided),
+        otherwise True.
+        """
+        # Resolve model + record.
+        record = None
+        model_name = model
+        if model_name is None and hasattr(record_or_model, "_name"):
+            model_name = getattr(record_or_model, "_name")
+            record = record_or_model
+        elif model_name is None:
+            model_name = str(record_or_model)
+
+        if perm:
+            if not self.has_access(str(model_name), str(perm)):
+                return False
+
+        # Evaluate policy (if any). None => no opinion.
+        decision = eval_policy(
+            self,
+            model_name=str(model_name),
+            action=str(action),
+            record=record,
+            **kwargs,
+        )
+        if decision is None:
+            return True
+        return bool(decision)
+
+    def check_can(
+        self,
+        record_or_model: object,
+        action: str,
+        *,
+        perm: str | None = None,
+        model: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Raise PermissionError if :meth:`can` is false."""
+        if self.can(
+            record_or_model,
+            action,
+            perm=perm,
+            model=model,
+            **kwargs,
+        ):
+            return
+        model_name = model
+        if model_name is None and hasattr(record_or_model, "_name"):
+            model_name = getattr(record_or_model, "_name")
+        raise PermissionError(
+            f"Access denied: {action} on {model_name} (uid={self.uid})"
+        )
 
     def collect_record_rules(self, model_name: str, perm: str) -> list:
         """Return the union of domain leaves to AND-inject into
@@ -360,13 +502,26 @@ class Environment:
                 try:
                     if self_inner._kind == "tx":
                         if exc is None:
-                            env.conn.commit()
+                            try:
+                                env.conn.commit()
+                            except Exception:  # noqa: BLE001
+                                # If application code swallowed an exception inside
+                                # the `with` block after a SQL error, the connection
+                                # is left in an aborted transaction state and commit
+                                # will fail (e.g. psycopg.errors.InFailedSqlTransaction).
+                                # Roll back to restore a usable connection.
+                                env.conn.rollback()
+                                raise
                         else:
                             env.conn.rollback()
                     else:
                         sp = self_inner._sp_name
                         if exc is None:
-                            env.conn.execute(f"RELEASE SAVEPOINT {sp}")
+                            try:
+                                env.conn.execute(f"RELEASE SAVEPOINT {sp}")
+                            except Exception:  # noqa: BLE001
+                                env.conn.execute(f"ROLLBACK TO SAVEPOINT {sp}")
+                                raise
                         else:
                             env.conn.execute(f"ROLLBACK TO SAVEPOINT {sp}")
                 finally:

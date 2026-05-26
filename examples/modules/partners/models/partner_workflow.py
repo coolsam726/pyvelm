@@ -22,7 +22,17 @@ class PartnerWorkflow(MailThread, BaseModel):
                 continue
             if "workflow.instance" not in self.env.registry:
                 continue
-            inst = WorkflowEngine.instance_for_record(self.env, rec._name, rec.id)
+            # Read-only workflow state is useful on lists/forms even when the
+            # current user doesn't have broad access to workflow runtime models.
+            # Use a narrow sudo fallback so the relationship display doesn't
+            # crash the page.
+            env = self.env
+            try:
+                env.check_access("workflow.instance", "read")
+            except PermissionError:
+                env = env.sudo()
+
+            inst = WorkflowEngine.instance_for_record(env, "res.partner", rec.id)
             if not inst:
                 continue
             rec.workflow_state = inst.state or ""

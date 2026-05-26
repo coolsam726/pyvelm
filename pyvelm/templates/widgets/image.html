@@ -73,5 +73,6 @@
     </div>
     {# Hidden mirror of `url` — this is what the form submits. #}
     <input type="hidden" name="{{ name }}" :value="url">
+    <input type="hidden" name="{{ name }}_clear" :value="cleared ? '1' : ''">
 </div>
 {% endif %}

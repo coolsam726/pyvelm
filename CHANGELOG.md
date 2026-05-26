@@ -7,6 +7,50 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.10.0] — 2026-05-26
+
+Policies, granular UI access gating, public landing page, configurable home URL,
+sudo mode, and public attachments. See [docs/releases/v0.10.0.md](docs/releases/v0.10.0.md).
+
+### Added
+
+- **Policies** — `pyvelm/policy.py`, `pyvelm/policies/` (`AdminManagementPolicy`,
+  workflow policies); `env.can()` / `env.check_can()`; menu `policy=` and form
+  `header_actions` policy gating.
+- **Access denied page** — `templates/access_denied.html`; browser HTML 403s;
+  minimal shell for `/web/feedback_signals/` and `/web/account/`.
+- **Landing page** — `/` for anonymous visitors; `PYVELM_HOME_URL`, `PYVELM_LANDING`.
+- **`pyvelm.home`** — `home_url()`, `login_url()`, `render_landing_page()`.
+- **Sudo** — `Environment.sudo()` / `BaseModel.sudo()` (keeps real `uid`).
+- **Public attachments** — `ir.attachment.public`; public download without login;
+  image-widget uploads marked public; migration `0_24_to_0_25`.
+- **`pyvelm.security`** — `grant_model_access()`, `user_in_group()`,
+  `can_view_apps_catalog()`, `template_access()`.
+- **Menu ACL fields** — `ir.ui.menu.access_model`, `access_perm`, `access_policy`;
+  migrations `0_21`–`0_24`.
+- **Apps catalog gate** — module `CATALOG_ACCESS_MODEL` / `_PERM` / `_POLICY`.
+- **Tests** — security, policies, home, policy UI gating, apps catalog, view access.
+
+### Changed
+
+- **Sidebar / dashboard / apps** — management menus use `policy="view_any"`;
+  Apps menu and catalog require admin policy; breadcrumbs and brand use
+  `PYVELM_HOME_URL`.
+- **Workflow ACL** — User read on approvals only; admin lists require write/policy.
+- **Base sync** — no longer re-adds **User** group on every reload (backfill is
+  migration-only).
+- **Everyone grants** — shell read on `res.users` / `res.groups` unchanged;
+  admin UI gated by policy instead of `perm="write"` alone.
+
+### Fixed
+
+- **Profile avatar** — saving without a new image no longer stores `False`.
+- **Char fields** — `False` and `""` normalize to SQL `NULL`.
+- **Workflow install** — `maybe_auto_start_workflow` when schema not ready.
+- **Many2one display** — label sudo fallback; list M2O links use `_ids[0]`.
+- **Feedback routes** — `PermissionError` renders HTML access denied, not JSON.
+- **Transaction rollback** on failed commit when nested tx poisoned.
+
 ## [0.9.0] — 2026-05-25
 
 Kanban boards, schema autogen, relational dialog UX, navigation history breadcrumbs,

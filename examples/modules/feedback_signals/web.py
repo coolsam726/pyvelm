@@ -84,10 +84,7 @@ def register_routes(app) -> None:
     def capture_page(request: Request, env: Environment = Depends(get_env)):
         if env.uid is None:
             return _auth_redirect(request)
-        try:
-            env.check_access("feedback.intake", "create")
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        env.check_access("feedback.intake", "create")
         return HTMLResponse(
             _render(
                 "feedback_capture.html",
@@ -115,10 +112,7 @@ def register_routes(app) -> None:
     ):
         if env.uid is None:
             return _auth_redirect(request)
-        try:
-            env.check_access("feedback.intake", "create")
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        env.check_access("feedback.intake", "create")
 
         rating_val = None
         if explicit_rating.strip().isdigit():
@@ -171,10 +165,7 @@ def register_routes(app) -> None:
     def analytics_page(request: Request, env: Environment = Depends(get_env)):
         if env.uid is None:
             return _auth_redirect(request)
-        try:
-            env.check_access("feedback.intake", "read")
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        env.check_access("feedback.intake", "read")
         from feedback_signals.analytics import gather_analytics
         from feedback_signals.interpret import SIGNAL_GLOSSARY
 
@@ -194,10 +185,7 @@ def register_routes(app) -> None:
     def review_queue(request: Request, env: Environment = Depends(get_env)):
         if env.uid is None:
             return _auth_redirect(request)
-        try:
-            env.check_access("feedback.intake", "read")
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        env.check_access("feedback.intake", "read")
         Intake = env["feedback.intake"]
         pending = Intake.search(
             [("signals_verified", "=", False), ("active", "=", True)],
@@ -225,10 +213,7 @@ def register_routes(app) -> None:
     ):
         if env.uid is None:
             return _auth_redirect(request)
-        try:
-            env.check_access("feedback.intake", "write")
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        env.check_access("feedback.intake", "write")
         record = _load_intake(env, record_id)
         return HTMLResponse(
             _render_verify(
@@ -255,10 +240,7 @@ def register_routes(app) -> None:
     ):
         if env.uid is None:
             return _auth_redirect(request)
-        try:
-            env.check_access("feedback.intake", "write")
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        env.check_access("feedback.intake", "write")
         record = _load_intake(env, record_id)
 
         if action == "approve":
@@ -317,10 +299,7 @@ def register_routes(app) -> None:
     def export_training(env: Environment = Depends(get_env)):
         if env.uid is None:
             raise HTTPException(status_code=401, detail="Login required")
-        try:
-            env.check_access("feedback.intake", "read")
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        env.check_access("feedback.intake", "read")
         from feedback_signals.training_examples import export_training_record
 
         lines: list[str] = []

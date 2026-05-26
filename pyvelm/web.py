@@ -84,14 +84,40 @@ def _display_value(record) -> str:
     """
     if not record:
         return ""
+    # Avoid `record.id` (descriptor) because it can trigger `_read` and
+    # therefore a model ACL check. We sometimes need a label for a related
+    # record the caller cannot read; in that case we still want to fall back
+    # to the referenced primary key.
+    raw_id = None
+    try:
+        raw_id = record._ids[0] if getattr(record, "_ids", None) else None
+    except Exception:  # noqa: BLE001
+        raw_id = None
     for attr in ("display_name", "name"):
         if attr in record._fields:
             try:
                 value = getattr(record, attr)
                 if value is not None:
                     return str(value)
+            except PermissionError:
+                # Relationship labels are frequently needed even when the
+                # current user has no access to the related model (e.g.
+                # showing company name on a lead row). Allow a narrow
+                # fallback: fetch the label for this already-referenced id
+                # under sudo, without granting broader model access.
+                try:
+                    su = record.env.sudo()[record._name].browse(raw_id or record.id)
+                    su.ensure_one()
+                    value = getattr(su, attr, None)
+                    if value is not None:
+                        return str(value)
+                except Exception:  # noqa: BLE001
+                    pass
             except Exception:  # noqa: BLE001
                 pass
+    if raw_id is not None:
+        return str(raw_id)
+    # Last resort: may trigger ACL, but we have no other handle.
     return str(record.id)
 
 
@@ -182,8 +208,10 @@ def create_app(
     over the connection class and propagating that here adds friction
     without buying meaningful type safety — every method we call on it
     is on the runtime type."""
+    from .policies import register_builtin_policies
     from .runtime import cookie_options, get_runtime_env, is_development
 
+    register_builtin_policies()
     env_mode = get_runtime_env(runtime_env)
     dev = is_development(env_mode)
     auth_cookie = cookie_options(env=env_mode)
@@ -321,17 +349,50 @@ def create_app(
 
     app.add_middleware(NoCacheMiddleware)
 
+    def _wants_html_error_page(request: Request) -> bool:
+        """Browser page navigations under ``/web/`` get a styled HTML body."""
+        if request.headers.get("HX-Request") == "true":
+            return False
+        if request.url.path.startswith("/api/"):
+            return False
+        if request.method == "GET" and request.url.path.startswith("/web/"):
+            return True
+        accept = request.headers.get("accept", "")
+        return "text/html" in accept
+
     @app.exception_handler(PermissionError)
     def _permission_error(request, exc):
         msg = str(exc)
-        # Anonymous failures get 401 + WWW-Authenticate so browsers
-        # prompt for credentials; authenticated-but-denied is 403.
-        if "anonymous" in msg or "uid=None" in msg:
+        is_anonymous = "anonymous" in msg or "uid=None" in msg
+        is_htmx = request.headers.get("HX-Request") == "true"
+        wants_html = _wants_html_error_page(request)
+        # Not logged in: send them to sign in (or 401 the API caller).
+        if is_anonymous:
+            if is_htmx or wants_html:
+                return _auth_required_response(request)
             return Response(
                 status_code=401,
                 headers={"WWW-Authenticate": 'Basic realm="pyvelm"'},
                 content=msg,
             )
+        # Authenticated but denied: render the styled page for browsers,
+        # plain text for API / HTMX callers.
+        if wants_html:
+            from pyvelm.request_env import apply_request_scope
+            from .render import render_access_denied_page
+
+            with pool.connection() as conn:
+                env = Environment(conn, registry=registry, uid=None)
+                env = apply_request_scope(
+                    env,
+                    request,
+                    resolve_session=_resolve_user_from_session,
+                    resolve_basic=_resolve_user_from_basic,
+                )
+                html = render_access_denied_page(
+                    env, detail=msg, current_path=str(request.url.path)
+                )
+            return HTMLResponse(html, status_code=403)
         return Response(status_code=403, content=msg)
 
     # Static assets shipped inside the package (CSS, eventually images).
@@ -350,17 +411,15 @@ def create_app(
         """Return uid for a valid session token, or None."""
         if not token or "res.users" not in registry:
             return None
-        env._acl_bypass = True
-        try:
-            users = env["res.users"].search(
-                [("session_token", "=", token), ("active", "=", True)], limit=1
-            )
-            if not users:
-                return None
-            users.ensure_one()
-            return users.id
-        finally:
-            env._acl_bypass = False
+        # sudo: the request is still anonymous here, so look the user up
+        # without ACL (leaves the request env enforced).
+        users = env.sudo()["res.users"].search(
+            [("session_token", "=", token), ("active", "=", True)], limit=1
+        )
+        if not users:
+            return None
+        users.ensure_one()
+        return users.id
 
     def _resolve_user_from_basic(
         env: Environment, header_value: str | None
@@ -380,22 +439,18 @@ def create_app(
             return None
         if "res.users" not in registry:
             return None
-        # Bypass ACL on the user lookup itself.
-        env._acl_bypass = True
-        try:
-            users = env["res.users"].search(
-                [("login", "=", login), ("active", "=", True)],
-                limit=1,
-            )
-            if not users:
-                return None
-            user = users
-            user.ensure_one()
-            if not user.check_password(password):
-                return None
-            return user.id
-        finally:
-            env._acl_bypass = False
+        # sudo: look up the user without ACL (request env stays enforced).
+        users = env.sudo()["res.users"].search(
+            [("login", "=", login), ("active", "=", True)],
+            limit=1,
+        )
+        if not users:
+            return None
+        user = users
+        user.ensure_one()
+        if not user.check_password(password):
+            return None
+        return user.id
 
     def get_env(request: Request):
         from pyvelm.request_env import apply_request_scope
@@ -411,15 +466,15 @@ def create_app(
             yield env
 
     def _load_view(env, module: str, name: str):
+        from .render import _load_ui_view
+
         if "ir.ui.view" not in registry:
             raise HTTPException(status_code=503, detail="No ir.ui.view model loaded")
-        View = env["ir.ui.view"]
-        rec = View.search([("module", "=", module), ("name", "=", name)])
+        rec = _load_ui_view(env, module, name)
         if not rec:
             raise HTTPException(
                 status_code=404, detail=f"View {module}/{name} not found"
             )
-        rec.ensure_one()
         return rec
 
     def _login_redirect(request: Request) -> RedirectResponse:
@@ -1074,6 +1129,8 @@ def create_app(
         from .render import render_form_page
 
         view = _require_form_view(_load_view(env, module, name))
+        if not env.has_access(view.model, "create"):
+            raise PermissionError(f"You cannot create {view.model} records.")
         # Query params named after declared fields prefill the new
         # record's defaults — used by the O2m inline-Add link to
         # carry the parent FK into the child form.
@@ -1154,6 +1211,8 @@ def create_app(
         from .render import render_form_page
 
         view = _require_form_view(_load_view(env, module, name))
+        if not env.has_access(view.model, "write"):
+            raise PermissionError(f"You cannot edit {view.model} records.")
         rec = _load_record(env, view, record_id)
         body_only = request.headers.get("HX-Request") == "true"
         return HTMLResponse(
@@ -1946,10 +2005,9 @@ def create_app(
         from .render import render_report_builder_page
         if env.uid is None:
             return _login_redirect(request)
-        try:
-            env.check_access("ir.report", "create")
-        except PermissionError:
-            raise HTTPException(status_code=403, detail="Cannot create reports")
+        # Let PermissionError reach the global handler so the browser
+        # gets the styled access-denied page, not a JSON error.
+        env.check_access("ir.report", "create")
         return HTMLResponse(render_report_builder_page(env, report_rec=None, current_path=str(request.url.path)))
 
     @app.get("/web/reports/{report_id}/build", response_class=HTMLResponse)
@@ -1963,10 +2021,7 @@ def create_app(
         recs = Report.search([("id", "=", report_id)], limit=1)
         if not recs:
             raise HTTPException(status_code=404, detail="Report not found")
-        try:
-            env.check_access("ir.report", "write")
-        except PermissionError as e:
-            raise HTTPException(status_code=403, detail=str(e)) from e
+        env.check_access("ir.report", "write")
         return HTMLResponse(
             render_report_builder_page(env, report_rec=recs, current_path=str(request.url.path))
         )
@@ -2151,7 +2206,11 @@ def create_app(
                     "HX-Trigger": json.dumps({"pv-dialog-saved": {"ok": True}}),
                 },
             )
-        return RedirectResponse(request.headers.get("Referer") or "/web/admin", status_code=303)
+        from .home import home_url
+
+        return RedirectResponse(
+            request.headers.get("Referer") or home_url(), status_code=303
+        )
 
     @app.get("/web/workflow/build", response_class=HTMLResponse)
     def web_workflow_build(request: Request, env: Environment = Depends(get_env)):
@@ -2159,10 +2218,7 @@ def create_app(
 
         if env.uid is None:
             return _login_redirect(request)
-        try:
-            env.check_access("workflow.definition", "create")
-        except PermissionError:
-            raise HTTPException(status_code=403, detail="Cannot create workflows")
+        env.check_access("workflow.definition", "create")
         return HTMLResponse(
             render_workflow_builder_page(env, workflow_rec=None, current_path=str(request.url.path))
         )
@@ -2179,10 +2235,7 @@ def create_app(
         recs = Definition.search([("id", "=", workflow_id)], limit=1)
         if not recs:
             raise HTTPException(status_code=404, detail="Workflow not found")
-        try:
-            env.check_access("workflow.definition", "write")
-        except PermissionError as e:
-            raise HTTPException(status_code=403, detail=str(e)) from e
+        env.check_access("workflow.definition", "write")
         return HTMLResponse(
             render_workflow_builder_page(env, workflow_rec=recs, current_path=str(request.url.path))
         )
@@ -2348,14 +2401,40 @@ def create_app(
             raise HTTPException(status_code=403, detail=str(e)) from e
         return {"ok": True}
 
-    # ---- admin dashboard ----
+    # ---- site root + home dashboard ----
+
+    @app.get("/", response_class=HTMLResponse)
+    def site_root(request: Request, env: Environment = Depends(get_env)):
+        from .home import home_url, landing_enabled, login_url
+        from .render import render_home_page, render_landing_page
+
+        if env.uid is not None:
+            target = home_url()
+            if target == "/":
+                return HTMLResponse(
+                    render_home_page(env, current_path="/")
+                )
+            return RedirectResponse(target, status_code=302)
+        if landing_enabled():
+            return HTMLResponse(
+                render_landing_page(env, current_path=str(request.url.path))
+            )
+        return RedirectResponse(login_url(), status_code=302)
 
     @app.get("/web/admin", response_class=HTMLResponse)
     def web_admin(request: Request, env: Environment = Depends(get_env)):
-        from .render import render_admin_page
+        from .home import home_url, login_url
+        from .render import render_admin_page, render_home_page
 
         if env.uid is None:
-            return RedirectResponse("/login?next=/web/admin", status_code=302)
+            return RedirectResponse(login_url(), status_code=302)
+        target = home_url()
+        if target not in ("/web/admin", "/web/admin/"):
+            if target == "/":
+                return HTMLResponse(
+                    render_home_page(env, current_path="/")
+                )
+            return RedirectResponse(target, status_code=302)
         return HTMLResponse(
             render_admin_page(env=env, current_path=str(request.url.path))
         )
@@ -2425,7 +2504,10 @@ def create_app(
         from urllib.parse import quote
 
         message = _header_safe_text(result.get("message", "Module updated."))
-        redirect = f"/web/admin?pv_flash={quote(message, safe='')}"
+        from .home import home_url
+
+        flash_base = home_url() if home_url() != "/" else "/web/admin"
+        redirect = f"{flash_base}?pv_flash={quote(message, safe='')}"
         if request.headers.get("HX-Request") == "true":
             return Response(
                 status_code=204,
@@ -2546,7 +2628,9 @@ def create_app(
             return RedirectResponse("/login", status_code=302)
         form = await request.form()
         raw = (form.get("company_id") or "").strip()
-        redirect_to = request.headers.get("referer") or "/web/admin"
+        from .home import home_url
+
+        redirect_to = request.headers.get("referer") or home_url()
         response = RedirectResponse(redirect_to, status_code=303)
         if raw:
             try:
@@ -2572,12 +2656,7 @@ def create_app(
             raise HTTPException(status_code=401, detail="Authentication required")
         if "res.company" not in registry:
             return {"companies": []}
-        bypass_env = env.with_company(None)
-        bypass_env._acl_bypass = True
-        try:
-            recs = bypass_env["res.company"].search([])
-        finally:
-            bypass_env._acl_bypass = False
+        recs = env.with_company(None).sudo()["res.company"].search([])
         return {
             "current_company_id": env.company_id,
             "companies": [{"id": r.id, "name": r.name} for r in recs],
@@ -2654,13 +2733,8 @@ def create_app(
         # Invalidate any active sessions the affected user has — a
         # password reset should kick them out so they re-authenticate
         # with the new credential. Same convention as Odoo.
-        prev = env._acl_bypass
-        env._acl_bypass = True
-        try:
-            with env.transaction():
-                user.write({"session_token": None})
-        finally:
-            env._acl_bypass = prev
+        with env.transaction():
+            user.sudo().write({"session_token": None})
 
         return HTMLResponse(
             render_admin_password_reset_page(
@@ -2711,18 +2785,24 @@ def create_app(
         if not name:
             return reject("Display name is required.")
 
-        prev = env._acl_bypass
-        env._acl_bypass = True
+        # sudo: self-service write — a user may edit their own profile
+        # even without an explicit res.users write grant.
+        vals: dict = {"name": name}
+        if avatar_url:
+            vals["avatar_url"] = avatar_url
+        elif (form.get("avatar_url_clear") or "").strip().lower() in (
+            "1",
+            "true",
+            "on",
+            "yes",
+        ):
+            vals["avatar_url"] = None
+
         try:
             with env.transaction():
-                env["res.users"].browse(env.uid).write({
-                    "name": name,
-                    "avatar_url": avatar_url or False,
-                })
+                env.sudo()["res.users"].browse(env.uid).write(vals)
         except (PermissionError, ValueError) as exc:
             return reject(str(exc) or "Could not update profile.")
-        finally:
-            env._acl_bypass = prev
 
         return HTMLResponse(
             render_account_profile_page(
@@ -2758,16 +2838,11 @@ def create_app(
         new = form.get("new_password") or ""
         confirm = form.get("confirm_password") or ""
 
-        # Verify the current password under ACL bypass so even users
-        # without explicit read on res.users (their own row included)
-        # can still self-serve.
-        prev = env._acl_bypass
-        env._acl_bypass = True
-        try:
-            user = env["res.users"].browse(env.uid)
-            current_ok = user.check_password(str(current))
-        finally:
-            env._acl_bypass = prev
+        # Verify the current password under sudo so even users without
+        # explicit read on res.users (their own row included) can
+        # still self-serve.
+        user = env.sudo()["res.users"].browse(env.uid)
+        current_ok = user.check_password(str(current))
 
         def reject(msg: str) -> HTMLResponse:
             return HTMLResponse(
@@ -2794,15 +2869,11 @@ def create_app(
         # fresh token, persist it in the same atomic write, and refresh
         # the cookie on the response below.
         new_token = secrets.token_hex(32)
-        env._acl_bypass = True
-        try:
-            with env.transaction():
-                env["res.users"].browse(env.uid).write({
-                    "password": new,
-                    "session_token": new_token,
-                })
-        finally:
-            env._acl_bypass = prev
+        with env.transaction():
+            env.sudo()["res.users"].browse(env.uid).write({
+                "password": new,
+                "session_token": new_token,
+            })
         response = HTMLResponse(
             render_password_page(
                 env,
@@ -2817,6 +2888,7 @@ def create_app(
 
     @app.get("/login", response_class=HTMLResponse)
     def login_page(request: Request, next: str = Query(default="")):
+        from .home import login_destination
         from .render import render_login_page
 
         # Already authenticated and the token is valid? Skip the login screen.
@@ -2824,7 +2896,9 @@ def create_app(
         with pool.connection() as conn:
             env = Environment(conn, registry=registry, uid=None)
             if token and _resolve_user_from_session(env, token) is not None:
-                return RedirectResponse(next or "/web/admin", status_code=302)
+                return RedirectResponse(
+                    login_destination(next), status_code=302
+                )
             raw_co = request.cookies.get(_COMPANY_COOKIE)
             if raw_co:
                 try:
@@ -2885,48 +2959,49 @@ def create_app(
         form = await request.form()
         login_val = (form.get("login") or "").strip()
         password_val = form.get("password") or ""
-        next_url = (form.get("next") or "").strip() or "/web/admin"
+        from .home import login_destination
+
+        next_url = login_destination((form.get("next") or "").strip())
 
         # Validate credentials.
         with pool.connection() as conn:
             env = Environment(conn, registry=registry, uid=None)
-            env._acl_bypass = True
-            try:
-                if "res.users" not in registry:
-                    raise HTTPException(503, "User model not loaded")
-                users = env["res.users"].search(
-                    [("login", "=", login_val), ("active", "=", True)], limit=1
+            # sudo: credential validation runs before any user is bound,
+            # so it must read res.users without ACL.
+            senv = env.sudo()
+            if "res.users" not in registry:
+                raise HTTPException(503, "User model not loaded")
+            users = senv["res.users"].search(
+                [("login", "=", login_val), ("active", "=", True)], limit=1
+            )
+            if not users or not users.check_password(password_val):
+                theme_env = senv
+                raw_co = request.cookies.get(_COMPANY_COOKIE)
+                if raw_co:
+                    try:
+                        theme_env = senv.with_company(int(raw_co))
+                    except (TypeError, ValueError):
+                        theme_env = senv
+                return HTMLResponse(
+                    render_login_page(
+                        error="Invalid username or password.",
+                        next=next_url,
+                        prefill_login=login_val,
+                        csrf_token=request.state.csrf_token,
+                        env=theme_env,
+                    ),
+                    status_code=401,
                 )
-                if not users or not users.check_password(password_val):
-                    theme_env = env
-                    raw_co = request.cookies.get(_COMPANY_COOKIE)
-                    if raw_co:
-                        try:
-                            theme_env = env.with_company(int(raw_co))
-                        except (TypeError, ValueError):
-                            theme_env = env
-                    return HTMLResponse(
-                        render_login_page(
-                            error="Invalid username or password.",
-                            next=next_url,
-                            prefill_login=login_val,
-                            csrf_token=request.state.csrf_token,
-                            env=theme_env,
-                        ),
-                        status_code=401,
-                    )
-                uid = users.id
-                token = secrets.token_hex(32)
-                with env.transaction():
-                    users.write({"session_token": token})
-                # Capture the user's home company so we can pre-set the
-                # company-scope cookie below. Reads through the ACL bypass
-                # so a user without explicit access to res.users on their
-                # own row still resolves the FK.
-                home_company = users.company_id
-                home_company_id = home_company.id if home_company else None
-            finally:
-                env._acl_bypass = False
+            uid = users.id
+            token = secrets.token_hex(32)
+            with senv.transaction():
+                users.write({"session_token": token})
+            # Capture the user's home company so we can pre-set the
+            # company-scope cookie below. Reads through sudo so a user
+            # without explicit access to res.users on their own row
+            # still resolves the FK.
+            home_company = users.company_id
+            home_company_id = home_company.id if home_company else None
 
         response = RedirectResponse(next_url, status_code=303)
         response.set_cookie(_SESSION_COOKIE, token, **auth_cookie)
@@ -2950,17 +3025,14 @@ def create_app(
         token = request.cookies.get(_SESSION_COOKIE)
         if token:
             with pool.connection() as conn:
-                env = Environment(conn, registry=registry, uid=None)
-                env._acl_bypass = True
-                try:
-                    users = env["res.users"].search(
-                        [("session_token", "=", token)], limit=1
-                    )
-                    if users:
-                        with env.transaction():
-                            users.write({"session_token": None})
-                finally:
-                    env._acl_bypass = False
+                # sudo: revoke the token for an as-yet-unidentified session.
+                env = Environment(conn, registry=registry, uid=None).sudo()
+                users = env["res.users"].search(
+                    [("session_token", "=", token)], limit=1
+                )
+                if users:
+                    with env.transaction():
+                        users.write({"session_token": None})
         response = RedirectResponse("/login", status_code=303)
         response.delete_cookie(_SESSION_COOKIE, path="/")
         response.delete_cookie(_COMPANY_COOKIE, path="/")
@@ -2980,6 +3052,7 @@ def create_app(
         file: UploadFile = File(...),
         res_model: str | None = Form(None),
         res_id: int | None = Form(None),
+        public: bool = Form(False),
         env: Environment = Depends(get_env),
     ):
         """Persist an uploaded blob into ``ir.attachment``.
@@ -2990,6 +3063,10 @@ def create_app(
                      omit when uploading to a not-yet-saved record; the
                      widget patches ``res_id`` on parent-form save.
           res_id     Primary key of the owning record. Same caveat.
+          public     ``True`` for UI-chrome images (logos, avatars) that
+                     must be served without an ``ir.attachment`` read
+                     grant. The image widget sets this; the document
+                     uploader leaves it ``False``.
 
         Returns JSON with the new row's ``{id, name, mimetype, size}``.
         """
@@ -3033,6 +3110,7 @@ def create_app(
                 "type": "binary",
                 "storage_key": storage_key,
                 "datas": datas,
+                "public": bool(public),
             })
         return {
             "id": att.id,
@@ -3052,15 +3130,29 @@ def create_app(
         ``Content-Disposition: attachment`` plus the original filename
         triggers a browser download; the widget links to this URL
         directly so users get save-as semantics."""
-        if env.uid is None:
-            return _auth_required_response(request)
         if "ir.attachment" not in registry:
             raise HTTPException(
                 status_code=503, detail="ir.attachment model not loaded"
             )
-        att = env["ir.attachment"].browse(att_id)
-        if not att:
+        # Probe existence + the public flag under sudo (cheap, leaks
+        # nothing). `public` attachments are UI chrome — logos, favicons,
+        # avatars, inline images referenced from rendered pages — so the
+        # bytes are served to anyone, even an anonymous session (the
+        # login-screen logo). Anything else stays behind the normal
+        # login + `ir.attachment` read check.
+        probe = env.sudo()["ir.attachment"].search(
+            [("id", "=", att_id)], limit=1
+        )
+        if not probe:
             raise HTTPException(status_code=404, detail="Attachment not found")
+        if probe.public:
+            att = probe  # already a sudo-bound singleton
+        else:
+            if env.uid is None:
+                return _auth_required_response(request)
+            # Enforced env: reading the fields below runs the normal
+            # check_access("ir.attachment", "read").
+            att = env["ir.attachment"].browse(att_id)
         att.ensure_one()
         if att.type == "url":
             # External link — bounce the browser there rather than
@@ -3070,6 +3162,7 @@ def create_app(
         filename = att.datas_fname or att.name or f"attachment-{att.id}"
         # Quote double-quotes in the filename to keep the header valid.
         safe_filename = filename.replace('"', "")
+        cache = "public" if probe.public else "private"
         return Response(
             content,
             media_type=att.mimetype or "application/octet-stream",
@@ -3077,7 +3170,7 @@ def create_app(
                 "Content-Disposition": f'attachment; filename="{safe_filename}"',
                 # Cache by id (immutable once written) so repeated views
                 # of a form don't re-download.
-                "Cache-Control": "private, max-age=3600",
+                "Cache-Control": f"{cache}, max-age=3600",
             },
         )
 

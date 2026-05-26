@@ -7,31 +7,14 @@ from datetime import date, datetime, time, timedelta
 
 
 def _ensure_acl(env) -> None:
-    Access = env["ir.model.access"]
-    Group = env["res.groups"]
-    admin = Group.search([("name", "=", "Admin")])
-    if not admin:
-        return
-    admin.ensure_one()
+    from pyvelm.security import grant_model_access
+
     for model in (
         "vellum.demo.note",
         "vellum.demo.comment",
         "vellum.demo.soft_note",
     ):
-        name = f"Admin/{model}"
-        if Access.search([("name", "=", name)]):
-            continue
-        Access.create(
-            {
-                "name": name,
-                "model": model,
-                "group_id": admin,
-                "perm_read": True,
-                "perm_write": True,
-                "perm_create": True,
-                "perm_unlink": True,
-            }
-        )
+        grant_model_access(env, model, admin="crud", user="read")
 
 
 def _seed_demo_rows(env) -> int:

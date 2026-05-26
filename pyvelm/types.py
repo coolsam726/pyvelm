@@ -145,12 +145,22 @@ class ArchHeaderAction(TypedDict, total=False):
     - ``method``  — HTTP verb, default ``"POST"``.
     - ``confirm`` — optional confirmation prompt; when set, the button
                     asks before firing.
+    - ``perm``    — CRUD permission (``read`` / ``write`` / ``create`` /
+                    ``unlink``) required to *see* this action. When the
+                    current user lacks it, the button is hidden instead
+                    of rendered-then-denied. Omit for actions any reader
+                    may run.
+    - ``model``   — model the ``perm`` check targets; defaults to the
+                    view's own model.
     """
 
     label: str
     url: str
     method: str
     confirm: str
+    perm: str
+    model: str
+    policy: str
 
 
 class _ArchFormRequired(TypedDict):
@@ -467,6 +477,9 @@ class Menu(_MenuRequired, total=False):
     href: str
     parent: str  # fully qualified: "<module>.<menu_name>"
     sequence: int
+    access_model: str  # gate visibility on this model …
+    access_perm: str   # … with this perm (default "read")
+    access_policy: str  # optional policy method name for recordless gating
 
 
 # ---- manifest globals ---------------------------------------------
@@ -503,6 +516,10 @@ class Manifest(_ManifestRequired, total=False):
     CATEGORY: str
     AUTHOR: str
     ICON: str                    # raw inline SVG markup
+    # Optional Apps catalog visibility gate (UI only):
+    CATALOG_ACCESS_MODEL: str
+    CATALOG_ACCESS_PERM: str
+    CATALOG_ACCESS_POLICY: str
 
 
 __all__ = [

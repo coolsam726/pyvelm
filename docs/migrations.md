@@ -65,6 +65,18 @@ pyvelm db migrate
 gunicorn -c gunicorn_conf.py app.serve:app
 ```
 
+For **manual production** deploys, prefer `migrate-fresh` so you see the module
+plan and must confirm before anything runs:
+
+```bash
+export PYVELM_ENV=production
+pyvelm db migrate-fresh              # prompts: type migrate-fresh
+pyvelm db migrate-fresh --dry-run    # plan only
+pyvelm db migrate-fresh --module base
+```
+
+CI pipelines can use `pyvelm db migrate` or `pyvelm db migrate-fresh --yes`.
+
 Docker Compose (scaffolded projects) includes a one-shot `migrate` service that
 runs before `app` — see `docker-compose.yml`.
 
@@ -88,6 +100,7 @@ Lists each discovered module, the on-disk manifest version, and whether
 | `pyvelm db diff <module>` | Print schema delta (no writes) |
 | `pyvelm db autogen <module>` | Write migration file + bump `VERSION` |
 | `pyvelm db migrate` | Install/upgrade all modules |
+| `pyvelm db migrate-fresh` | Same as migrate, with plan + production confirmation |
 | `pyvelm db status` | Installed vs manifest versions |
 
 All require `PYVELM_DSN`. Module roots: `pyvelm.toml` + `PYVELM_MODULE_ROOTS` (same

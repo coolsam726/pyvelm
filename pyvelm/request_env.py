@@ -30,6 +30,7 @@ def apply_request_scope(
         env.uid = uid
         env._user_groups_cache = None  # type: ignore[attr-defined]
         env._access_cache.clear()
+        env.prime_current_user_cache()
 
     raw_company = request.cookies.get(COMPANY_COOKIE)
     if raw_company:

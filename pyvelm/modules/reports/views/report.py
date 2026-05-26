@@ -20,11 +20,13 @@ VIEWS: list[View] = [
                 "label": "Design report",
                 "url": "/web/reports/{id}/build",
                 "method": "GET",
+                "perm": "write",
             },
             {
                 "label": "Run report",
                 "url": "/web/reports/{id}/run",
                 "method": "GET",
+                "perm": "write",
             },
         ],
         sections=[

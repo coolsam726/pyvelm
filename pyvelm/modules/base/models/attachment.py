@@ -23,13 +23,19 @@ storage_key    Opaque key handed back by the storage backend. Empty
                string for the ``db`` backend (datas column holds bytes).
 datas          Inline bytes — populated by the ``db`` backend, ``NULL``
                by the ``local`` backend (which uses ``storage_key``).
+public         When ``True`` the bytes are served to anyone (no login,
+               no ``ir.attachment`` read grant) — UI chrome like logos,
+               favicons, and avatars. ``False`` (default) keeps the
+               attachment behind the normal access check. The download
+               URL is the only handle either way, but ``public`` decides
+               whether delivery is gated.
 """
 
 from __future__ import annotations
 
 import base64
 
-from pyvelm import BaseModel, Char, Integer, Text, depends
+from pyvelm import BaseModel, Boolean, Char, Integer, Text, depends
 
 
 class Attachment(BaseModel):
@@ -45,6 +51,7 @@ class Attachment(BaseModel):
     url = Char(string="URL")
     storage_key = Char(string="Storage Key")
     datas = Text(string="Data")  # base64-encoded bytes for the db backend
+    public = Boolean(default=False, string="Public")
 
     @depends("name", "datas_fname")
     def _compute_display_name(self):

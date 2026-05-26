@@ -305,6 +305,10 @@ def form_view(
                    ``label`` and ``url`` (required), plus optional
                    ``method`` (default ``"POST"``) and ``confirm``.
                    ``{id}`` in ``url`` is substituted at render time.
+                   Add ``perm`` (read/write/create/unlink) — and
+                   optionally ``model`` (default: this view's model) —
+                   to hide the button from users who lack that grant
+                   instead of letting them click into a 403.
         priority:  Inheritance chain priority (default 16).
 
     Example::
@@ -518,6 +522,7 @@ def chart_widget(
     domain: list | None = None,
     view: ViewRef | None = None,
     colspan: DashboardColspan = 2,
+    perm: str = "read",
 ) -> DashboardWidget:
     """Chart tile — inline graph config or a reference to a graph view.
 
@@ -525,7 +530,7 @@ def chart_widget(
     to reuse an existing ``graph_view``. Otherwise set ``model``, ``groupby``,
     and ``measure`` inline.
     """
-    w = _widget(widget_id, "chart", colspan=colspan)
+    w = _widget(widget_id, "chart", colspan=colspan, perm=perm)
     if title is not None:
         w["title"] = title
     if view is not None:
@@ -555,13 +560,14 @@ def table_widget(
     order: str | None = None,
     more_href: str | None = None,
     colspan: DashboardColspan = 1,
+    perm: str = "read",
 ) -> DashboardWidget:
     """Table tile — inline columns or a reference to a list view.
 
     When ``view`` references a list view, pass ``columns`` to show a
     subset of that view's fields (order follows ``columns``).
     """
-    w = _widget(widget_id, "table", limit=limit, colspan=colspan)
+    w = _widget(widget_id, "table", limit=limit, colspan=colspan, perm=perm)
     if title is not None:
         w["title"] = title
     if view is not None:
@@ -591,9 +597,18 @@ def stat_widget(
     domain: list | None = None,
     href: str | None = None,
     colspan: DashboardColspan = 1,
+    perm: str = "read",
 ) -> DashboardWidget:
     """Single KPI number aggregated from a model."""
-    w = _widget(widget_id, "stat", title=title, model=model, measure=measure, colspan=colspan)
+    w = _widget(
+        widget_id,
+        "stat",
+        title=title,
+        model=model,
+        measure=measure,
+        colspan=colspan,
+        perm=perm,
+    )
     if domain is not None:
         w["domain"] = domain
     if href is not None:
@@ -609,6 +624,7 @@ def link_widget(
     description: str,
     url: str,
     colspan: DashboardColspan = 1,
+    perm: str = "write",
 ) -> DashboardWidget:
     """Navigation card linking to another page."""
     return _widget(
@@ -619,6 +635,7 @@ def link_widget(
         description=description,
         url=url,
         colspan=colspan,
+        perm=perm,
     )
 
 
@@ -893,6 +910,9 @@ class Menus:
         parent: str | tuple[str, str] | None = None,
         icon: str | None = None,
         sequence: int = 10,
+        perm: str | None = None,
+        model: str | None = None,
+        policy: str | None = None,
     ) -> Menu:
         """Leaf sidebar entry.
 
@@ -900,6 +920,14 @@ class Menus:
         of a full ``href``. Pass ``parent="business"`` for a group in this
         module, or ``parent=("admin", "settings")`` for another module's group.
         Use ``href=`` for non-view routes (e.g. ``"/web/apps"``).
+
+        ``policy`` names a method on the model's registered policy class
+        (e.g. ``view_any`` for list menus). ``perm`` is the ACL ceiling
+        checked before the policy (default ``"read"``).
+
+        ``perm`` / ``model`` without ``policy`` gate on ACL only. For a custom
+        ``href`` you must name the ``model``; ``view=`` entries infer it
+        from the view when ``model`` is omitted.
         """
         resolved_href = _resolve_menu_href(
             href=href,
@@ -919,6 +947,9 @@ class Menus:
             parent=resolved_parent,
             icon=icon,
             sequence=sequence,
+            perm=perm,
+            model=model,
+            policy=policy,
         )
 
 
@@ -958,6 +989,9 @@ def menu_item(
     parent: str | tuple[str, str] | None = None,
     icon: str | None = None,
     sequence: int = 10,
+    perm: str | None = None,
+    model: str | None = None,
+    policy: str | None = None,
 ) -> Menu:
     """Declare a leaf sidebar entry.
 
@@ -976,6 +1010,11 @@ def menu_item(
                       (needs ``menu_module=``), or ``("admin", "settings")``.
         icon:         Heroicons name or SVG for root-level items (Dashboard, Apps).
         sequence:     Ordering among siblings (lower = higher up).
+        perm:         ACL ceiling before policy evaluation (default ``"read"``).
+        model:        Model for ACL / policy. Required when ``perm`` or
+                      ``policy`` is set on a non-view ``href``; inferred from
+                      the view otherwise.
+        policy:       Policy method name (e.g. ``"view_any"`` for list menus).
     """
     resolved_href = _resolve_menu_href(
         href=href,
@@ -983,7 +1022,20 @@ def menu_item(
         view_module=view_module,
         menu_module=menu_module,
     )
+    if perm is not None and model is None and not (
+        (resolved_href or "").startswith("/web/views/")
+    ):
+        raise ValueError(
+            f"Menu item {name!r}: perm= needs model= for a non-view href "
+            f"(nothing to infer the model from)"
+        )
     result: Menu = {"name": name, "label": label, "href": resolved_href, "sequence": sequence}
+    if perm is not None:
+        result["access_perm"] = perm
+    if model is not None:
+        result["access_model"] = model
+    if policy is not None:
+        result["access_policy"] = str(policy)
     if parent is not None:
         if (
             menu_module is None

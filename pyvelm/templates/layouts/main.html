@@ -1692,18 +1692,25 @@
         // knows whether the bytes are local or remote.
         Alpine.data('pvImageWidget', (cfg) => ({
             url: cfg.initial || '',
+            cleared: false,
             uploading: false,
             error: '',
             clear() {
                 this.url = '';
+                this.cleared = true;
                 this.error = '';
             },
             async upload(file) {
                 if (!file) return;
                 this.error = '';
+                this.cleared = false;
                 this.uploading = true;
                 const fd = new FormData();
                 fd.append('file', file);
+                // Image-widget assets are UI chrome (logos, favicons,
+                // avatars) — mark them public so they render for every
+                // user without an ir.attachment read grant.
+                fd.append('public', '1');
                 try {
                     const r = await fetch('/api/attachment/upload', {
                         method: 'POST',

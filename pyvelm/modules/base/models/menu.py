@@ -24,3 +24,11 @@ class Menu(BaseModel):
     href = Char()                                       # nullable on group entries
     icon = Text()                                       # raw SVG markup, nullable
     active = Boolean(default=True)
+    # Optional visibility gate: the entry is shown only if the user has
+    # ``access_perm`` (default "read") on ``access_model``. Required for
+    # custom-href entries (no view to infer a model from); view-backed
+    # entries fall back to read on the view's model when unset. See
+    # ``pyvelm.render._menu_node_visible``.
+    access_model = Char()
+    access_perm = Char()
+    access_policy = Char()

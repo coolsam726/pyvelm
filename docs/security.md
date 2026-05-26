@@ -29,29 +29,102 @@ Access checks happen on every `search` / `read` / `create` / `write` /
 `unlink`. If no `ir.model.access` row grants the requested perm, the
 operation raises `PermissionError`. The HTTP layer turns that into
 **401** for unauthenticated clients (with a `WWW-Authenticate: Basic`
-header) and **403** for authenticated-but-denied.
+header) and **403** for authenticated-but-denied. Browser navigations
+get the rendered **Access denied** page (the app shell with a clear
+message); API / HTMX callers get the plain-text status. Unauthenticated
+browser requests are bounced to `/login` instead.
 
 Module install hooks are the conventional place to seed the access
-rows:
+rows. Use :func:`pyvelm.security.grant_model_access` so **Admin** gets
+full CRUD and the internal **User** group gets at least read (list/form
+load without create):
 
 ```python
 # crm/hooks.py
-def install(env):
-    Access = env["ir.model.access"]
-    Group = env["res.groups"]
-    admin = Group.search([("name", "=", "Admin")])
-    admin.ensure_one()
+from pyvelm.security import grant_model_access
 
-    Access.create({
-        "name": "Admin/crm.lead",
-        "model": "crm.lead",
-        "group_id": admin,
-        "perm_read": True,
-        "perm_write": True,
-        "perm_create": True,
-        "perm_unlink": True,
-    })
+def install(env):
+    grant_model_access(env, "crm.lead", admin="crud", user="read")
 ```
+
+The web UI checks each permission separately: list/kanban need **read**
+only; the **New** button needs **create**; **Edit** / **Save** need
+**write**; **Delete** needs **unlink**. Missing create no longer blocks
+the list page.
+
+### Pages open on read; actions hide on their own perm
+
+The guiding rule for the web layer is **read gets you the page, and
+every action you can't perform is hidden — not rendered-then-denied.**
+A read-only user lands on the list, kanban, and record-display pages
+without a single `403`; the framework simply omits the buttons they
+can't use (New, Edit, Delete, the row **Design** link, etc.).
+
+The **sidebar** follows the same idea: a menu entry that points at a
+view is shown only when the user can **read** (list) that view's model,
+and a group with no reachable children is dropped entirely. Home/Apps
+aren't model-backed, so they always show. Superuser sees the full tree.
+
+**Policies** are the preferred gate when ACL alone is too coarse — for
+example everyone gets read on `res.users` for the shell, but only
+**Admin** should see Settings → Users. Register a policy class for the
+model, then name the method on the menu:
+
+```python
+# hooks.py (or rely on built-in framework policies registered at boot)
+from pyvelm.policy import register_policy
+from pyvelm.policies.management import AdminManagementPolicy
+
+register_policy("res.users", AdminManagementPolicy)
+
+# menu.py
+m.item("settings.users", "Users", parent="settings",
+       view="user.list", policy="view_any")
+```
+
+Evaluation order: ACL ceiling (`perm`, default `read`) then
+`env.can(model, policy)`. Built-in management models use
+`AdminManagementPolicy.view_any` (Admin group). Workflow inbox uses
+`WorkflowApprovalPolicy.inbox`; admin approval lists use `view_any`.
+
+Custom feature pages (a menu with an `href` that isn't `/web/views/…`)
+have no model to infer, so gate them with `model=` + `policy=` and/or
+`perm=`:
+
+```python
+m.item("reports.build", "Design a report", parent="reports",
+       href="/web/reports/build", model="ir.report",
+       perm="create", policy="create")
+```
+
+On a `view=` entry the model is inferred from the view. A custom `href`
+with `policy` or `perm` **must** also name the `model`.
+
+Custom **header actions** on a form join the same scheme. Declare the
+permission a button needs and it disappears for users who lack it:
+
+```python
+form_view("cron.form", "ir.cron",
+    header_actions=[
+        {"label": "Run Now", "url": "/web/cron/{id}/run-now",
+         "method": "POST", "perm": "write"},
+    ],
+    sections=[...],
+)
+```
+
+`perm` is one of `read` / `write` / `create` / `unlink`; add `model`
+to check a different model than the view's own. An action with no
+`perm` stays visible to anyone who can read the record — so always
+tag buttons that mutate or open a write-only screen. The endpoint
+behind the button still enforces its own `check_access`; hiding the
+button is a UX layer over that, never a replacement for it.
+
+The **User** group is backfilled once (migration ``0_23→0_24`` on upgrade).
+It is **not** re-applied on every Apps Sync or dev-server reload, so you
+can remove **User** from an account (e.g. Sales-only operators) without
+it coming back. Assign **User** manually in Settings → Users when a new
+internal account should get module ``User/…`` read grants.
 
 For public read access (e.g. country dropdowns on a signup form),
 use `group_id=None`:
@@ -64,6 +137,37 @@ Access.create({
     "perm_read": True,
 })
 ```
+
+## Bypassing access: sudo mode
+
+Trusted framework or app code sometimes has to touch rows the current
+user can't reach — a cross-company lookup, a counter increment, system
+bookkeeping. `sudo()` returns a view of the env (or recordset) that
+skips every `ir.model.access` check and `ir.rule` domain:
+
+```python
+# Env-level: derive a sudo env, then go through it.
+companies = env.with_company(None).sudo()["res.company"].search([])
+
+# Recordset-level: the original recordset stays access-enforced.
+partner.sudo().write({"credit_limit": 0})
+```
+
+`sudo()` **keeps the real `uid`** — audit trails and
+`{"placeholder": "uid"}` record rules still attribute to the actual
+user; only the enforcement is lifted. Call `sudo(False)` to get back an
+enforced view. It's a sibling env sharing the same connection and value
+cache, so it composes with `with_context` / `with_company` and the sudo
+flag rides along:
+
+```python
+env.sudo().with_company(other_co)   # still in sudo mode
+```
+
+Reach for sudo deliberately — it is the supported replacement for
+poking `env._acl_bypass` by hand, and like `SUPERUSER_ID` it removes
+the safety net. Keep the bypassed section as small as the work requires,
+then hand normal (non-sudo) recordsets back to caller code.
 
 ## Restricting which rows a group sees
 
@@ -120,6 +224,12 @@ drive the env value.
 `res.users` is **not** company-scoped on purpose — users carry a
 home `company_id` but stay globally visible so an admin in one
 company can manage users in another from the same screen.
+
+Non-admin operators still need their **own** row for the web shell.
+The base module seeds `Everyone/res.users` (read) plus a global
+`ir.rule` ``Own user record only`` (`id = uid`). Group names for the
+profile page use `Everyone/res.groups` (read). Profile/password writes
+still use ACL bypass — only Admin can edit other users.
 
 ## How users sign in
 

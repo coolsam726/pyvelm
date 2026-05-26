@@ -35,3 +35,15 @@ def migrate(env):
         'FOREIGN KEY ("parent_id") REFERENCES "ir_ui_menu"("id") '
         'ON DELETE CASCADE'
     )
+    env.conn.execute(
+        'ALTER TABLE "ir_ui_menu" '
+        'ADD COLUMN IF NOT EXISTS "access_model" text'
+    )
+    env.conn.execute(
+        'ALTER TABLE "ir_ui_menu" '
+        'ADD COLUMN IF NOT EXISTS "access_perm" text'
+    )
+    env.conn.execute(
+        'ALTER TABLE "ir_ui_menu" '
+        'ADD COLUMN IF NOT EXISTS "access_policy" text'
+    )

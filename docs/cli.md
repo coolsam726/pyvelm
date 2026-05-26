@@ -186,11 +186,17 @@ pyvelm db diff tasks              # print additive schema delta
 pyvelm db autogen tasks           # write migrations/0_x_to_0_y.py + bump VERSION
 pyvelm db autogen tasks --with-views
 pyvelm db migrate                 # install/upgrade every discovered module
+pyvelm db migrate-fresh           # same, with plan + production confirmation
 pyvelm db status                  # ir_module vs on-disk versions
 ```
 
 **`db migrate`** is the deploy hook: run once before gunicorn workers start.
 Scaffolded Docker projects run it automatically via a `migrate` service.
+
+**`db migrate-fresh`** runs the same install pass but prints a pre-flight plan
+first. When `PYVELM_ENV=production`, you must type `migrate-fresh` to continue
+(unless `--yes` for CI). Use `--dry-run` to preview without writing, and
+`--module base` to limit to one module and its dependencies.
 
 ### Where the module lands
 

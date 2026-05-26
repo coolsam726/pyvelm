@@ -1,11 +1,15 @@
-# Project context — pyvelm v0.9.0
+# Project context — pyvelm v0.10.0
 
 Building an Odoo-style ERP framework in Python.
 
+**v0.10.0 (released 2026-05-26)** — **Policies** on ACL, **UI action/menu gating**,
+**access denied** page, **landing** + `PYVELM_HOME_URL`, **sudo**, **public
+attachments**, **User** group no longer re-added on sync. See
+[CHANGELOG.md](CHANGELOG.md) and [docs/releases/v0.10.0.md](docs/releases/v0.10.0.md).
 **v0.9.0 (released 2026-05-25)** — **Kanban** (grid, filters, drag-drop), **schema
 diff/migrate**, **dialog** O2M/M2M widgets, **breadcrumb history** (`ref`/`bc`),
 framework **timestamps**, `make:view` from model. See
-[CHANGELOG.md](CHANGELOG.md) and [docs/releases/v0.9.0.md](docs/releases/v0.9.0.md).
+[docs/releases/v0.9.0.md](docs/releases/v0.9.0.md).
 **v0.8.0 (released 2026-05-25)** — **White-label branding** per company (`res.company`
 + `PYVELM_*`), login/profile chrome, date/datetime picker fixes (no double calendar;
 floating popups in inline O2M tables). Base module **0.21.0**. See

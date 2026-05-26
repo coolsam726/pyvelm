@@ -20,6 +20,8 @@ MENUS: list[Menu] = [
         parent="feedback_signals",
         href="/web/feedback_signals/capture",
         sequence=5,
+        model="feedback.intake",
+        perm="create",
     ),
     m.item(
         "feedback_signals.analytics",
@@ -27,6 +29,8 @@ MENUS: list[Menu] = [
         parent="feedback_signals",
         href="/web/feedback_signals/analytics",
         sequence=8,
+        model="feedback.intake",
+        perm="read",
     ),
     m.item(
         "feedback_signals.review",
@@ -34,6 +38,8 @@ MENUS: list[Menu] = [
         parent="feedback_signals",
         href="/web/feedback_signals/review",
         sequence=9,
+        model="feedback.intake",
+        perm="write",
     ),
     m.item(
         "feedback_signals.intakes",

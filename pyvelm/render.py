@@ -30,6 +30,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import jinja2
 from markupsafe import Markup, escape
 
+from .security import template_access
 from .fields import (
     Boolean,
     Char,
@@ -141,6 +142,7 @@ def _active_tz(env) -> ZoneInfo:
         # it's the obvious right answer.
         if env.uid and "res.users" in env.registry:
             try:
+                env.prime_current_user_cache()
                 user = env["res.users"].browse(env.uid)
                 cid = user.company_id.id if user.company_id else None
             except Exception:
@@ -285,7 +287,14 @@ def _render_m2o(value, spec, field):
     form_view_url = spec.get("_form_view_url")
     if not form_view_url:
         return label
-    href = f"{form_view_url}/record/{value.id}"
+    # Avoid `value.id` (descriptor) since Many2one targets may be unreadable
+    # (we still want to render a label, but the related model ACL can deny).
+    target_id = None
+    try:
+        target_id = value._ids[0] if getattr(value, "_ids", None) else None
+    except Exception:  # noqa: BLE001
+        target_id = None
+    href = f"{form_view_url}/record/{target_id or value.id}"
     return Markup(
         f'<a href="{href}" '
         f'class="inline-flex items-center gap-1 group/m2o '
@@ -432,8 +441,8 @@ def _resolve_o2m_table_fields(env, comodel_name, list_view_url):
         # list_view_url looks like /web/views/<module>/<name>
         parts = list_view_url.rstrip("/").split("/")
         module, view_name = parts[-2], parts[-1]
-        View = env["ir.ui.view"]
-        match = View.search(
+        match = _search_ui_views(
+            env,
             [
                 ("module", "=", module),
                 ("name", "=", view_name),
@@ -474,7 +483,8 @@ def _resolve_o2m_sequence(env, comodel_name, list_view_url) -> str | None:
         return None
     parts = list_view_url.rstrip("/").split("/")
     module, view_name = parts[-2], parts[-1]
-    match = env["ir.ui.view"].search(
+    match = _search_ui_views(
+        env,
         [
             ("module", "=", module),
             ("name", "=", view_name),
@@ -1594,7 +1604,11 @@ def render_list_row(view, record, env, *, mode: str = "display") -> str:
     cells = _render_cells(record, fields_spec, mode=mode)
     template_name = "list_row_edit.html" if mode == "edit" else "list_row.html"
     template = _env.get_template(template_name)
-    return template.render(view=view, row={"id": record.id, "cells": cells})
+    return template.render(
+        view=view,
+        row={"id": record.id, "cells": cells},
+        access=template_access(env, view.model),
+    )
 
 
 def render_new_row(view, env) -> str:
@@ -2377,11 +2391,27 @@ def _list_view_domain_and_order(
     return domain, safe_ord
 
 
+def _search_ui_views(env, domain: list, **kwargs):
+    """Search ``ir.ui.view`` bypassing ACL — UI arch is system metadata.
+
+    Mirrors ``_menu``: every authenticated session needs view definitions
+    to render pages. ``ir.model.access`` grants are still seeded for
+    shell/admin use; the web layer does not depend on them.
+    """
+    prev = env._acl_bypass
+    env._acl_bypass = True
+    try:
+        return env["ir.ui.view"].search(domain, **kwargs)
+    finally:
+        env._acl_bypass = prev
+
+
 def _load_ui_view(env, module: str | None, name: str | None):
     """Load ``ir.ui.view`` by module + name (any view type)."""
-    if not module or not name or "ir.ui.view" not in env.registry:
+    if not module or not name:
         return None
-    matches = env["ir.ui.view"].search(
+    matches = _search_ui_views(
+        env,
         [("module", "=", module), ("name", "=", name)],
         limit=1,
     )
@@ -2559,6 +2589,58 @@ def _record_title(record_or_none, view_model: str, mode: str) -> str:
     return f"{view_model} #{record_or_none.id}"
 
 
+def _resolve_header_actions(
+    actions,
+    env,
+    *,
+    model: str,
+    module: str,
+    name: str,
+    record_id,
+    record=None,
+) -> list[dict]:
+    """Materialize a form's display-mode header actions.
+
+    Granular gating: an action that declares the ``perm`` it needs is
+    *hidden* — not rendered-then-denied — when the user lacks that grant
+    (checked against ``model`` by default, or the action's own ``model``
+    override). Actions with no ``perm`` stay visible to anyone who can
+    read the record. ``{id}`` in the URL is substituted, and any URL
+    that leaves the current view is flagged ``full_page``.
+    """
+    out: list[dict] = []
+    for act in actions or []:
+        perm = act.get("perm")
+        if perm and not env.has_access(act.get("model") or model, perm):
+            continue
+        policy = act.get("policy")
+        if policy:
+            # Record-aware gating (Laravel-like policies): hide the action
+            # when the policy method denies it.
+            rec = record
+            if rec is None:
+                try:
+                    rec = env[model].browse(record_id)
+                except Exception:  # noqa: BLE001
+                    rec = None
+            if rec is None or not env.can(rec, str(policy), perm=perm):
+                continue
+        url = (act.get("url") or "").replace("{id}", str(record_id))
+        out.append(
+            {
+                "label": act.get("label", "Run"),
+                "url": url,
+                "method": (act.get("method") or "POST").upper(),
+                "confirm": act.get("confirm") or "",
+                "full_page": bool(
+                    act.get("full_page")
+                    or not url.startswith(f"/web/views/{module}/{name}")
+                ),
+            }
+        )
+    return out
+
+
 def render_form_page(
     view,
     record_or_none,
@@ -2635,22 +2717,15 @@ def render_form_page(
     arch = resolve_arch(view)
     header_actions: list[dict] = []
     if mode == "display" and record_or_none is not None and record_or_none._ids:
-        for act in arch.get("header_actions", []) or []:
-            url = (act.get("url") or "").replace("{id}", str(record_or_none.id))
-            header_actions.append(
-                {
-                    "label": act.get("label", "Run"),
-                    "url": url,
-                    "method": (act.get("method") or "POST").upper(),
-                    "confirm": act.get("confirm") or "",
-                    "full_page": bool(
-                        act.get("full_page")
-                        or not url.startswith(
-                            f"/web/views/{view.module}/{view.name}"
-                        )
-                    ),
-                }
-            )
+        header_actions = _resolve_header_actions(
+            arch.get("header_actions", []),
+            env,
+            model=view.model,
+            module=view.module,
+            name=view.name,
+            record_id=record_or_none.id,
+            record=record_or_none,
+        )
     workflow_ctx = None
     if (
         mode == "display"
@@ -2718,6 +2793,7 @@ def render_form_page(
             page_size=page_size,
             bc_stack=bc_stack,
         ),
+        access=template_access(env, view.model),
         **ctx,
     )
 
@@ -2872,12 +2948,16 @@ def _kanban_fields_spec(view, arch, env) -> list:
         return _kanban_fields_spec_from_card(arch)
     from .views import resolve_arch
 
-    View = env["ir.ui.view"]
     for domain in (
         [("module", "=", view.module), ("model", "=", view.model), ("view_type", "=", "list")],
         [("model", "=", view.model), ("view_type", "=", "list")],
     ):
-        matches = View.search(domain, limit=1, order='"priority" ASC, "id" ASC')
+        matches = _search_ui_views(
+            env,
+            domain,
+            limit=1,
+            order='"priority" ASC, "id" ASC',
+        )
         if matches:
             matches.ensure_one()
             list_arch = resolve_arch(matches)
@@ -3152,6 +3232,7 @@ def _render_kanban_content(
         "sequence_field": sequence_field,
         "kanban_draggable": kanban_draggable,
         "form_view_name": state["form_view"],
+        "access": template_access(env, view.model),
         "page_title": page_title,
         "subtitle": _kanban_subtitle(
             total=state["total"],
@@ -3267,12 +3348,12 @@ def _other_views_for_model(
     """
     if "ir.ui.view" not in env.registry:
         return []
-    View = env["ir.ui.view"]
     # Pull every view registered for the same (module, model). The
     # switcher only shows view types that have a meaningful top-level
     # page — form is bare-URL-only so it gets dropped.
     sibling_types = ("list", "kanban", "graph", "pivot")
-    matches = View.search(
+    matches = _search_ui_views(
+        env,
         [
             ("module", "=", view.module),
             ("model", "=", view.model),
@@ -3386,7 +3467,7 @@ def _find_ui_view(env, module: str, name: str, view_type: str | None = None):
     domain = [("module", "=", module), ("name", "=", name)]
     if view_type:
         domain.append(("view_type", "=", view_type))
-    recs = env["ir.ui.view"].search(domain, limit=1)
+    recs = _search_ui_views(env, domain, limit=1)
     return recs if recs else None
 
 
@@ -3911,8 +3992,8 @@ def _find_form_view(view, env):
     or None if no such view is registered."""
     if "ir.ui.view" not in env.registry:
         return None
-    View = env["ir.ui.view"]
-    matches = View.search(
+    matches = _search_ui_views(
+        env,
         [("model", "=", view.model), ("view_type", "=", "form")],
         limit=1,
         order='"id" ASC',
@@ -3929,8 +4010,8 @@ def _list_view_for_model(env, model_name: str) -> tuple[str, str] | None:
     learn which fields the comodel wants to surface in a table."""
     if "ir.ui.view" not in env.registry:
         return None
-    View = env["ir.ui.view"]
-    matches = View.search(
+    matches = _search_ui_views(
+        env,
         [("model", "=", model_name), ("view_type", "=", "list")],
         limit=1,
         order='"id" ASC',
@@ -3952,8 +4033,8 @@ def _form_view_for_model(env, model_name: str) -> tuple[str, str] | None:
     """
     if "ir.ui.view" not in env.registry:
         return None
-    View = env["ir.ui.view"]
-    matches = View.search(
+    matches = _search_ui_views(
+        env,
         [("model", "=", model_name), ("view_type", "=", "form")],
         limit=1,
         order='"id" ASC',
@@ -4279,6 +4360,7 @@ def render_list_page(
             page_size=page_size,
         ),
         bc_param=format_bc_param(bc_stack or []),
+        access=template_access(env, view.model),
         **layout_context(env, current_path, leaf_label=page_title),
     )
 
@@ -4374,23 +4456,26 @@ def render_list_rows(
         record_href=record_href,
         create_href=create_href,
         list_nav_query=list_nav_query,
+        access=template_access(env, view.model),
     )
 
 
 def _load_account_user(env):
-    """Return the signed-in ``res.users`` row (ACL bypass for self-service)."""
-    prev = env._acl_bypass
-    env._acl_bypass = True
-    try:
-        user = env["res.users"].browse(env.uid)
-        if not env["res.users"].search([("id", "=", env.uid)]):
-            return None
-        return user
-    finally:
-        env._acl_bypass = prev
+    """Return the signed-in ``res.users`` row (primed for shell/profile reads)."""
+    if env.uid is None:
+        return None
+    env.prime_current_user_cache()
+    user = env["res.users"].browse(env.uid)
+    if not env["res.users"].search([("id", "=", env.uid)], limit=1):
+        return None
+    user.ensure_one()
+    return user
 
 
 def _account_profile_context(user) -> dict:
+    # sudo: self-service profile reads the user's own row + related
+    # company / groups without requiring broad res.users grants.
+    user = user.sudo()
     company_name = ""
     if user.company_id:
         company_name = user.company_id.name or ""
@@ -4542,6 +4627,27 @@ def _resolve_dashboard_colspan(
     return max(1, min(n, grid_columns))
 
 
+def _dashboard_widget_visible(env, raw: dict, *, source_module: str) -> bool:
+    """Return whether the current user may see a dashboard widget."""
+    wtype = raw.get("type")
+    perm = (raw.get("perm") or "read").strip() or "read"
+    if wtype == "link":
+        model = (raw.get("subtitle") or "").strip()
+        if model and model in env.registry:
+            link_perm = (raw.get("perm") or "write").strip() or "write"
+            return env.has_access(model, link_perm)
+        return True
+    model = raw.get("model")
+    if not model and raw.get("view"):
+        mod, vname = _parse_view_ref(raw["view"], source_module)
+        view_type = "graph" if wtype == "chart" else "list"
+        view = _find_ui_view(env, mod, vname, view_type)
+        model = view.model if view else None
+    if model and model in env.registry:
+        return env.has_access(model, perm)
+    return True
+
+
 def _materialize_dashboard_widgets(
     env, widgets: list[dict], source_module: str
 ) -> list[dict]:
@@ -4552,6 +4658,8 @@ def _materialize_dashboard_widgets(
 
     out: list[dict] = []
     for raw in widgets:
+        if not _dashboard_widget_visible(env, raw, source_module=source_module):
+            continue
         wtype = raw.get("type")
         wid = raw.get("id") or f"widget_{len(out)}"
         default_span = 2 if wtype == "chart" else 1
@@ -4705,7 +4813,8 @@ def render_dashboard_page(
 
 def render_admin_page(env=None, current_path: str | None = None) -> str:
     if env is not None and "ir.ui.view" in env.registry:
-        dash = env["ir.ui.view"].search(
+        dash = _search_ui_views(
+            env,
             [
                 ("module", "=", "admin"),
                 ("name", "=", "home"),
@@ -4721,43 +4830,163 @@ def render_admin_page(env=None, current_path: str | None = None) -> str:
             "subtitle": "res.groups",
             "description": "Manage permission groups and their members.",
             "url": "/web/views/admin/group.list",
+            "perm": "write",
         },
         {
             "title": "Users",
             "subtitle": "res.users",
             "description": "Create and manage operator accounts.",
             "url": "/web/views/admin/user.list",
+            "perm": "write",
         },
         {
             "title": "Access Control",
             "subtitle": "ir.model.access",
             "description": "Grant CRUD permissions per model and group.",
             "url": "/web/views/admin/access.list",
+            "perm": "write",
         },
         {
             "title": "Record Rules",
             "subtitle": "ir.rule",
             "description": "Define row-level security using domain filters.",
             "url": "/web/views/admin/rule.list",
+            "perm": "write",
         },
         {
             "title": "Companies",
             "subtitle": "res.company",
             "description": "Manage companies and multi-tenant configuration.",
             "url": "/web/views/admin/company.list",
+            "perm": "write",
         },
         {
             "title": "Partners",
             "subtitle": "res.partner",
             "description": "Browse and manage partners for the current company.",
             "url": "/web/views/partners/partner.list",
+            "perm": "read",
         },
     ]
+    if env is not None:
+        cards = [
+            c
+            for c in cards
+            if env.has_access(
+                c["subtitle"],
+                (c.get("perm") or "read").strip() or "read",
+            )
+        ]
     template = _env.get_template("admin.html")
     ctx = layout_context(env, current_path) if env is not None else {}
     if env is not None:
         ctx["subtitle"] = "Framework configuration and security."
     return template.render(cards=cards, **ctx)
+
+
+def _home_breadcrumb() -> dict:
+    from pyvelm.home import home_url
+
+    return {"label": "Home", "href": home_url()}
+
+
+def render_landing_page(env=None, *, current_path: str | None = None) -> str:
+    """Public marketing-style entry page at ``/`` (no app sidebar)."""
+    from .branding import branding_context
+    from .home import home_url, login_url
+
+    brand = branding_context(env)
+    app = brand.get("app_name") or "pyvelm"
+    template = _env.get_template("landing.html")
+    tagline = (brand.get("app_tagline") or "").strip() or (
+        "Sign in to manage your data, workflows, and team — or explore the demo modules."
+    )
+    return template.render(
+        brand=brand,
+        headline=f"Welcome to {app}",
+        tagline=tagline,
+        get_started_href=login_url(),
+        sign_in_href=login_url(),
+        home_url=home_url(),
+        current_path=current_path or "/",
+    )
+
+
+def render_home_page(env, *, current_path: str | None = None) -> str:
+    """Render ``PYVELM_HOME_URL`` when it points at a built-in view path."""
+    from .home import home_url
+
+    path = home_url()
+    current_path = current_path or path
+    if path in ("/web/admin", "/web/admin/"):
+        return render_admin_page(env, current_path=current_path)
+    if path.startswith("/web/views/"):
+        parts = path.rstrip("/").split("/")
+        if len(parts) >= 5 and parts[1] == "web" and parts[2] == "views":
+            module, name = parts[3], parts[4]
+            view = _load_ui_view(env.sudo(), module, name)
+            if view is None:
+                raise ValueError(f"Home view {module}/{name!r} not found")
+            if view.view_type == "dashboard":
+                return render_dashboard_page(view, env, current_path=current_path)
+            if view.view_type == "list":
+                return render_list_page(view, env, current_path=current_path)
+            if view.view_type == "kanban":
+                return render_kanban_page(view, env, current_path=current_path)
+            if view.view_type == "graph":
+                return render_graph_page(view, env, current_path=current_path)
+            raise ValueError(
+                f"Home view {module}/{name!r} has type {view.view_type!r}; "
+                "use dashboard, list, kanban, or graph"
+            )
+    raise ValueError(
+        f"PYVELM_HOME_URL={path!r} cannot be rendered inline — use a /web/views/… "
+        "path or leave the default /web/admin"
+    )
+
+
+# Routes that use the top-nav shell (no admin sidebar) — access denied
+# should match, e.g. feedback capture and account self-service pages.
+_MINIMAL_ACCESS_DENIED_PREFIXES: tuple[str, ...] = (
+    "/web/feedback_signals/",
+    "/web/account/",
+)
+
+
+def access_denied_use_sidebar(current_path: str | None) -> bool:
+    """Return whether the access-denied page should include the app sidebar."""
+    if not current_path:
+        return True
+    path = current_path.split("?", 1)[0]
+    return not any(path.startswith(prefix) for prefix in _MINIMAL_ACCESS_DENIED_PREFIXES)
+
+
+def render_access_denied_page(
+    env,
+    *,
+    detail: str | None = None,
+    current_path: str | None = None,
+    use_sidebar: bool | None = None,
+) -> str:
+    """Full-page "Access denied" screen inside the app shell.
+
+    Served by the HTTP layer when an authenticated user hits a page or
+    action they lack the grant for — read access opens pages, so this is
+    the fallback for the genuinely-forbidden case (e.g. a deep-linked
+    edit/create URL). `detail` carries the raw ``PermissionError``
+    message for the small diagnostic line; pass ``None`` to omit it.
+
+    When ``use_sidebar`` is false (auto for feedback capture / account URLs),
+    the page uses the same top-nav-only layout as those flows.
+    """
+    template = _env.get_template("access_denied.html")
+    if use_sidebar is None:
+        use_sidebar = access_denied_use_sidebar(current_path)
+    ctx = merge_template_context(env, current_path, detail=detail)
+    if not use_sidebar:
+        ctx["use_sidebar"] = False
+        ctx["breadcrumbs"] = []
+    return template.render(**ctx)
 
 
 def _apps_catalog(env, module_roots: list) -> list[dict]:
@@ -4799,6 +5028,16 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
 
     catalog: list[dict] = []
     for name, spec in specs.items():
+        # Optional catalog visibility gate (UI only): hide modules the user
+        # cannot reach. Mirrors sidebar menu gating but is recordless.
+        cam = (spec.catalog_access_model or "").strip() or None
+        if cam:
+            cap = (spec.catalog_access_perm or "").strip() or "read"
+            if not env.has_access(cam, cap):
+                continue
+            pol = (spec.catalog_access_policy or "").strip() or None
+            if pol and not env.can(cam, pol, perm=cap, model=cam):
+                continue
         inst = installed.get(name)
         if inst is None:
             state = "uninstalled"
@@ -5058,6 +5297,7 @@ def uninstall_module_action(env, module_roots: list, target_name: str) -> dict:
 
 def render_apps_page(env, module_roots: list, current_path: str | None = None) -> str:
     """Apps catalog at `/web/apps` — grid of module cards."""
+    env.check_can("res.users", "view_any", perm="read")
     catalog = _apps_catalog(env, module_roots)
     summary = {
         "total": len(catalog),
@@ -5086,12 +5326,13 @@ def render_apps_detail_page(
     env, module_roots: list, name: str, current_path: str | None = None
 ) -> str | None:
     """Per-module detail at `/web/apps/<name>`. Returns None if unknown."""
+    env.check_can("res.users", "view_any", perm="read")
     app = _apps_catalog_entry(env, module_roots, name)
     if app is None:
         return None
     ctx = layout_context(env, current_path, leaf_label=app["display_name"])
     ctx["breadcrumbs"] = [
-        {"label": "Home", "href": "/web/admin"},
+        _home_breadcrumb(),
         {"label": "Apps", "href": "/web/apps"},
         {"label": app["display_name"], "href": None},
     ]
@@ -5115,7 +5356,7 @@ def render_report_run_page(report_rec, env, current_path: str | None = None) -> 
     initial_params = {p["name"]: "" for p in parameters}
     ctx = layout_context(env, current_path, leaf_label=report_rec.name)
     ctx["breadcrumbs"] = [
-        {"label": "Home", "href": "/web/admin"},
+        _home_breadcrumb(),
         {"label": "Reports", "href": "/web/records/reports/report.list"},
         {"label": report_rec.name, "href": None},
     ]
@@ -5234,7 +5475,7 @@ def render_report_builder_page(
         }
     ctx = layout_context(env, current_path, leaf_label=page_title)
     ctx["breadcrumbs"] = [
-        {"label": "Home", "href": "/web/admin"},
+        _home_breadcrumb(),
         {"label": "Reports", "href": "/web/records/reports/report.list"},
         {"label": page_title, "href": None},
     ]
@@ -5295,7 +5536,7 @@ def render_workflow_inbox_page(env, current_path: str | None = None) -> str:
     items = list_inbox_items(env)
     ctx = layout_context(env, current_path, leaf_label="My approvals")
     ctx["breadcrumbs"] = [
-        {"label": "Home", "href": "/web/admin"},
+        _home_breadcrumb(),
         {"label": "Workflows", "href": "/web/views/workflow/workflow_definition.list"},
         {"label": "My approvals", "href": None},
     ]
@@ -5350,7 +5591,7 @@ def render_workflow_builder_page(
 
     ctx = layout_context(env, current_path, leaf_label=page_title)
     ctx["breadcrumbs"] = [
-        {"label": "Home", "href": "/web/admin"},
+        _home_breadcrumb(),
         {"label": "Workflows", "href": "/web/views/workflow/workflow_definition.list"},
         {"label": page_title, "href": None},
     ]
@@ -5380,15 +5621,77 @@ def _resolve_menu_icon(icon: str | None):
     return resolve_icon(icon)
 
 
+def _menu_target_model(env, href: str | None) -> str | None:
+    """Model a menu entry ultimately lists, or None when it isn't a view.
+
+    Only ``/web/views/<module>/<name>`` hrefs map to a model (and thus a
+    "list" permission). Home/apps and custom feature pages return None —
+    they aren't gated by a model read grant. View metadata is resolved
+    under sudo (it's system metadata, same as the menu read itself).
+    """
+    if not href:
+        return None
+    path = href.split("?", 1)[0].rstrip("/")
+    if not path.startswith("/web/views/"):
+        return None
+    parts = path.split("/")
+    # ["", "web", "views", "<module>", "<name>", ...]
+    if len(parts) < 5:
+        return None
+    view = _load_ui_view(env.sudo(), parts[3], parts[4])
+    return view.model if view else None
+
+
+def _menu_node_visible(env, node: dict) -> bool:
+    """Prune ``node``'s children to the permitted set; return its visibility.
+
+    Leaf entries resolve a target *model* (explicit ``access_model``, or
+    inferred from a ``/web/views/…`` href). Then:
+
+    1. **ACL ceiling** — ``access_perm`` (default ``"read"``) via
+       :meth:`~pyvelm.env.Environment.has_access`.
+    2. **Policy** — when ``access_policy`` is set, require
+       :meth:`~pyvelm.env.Environment.can` on that method (e.g.
+       ``view_any`` for management lists). Prefer policies over
+       ``perm="write"`` when shell grants give everyone read.
+    3. If there is no model (e.g. Dashboard), the entry stays visible.
+       The Apps catalog uses ``model`` + ``policy`` like other gated pages.
+
+    A group survives only if at least one child does. Evaluated against
+    the real user (after menu-metadata ACL bypass is restored).
+    """
+    children = node.get("children") or []
+    if children:
+        node["children"] = [c for c in children if _menu_node_visible(env, c)]
+        if node["children"]:
+            return True
+        # An empty group with no destination of its own is just noise.
+        if not node.get("href"):
+            return False
+    model = node.get("access_model") or _menu_target_model(env, node.get("href"))
+    if model is None:
+        return True
+    perm = node.get("access_perm") or "read"
+    if not env.has_access(model, perm):
+        return False
+    policy = node.get("access_policy")
+    if policy:
+        return env.can(model, str(policy), perm=perm, model=model)
+    return True
+
+
 def _menu(env, current_path: str | None) -> list[dict]:
     """Build the sidebar menu tree from `ir.ui.menu`.
 
     Each installed module contributes entries via its `MENUS` data
     file; the loader upserts them keyed by `(module, name)`. Here we
     walk the table once, group by parent, and emit a two-level tree
-    sorted by (sequence, label). ACL is bypassed because menus are
-    system metadata: every authenticated session needs the same view
-    of the navigation, regardless of group membership.
+    sorted by (sequence, label).
+
+    Reading the menu rows themselves is ACL-bypassed (system metadata),
+    but the resulting tree is then filtered to what the user may reach:
+    a view-backed entry is shown only if the user can read (list) its
+    target model, and empty groups are dropped. Superuser sees all.
     """
     if "ir.ui.menu" not in env.registry:
         return []
@@ -5420,6 +5723,9 @@ def _menu(env, current_path: str | None) -> list[dict]:
                 "label": r.label,
                 "href": r.href or None,
                 "icon": _resolve_menu_icon(r.icon),
+                "access_model": r.access_model or None,
+                "access_perm": r.access_perm or None,
+                "access_policy": getattr(r, "access_policy", None) or None,
                 "children": [],
             }
             parent_id = r.parent_id.id if r.parent_id else None
@@ -5441,6 +5747,9 @@ def _menu(env, current_path: str | None) -> list[dict]:
             if top_id == parent_id:
                 top_entry["children"] = [c for _cid, c in children]
                 break
+    # Filter to the permitted set with the real user's grants (the
+    # bypass above has been restored), then compute active state.
+    items = [item for item in items if _menu_node_visible(env, item)]
     return [_mark(item) for item in items]
 
 
@@ -5557,7 +5866,9 @@ def build_form_breadcrumbs(
     leaf_label: str | None = None,
 ) -> list[dict]:
     """Odoo-style trail: Home → …ancestors… → parent view → optional record."""
-    crumbs: list[dict] = [{"label": "Home", "href": "/web/admin"}]
+    from pyvelm.home import home_url
+
+    crumbs: list[dict] = [{"label": "Home", "href": home_url()}]
     for mod, view_name in bc_stack or []:
         entry = _view_breadcrumb(
             env, mod, view_name, menu_tree, link_query=False
@@ -5595,7 +5906,7 @@ def build_breadcrumbs(
 ) -> list[dict]:
     """Build navigation crumbs: Home → list → record/detail.
 
-    * Home always links to ``/web/admin``.
+    * Home links to :func:`~pyvelm.home.home_url` (``PYVELM_HOME_URL``).
     * List / kanban / graph pages get a single leaf (the view), linked
       from Home only on the leaf when it is not the current page.
     * Form / new / edit pages pass ``parent_href`` + ``parent_label``
@@ -5603,7 +5914,9 @@ def build_breadcrumbs(
       list. The record title stays in the page heading only (no third
       crumb unless ``leaf_label`` is passed explicitly).
     """
-    crumbs: list[dict] = [{"label": "Home", "href": "/web/admin"}]
+    from pyvelm.home import home_url
+
+    crumbs: list[dict] = [{"label": "Home", "href": home_url()}]
     if parent_href and parent_label:
         crumbs.append({"label": parent_label, "href": parent_href})
         if leaf_label:
@@ -5632,39 +5945,31 @@ def layout_context(
     initial = "?"
     avatar_url = ""
     if env.uid is not None and "res.users" in env.registry:
-        prev = env._acl_bypass
-        env._acl_bypass = True
-        try:
-            user = env["res.users"].browse(env.uid)
-            if env["res.users"].search([("id", "=", env.uid)]):
-                name = user.name or user.login or f"user#{user.id}"
-                login = user.login or ""
-                initial = (name[:1] or "?").upper()
-                # `avatar_url` is a recent addition (base 0.18.0); guard
-                # against older registries that don't carry the field.
-                if "avatar_url" in env["res.users"]._fields:
-                    avatar_url = user.avatar_url or ""
-        finally:
-            env._acl_bypass = prev
+        env.prime_current_user_cache()
+        user = env["res.users"].browse(env.uid)
+        if env["res.users"].search([("id", "=", env.uid)], limit=1):
+            name = user.name or user.login or f"user#{user.id}"
+            login = user.login or ""
+            initial = (name[:1] or "?").upper()
+            if "avatar_url" in env["res.users"]._fields:
+                avatar_url = user.avatar_url or ""
 
     companies: list[dict] = []
     current_company_name = ""
     if "res.company" in env.registry:
-        bypass_env = env.with_company(None)
-        bypass_env._acl_bypass = True
-        try:
-            for c in bypass_env["res.company"].search([]):
-                companies.append({"id": c.id, "name": c.name})
-                if env.company_id == c.id:
-                    current_company_name = c.name
-        finally:
-            bypass_env._acl_bypass = False
+        for c in env.with_company(None).sudo()["res.company"].search([]):
+            companies.append({"id": c.id, "name": c.name})
+            if env.company_id == c.id:
+                current_company_name = c.name
 
     from pyvelm.branding import branding_context
+
+    from pyvelm.home import home_url
 
     menu_tree = _menu(env, current_path)
     return {
         "menu": menu_tree,
+        "home_href": home_url(),
         "current_user_name": name,
         "current_user_login": login,
         "current_user_initial": initial,

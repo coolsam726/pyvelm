@@ -10,3 +10,8 @@ DATA: list[str] = [
     "views/menu.py",
 ]
 INSTALL_HOOK: str = "admin.hooks:install"
+
+# Optional Apps catalog visibility gate (UI only).
+CATALOG_ACCESS_MODEL: str = "res.users"
+CATALOG_ACCESS_PERM: str = "read"
+CATALOG_ACCESS_POLICY: str = "view_any"

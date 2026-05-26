@@ -5,17 +5,6 @@ Seeds access grants so Admin can fully manage CRM leads.
 
 
 def install(env):
-    Access = env["ir.model.access"]
-    Group = env["res.groups"]
-    admin = Group.search([("name", "=", "Admin")])
-    admin.ensure_one()
+    from pyvelm.security import grant_model_access
 
-    Access.create({
-        "name": "Admin/crm.lead",
-        "model": "crm.lead",
-        "group_id": admin,
-        "perm_read": True,
-        "perm_write": True,
-        "perm_create": True,
-        "perm_unlink": True,
-    })
+    grant_model_access(env, "crm.lead", admin="crud", user="read")

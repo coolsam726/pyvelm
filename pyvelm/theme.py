@@ -125,16 +125,12 @@ def company_theme_context(env, *, company_id: int | None = None) -> dict[str, st
     cid = env.company_id if company_id is None else company_id
     if cid is None or "res.company" not in env.registry:
         return empty
-    bypass_env = env.with_company(None)
-    bypass_env._acl_bypass = True
-    try:
-        if not bypass_env["res.company"].search([("id", "=", cid)]):
-            return empty
-        co = bypass_env["res.company"].browse(cid)
-        primary = normalize_hex(co.primary_color) or ""
-        return {
-            "company_primary_color": primary,
-            "company_theme_style": company_theme_css(primary),
-        }
-    finally:
-        bypass_env._acl_bypass = False
+    Company = env.with_company(None).sudo()["res.company"]
+    if not Company.search([("id", "=", cid)]):
+        return empty
+    co = Company.browse(cid)
+    primary = normalize_hex(co.primary_color) or ""
+    return {
+        "company_primary_color": primary,
+        "company_theme_style": company_theme_css(primary),
+    }

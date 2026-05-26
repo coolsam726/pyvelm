@@ -8,6 +8,33 @@ The mail-dispatcher seed (``_seed_mail_dispatcher``) is factored out
 so the 0_8_to_0_9 migration can call it for already-installed
 databases that won't re-run ``install()``.
 """
+from __future__ import annotations
+
+import json
+import re
+
+# UI-chrome image fields whose Char value may hold an
+# `/api/attachment/<id>/download` URL. Attachments behind these are
+# served to everyone, so they're flagged ``public`` (see
+# ``classify_chrome_attachments_public``).
+_CHROME_IMAGE_FIELDS: dict[str, tuple[str, ...]] = {
+    "res.company": ("logo_url", "logo_url_dark", "favicon_url"),
+    "res.users": ("avatar_url",),
+}
+
+_DOWNLOAD_URL_RE = re.compile(r"/api/attachment/(\d+)/download")
+
+
+def attachment_id_from_download_url(value: str | None) -> int | None:
+    """Return the attachment id embedded in a download URL, or None.
+
+    Only matches the framework's own ``/api/attachment/<id>/download``
+    shape — external URLs (``https://…``) yield None and stay untouched.
+    """
+    if not value:
+        return None
+    m = _DOWNLOAD_URL_RE.search(value)
+    return int(m.group(1)) if m else None
 
 
 def install(env):
@@ -15,6 +42,7 @@ def install(env):
     User = env["res.users"]
 
     admin_group = Group.create({"name": "Admin"})
+    Group.create({"name": "User"})
     Group.create({"name": "Public"})
 
     # Seed the currency list before the company so the company can be
@@ -56,6 +84,7 @@ def install(env):
             "mail.message",
             "res.company",
             "ir.ui.menu",
+            "ir.ui.view",
             "res.currency",
             "res.currency.rate",
             "ir.attachment",
@@ -72,6 +101,13 @@ def install(env):
                         "perm_unlink": True,
                     }
                 )
+
+    # UI arch is not business data — every authenticated session needs
+    # read access to render list/form/kanban views (menus already bypass
+    # ACL in the renderer; views do not).
+    _seed_ui_view_read_access(env)
+    _seed_res_users_self_read(env)
+    _seed_res_groups_read_access(env)
 
     # NOTE: company scoping is enforced at the model level by
     # `BaseModel.search` for any model that opts in via
@@ -96,6 +132,51 @@ def install(env):
 def sync(env):
     """Runs on Apps Sync — housekeeping that should not require reinstall."""
     _purge_smoke_test_cron(env)
+    # Backfill on every sync/upgrade — idempotent; fixes DBs that never
+    # ran the 0_21→0_22 migration or were synced at matching VERSION.
+    _seed_ui_view_read_access(env)
+    _seed_res_users_self_read(env)
+    _seed_res_groups_read_access(env)
+    classify_chrome_attachments_public(env)
+    # Do not call assign_user_group_to_active_users here — it ran on
+    # upgrade via migration 0_23→0_24 and must not re-add **User** on
+    # every dev reload (serve.py runs load_and_install) after an admin
+    # removes the group from an account (e.g. Sales-only operators).
+
+
+def classify_chrome_attachments_public(env) -> None:
+    """Flag attachments behind UI-chrome image fields as ``public``.
+
+    Backfill for assets uploaded before the ``public`` flag existed: scan
+    ``res.company`` logos/favicon and ``res.users`` avatars for
+    ``/api/attachment/<id>/download`` URLs and mark those rows public so
+    they render for non-admins (and the anonymous login screen). New
+    uploads set the flag at upload time; this only repairs old data.
+
+    Idempotent — only writes rows not already public. Runs under sudo so
+    it works regardless of the syncing user's grants.
+    """
+    if "ir.attachment" not in env.registry:
+        return
+    senv = env.sudo()
+    ids: set[int] = set()
+    for model, fields in _CHROME_IMAGE_FIELDS.items():
+        if model not in env.registry:
+            continue
+        present = [f for f in fields if f in env.registry[model]._fields]
+        if not present:
+            continue
+        for rec in senv[model].search([]):
+            for fname in present:
+                att_id = attachment_id_from_download_url(getattr(rec, fname))
+                if att_id is not None:
+                    ids.add(att_id)
+    if not ids:
+        return
+    Attachment = senv["ir.attachment"]
+    rows = Attachment.search([("id", "in", list(ids)), ("public", "=", False)])
+    for att in rows:
+        att.write({"public": True})
 
 
 def _purge_smoke_test_cron(env) -> None:
@@ -127,6 +208,104 @@ def _purge_smoke_test_cron(env) -> None:
                 action.unlink()
     finally:
         env._acl_bypass = prev
+
+
+def _seed_ui_view_read_access(env):
+    """Idempotently grant read on ``ir.ui.view`` to everyone (group_id=None).
+
+    Callable from the install hook and from migrations so databases that
+    already ran ``install()`` before this grant existed still work for
+    non-admin users.
+    """
+    if "ir.model.access" not in env.registry:
+        return
+    if "ir.ui.view" not in env.registry:
+        return
+    Access = env["ir.model.access"]
+    if Access.search(
+        [("model", "=", "ir.ui.view"), ("group_id", "=", None)],
+        limit=1,
+    ):
+        return
+    Access.create(
+        {
+            "name": "Everyone/ir.ui.view",
+            "model": "ir.ui.view",
+            "group_id": None,
+            "perm_read": True,
+        }
+    )
+
+
+def _seed_res_users_self_read(env) -> None:
+    """Grant read on ``res.users`` for everyone, scoped to the active uid.
+
+    Authenticated users must load their own row for the shell, session, and
+    profile flows. ``perm_write`` is intentionally omitted — self-service
+    profile/password routes use ACL bypass; only Admin may edit other users.
+    """
+    if "ir.model.access" not in env.registry or "ir.rule" not in env.registry:
+        return
+    if "res.users" not in env.registry:
+        return
+    Access = env["ir.model.access"]
+    Rule = env["ir.rule"]
+    if not Access.search(
+        [
+            ("model", "=", "res.users"),
+            ("group_id", "=", None),
+            ("perm_read", "=", True),
+        ],
+        limit=1,
+    ):
+        Access.create(
+            {
+                "name": "Everyone/res.users",
+                "model": "res.users",
+                "group_id": None,
+                "perm_read": True,
+            }
+        )
+    rule_name = "Own user record only"
+    if not Rule.search(
+        [("model", "=", "res.users"), ("name", "=", rule_name)],
+        limit=1,
+    ):
+        Rule.create(
+            {
+                "name": rule_name,
+                "model": "res.users",
+                "group_id": None,
+                "perm_read": True,
+                "domain": json.dumps([["id", "=", {"placeholder": "uid"}]]),
+            }
+        )
+
+
+def _seed_res_groups_read_access(env) -> None:
+    """Read-only on ``res.groups`` for everyone — group labels in the shell."""
+    if "ir.model.access" not in env.registry:
+        return
+    if "res.groups" not in env.registry:
+        return
+    Access = env["ir.model.access"]
+    if Access.search(
+        [
+            ("model", "=", "res.groups"),
+            ("group_id", "=", None),
+            ("perm_read", "=", True),
+        ],
+        limit=1,
+    ):
+        return
+    Access.create(
+        {
+            "name": "Everyone/res.groups",
+            "model": "res.groups",
+            "group_id": None,
+            "perm_read": True,
+        }
+    )
 
 
 def _seed_currencies(env):

@@ -27,19 +27,22 @@ VIEWS: list[View] = [
                 model="res.users",
                 domain=[("active", "=", True)],
                 href="/web/views/admin/user.list",
+                perm="write",
             ),
             stat_widget(
                 "companies",
                 title="Companies",
                 model="res.company",
                 href="/web/views/admin/company.list",
+                perm="write",
             ),
             stat_widget(
                 "groups",
                 title="Groups",
                 model="res.groups",
-                href="/web/views/admin/groups.list",
+                href="/web/views/admin/group.list",
                 colspan=1,
+                perm="write",
             ),
             stat_widget(
                 "active_currencies",
@@ -48,6 +51,7 @@ VIEWS: list[View] = [
                 domain=[("active", "=", True)],
                 href="/web/views/admin/currency.list",
                 colspan=1,
+                perm="write",
             ),
             chart_widget(
                 "users_by_status",
@@ -56,6 +60,7 @@ VIEWS: list[View] = [
                 groupby="company_id",
                 measure="__count",
                 chart="pie",
+                perm="write",
             ),
             table_widget(
                 "recent_users",
@@ -64,6 +69,7 @@ VIEWS: list[View] = [
                 limit=8,
                 colspan=2,
                 order="id DESC",
+                perm="write",
             ),
             link_widget(
                 "groups",
@@ -71,6 +77,7 @@ VIEWS: list[View] = [
                 subtitle="res.groups",
                 description="Manage permission groups and their members.",
                 url="/web/views/admin/group.list",
+                perm="write",
             ),
             link_widget(
                 "users",
@@ -78,6 +85,7 @@ VIEWS: list[View] = [
                 subtitle="res.users",
                 description="Create and manage operator accounts.",
                 url="/web/views/admin/user.list",
+                perm="write",
             ),
             link_widget(
                 "access",
@@ -85,6 +93,7 @@ VIEWS: list[View] = [
                 subtitle="ir.model.access",
                 description="Grant CRUD permissions per model and group.",
                 url="/web/views/admin/access.list",
+                perm="write",
             ),
             link_widget(
                 "rules",
@@ -92,6 +101,7 @@ VIEWS: list[View] = [
                 subtitle="ir.rule",
                 description="Define row-level security using domain filters.",
                 url="/web/views/admin/rule.list",
+                perm="write",
             ),
             link_widget(
                 "companies_link",
@@ -99,6 +109,7 @@ VIEWS: list[View] = [
                 subtitle="res.company",
                 description="Manage companies and multi-tenant configuration.",
                 url="/web/views/admin/company.list",
+                perm="write",
             ),
             link_widget(
                 "partners",

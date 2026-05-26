@@ -13,5 +13,13 @@ from pyvelm.types import Menu
 # Root-level standalone items (no parent group, icon shown in sidebar).
 MENUS: list[Menu] = [
     menu_item("dashboard", "Dashboard", href="/web/admin", icon="home", sequence=10),
-    menu_item("apps", "Apps", href="/web/apps", icon="squares-2x2", sequence=100),
+    menu_item(
+        "apps",
+        "Apps",
+        href="/web/apps",
+        icon="squares-2x2",
+        sequence=100,
+        model="res.users",
+        policy="view_any",
+    ),
 ]

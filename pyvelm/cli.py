@@ -8,6 +8,7 @@ A single ``pyvelm`` command dispatches subcommands:
     pyvelm db diff <module>    Print the schema delta for a module.
     pyvelm db autogen <module> Write an additive migration file.
     pyvelm db migrate          Install/upgrade all modules (deploy hook).
+    pyvelm db migrate-fresh    Same as migrate, with plan + prod confirmation.
     pyvelm db status           Installed vs on-disk module versions.
     pyvelm list                List Artisan-style module commands.
     pyvelm make:module …       Scaffold a module (see docs/console.md).
@@ -283,8 +284,9 @@ def _add_db_subcommand(subs) -> None:
         description=(
             "Inspect or update the DB schema against the loaded module "
             "registry. `diff` / `autogen` draft migrations; `migrate` "
-            "runs install/upgrade for all discovered modules; `status` "
-            "lists versions. Requires PYVELM_DSN."
+            "runs install/upgrade for all discovered modules; "
+            "`migrate-fresh` adds a plan and production confirmation; "
+            "`status` lists versions. Requires PYVELM_DSN."
         ),
     )
     db_subs = db.add_subparsers(
@@ -346,6 +348,31 @@ def _add_db_subcommand(subs) -> None:
         help="Extra module roots (default: pyvelm.toml + PYVELM_MODULE_ROOTS).",
     )
     mig_p.set_defaults(func=_run_db_migrate)
+
+    fresh_p = db_subs.add_parser(
+        "migrate-fresh",
+        help=(
+            "Install/upgrade with a pre-flight plan; requires confirmation "
+            "when PYVELM_ENV=production."
+        ),
+    )
+    fresh_p.add_argument(
+        "--roots", nargs="*", default=None,
+        help="Extra module roots (default: pyvelm.toml + PYVELM_MODULE_ROOTS).",
+    )
+    fresh_p.add_argument(
+        "--module", dest="only_module", default=None,
+        help="Limit to one module and its dependencies (e.g. base).",
+    )
+    fresh_p.add_argument(
+        "--yes", "-y", action="store_true",
+        help="Skip interactive confirmation (for CI; still prints warnings).",
+    )
+    fresh_p.add_argument(
+        "--dry-run", action="store_true",
+        help="Print the migration plan only; do not change the database.",
+    )
+    fresh_p.set_defaults(func=_run_db_migrate_fresh)
 
     st_p = db_subs.add_parser(
         "status",
@@ -483,20 +510,147 @@ def _run_db_autogen(args: argparse.Namespace) -> None:
         print("(Migration body is a no-op — review whether you really need it.)")
 
 
-def _run_db_migrate(args: argparse.Namespace) -> None:
-    """Discover modules, load models, install/upgrade — one-shot deploy hook."""
+def _require_dsn() -> str:
     dsn = os.environ.get("PYVELM_DSN")
     if not dsn:
         sys.exit("PYVELM_DSN not set")
-    roots = _resolve_module_roots(args)
+    return dsn
+
+
+def _dsn_display(dsn: str) -> str:
+    """Return a DSN safe to print (password redacted)."""
+    try:
+        from urllib.parse import urlparse, urlunparse
+
+        parsed = urlparse(dsn)
+        if parsed.scheme and parsed.hostname:
+            netloc = parsed.hostname
+            if parsed.port:
+                netloc = f"{netloc}:{parsed.port}"
+            if parsed.username:
+                netloc = f"{parsed.username}:***@{netloc}"
+            path = parsed.path or ""
+            return urlunparse(
+                (parsed.scheme, netloc, path, parsed.params, "", "")
+            )
+    except Exception:
+        pass
+    return "<dsn>"
+
+
+def _read_installed_versions(conn) -> dict[str, str]:
+    installed: dict[str, str] = {}
+    try:
+        rows = conn.execute(
+            'SELECT "name", "version" FROM "ir_module"'
+        ).fetchall()
+        installed = {str(r[0]): str(r[1]) for r in rows}
+    except Exception:
+        pass
+    return installed
+
+
+def _module_action(installed: dict[str, str], spec: loader.ModuleSpec) -> str:
+    db_ver = installed.get(spec.name)
+    disk = spec.version_str
+    if db_ver is None:
+        return "install"
+    if db_ver == disk:
+        return "sync"
+    return f"upgrade ({db_ver} → {disk})"
+
+
+def _ordered_specs_for_install(
+    roots: list[Path], only_module: str | None
+) -> list[loader.ModuleSpec]:
     specs = loader.discover(roots)
-    ordered = loader.resolve_order(specs)
+    if only_module is not None:
+        if only_module not in specs:
+            sys.exit(
+                f"Module {only_module!r} not discovered. "
+                f"Known: {sorted(specs)}"
+            )
+        needed: set[str] = set()
+
+        def _add(name: str) -> None:
+            if name in needed:
+                return
+            if name not in specs:
+                sys.exit(
+                    f"Module {only_module!r} depends on {name!r}, "
+                    f"which is not in the discovered set."
+                )
+            needed.add(name)
+            for dep in specs[name].depends:
+                _add(dep)
+
+        _add(only_module)
+        ordered = loader.resolve_order(specs)
+        return [s for s in ordered if s.name in needed]
+    return loader.resolve_order(specs)
+
+
+def _print_migrate_plan(
+    *,
+    dsn: str,
+    ordered: list[loader.ModuleSpec],
+    installed: dict[str, str],
+    production: bool,
+) -> None:
+    from .runtime import get_runtime_env
+
+    runtime = get_runtime_env()
+    print("Migration plan (migrate-fresh)")
+    print(f"  PYVELM_ENV:     {runtime}")
+    print(f"  Database:       {_dsn_display(dsn)}")
+    print(f"  Modules:        {len(ordered)}")
+    if production:
+        print(
+            "  Production:     yes — confirmation required "
+            "(use --yes for non-interactive CI)"
+        )
+    print()
+    for spec in ordered:
+        action = _module_action(installed, spec)
+        print(f"  {spec.name:20} {spec.version_str:12}  {action}")
+    print()
+
+
+def _confirm_migrate_fresh(*, production: bool, yes: bool) -> None:
+    if yes:
+        if production:
+            print(
+                "WARNING: --yes skipped production confirmation. "
+                "Only use in trusted CI/deploy pipelines.",
+                file=sys.stderr,
+            )
+        return
+    if not production:
+        return
+    print(
+        "This will modify the production database (schema, views, menus, "
+        "migration scripts for version gaps)."
+    )
+    try:
+        typed = input("Type migrate-fresh to continue: ").strip()
+    except EOFError:
+        sys.exit("Aborted (non-interactive terminal). Use --yes in CI.")
+    if typed != "migrate-fresh":
+        sys.exit("Aborted.")
+
+
+def _execute_db_install(
+    dsn: str, ordered: list[loader.ModuleSpec]
+) -> list[dict]:
     with psycopg.connect(dsn, autocommit=True) as conn:
         reg = Registry()
         env = Environment(conn, registry=reg)
         for spec in ordered:
             loader._load_models(spec, reg)
-        results = loader.install(ordered, env)
+        return loader.install(ordered, env)
+
+
+def _print_install_results(ordered: list[loader.ModuleSpec], results: list[dict]) -> None:
     print(f"Migrated {len(ordered)} module(s):")
     for row in results:
         parts = [row["name"]]
@@ -509,35 +663,56 @@ def _run_db_migrate(args: argparse.Namespace) -> None:
         print("  " + " — ".join(parts))
 
 
+def _run_db_migrate(args: argparse.Namespace) -> None:
+    """Discover modules, load models, install/upgrade — one-shot deploy hook."""
+    dsn = _require_dsn()
+    roots = _resolve_module_roots(args)
+    ordered = _ordered_specs_for_install(roots, None)
+    results = _execute_db_install(dsn, ordered)
+    _print_install_results(ordered, results)
+
+
+def _run_db_migrate_fresh(args: argparse.Namespace) -> None:
+    """Install/upgrade with a printed plan and production confirmation."""
+    from .runtime import is_production
+
+    dsn = _require_dsn()
+    roots = _resolve_module_roots(args)
+    ordered = _ordered_specs_for_install(roots, args.only_module)
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        installed = _read_installed_versions(conn)
+    production = is_production()
+    _print_migrate_plan(
+        dsn=dsn,
+        ordered=ordered,
+        installed=installed,
+        production=production,
+    )
+    if args.dry_run:
+        print("Dry run — no changes applied.")
+        return
+    _confirm_migrate_fresh(production=production, yes=args.yes)
+    results = _execute_db_install(dsn, ordered)
+    _print_install_results(ordered, results)
+
+
 def _run_db_status(args: argparse.Namespace) -> None:
     """Compare ``ir_module`` rows to discovered manifests."""
-    dsn = os.environ.get("PYVELM_DSN")
-    if not dsn:
-        sys.exit("PYVELM_DSN not set")
+    dsn = _require_dsn()
     roots = _resolve_module_roots(args)
     specs = loader.discover(roots)
     ordered = loader.resolve_order(specs)
     with psycopg.connect(dsn, autocommit=True) as conn:
-        reg = Registry()
-        env = Environment(conn, registry=reg)
-        installed: dict[str, str] = {}
-        try:
-            rows = env.conn.execute(
-                'SELECT "name", "version" FROM "ir_module"'
-            ).fetchall()
-            installed = {str(r[0]): str(r[1]) for r in rows}
-        except Exception:
-            pass
+        installed = _read_installed_versions(conn)
     for spec in ordered:
-        disk = spec.version_str
         db_ver = installed.get(spec.name)
         if db_ver is None:
             state = "not installed"
-        elif db_ver == disk:
+        elif db_ver == spec.version_str:
             state = "ok"
         else:
-            state = f"upgrade ({db_ver} → {disk})"
-        print(f"  {spec.name:20} {disk:12}  {state}")
+            state = f"upgrade ({db_ver} → {spec.version_str})"
+        print(f"  {spec.name:20} {spec.version_str:12}  {state}")
 
 
 # ---------------------------------------------------------------------------

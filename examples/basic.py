@@ -57,9 +57,16 @@ def main():
         france = Country.create({"name": "France", "code": "FR", "region_id": europe})
         japan = Country.create({"name": "Japan", "code": "JP", "region_id": asia_region})
 
-        alice = Partner.create({"name": "Alice", "age": 30, "country_id": france})
-        bob = Partner.create({"name": "Bob", "age": 25, "country_id": japan})
-        carol = Partner.create({"name": "Carol", "age": 40, "parent_id": alice})
+        # partners>=0.2.0 requires a non-null `code` on res.partner.
+        alice = Partner.create(
+            {"name": "Alice", "code": "ALI", "age": 30, "country_id": france}
+        )
+        bob = Partner.create(
+            {"name": "Bob", "code": "BOB", "age": 25, "country_id": japan}
+        )
+        carol = Partner.create(
+            {"name": "Carol", "code": "CAR", "age": 40, "parent_id": alice}
+        )
         print("Created:", alice, bob, carol)
 
         # Computed fields still work.
@@ -106,14 +113,13 @@ def main():
         print("ir_module:", rows)
 
         # ----- Migration demo -----
-        # Fresh install of partners=0.2.0 created the `code` column from
-        # the model declaration but didn't run the migration (no upgrade
-        # gap). Simulate "an existing 0.1.0 install upgrading to 0.2.0":
-        #   - downgrade ir_module to 0.1.0
-        #   - null out the code column (as if it never existed in 0.1.0)
-        #   - re-run install — loader sees the gap, runs the migration
+        # Simulate "an older install upgrading": downgrade the recorded module
+        # version and null out a column that is now required, then re-run
+        # install. Since `code` is NOT NULL on fresh installs, drop the
+        # constraint first so the demo update succeeds.
         conn.execute("UPDATE ir_module SET version = '0.1.0' WHERE name = 'partners'")
-        conn.execute('UPDATE res_partner SET code = NULL')
+        conn.execute('ALTER TABLE "res_partner" ALTER COLUMN "code" DROP NOT NULL')
+        conn.execute('UPDATE "res_partner" SET "code" = NULL')
         env.cache.invalidate(model_name="res.partner", fields=["code"])
 
         # Re-install. Models are already loaded; just kick off install.
@@ -123,7 +129,10 @@ def main():
             'SELECT name, version FROM ir_module ORDER BY name'
         ).fetchall()
         print("ir_module after upgrade:", rows)
-        assert dict(rows)["partners"] == "0.3.0"
+        expected_partners_version = next(
+            s.version_str for s in specs if s.name == "partners"
+        )
+        assert dict(rows)["partners"] == expected_partners_version
 
         codes = conn.execute(
             'SELECT name, code FROM res_partner ORDER BY id'
@@ -208,7 +217,14 @@ def main():
             # Print the fields_by_name before asserting so we can see the actual structure in the test output if it doesn't match.
             print("Fields by name:", list(fields_by_name))
             assert list(fields_by_name) == [
-                "name", "code","company_id", "country_id", "tag_ids", "active",
+                "name",
+                "workflow_state_label",
+                "code",
+                "company_id",
+                "birth_date",
+                "country_id",
+                "tag_ids",
+                "active",
             ]
             # `update` merged two attrs into the existing field dict.
             assert fields_by_name["active"]["widget"] == "toggle"
@@ -333,7 +349,7 @@ def main():
             # Filter toolbar: search input + state pills + category dropdown,
             # and each card carries the data-attributes that drive client-
             # side filtering.
-            assert "data-pv-apps-state" in body
+            assert "data-pv-app-state" in body
             assert "data-pv-app-haystack" in body
             assert "Search modules…" in body
             print("Apps catalog renders all modules with category + summary")
@@ -351,12 +367,14 @@ def main():
             r = r_no_follow.post("/web/apps/base/upgrade",
                                  headers={"HX-Request": "true"})
             assert r.status_code == 204, (r.status_code, r.text)
-            assert r.headers.get("HX-Redirect") == "/web/apps"
+            hx_redirect = r.headers.get("HX-Redirect") or ""
+            assert hx_redirect.startswith("/web/admin?pv_flash="), hx_redirect
             with pool.connection() as side_conn:
                 row = side_conn.execute(
                     "SELECT version FROM ir_module WHERE name = 'base'"
                 ).fetchone()
-            assert row == ("0.18.0",), row
+            expected_base_version = next(s.version_str for s in specs if s.name == "base")
+            assert row == (expected_base_version,), row
 
             # Non-superuser is rejected — install / upgrade is admin-only
             # since it executes install_hook code and DDL.

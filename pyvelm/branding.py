@@ -11,6 +11,13 @@ Configure on **Settings → Companies** (``res.company``) or via environment:
 - ``PYVELM_SHOW_POWERED_BY`` — ``0`` / ``false`` hides the powered-by line
 
 Theme accent still comes from ``res.company.primary_color`` (see ``pyvelm.theme``).
+
+Site entry (see ``pyvelm.home``):
+
+- ``PYVELM_HOME_URL`` — post-login home (default ``/web/admin``; use ``/`` or a
+  ``/web/views/…`` dashboard to mount the app home at the site root).
+- ``PYVELM_LANDING`` — show a public landing page at ``/`` for anonymous visitors
+  (default on; set ``0`` to send them straight to login).
 """
 from __future__ import annotations
 
@@ -55,27 +62,22 @@ def _pick_bool(company_val: bool | None, env_key: str, *, default: bool) -> bool
 def _load_company_branding(env, company_id: int | None) -> dict[str, Any] | None:
     if env is None or company_id is None or "res.company" not in env.registry:
         return None
-    bypass = env.with_company(None)
-    bypass._acl_bypass = True
-    try:
-        Company = bypass["res.company"]
-        if not Company.search([("id", "=", company_id)]):
-            return None
-        co = Company.browse(company_id)
-        co.ensure_one()
-        return {
-            "app_name": co.app_name,
-            "app_tagline": co.app_tagline,
-            "logo_url": co.logo_url,
-            "logo_url_dark": co.logo_url_dark,
-            "favicon_url": co.favicon_url,
-            "copyright_text": co.copyright_text,
-            "support_email": co.support_email,
-            "support_url": co.support_url,
-            "show_powered_by": co.show_powered_by,
-        }
-    finally:
-        bypass._acl_bypass = False
+    Company = env.with_company(None).sudo()["res.company"]
+    if not Company.search([("id", "=", company_id)]):
+        return None
+    co = Company.browse(company_id)
+    co.ensure_one()
+    return {
+        "app_name": co.app_name,
+        "app_tagline": co.app_tagline,
+        "logo_url": co.logo_url,
+        "logo_url_dark": co.logo_url_dark,
+        "favicon_url": co.favicon_url,
+        "copyright_text": co.copyright_text,
+        "support_email": co.support_email,
+        "support_url": co.support_url,
+        "show_powered_by": co.show_powered_by,
+    }
 
 
 def brand_dict(

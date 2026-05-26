@@ -272,11 +272,16 @@ def apply_operations(arch: dict, operations: list[dict]) -> dict:
 
 def _ext_search(view, parent_id):
     """All extension views of parent_id, in ascending priority then id."""
-    View = view.env["ir.ui.view"]
-    return View.search(
-        [("inherit_id", "=", parent_id)],
-        order='"priority" ASC, "id" ASC',
-    )
+    env = view.env
+    prev = env._acl_bypass
+    env._acl_bypass = True
+    try:
+        return env["ir.ui.view"].search(
+            [("inherit_id", "=", parent_id)],
+            order='"priority" ASC, "id" ASC',
+        )
+    finally:
+        env._acl_bypass = prev
 
 
 def resolve_arch(view) -> dict:
@@ -286,23 +291,32 @@ def resolve_arch(view) -> dict:
     Then applies every extension in the family in (priority, id) order.
     Depth-first: extensions-of-extensions are applied after their parent
     extension's ops, in the same priority sweep.
+
+    ACL is bypassed for the whole resolution — view arch is system metadata
+    (same policy as ``render._search_ui_views`` / ``_menu``).
     """
-    root = view
-    while root.inherit_id:
-        root = root.inherit_id
-    if not root.arch:
-        raise ValueError(
-            f"View {root.module}.{root.name} has no arch (extension views "
-            f"need an inherit_id to a base view)"
-        )
-    arch = copy.deepcopy(json.loads(root.arch))
-    _apply_chain(root, arch)
-    # Normalize the resolved arch so that any plain-string entries
-    # inserted by before/after/replace operations are promoted to dicts.
-    view_type = root.view_type
-    if view_type:
-        arch = normalize_arch(arch, view_type)
-    return arch
+    env = view.env
+    prev = env._acl_bypass
+    env._acl_bypass = True
+    try:
+        root = view
+        while root.inherit_id:
+            root = root.inherit_id
+        if not root.arch:
+            raise ValueError(
+                f"View {root.module}.{root.name} has no arch (extension views "
+                f"need an inherit_id to a base view)"
+            )
+        arch = copy.deepcopy(json.loads(root.arch))
+        _apply_chain(root, arch)
+        # Normalize the resolved arch so that any plain-string entries
+        # inserted by before/after/replace operations are promoted to dicts.
+        view_type = root.view_type
+        if view_type:
+            arch = normalize_arch(arch, view_type)
+        return arch
+    finally:
+        env._acl_bypass = prev
 
 
 def _apply_chain(view, arch):

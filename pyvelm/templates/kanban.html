@@ -3,7 +3,7 @@
 {% block page_title %}{{ page_title }}{% endblock %}
 
 {% block page_actions %}
-{% if form_view_name %}
+{% if access.can_create and form_view_name %}
 <a href="/web/views/{{ view.module }}/{{ form_view_name }}/new"
    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
           rounded-md bg-fg-brand hover:opacity-90 transition-opacity">

@@ -83,6 +83,7 @@ or (chatter_context and chatter_context.enabled)
                     </button>
                     {% endif %}
                     {% endfor %}
+                    {% if access.can_write %}
                     <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
                            rounded-md bg-fg-brand hover:opacity-90 transition" hx-get="{{ rec_edit_url }}"
                         hx-target="closest [data-pv-form-shell]" hx-swap="innerHTML">
@@ -92,6 +93,8 @@ or (chatter_context and chatter_context.enabled)
                         </svg>
                         Edit
                     </button>
+                    {% endif %}
+                    {% if access.can_unlink %}
                     <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-default
                            text-fg-danger rounded-md hover:bg-danger-soft transition"
                         hx-delete="/api/records/{{ record_id }}?model={{ view.model }}" hx-confirm="Delete this record?"
@@ -102,7 +105,8 @@ or (chatter_context and chatter_context.enabled)
                         </svg>
                         Delete
                     </button>
-                    {% elif mode == "edit" %}
+                    {% endif %}
+                    {% elif mode == "edit" and access.can_write %}
                     <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
                            rounded-md bg-success hover:opacity-90 transition" hx-post="{{ rec_url }}"
                         hx-include="closest [data-pv-form-shell]" hx-target="closest [data-pv-form-shell]"
@@ -114,7 +118,7 @@ or (chatter_context and chatter_context.enabled)
                         hx-target="closest [data-pv-form-shell]" hx-swap="innerHTML" data-pv-hide-in-dialog>
                         Cancel
                     </button>
-                    {% elif mode == "new" %}
+                    {% elif mode == "new" and access.can_create %}
                     <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
                            rounded-md bg-success hover:opacity-90 transition" hx-post="{{ base }}"
                         hx-include="closest [data-pv-form-shell]" hx-target="closest [data-pv-form-shell]"

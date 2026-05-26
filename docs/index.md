@@ -5,13 +5,13 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.9.0](releases/v0.9.0.md) (2026-05-25) — **Kanban** boards,
-**schema diff/migrate**, **dialog** relational fields, and **breadcrumb history**.
-See [releases](releases/v0.9.0.md) and the
+**Latest release:** [v0.10.0](releases/v0.10.0.md) (2026-05-26) — **Policies**,
+**UI access gating**, **landing page**, **sudo**, and **public attachments**.
+See [releases](releases/v0.10.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.9.0
+pip install pyvelm==0.10.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
