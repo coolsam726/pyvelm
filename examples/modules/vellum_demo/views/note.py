@@ -28,6 +28,11 @@ VIEWS: list[View] = [
                 ["title", "body", "score", "publish_on", "event_at", "standup_at", "active"],
             ),
             section(
+                "snippet",
+                "Snippet",
+                ["snippet"],
+            ),
+            section(
                 "comments",
                 "Comments",
                 [field("comment_ids", widget="dialog")],

@@ -13,7 +13,8 @@
 
     <p x-show="!readonly" class="text-xs text-body-subtle mb-3">
         <strong>Write</strong> — TipTap.
-        <strong>HTML source</strong> — CodeMirror autocomplete (Ctrl+Space).
+        <strong>HTML source</strong> — same code editor as Code fields (VSCode theme, Ctrl+Space).
+        Switch language to <strong>Jinja</strong> for template syntax highlighting.
         Use <strong>Insert variable</strong> or type <code class="font-mono text-2xs">{% raw %}{{ object. }}{% endraw %}</code> in source.
     </p>
 
@@ -346,13 +347,43 @@
             </div>
         </div>
         <div x-ref="writeMount"
-             class="pv-tiptap-mount border border-default rounded-b-lg bg-white min-h-[20rem]"></div>
+             class="pv-tiptap-mount border border-default rounded-b-lg bg-neutral-primary min-h-[20rem]"></div>
     </div>
 
-    {# Source tab — CodeMirror. Display mode skips this entirely. #}
-    <div x-show="!readonly && tab === 'source'">
-        <div x-ref="sourceMount"
-             class="pv-cm-mount border border-default rounded-lg overflow-hidden min-h-[22rem] bg-white"></div>
+    {# Source tab — same CodeMirror stack as the Code field widget. #}
+    <div x-show="!readonly && tab === 'source'" class="pv-code-editor pv-code-editor--embedded">
+        <div class="pv-code-editor__header">
+            <label class="sr-only" for="pv-html-source-lang">Source language</label>
+            <select id="pv-html-source-lang"
+                    class="pv-code-editor__lang pv-code-editor__lang-select"
+                    x-model="sourceLanguage"
+                    @change="applySourceLanguage()">
+                <option value="html">html</option>
+                <option value="jinja">jinja</option>
+            </select>
+            <div class="flex items-center gap-1.5">
+                <span x-show="sourceFormatError"
+                      x-text="sourceFormatError"
+                      class="text-2xs text-fg-danger"
+                      x-cloak></span>
+                <button type="button"
+                        class="pv-code-editor__action"
+                        @mousedown.prevent
+                        @click="formatSourceHtml()"
+                        title="Format HTML (indent)">
+                    Format
+                </button>
+                <button type="button"
+                        class="pv-code-editor__action"
+                        @mousedown.prevent
+                        @click="copySource()"
+                        :title="sourceCopied ? 'Copied!' : 'Copy HTML source'">
+                    <span x-show="!sourceCopied">Copy</span>
+                    <span x-show="sourceCopied" x-cloak>Copied</span>
+                </button>
+            </div>
+        </div>
+        <div x-ref="sourceMount" class="pv-code-editor__mount pv-code-editor__mount--mail"></div>
     </div>
 
     {# Preview panel — always visible in display mode; tab-gated in edit
@@ -432,14 +463,14 @@
                     <span class="text-2xs font-semibold uppercase tracking-wider text-body-subtle">Subject</span>
                     <span class="font-medium text-heading" x-text="previewRendered.subject || '(empty)'"></span>
                 </div>
-                <div class="pv-html-preview-pane min-h-[16rem] rounded-lg border border-default
-                            bg-white px-5 py-4 overflow-auto"
+                <div class="pv-html-preview-pane pv-html-preview-pane--email min-h-[16rem] rounded-lg border border-default
+                            px-5 py-4 overflow-auto"
                      x-html="previewRendered.body_html"></div>
             </div>
         </template>
         <div x-show="!previewRendered"
-             class="pv-html-preview-pane min-h-[20rem] rounded-lg border border-default
-                    bg-white px-5 py-4 overflow-auto"
+             class="pv-html-preview-pane pv-html-preview-pane--email min-h-[20rem] rounded-lg border border-default
+                    px-5 py-4 overflow-auto"
              x-html="previewHtml()"></div>
     </div>
 

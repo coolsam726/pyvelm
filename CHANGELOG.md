@@ -7,6 +7,39 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.12.0] — 2026-05-26
+
+VSCode-style **`Code`** field type with per-language syntax highlighting, plus
+a shared CodeMirror layer that the mail-template HTML source now reuses (with
+an html/jinja language toggle and Format button). See
+[docs/releases/v0.12.0.md](docs/releases/v0.12.0.md).
+
+### Added
+
+- **`Code` field** — `pyvelm/fields.py`. Subclass of `Text` declaring a
+  `language` (one of `text`, `python`, `javascript`, `typescript`, `json`,
+  `html`, `css`, `sql`, `xml`, `markdown`). Stored as TEXT, never sanitized.
+  Renders through the new CodeMirror editor widget by default; views can
+  override the language with `field("script", language="sql")`. `Text` fields
+  also accept `widget="code"`. Wired into the `vellum_demo` Note model as a
+  `snippet` example (migration `0_4_0_to_0_5_0.py`).
+- **Code editor widget** — `pyvelm/static/src/code_editor.js` +
+  `codemirror_field.js` (esbuild → `dist/code_editor.js`). CodeMirror 6 with
+  per-language packs, VSCode light/dark theme that follows the surrounding
+  `.dark` class, line numbers, fold gutter, bracket matching, search, format,
+  and a copy-to-clipboard chip. Display mode mounts the editor read-only so
+  values still get syntax highlighting. The mail template HTML source tab now
+  uses the same stack (language toggle: html ↔ jinja).
+
+### Changed
+
+- **HTML source tab in the mail editor** — replaced the bespoke CodeMirror
+  wiring with the shared `codemirror_field` layer so language switching,
+  formatting, copy, and the VSCode theme are consistent across `Html` and
+  `Code` fields.
+- **docs CI** — `.github/workflows/docs.yml` now triggers on `v*` tags
+  instead of every `main` push so doc rebuilds happen only on releases.
+
 ## [0.11.0] — 2026-05-26
 
 Email templates with sandboxed Jinja, sanitized **Html** field, MS Word-shaped

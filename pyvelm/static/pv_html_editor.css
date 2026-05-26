@@ -1,5 +1,10 @@
 /* Email template editor (TipTap + CodeMirror 6) */
 
+.pv-tiptap-mount {
+    background-color: var(--color-neutral-primary, #ffffff);
+    color: var(--color-heading, #111827);
+}
+
 .pv-tiptap-mount .tiptap,
 .pv-tiptap-mount .ProseMirror,
 .pv-tiptap-mount .pv-tiptap-doc {
@@ -10,7 +15,8 @@
     font-family: system-ui, -apple-system, sans-serif;
     font-size: 0.875rem;
     line-height: 1.65;
-    color: var(--color-heading, #111827);
+    color: inherit;
+    background-color: transparent;
 }
 
 .pv-tiptap-mount .tiptap p {
@@ -41,27 +47,24 @@
     outline: none;
 }
 
-/* CodeMirror 6 */
-.pv-cm-mount .cm-editor {
-    min-height: 22rem;
-    font-size: 0.8125rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.pv-cm-mount .cm-scroller {
-    min-height: 22rem;
-}
-
-.pv-cm-mount .cm-gutters {
-    background: var(--color-neutral-secondary, #f9fafb);
-    border-right: 1px solid var(--color-default, #e5e7eb);
-}
-
 .pv-html-preview-pane {
     font-family: system-ui, -apple-system, sans-serif;
     font-size: 0.875rem;
     line-height: 1.65;
+    background-color: var(--color-neutral-primary, #ffffff);
     color: var(--color-heading, #111827);
+}
+
+/* Rendered email HTML: show on a light “message” canvas so template colours
+   stay readable in dark app chrome (matches typical inbox rendering). */
+.pv-html-preview-pane--email {
+    color-scheme: light;
+    background-color: #ffffff;
+    color: #111827;
+}
+
+.pv-html-preview-pane--email :where(p, li, td, th, div, span, h1, h2, h3, h4, blockquote) {
+    color: inherit;
 }
 
 .pv-html-preview-pane img {
@@ -72,6 +75,10 @@
 .pv-html-preview-pane a {
     color: var(--color-fg-brand, #4f46e5);
     text-decoration: underline;
+}
+
+.pv-html-preview-pane--email a {
+    color: #4f46e5;
 }
 
 .pv-var-picker ul,

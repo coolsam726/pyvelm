@@ -9,7 +9,7 @@ Each template targets a model (`res.partner`, etc.) and stores a Jinja2
 subject plus an **`Html`** body (sanitized on save). The editor has:
 
 - **Write** — TipTap v3 ribbon toolbar (styles, font, lists, insert image, etc.)
-- **HTML source** — CodeMirror 6 with Jinja variable autocomplete (Ctrl+Space)
+- **HTML source** — CodeMirror 6 (language **html** or **jinja**), Jinja variable autocomplete (Ctrl+Space)
 - **Preview** — sanitized HTML; optional **preview with record** via
   `POST /api/mail/templates/preview` and a record picker on the Preview tab
 

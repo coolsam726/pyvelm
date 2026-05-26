@@ -39,22 +39,17 @@ import { Image } from '@tiptap/extension-image';
 import { TaskList } from '@tiptap/extension-task-list';
 import { TaskItem } from '@tiptap/extension-task-item';
 import { Placeholder } from '@tiptap/extension-placeholder';
-import { EditorState } from '@codemirror/state';
 import {
-    EditorView,
-    keymap,
-    lineNumbers,
-    highlightActiveLine,
-    drawSelection,
-} from '@codemirror/view';
-import { html } from '@codemirror/lang-html';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
-import {
-    autocompletion,
-    completionKeymap,
-    completeFromList,
-} from '@codemirror/autocomplete';
+    applyFormatToView,
+    buildCodeView,
+    formatSource,
+    getDocContent,
+    htmlLooksMinified,
+    jinjaTemplateCompletions,
+    reconfigureLanguage,
+    reconfigureTheme,
+    setDocContent,
+} from './codemirror_field.js';
 
 // host element → { tipTap, codeView }. Lives outside Alpine reactivity.
 const EDITORS = new WeakMap();
@@ -97,16 +92,6 @@ function stripScripts(text) {
 
 function whenVisible(cb) {
     requestAnimationFrame(() => requestAnimationFrame(cb));
-}
-
-function buildTemplateCompletions(variables) {
-    const entries = (variables || []).map((v) => ({
-        label: v.expr,
-        detail: v.label,
-        type: 'variable',
-        apply: v.snippet || `{{ ${v.expr} }}`,
-    }));
-    return completeFromList(entries);
 }
 
 function createTipTap(mountEl, { content, onUpdate, onSelectionChange }) {
@@ -162,72 +147,6 @@ function createTipTap(mountEl, { content, onUpdate, onSelectionChange }) {
     return editor;
 }
 
-function createCodeMirror(mountEl, { content, onUpdate, getCompletions }) {
-    mountEl.innerHTML = '';
-    const completionExt = autocompletion({
-        override: [
-            (context) => {
-                const list = getCompletions?.() || [];
-                if (!list.length) return null;
-                const word = context.matchBefore(
-                    /(?:\{\{\s*)?((?:object|user|company|ctx)(?:\.\w+)*)/
-                );
-                if (!word && !context.explicit) return null;
-                const from = word ? word.from : context.pos;
-                const typed = word ? word.text : '';
-                const options = list
-                    .filter((v) => {
-                        const expr = v.expr || '';
-                        if (!typed) return true;
-                        return expr.startsWith(typed) || expr.includes(typed);
-                    })
-                    .slice(0, 80)
-                    .map((v) => ({
-                        label: v.expr,
-                        detail: v.label,
-                        type: 'variable',
-                        apply: v.snippet || `{{ ${v.expr} }}`,
-                    }));
-                if (!options.length) return null;
-                return { from, options, validFor: /^[\w.]*$/ };
-            },
-            buildTemplateCompletions(getCompletions?.() || []),
-        ],
-    });
-
-    const state = EditorState.create({
-        doc: content ?? '',
-        extensions: [
-            lineNumbers(),
-            highlightActiveLine(),
-            drawSelection(),
-            history(),
-            html(),
-            // Soft-wrap long lines so authors don't have to horizontally
-            // scroll a long {{ object.some.long.path }} placeholder.
-            EditorView.lineWrapping,
-            syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-            keymap.of([
-                ...defaultKeymap,
-                ...historyKeymap,
-                ...completionKeymap,
-            ]),
-            completionExt,
-            EditorView.updateListener.of((update) => {
-                if (update.docChanged) {
-                    onUpdate(update.state.doc.toString());
-                }
-            }),
-        ],
-    });
-    const view = new EditorView({ state, parent: mountEl });
-    whenVisible(() => {
-        view.requestMeasure();
-        view.focus();
-    });
-    return view;
-}
-
 function registerAlpine() {
     if (!window.Alpine) {
         console.error('[pvHtmlEditor] Alpine.js not found');
@@ -237,6 +156,7 @@ function registerAlpine() {
     window.Alpine.data('pvHtmlEditor', () => ({
         // --- config (filled in by init() from data-pv-config) ---
         name: 'body_html',
+        sourceLanguage: 'html',
         readonly: false,
         mailModel: '',
         // Stored subject from the record. Edit mode reads the live form
@@ -254,6 +174,9 @@ function registerAlpine() {
         varQuery: '',
         varPickerOpen: false,
         varCursor: 0,
+        sourceCopied: false,
+        sourceFormatError: '',
+        _sourceAutoFormatted: false,
 
         // --- live-preview state (Preview tab only) ---
         previewQuery: '',
@@ -276,6 +199,7 @@ function registerAlpine() {
             this.html = cfg.initial ?? '';
             this.readonly = !!cfg.readonly;
             this.tab = this.readonly ? 'preview' : 'write';
+            this.sourceLanguage = 'html';
             this.mailModel = cfg.mailModel || '';
             this.subject = cfg.subject || '';
 
@@ -329,6 +253,14 @@ function registerAlpine() {
                 // the user sees the live preview without an extra click.
                 this.$nextTick(() => this.renderPreview());
             }
+
+            this._themeObserver = new MutationObserver(() => {
+                reconfigureTheme(this._codeView());
+            });
+            this._themeObserver.observe(document.documentElement, {
+                attributes: true,
+                attributeFilter: ['class'],
+            });
         },
 
         // ----- editor accessors (raw, NOT through Alpine) -----
@@ -592,7 +524,7 @@ function registerAlpine() {
                     changes: { from: pos, insert: snippet },
                     selection: { anchor: pos + snippet.length },
                 });
-                this.html = code.state.doc.toString();
+                this.html = getDocContent(code);
                 code.focus();
                 return;
             }
@@ -669,30 +601,85 @@ function registerAlpine() {
             let view = this._codeView();
             if (!view) {
                 try {
-                    view = createCodeMirror(mount, {
-                        content: this.html,
+                    let initial = this.html;
+                    if (
+                        !this._sourceAutoFormatted &&
+                        htmlLooksMinified(initial)
+                    ) {
+                        const formatted = formatSource(initial, 'html');
+                        if (formatted !== null) {
+                            initial = formatted;
+                            this.html = initial;
+                        }
+                        this._sourceAutoFormatted = true;
+                    }
+                    view = buildCodeView(mount, {
+                        content: initial,
+                        language: this.sourceLanguage,
+                        readonly: false,
                         onUpdate: (v) => {
                             this.html = v;
                         },
-                        getCompletions: () => this.variables,
+                        extraExtensions: [
+                            jinjaTemplateCompletions(() => this.variables),
+                        ],
                     });
                     this._setCodeView(view);
+                    reconfigureTheme(view);
+                    whenVisible(() => {
+                        view.requestMeasure();
+                        view.focus();
+                    });
                 } catch (err) {
                     console.error('[pvHtmlEditor] CodeMirror mount failed', err);
                 }
                 return;
             }
             if (prevTab && prevTab !== 'source') {
-                const current = view.state.doc.toString();
-                if (current !== this.html) {
-                    view.dispatch({
-                        changes: {
-                            from: 0,
-                            to: current.length,
-                            insert: this.html || '',
-                        },
-                    });
+                if (htmlLooksMinified(this.html)) {
+                    const formatted = formatSource(this.html, 'html');
+                    if (formatted !== null) {
+                        this.html = formatted;
+                    }
                 }
+                setDocContent(view, this.html);
+            }
+        },
+
+        applySourceLanguage() {
+            const lang = this.sourceLanguage === 'jinja' ? 'jinja' : 'html';
+            const view = this._codeView();
+            if (view) reconfigureLanguage(view, lang);
+        },
+
+        formatSourceHtml() {
+            this.sourceFormatError = '';
+            this.syncAll();
+            const view = this._codeView();
+            if (!view) return;
+            const fmtLang =
+                this.sourceLanguage === 'jinja' ? 'html' : this.sourceLanguage;
+            const after = applyFormatToView(view, fmtLang, (v) => {
+                this.html = v;
+            });
+            if (after === null) {
+                this.sourceFormatError = 'Could not format';
+                setTimeout(() => {
+                    this.sourceFormatError = '';
+                }, 2500);
+            }
+        },
+
+        async copySource() {
+            this.syncAll();
+            try {
+                await navigator.clipboard.writeText(this.html || '');
+                this.sourceCopied = true;
+                setTimeout(() => {
+                    this.sourceCopied = false;
+                }, 1500);
+            } catch (err) {
+                console.warn('[pvHtmlEditor] copy failed', err);
             }
         },
 
@@ -704,11 +691,11 @@ function registerAlpine() {
             const tt = this._tipTap();
             const cv = this._codeView();
             if (this.tab === 'source' && cv) {
-                this.html = cv.state.doc.toString();
+                this.html = getDocContent(cv);
             } else if (tt && !tt.isDestroyed) {
                 this.html = tt.getHTML();
             } else if (cv) {
-                this.html = cv.state.doc.toString();
+                this.html = getDocContent(cv);
             }
         },
 
@@ -970,6 +957,10 @@ function registerAlpine() {
             destroyEditor(eds.tipTap);
             destroyEditor(eds.codeView);
             EDITORS.delete(this.$root);
+            if (this._themeObserver) {
+                this._themeObserver.disconnect();
+                this._themeObserver = null;
+            }
         },
     }));
 }

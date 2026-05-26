@@ -1,0 +1,41 @@
+{# Code editor — CodeMirror 6 with VSCode-like syntax highlighting.
+   Requires /web/static/dist/code_editor.js (npm run build:code-editor).
+
+   One template serves both display and edit modes. Display mode mounts
+   a read-only CodeMirror instance so the value still gets full
+   highlighting (and line numbers + soft wrap) rather than a dumb
+   <pre>. The hidden input is always present so the value round-trips
+   through the form; in read-only mode it's inert. #}
+<div class="pv-code-editor"
+     data-language="{{ language }}"
+     x-data="pvCodeEditor()"
+     data-pv-config="{{ config_b64 }}"
+     x-cloak>
+    <div class="pv-code-editor__header">
+        <span class="pv-code-editor__lang" x-text="language"></span>
+        <div class="flex items-center gap-1.5">
+            <span x-show="formatError"
+                  x-text="formatError"
+                  class="text-2xs text-fg-danger max-w-[10rem] truncate"
+                  x-cloak></span>
+            <button type="button"
+                    x-show="canFormat()"
+                    class="pv-code-editor__action"
+                    @mousedown.prevent
+                    @click="formatDocument()"
+                    title="Format document (indent)">
+                Format
+            </button>
+            <button type="button"
+                    class="pv-code-editor__action"
+                    @mousedown.prevent
+                    @click="copyToClipboard()"
+                    :title="copied ? 'Copied!' : 'Copy to clipboard'">
+                <span x-show="!copied">Copy</span>
+                <span x-show="copied" x-cloak>Copied</span>
+            </button>
+        </div>
+    </div>
+    <div x-ref="mount" class="pv-code-editor__mount"></div>
+    <input type="hidden" name="{{ name }}" :value="code">
+</div>

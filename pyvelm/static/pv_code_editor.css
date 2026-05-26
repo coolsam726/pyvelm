@@ -1,0 +1,104 @@
+/* Code editor field (Code / Text widget="code") — CodeMirror 6 with
+   the VSCode light/dark theme picked from the surrounding `.dark` class. */
+
+.pv-code-editor {
+    border: 1px solid var(--color-default, #d1d5db);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: var(--color-neutral-primary, #ffffff);
+}
+
+.pv-code-editor__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    border-bottom: 1px solid var(--color-default, #d1d5db);
+    background: var(--color-neutral-secondary, #f3f4f6);
+    font-size: 0.6875rem;
+    line-height: 1;
+}
+
+.pv-code-editor__lang {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-body-subtle, #6b7280);
+    font-weight: 600;
+}
+
+.pv-code-editor__lang-select {
+    text-transform: lowercase;
+    border: 1px solid var(--color-default, #d1d5db);
+    border-radius: 0.25rem;
+    padding: 0.125rem 0.375rem;
+    background: var(--color-neutral-primary, #ffffff);
+    color: var(--color-body-subtle, #6b7280);
+    cursor: pointer;
+}
+
+.pv-code-editor__action {
+    font-family: inherit;
+    font-size: 0.6875rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--color-default, #d1d5db);
+    background: var(--color-neutral-primary, #ffffff);
+    color: var(--color-body, #374151);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pv-code-editor__action:hover {
+    background: var(--color-brand-softer, #eef2ff);
+    color: var(--color-fg-brand, #4f46e5);
+}
+
+.pv-code-editor__mount {
+    min-height: 14rem;
+    max-height: 32rem;
+    overflow: auto;
+}
+
+.pv-code-editor__mount .cm-editor {
+    min-height: 14rem;
+    font-size: 0.8125rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.pv-code-editor__mount .cm-scroller {
+    font-family: inherit;
+    line-height: 1.55;
+}
+
+/* Let the VSCode CodeMirror theme own surface colours (light/dark). */
+.pv-code-editor__mount .cm-editor,
+.pv-code-editor__mount .cm-gutters {
+    background-color: transparent;
+}
+
+/* Read-only display flavour: lose the "input" affordances, keep the
+   highlighting. The cursor stays hidden so it doesn't blink in a
+   field the user can't edit. */
+.pv-code-editor--readonly .cm-editor .cm-cursor {
+    display: none !important;
+}
+
+.pv-code-editor--readonly .cm-editor.cm-focused {
+    outline: none;
+}
+
+/* Embedded in the mail template HTML editor (Source tab). */
+.pv-code-editor--embedded {
+    margin-bottom: 0;
+}
+
+.pv-code-editor__mount--mail {
+    min-height: 22rem;
+    max-height: none;
+}
+
+.pv-code-editor__mount--mail .cm-editor {
+    min-height: 22rem;
+}

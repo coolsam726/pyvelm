@@ -35,6 +35,7 @@ from .security import template_access
 from .fields import (
     Boolean,
     Char,
+    Code,
     Date,
     Datetime,
     Field,
@@ -1137,6 +1138,61 @@ def _edit_html_body(value, spec, field):
     if spec.get("readonly"):
         return _render_html_editor_widget(value, spec, readonly=True)
     return _render_html_editor_widget(value, spec, readonly=False)
+
+
+def _code_language(spec, field) -> str:
+    """Per-view ``language`` wins; else the field's declared language;
+    else plain text. Unknown values fall back to plain text rather
+    than failing the render."""
+    declared = getattr(field, "language", None) or "text"
+    override = spec.get("language")
+    lang = (override or declared or "text").lower()
+    if lang not in Code.SUPPORTED_LANGUAGES:
+        lang = "text"
+    return lang
+
+
+def _render_code_editor_widget(value, spec, field, *, readonly: bool) -> Markup:
+    """CodeMirror 6 source editor with VSCode-like highlighting.
+
+    The Alpine component (``pvCodeEditor``) reads its config from a
+    base64 ``data-pv-config`` attribute — the same trick the HTML
+    editor uses to keep JSON safely outside the ``x-data`` expression.
+    """
+    partial = _env.get_template("widgets/code_editor.html")
+    raw = "" if value is None else str(value)
+    payload = json.dumps(
+        {
+            "name": spec["name"],
+            "initial": raw,
+            "language": _code_language(spec, field),
+            "readonly": readonly,
+        }
+    ).encode()
+    config_b64 = base64.b64encode(payload).decode("ascii")
+    return Markup(
+        partial.render(
+            name=spec["name"],
+            config_b64=escape(config_b64),
+            readonly=readonly,
+            language=_code_language(spec, field),
+            raw=raw,
+        )
+    )
+
+
+@widget(Text, hint="code")
+@widget(Code)
+def _render_code_body(value, spec, field):
+    return _render_code_editor_widget(value, spec, field, readonly=True)
+
+
+@widget(Text, hint="code", mode="edit")
+@widget(Code, mode="edit")
+def _edit_code_body(value, spec, field):
+    if spec.get("readonly"):
+        return _render_code_editor_widget(value, spec, field, readonly=True)
+    return _render_code_editor_widget(value, spec, field, readonly=False)
 
 
 @widget(Integer, mode="edit")
@@ -2311,8 +2367,11 @@ def _form_section_html(
             isinstance(field, One2many)
             and (_o2m_use_inline_edit(spec) or _o2m_show_table(spec))
         ) or (
-            isinstance(field, Html)
-            or (isinstance(field, Text) and spec.get("widget") == "html")
+            isinstance(field, (Html, Code))
+            or (
+                isinstance(field, Text)
+                and spec.get("widget") in ("html", "code")
+            )
         )
         if author_span is None and is_wide_default:
             cell_span = cols

@@ -310,6 +310,76 @@ class Text(Char):
     pass
 
 
+class Code(Text):
+    """Source-code field with a declared ``language``.
+
+    Stored as TEXT, never sanitized — the value is the operator's
+    code, not HTML that will be embedded in a page. The render layer
+    picks the CodeMirror editor automatically based on the field
+    class. ``language`` seeds the editor's syntax highlighting
+    (``"python"``, ``"javascript"``, ``"json"``, ``"sql"``, ``"html"``,
+    ``"css"``, ``"xml"``, ``"markdown"``, ``"text"``) and can be
+    overridden per view via ``widget_options={"language": "..."}``.
+    """
+
+    SUPPORTED_LANGUAGES = (
+        "text",
+        "python",
+        "javascript",
+        "typescript",
+        "json",
+        "html",
+        "css",
+        "sql",
+        "xml",
+        "markdown",
+    )
+
+    def __init__(
+        self,
+        string=None,
+        required=False,
+        default=None,
+        column=None,
+        compute=None,
+        store=None,
+        language: str = "text",
+        related: str | None = None,
+        readonly: bool = False,
+        tracking: bool = False,
+    ):
+        super().__init__(
+            string=string,
+            required=required,
+            default=default,
+            column=column,
+            compute=compute,
+            store=store,
+            related=related,
+            readonly=readonly,
+            tracking=tracking,
+        )
+        lang = (language or "text").lower()
+        if lang not in self.SUPPORTED_LANGUAGES:
+            raise ValueError(
+                f"Code field {self.name or '?'}: unsupported language "
+                f"{language!r}. Choose one of {', '.join(self.SUPPORTED_LANGUAGES)}."
+            )
+        self.language = lang
+
+    # Plain text passthrough — no sanitization. The value is operator
+    # code, not markup destined for the DOM.
+    def to_python(self, value):
+        if value is None or value is False or value == "":
+            return None
+        return str(value)
+
+    def to_sql_param(self, value):
+        if value is None or value is False or value == "":
+            return None
+        return str(value)
+
+
 class Html(Text):
     """Rich-text/HTML field. Stored as TEXT; sanitized on write.
 
