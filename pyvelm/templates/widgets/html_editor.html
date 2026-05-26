@@ -1,0 +1,143 @@
+{# Email template editor — requires /web/static/dist/mail_editor.js (npm run build:editor) #}
+{% if readonly %}
+<div class="pv-html-editor pv-html-editor--readonly"
+     x-data="pvHtmlEditor()" data-pv-config="{{ config_b64 }}" x-cloak>
+    <div class="pv-html-preview-pane border border-default rounded-lg p-5 bg-white min-h-[16rem] overflow-auto"
+         x-html="previewHtml()"></div>
+</div>
+{% else %}
+<div class="pv-html-editor"
+     x-data="pvHtmlEditor()" data-pv-config="{{ config_b64 }}"
+     x-cloak>
+
+    <p class="text-xs text-body-subtle mb-3">
+        <strong>Write</strong> — TipTap.
+        <strong>HTML source</strong> — CodeMirror autocomplete (Ctrl+Space).
+        Use <strong>Insert variable</strong> or type <code class="font-mono text-2xs">{% raw %}{{ object. }}{% endraw %}</code> in source.
+    </p>
+
+    <div class="flex flex-wrap items-end gap-3 border-b border-default pb-2 mb-3">
+        <div class="flex flex-wrap gap-1" role="tablist">
+        {# Tab buttons: @mousedown.prevent keeps the editor selection intact so
+           a click on "HTML source" or "Preview" doesn't trigger a ProseMirror
+           blur transaction that races against syncAll(). #}
+        <button type="button" role="tab" @mousedown.prevent @click="setTab('write')"
+                :class="tab === 'write'
+                    ? 'bg-fg-brand text-white border-fg-brand'
+                    : 'bg-neutral-primary text-body border-default hover:bg-neutral-secondary'"
+                class="px-3 py-1.5 text-xs font-medium rounded-md border transition">
+            Write
+        </button>
+        <button type="button" role="tab" @mousedown.prevent @click="setTab('source')"
+                :class="tab === 'source'
+                    ? 'bg-fg-brand text-white border-fg-brand'
+                    : 'bg-neutral-primary text-body border-default hover:bg-neutral-secondary'"
+                class="px-3 py-1.5 text-xs font-medium rounded-md border transition">
+            HTML source
+        </button>
+        <button type="button" role="tab" @mousedown.prevent @click="setTab('preview')"
+                :class="tab === 'preview'
+                    ? 'bg-fg-brand text-white border-fg-brand'
+                    : 'bg-neutral-primary text-body border-default hover:bg-neutral-secondary'"
+                class="px-3 py-1.5 text-xs font-medium rounded-md border transition">
+            Preview
+        </button>
+        </div>
+
+        {# Variable picker is only useful while editing HTML source — inserting
+           {{ … }} into TipTap turns it into stylable text that's easy to
+           mangle. Hide it on Write / Preview. #}
+        <div class="pv-var-picker relative flex-1 min-w-[14rem] max-w-md ml-auto"
+             x-show="showVarPicker()"
+             x-cloak
+             @click.outside="closeVarPicker()"
+             @keydown.escape.prevent.stop="closeVarPicker()">
+            <label class="block text-2xs font-medium text-body-subtle mb-1">Insert variable</label>
+            <input type="text"
+                   x-ref="varInput"
+                   x-model="varQuery"
+                   :readonly="!mailModel || variablesLoading"
+                   :placeholder="varPickerPlaceholder()"
+                   @focus="openVarPicker()"
+                   @input="openVarPicker(); varCursor = 0"
+                   @keydown.arrow-down.prevent="moveVarCursor(1)"
+                   @keydown.arrow-up.prevent="moveVarCursor(-1)"
+                   @keydown.enter.prevent="pickVarAtCursor()"
+                   autocomplete="off"
+                   class="w-full border border-default bg-neutral-primary rounded-md px-3 py-1.5
+                          text-xs font-mono text-heading focus:outline-none focus:ring-2
+                          focus:ring-fg-brand focus:border-fg-brand disabled:opacity-60">
+            <div x-show="varPickerOpen"
+                 x-cloak
+                 x-transition.opacity.duration.100ms
+                 class="absolute z-50 left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto
+                        bg-neutral-primary border border-default rounded-md shadow-lg text-sm">
+                <div x-show="variablesLoading"
+                     class="px-3 py-2 text-xs text-body-subtle">Loading fields…</div>
+                <div x-show="!mailModel && !variablesLoading"
+                     class="px-3 py-2 text-xs text-body-subtle">Select a model above first.</div>
+                <div x-show="varPickerNeedQuery() && !variablesLoading"
+                     class="px-3 py-2 text-xs text-body-subtle"
+                     x-text="'Type to search among ' + variables.length + ' fields'"></div>
+                <template x-for="(opt, i) in filteredVarOptions()" :key="opt.value">
+                    <button type="button"
+                            role="option"
+                            @mousedown.prevent
+                            @click="pickVar(opt)"
+                            @mousemove="varCursor = i"
+                            :class="i === varCursor
+                                ? 'bg-brand-softer text-fg-brand'
+                                : 'text-body hover:bg-neutral-secondary'"
+                            class="w-full text-left px-3 py-2 flex flex-col gap-0.5">
+                        <span class="font-mono text-xs truncate" x-text="opt.label"></span>
+                        <span class="text-2xs text-body-subtle truncate" x-text="opt.detail"></span>
+                    </button>
+                </template>
+                <div x-show="mailModel && !variablesLoading && !varPickerNeedQuery() && filteredVarOptions().length === 0"
+                     class="px-3 py-2 text-xs text-body-subtle">No matches.</div>
+            </div>
+        </div>
+    </div>
+
+    {# Panels stay in the DOM (x-show) so refs and editors stay mountable. #}
+    <div x-show="tab === 'write'">
+        {# All toolbar buttons use @mousedown.prevent so the editor never loses
+           focus on click. A blur fires a ProseMirror selection transaction
+           that, racing against our chain().focus().toggleX().run() call,
+           causes "Applying a mismatched transaction". Keeping focus removes
+           the race entirely. #}
+        <div class="flex flex-wrap gap-1 p-2 mb-0 rounded-t-lg border border-default border-b-0
+                    bg-neutral-secondary" role="toolbar">
+            <button type="button" class="pv-html-tb" title="Bold" @mousedown.prevent @click="run('bold')"><b>B</b></button>
+            <button type="button" class="pv-html-tb" title="Italic" @mousedown.prevent @click="run('italic')"><i>I</i></button>
+            <button type="button" class="pv-html-tb" title="Strike" @mousedown.prevent @click="run('strike')"><s>S</s></button>
+            <span class="w-px h-6 bg-default self-center mx-0.5" aria-hidden="true"></span>
+            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('h1')">H1</button>
+            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('h2')">H2</button>
+            <span class="w-px h-6 bg-default self-center mx-0.5" aria-hidden="true"></span>
+            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('bullet')">•</button>
+            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('ordered')">1.</button>
+            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('blockquote')">"</button>
+            <span class="w-px h-6 bg-default self-center mx-0.5" aria-hidden="true"></span>
+            <button type="button" class="pv-html-tb" @mousedown.prevent @click="insertLink()">Link</button>
+            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('undo')">↶</button>
+            <button type="button" class="pv-html-tb" @mousedown.prevent @click="run('redo')">↷</button>
+        </div>
+        <div x-ref="writeMount"
+             class="pv-tiptap-mount border border-default rounded-b-lg bg-white min-h-[20rem]"></div>
+    </div>
+
+    <div x-show="tab === 'source'">
+        <div x-ref="sourceMount"
+             class="pv-cm-mount border border-default rounded-lg overflow-hidden min-h-[22rem] bg-white"></div>
+    </div>
+
+    <div x-show="tab === 'preview'">
+        <div class="pv-html-preview-pane min-h-[20rem] rounded-lg border border-default
+                    bg-white px-5 py-4 overflow-auto"
+             x-html="previewHtml()"></div>
+    </div>
+
+    <input type="hidden" name="{{ name }}" :value="html">
+</div>
+{% endif %}

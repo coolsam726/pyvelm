@@ -82,6 +82,7 @@ def install(env):
             "base.automation",
             "ir.cron",
             "mail.message",
+            "mail.template",
             "res.company",
             "ir.ui.menu",
             "ir.ui.view",

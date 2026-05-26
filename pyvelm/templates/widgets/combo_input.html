@@ -20,6 +20,7 @@
         "readonly": readonly,
         "hint": hint,
         "allowClear": allow_clear,
+        "modelsUrl": models_url if models_url is defined and models_url else none,
      }) | tojson }})'
      @click.outside="close()"
      @keydown.escape.prevent.stop="close()">

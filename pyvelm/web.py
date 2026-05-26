@@ -1849,6 +1849,26 @@ def create_app(
         from .reports.fields_api import list_readable_models
         return {"models": list_readable_models(env)}
 
+    @app.get("/api/mail/templates/models")
+    def api_mail_template_models(env: Environment = Depends(get_env)):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .reports.fields_api import list_readable_models
+        return {"models": list_readable_models(env)}
+
+    @app.get("/api/mail/templates/variables")
+    def api_mail_template_variables(
+        model: str = Query(""),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        from .mail_template_fields import list_template_variables
+        try:
+            return list_template_variables(env, model)
+        except (ValueError, PermissionError) as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
     @app.get("/api/reports/fields")
     def api_reports_fields(model: str = Query(...), env: Environment = Depends(get_env)):
         if env.uid is None:

@@ -18,6 +18,7 @@ ADMIN_MANAGEMENT_MODELS: tuple[str, ...] = (
     "base.automation",
     "ir.cron",
     "mail.message",
+    "mail.template",
     "ir.report",
     "ir.report.run",
     "workflow.instance",

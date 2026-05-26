@@ -19,6 +19,7 @@ bare strings are escaped. This is the safety contract.
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from datetime import datetime, timezone
@@ -1004,6 +1005,46 @@ def _required_marker(field) -> str:
     return " required" if getattr(field, "required", False) else ""
 
 
+@widget(Char, hint="model")
+def _display_char_model(value, spec, field):
+    val = str(value) if value is not None else ""
+    if not val:
+        return Markup("")
+    env = spec.get("_env")
+    if env and val in env.registry:
+        cls = env.registry[val]
+        label = getattr(cls, "_description", None) or val
+        return Markup(
+            f'<span class="font-medium">{escape(label)}</span> '
+            f'<span class="text-xs text-body-subtle font-mono">{escape(val)}</span>'
+        )
+    return escape(val)
+
+
+@widget(Char, hint="model", mode="edit")
+def _edit_char_model(value, spec, field):
+    val_str = str(value) if value is not None else ""
+    initial_label = val_str
+    env = spec.get("_env")
+    if env and val_str and val_str in env.registry:
+        cls = env.registry[val_str]
+        initial_label = getattr(cls, "_description", None) or val_str
+    partial = _env.get_template("widgets/combo_input.html")
+    return Markup(
+        partial.render(
+            name=spec["name"],
+            options=[],
+            value=val_str,
+            initial_label=initial_label,
+            placeholder=field.string or "Select model…",
+            readonly=bool(spec.get("readonly")),
+            hint=val_str,
+            allow_clear=not field.required,
+            models_url="/api/mail/templates/models",
+        )
+    )
+
+
 @widget(Char, mode="edit")
 def _edit_char(value, spec, field):
     val_str = str(value) if value is not None else ""
@@ -1046,6 +1087,42 @@ def _edit_textarea(value, spec, field):
         f"{_readonly_marker(spec)}{_required_marker(field)}>"
         f"{val}</textarea>"
     )
+
+
+def _render_html_editor_widget(value, spec, *, readonly: bool) -> Markup:
+    """Rich HTML editor with Design / Source / Preview tabs."""
+    partial = _env.get_template("widgets/html_editor.html")
+    raw = "" if value is None else str(value)
+    mail_model = ""
+    record = spec.get("_record")
+    if record is not None and getattr(record, "model", None):
+        mail_model = str(record.model)
+    # Base64 in a data attribute — HTML/JSON must not live inside x-data
+    # (embedded `"` in the template body truncates the attribute).
+    payload = json.dumps(
+        {
+            "name": spec["name"],
+            "initial": raw,
+            "readonly": readonly,
+            "mailModel": mail_model,
+        }
+    ).encode()
+    config_b64 = base64.b64encode(payload).decode("ascii")
+    return Markup(
+        partial.render(name=spec["name"], config_b64=escape(config_b64))
+    )
+
+
+@widget(Text, hint="html")
+def _render_html_body(value, spec, field):
+    return _render_html_editor_widget(value, spec, readonly=True)
+
+
+@widget(Text, hint="html", mode="edit")
+def _edit_html_body(value, spec, field):
+    if spec.get("readonly"):
+        return _render_html_editor_widget(value, spec, readonly=True)
+    return _render_html_editor_widget(value, spec, readonly=False)
 
 
 @widget(Integer, mode="edit")

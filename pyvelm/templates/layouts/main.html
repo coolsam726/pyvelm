@@ -25,9 +25,12 @@
        data-attribute-driven components we'll lean on. All deferred so
        inline scripts below can attach handlers safely. #}
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+    {# Before Alpine so pvHtmlEditor registers on alpine:init. Build: npm run build:editor #}
+    <script src="/web/static/dist/mail_editor.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
     <script src="/web/static/dist/flowbite.min.js" defer></script>
     <script src="/web/static/pv_datetime_picker.js" defer></script>
+    <link rel="stylesheet" href="/web/static/pv_html_editor.css">
 
     <style>
       /* Hide Alpine-controlled elements until alpine:init fires. */
@@ -1237,8 +1240,34 @@
             /** When true, show full option list (re-open after a selection). */
             listAll: false,
 
+            modelsUrl: cfg.modelsUrl || null,
+            modelsLoading: false,
+
             init() {
                 this.syncQueryFromValue();
+                if (this.modelsUrl) {
+                    this.loadModelsFromApi();
+                }
+            },
+
+            async loadModelsFromApi() {
+                if (!this.modelsUrl || this.modelsLoading) return;
+                this.modelsLoading = true;
+                try {
+                    const r = await fetch(this.modelsUrl, { credentials: 'same-origin' });
+                    if (!r.ok) return;
+                    const data = await r.json();
+                    const rows = data.models || data || [];
+                    this.setOptions(rows.map((m) => ({
+                        value: m.value,
+                        label: m.label,
+                        searchText: `${m.label || ''} ${m.value || ''}`.toLowerCase(),
+                    })));
+                } catch (err) {
+                    console.warn('[pvCombo] model list load failed', err);
+                } finally {
+                    this.modelsLoading = false;
+                }
             },
 
             get filtered() {

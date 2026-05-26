@@ -60,8 +60,8 @@ from datetime import datetime
 from email.message import EmailMessage
 from typing import Protocol
 
-from pyvelm import BaseModel, Char, Integer, Many2one, Text, depends
-from pyvelm.cron import _DatetimeField  # reuse the datetime field from cron
+from pyvelm import BaseModel, Boolean, Char, Integer, Many2one, Text, depends
+from pyvelm.fields import Datetime as _DatetimeField
 
 log = logging.getLogger("pyvelm.mail")
 
@@ -86,6 +86,7 @@ class MailBackend(Protocol):
         subject: str,
         body: str,
         from_addr: str | None = None,
+        body_html: str | None = None,
     ) -> None: ...
 
 
@@ -104,16 +105,20 @@ class ConsoleBackend:
         subject: str,
         body: str,
         from_addr: str | None = None,
+        body_html: str | None = None,
     ) -> None:
         log.info(
-            "[mail console] %s → %s | %s",
+            "[mail console] %s → %s | %s%s",
             from_addr or "<no-from>",
             to,
             subject or "(no subject)",
+            " [html]" if body_html else "",
         )
-        if body:
+        payload = body_html or body
+        if payload:
             log.info(
-                "[mail console] body: %s", body if len(body) < 200 else body[:200] + "…"
+                "[mail console] body: %s",
+                payload if len(payload) < 200 else payload[:200] + "…",
             )
 
 
@@ -157,12 +162,18 @@ class SmtpBackend:
         subject: str,
         body: str,
         from_addr: str | None = None,
+        body_html: str | None = None,
     ) -> None:
         msg = EmailMessage()
         msg["Subject"] = subject or "(no subject)"
         msg["To"] = to
         msg["From"] = from_addr or self.from_addr or "noreply@pyvelm"
-        msg.set_content(body or "")
+        plain = body or ""
+        if body_html:
+            msg.set_content(plain or " ")
+            msg.add_alternative(body_html, subtype="html")
+        else:
+            msg.set_content(plain)
         with smtplib.SMTP(self.host, self.port) as conn:
             if self.use_tls:
                 conn.starttls()
@@ -220,6 +231,8 @@ class Message(BaseModel):
     # purely as log entries — the dispatcher never touches them.
     recipient_email = Char()
     subject = Char()
+    body_is_html = Boolean(default=False)
+    template_id = Many2one("mail.template", ondelete="SET NULL")
     state = Char(default="outgoing")  # outgoing / sent / failed
     error = Text()
 
@@ -274,11 +287,14 @@ class Message(BaseModel):
                 if not msg.recipient_email:
                     continue
                 subject = msg.subject or (msg.body or "(no subject)")[:80]
+                body = msg.body or ""
+                is_html = bool(msg.body_is_html)
                 try:
                     backend.send(
                         to=msg.recipient_email,
                         subject=subject,
-                        body=msg.body or "",
+                        body="" if is_html else body,
+                        body_html=body if is_html else None,
                         from_addr=default_from,
                     )
                 except Exception as exc:  # noqa: BLE001
@@ -410,6 +426,64 @@ class MailThread:
         }
         if subtype:
             vals["subtype"] = subtype
+        if self.env.uid is not None and "res.users" in self.env.registry:
+            vals["author_id"] = self.env.uid
+        msg = self.env["mail.message"].create(vals)
+        _link_attachments(self.env, attachment_ids, "mail.message", msg.id)
+        return msg
+
+    def send_mail(
+        self,
+        template,
+        *,
+        to: str,
+        extra: dict | None = None,
+        attachment_ids: list[int] | None = None,
+    ) -> "Message":
+        """Queue email rendered from a ``mail.template`` record."""
+        self.ensure_one()
+        if hasattr(template, "send_mail"):
+            return template.send_mail(
+                self,
+                to=to,
+                extra=extra,
+                attachment_ids=attachment_ids,
+            )
+        if "mail.template" not in self.env.registry:
+            raise RuntimeError("mail.template model is not loaded")
+        tpl = self.env["mail.template"].browse(int(template))
+        if not tpl._ids:
+            raise ValueError(f"Unknown mail.template id={template!r}")
+        return tpl.send_mail(
+            self, to=to, extra=extra, attachment_ids=attachment_ids
+        )
+
+    def _send_rendered_mail(
+        self,
+        *,
+        subject: str,
+        body_html: str,
+        recipient_email: str,
+        template_id: int | None = None,
+        attachment_ids: list[int] | None = None,
+    ) -> "Message":
+        """Internal: queue pre-rendered HTML mail (used by ``mail.template``)."""
+        self.ensure_one()
+        if "mail.message" not in self.env.registry:
+            raise RuntimeError("mail.message model is not loaded")
+        vals: dict = {
+            "model": self._name,
+            "res_id": self.id,
+            "body": body_html,
+            "body_is_html": True,
+            "message_type": "email",
+            "date": datetime.utcnow(),
+            "recipient_email": recipient_email,
+            "subject": subject or (body_html[:80] if body_html else ""),
+            "state": "outgoing",
+        }
+        if template_id and "mail.template" in self.env.registry:
+            vals["template_id"] = template_id
         if self.env.uid is not None and "res.users" in self.env.registry:
             vals["author_id"] = self.env.uid
         msg = self.env["mail.message"].create(vals)

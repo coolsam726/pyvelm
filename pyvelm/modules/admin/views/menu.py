@@ -86,6 +86,14 @@ MENUS: list[Menu] = [
         policy="view_any",
     ),
     m.item(
+        "workflows.mail_templates",
+        "Email templates",
+        parent="workflows",
+        view="mail_template.list",
+        sequence=35,
+        policy="view_any",
+    ),
+    m.item(
         "workflows.messages",
         "Messages",
         parent="workflows",

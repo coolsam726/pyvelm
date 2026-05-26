@@ -295,6 +295,39 @@ VIEWS: list[View] = [
             ),
         ],
     ),
+    # ---- mail.template ----
+    list_view(
+        "mail_template.list",
+        "mail.template",
+        title="Email templates",
+        fields=[
+            "name",
+            field("model", widget="model"),
+            "subject",
+            field("active", widget="toggle"),
+        ],
+    ),
+    form_view(
+        "mail_template.form",
+        "mail.template",
+        sections=[
+            section(
+                "main",
+                "Template",
+                [
+                    "name",
+                    field("model", widget="model"),
+                    field("active", widget="toggle"),
+                    "subject",
+                ],
+            ),
+            section(
+                "body",
+                "HTML body",
+                [field("body_html", widget="html")],
+            ),
+        ],
+    ),
     # ---- mail.message ----
     list_view(
         "message.list",
@@ -325,6 +358,7 @@ VIEWS: list[View] = [
                     "model",
                     "res_id",
                     "author_id",
+                    "template_id",
                     "subtype",
                     "error",
                 ],
