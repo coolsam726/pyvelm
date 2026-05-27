@@ -9,6 +9,7 @@ A single ``pyvelm`` command dispatches subcommands:
     pyvelm db autogen <module> Write an additive migration file.
     pyvelm db migrate          Install/upgrade all modules (deploy hook).
     pyvelm db migrate-fresh    Same as migrate, with plan + prod confirmation.
+    pyvelm db nuke             DEV ONLY — drop schema + re-run every install.
     pyvelm db status           Installed vs on-disk module versions.
     pyvelm list                List Artisan-style module commands.
     pyvelm make:module …       Scaffold a module (see docs/console.md).
@@ -280,13 +281,15 @@ def _run_new(args: argparse.Namespace) -> None:
 def _add_db_subcommand(subs) -> None:
     db = subs.add_parser(
         "db",
-        help="Schema utilities (diff, autogen, migrate, status).",
+        help="Schema utilities (diff, autogen, migrate, nuke, status).",
         description=(
             "Inspect or update the DB schema against the loaded module "
             "registry. `diff` / `autogen` draft migrations; `migrate` "
             "runs install/upgrade for all discovered modules; "
             "`migrate-fresh` adds a plan and production confirmation; "
-            "`status` lists versions. Requires PYVELM_DSN."
+            "`nuke` (dev only) drops the schema and re-runs every "
+            "install from scratch; `status` lists versions. Requires "
+            "PYVELM_DSN."
         ),
     )
     db_subs = db.add_subparsers(
@@ -383,6 +386,28 @@ def _add_db_subcommand(subs) -> None:
         help="Extra module roots (default: pyvelm.toml + PYVELM_MODULE_ROOTS).",
     )
     st_p.set_defaults(func=_run_db_status)
+
+    nuke_p = db_subs.add_parser(
+        "nuke",
+        help=(
+            "DROP every table in the public schema and re-run all module "
+            "installs / migrations from scratch. DEVELOPMENT ONLY — refuses "
+            "to run when PYVELM_ENV=production."
+        ),
+    )
+    nuke_p.add_argument(
+        "--roots", nargs="*", default=None,
+        help="Extra module roots (default: pyvelm.toml + PYVELM_MODULE_ROOTS).",
+    )
+    nuke_p.add_argument(
+        "--yes", "-y", action="store_true",
+        help="Skip the interactive confirmation (for CI / scripts).",
+    )
+    nuke_p.add_argument(
+        "--schema", default="public",
+        help='Postgres schema to drop and recreate. Default "public".',
+    )
+    nuke_p.set_defaults(func=_run_db_nuke)
 
 
 def _build_db_env_and_spec(args):
@@ -692,6 +717,81 @@ def _run_db_migrate_fresh(args: argparse.Namespace) -> None:
         print("Dry run — no changes applied.")
         return
     _confirm_migrate_fresh(production=production, yes=args.yes)
+    results = _execute_db_install(dsn, ordered)
+    _print_install_results(ordered, results)
+
+
+def _drop_schema_contents(conn, schema: str) -> None:
+    """DROP SCHEMA <schema> CASCADE and recreate it empty.
+
+    Safer than ``DROP DATABASE`` (we'd lose the role grants, extensions,
+    etc.) and faster than enumerating every table. The connection must
+    be in autocommit so the DDL applies immediately.
+    """
+    from psycopg import sql
+
+    qschema = sql.Identifier(schema)
+    conn.execute(sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(qschema))
+    conn.execute(sql.SQL("CREATE SCHEMA {}").format(qschema))
+    # GRANT defaults that DROP SCHEMA wiped out for the connection user.
+    conn.execute(sql.SQL("GRANT ALL ON SCHEMA {} TO CURRENT_USER").format(qschema))
+    conn.execute(sql.SQL("GRANT ALL ON SCHEMA {} TO PUBLIC").format(qschema))
+
+
+def _confirm_nuke(*, dsn: str, schema: str, yes: bool) -> None:
+    if yes:
+        return
+    print(
+        f"This will DROP every table, view, sequence, and function in "
+        f"schema {schema!r} of {_dsn_display(dsn)}.\n"
+        f"All data is lost. There is no undo."
+    )
+    try:
+        typed = input("Type nuke to continue: ").strip()
+    except EOFError:
+        sys.exit("Aborted (non-interactive terminal). Pass --yes in CI.")
+    if typed != "nuke":
+        sys.exit("Aborted.")
+
+
+def _run_db_nuke(args: argparse.Namespace) -> None:
+    """DROP the schema and re-run every module install from scratch.
+
+    Refuses to run in production. The user types ``nuke`` to confirm
+    (or passes ``--yes``). Used to reset a development database to
+    "freshly-installed every module" without manual table-by-table
+    cleanup. Mirrors Laravel's ``migrate:fresh`` semantics.
+    """
+    from .runtime import is_production, get_runtime_env
+
+    if is_production():
+        sys.exit(
+            "pyvelm db nuke is disabled in production "
+            "(PYVELM_ENV=production). Aborting."
+        )
+
+    dsn = _require_dsn()
+    roots = _resolve_module_roots(args)
+    ordered = _ordered_specs_for_install(roots, None)
+    schema = args.schema or "public"
+
+    print("Nuke + reinstall plan")
+    print(f"  PYVELM_ENV:     {get_runtime_env()}")
+    print(f"  Database:       {_dsn_display(dsn)}")
+    print(f"  Schema:         {schema}")
+    print(f"  Modules:        {len(ordered)}")
+    for spec in ordered:
+        print(f"    - {spec.name} {spec.version_str}")
+    print()
+
+    _confirm_nuke(dsn=dsn, schema=schema, yes=args.yes)
+
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        print(f"Dropping schema {schema!r}…")
+        _drop_schema_contents(conn, schema)
+        print("Schema dropped + recreated.\n")
+
+    print("Reinstalling modules…")
     results = _execute_db_install(dsn, ordered)
     _print_install_results(ordered, results)
 

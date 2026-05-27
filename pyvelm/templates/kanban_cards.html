@@ -1,4 +1,5 @@
-{# HTMX fragment: replaces #pv-kanban-container innerHTML. #}
+{# HTMX fragment: replaces #pv-kanban-container innerHTML. No OOB
+   count-label swap — the heading no longer carries a record total. #}
 {% include "kanban_body.html" %}
 
 {% if list_controls and not grouped %}
@@ -6,7 +7,3 @@
     {% include "list_pagination.html" %}
 </div>
 {% endif %}
-
-<span id="pv-count-label" hx-swap-oob="true">
-    {{ subtitle }}
-</span>

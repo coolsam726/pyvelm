@@ -127,9 +127,10 @@
               md:translate-x-0 transition-transform duration-200 ease-in-out"
        :class="{ '-translate-x-full': !sidebarOpen }">
 
-    {# Brand — logo, app name, and current page (sidebar mode only). #}
+    {# Brand — logo + app name only. The current page title lives in
+       the heading region under the breadcrumbs (Filament-style), not
+       as a sidebar subtitle. #}
     <div class="px-4 min-h-[60px] flex items-center justify-between gap-2 border-b border-default/60">
-        {% set brand_subtitle = self.page_title() if self.page_title() else none %}
         {% include "layouts/_brand_mark.html" %}
         <button @click="sidebarOpen = false" aria-label="Close sidebar"
                 class="md:hidden p-1 rounded-md text-body-subtle hover:text-heading hover:bg-neutral-secondary">
@@ -368,8 +369,9 @@
        `render.layout_context`). Pages can replace `breadcrumbs` to
        suppress it, or override `{% block page_breadcrumb %}` for a
        custom layout. #}
+    {% set _page_title_text = self.page_title() %}
     {% block page_heading_region %}
-    {% if use_sidebar and (breadcrumbs or subtitle is defined or self.page_actions()) %}
+    {% if use_sidebar and (breadcrumbs or _page_title_text or subtitle is defined or self.page_actions()) %}
     <div class="px-4 md:px-6 pt-5 pb-4">
         {% block page_breadcrumb %}
         {% if breadcrumbs %}
@@ -405,8 +407,16 @@
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="min-w-0 flex-1">
                 {% block page_heading %}
+                {# Filament-style: h1 directly under the breadcrumbs.
+                   Pages set their title via `{% block page_title %}…{% endblock %}`;
+                   override `{% block page_heading %}` for fully custom markup. #}
+                {% if _page_title_text %}
+                <h1 class="text-2xl font-semibold text-heading tracking-tight truncate">
+                    {{ _page_title_text }}
+                </h1>
+                {% endif %}
                 {% if subtitle is defined and subtitle %}
-                <p id="pv-count-label" class="text-xs text-body-subtle">{{ subtitle }}</p>
+                <p id="pv-count-label" class="text-xs text-body-subtle mt-1">{{ subtitle }}</p>
                 {% endif %}
                 {% endblock %}
             </div>

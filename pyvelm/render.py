@@ -3323,13 +3323,12 @@ def _kanban_fetch(
 
 
 def _kanban_subtitle(*, total: int, grouped: bool, columns_count: int) -> str:
-    rec_label = f"{total} record{'s' if total != 1 else ''}"
-    if grouped:
-        return (
-            f"{rec_label} · {columns_count} column"
-            f"{'s' if columns_count != 1 else ''}"
-        )
-    return rec_label
+    """Kanban heading subtitle. Returns an empty string by design — the
+    record count is already visible on the pager footer (table mode) or
+    via column tallies / card layout (kanban mode), so duplicating it
+    under the page title is noise. Kept as a function so callers stay
+    decoupled from the rendering decision."""
+    return ""
 
 
 def _kanban_cards_for_records(
@@ -4564,7 +4563,10 @@ def render_list_page(
         create_href=create_href,
         list_nav_query=list_nav_query,
         page_title=page_title,
-        subtitle=f"{total} record{'s' if total != 1 else ''}",
+        # No record-count subtitle on list views — the pager footer
+        # already shows the total. Pass an empty string so existing
+        # ``{% if subtitle %}`` checks just skip.
+        subtitle="",
         view_switcher=_other_views_for_model(
             env,
             view,
@@ -5176,6 +5178,197 @@ def access_denied_use_sidebar(current_path: str | None) -> bool:
         return True
     path = current_path.split("?", 1)[0]
     return not any(path.startswith(prefix) for prefix in _MINIMAL_ACCESS_DENIED_PREFIXES)
+
+
+# ---------------------------------------------------------------------------
+# Generic styled error pages (4xx / 5xx)
+# ---------------------------------------------------------------------------
+
+# Heroicons (outline) SVG path stubs keyed by status code. Anything
+# not listed falls back to the generic ``warning`` glyph. Keep this
+# narrow — every "exotic" status family rolls up to its leading digit.
+_ERROR_ICON_WARNING = (
+    '<path stroke-linecap="round" stroke-linejoin="round" '
+    'd="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71'
+    'c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5'
+    '-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>'
+)
+_ERROR_ICON_DETAILS: dict[int, dict] = {
+    400: {
+        "title": "Bad request",
+        "message": "The request didn't look right. Check your input and try again.",
+        "icon_bg": "bg-warning-soft",
+        "icon_fg": "text-fg-warning",
+        "icon_path": _ERROR_ICON_WARNING,
+    },
+    401: {
+        "title": "Sign in required",
+        "message": "You need to sign in to view this page.",
+        "icon_bg": "bg-brand-softer",
+        "icon_fg": "text-fg-brand",
+        "icon_path": (
+            '<path stroke-linecap="round" stroke-linejoin="round" '
+            'd="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 '
+            '2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 '
+            '2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>'
+        ),
+    },
+    403: {
+        "title": "Access denied",
+        "message": (
+            "You don't have permission to view this page or perform this "
+            "action. If you think this is a mistake, contact your administrator."
+        ),
+        "icon_bg": "bg-danger-soft",
+        "icon_fg": "text-fg-danger",
+        "icon_path": (
+            '<path stroke-linecap="round" stroke-linejoin="round" '
+            'd="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 '
+            '2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 '
+            '2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>'
+        ),
+    },
+    404: {
+        "title": "Page not found",
+        "message": "We couldn't find that page. The link may be broken or the record removed.",
+        "icon_bg": "bg-neutral-tertiary",
+        "icon_fg": "text-body-subtle",
+        "icon_path": (
+            '<path stroke-linecap="round" stroke-linejoin="round" '
+            'd="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 '
+            '1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.997'
+            '-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"/>'
+        ),
+    },
+    405: {
+        "title": "Method not allowed",
+        "message": "That action isn't supported on this endpoint.",
+        "icon_bg": "bg-warning-soft",
+        "icon_fg": "text-fg-warning",
+        "icon_path": _ERROR_ICON_WARNING,
+    },
+    422: {
+        "title": "Validation failed",
+        "message": "Some of the data you submitted didn't pass validation.",
+        "icon_bg": "bg-warning-soft",
+        "icon_fg": "text-fg-warning",
+        "icon_path": _ERROR_ICON_WARNING,
+    },
+    429: {
+        "title": "Too many requests",
+        "message": (
+            "You're going a bit fast. Please wait a moment before trying again."
+        ),
+        "icon_bg": "bg-warning-soft",
+        "icon_fg": "text-fg-warning",
+        "icon_path": (
+            '<path stroke-linecap="round" stroke-linejoin="round" '
+            'd="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>'
+        ),
+    },
+    500: {
+        "title": "Something went wrong",
+        "message": (
+            "An unexpected error occurred while processing your request. "
+            "Try again, and if it keeps happening, contact your administrator."
+        ),
+        "icon_bg": "bg-danger-soft",
+        "icon_fg": "text-fg-danger",
+        "icon_path": _ERROR_ICON_WARNING,
+    },
+    501: {
+        "title": "Not implemented",
+        "message": "This action hasn't been wired up on the server yet.",
+        "icon_bg": "bg-neutral-tertiary",
+        "icon_fg": "text-body-subtle",
+        "icon_path": _ERROR_ICON_WARNING,
+    },
+    502: {
+        "title": "Bad gateway",
+        "message": "An upstream service didn't respond as expected. Try again shortly.",
+        "icon_bg": "bg-danger-soft",
+        "icon_fg": "text-fg-danger",
+        "icon_path": _ERROR_ICON_WARNING,
+    },
+    503: {
+        "title": "Service unavailable",
+        "message": "The server is temporarily unable to handle the request. Try again shortly.",
+        "icon_bg": "bg-warning-soft",
+        "icon_fg": "text-fg-warning",
+        "icon_path": _ERROR_ICON_WARNING,
+    },
+    504: {
+        "title": "Gateway timeout",
+        "message": "The server took too long to respond. Try again shortly.",
+        "icon_bg": "bg-warning-soft",
+        "icon_fg": "text-fg-warning",
+        "icon_path": _ERROR_ICON_WARNING,
+    },
+}
+
+
+def _error_defaults(status_code: int) -> dict:
+    """Look up the title/message/icon defaults for a given status code,
+    falling back to a generic 4xx / 5xx flavour for codes without an
+    explicit entry."""
+    if status_code in _ERROR_ICON_DETAILS:
+        return dict(_ERROR_ICON_DETAILS[status_code])
+    family = status_code // 100
+    if family == 4:
+        return {
+            "title": "Request error",
+            "message": "We couldn't complete your request.",
+            "icon_bg": "bg-warning-soft",
+            "icon_fg": "text-fg-warning",
+            "icon_path": _ERROR_ICON_WARNING,
+        }
+    return {
+        "title": "Server error",
+        "message": "An unexpected error occurred. Try again shortly.",
+        "icon_bg": "bg-danger-soft",
+        "icon_fg": "text-fg-danger",
+        "icon_path": _ERROR_ICON_WARNING,
+    }
+
+
+def render_error_page(
+    env,
+    *,
+    status_code: int,
+    title: str | None = None,
+    message: str | None = None,
+    detail: str | None = None,
+    current_path: str | None = None,
+    use_sidebar: bool | None = None,
+    retry_after: int | None = None,
+) -> str:
+    """Full-page styled error screen for any 4xx/5xx status.
+
+    Title / message default per status code (see ``_ERROR_ICON_DETAILS``);
+    pass ``title`` / ``message`` to override. ``detail`` carries a small
+    diagnostic line (e.g. the raw exception message). ``retry_after``
+    renders a live countdown — used by 429 responses.
+
+    The sidebar / top-nav choice mirrors :func:`render_access_denied_page`
+    so error pages on account / feedback URLs stay minimal.
+    """
+    template = _env.get_template("error.html")
+    defaults = _error_defaults(int(status_code))
+    if title is not None:
+        defaults["title"] = title
+    if message is not None:
+        defaults["message"] = message
+    if use_sidebar is None:
+        use_sidebar = access_denied_use_sidebar(current_path)
+    ctx = merge_template_context(env, current_path)
+    ctx.update(defaults)
+    ctx["status_code"] = int(status_code)
+    ctx["detail"] = detail
+    ctx["retry_after"] = int(retry_after) if retry_after else None
+    if not use_sidebar:
+        ctx["use_sidebar"] = False
+        ctx["breadcrumbs"] = []
+    return template.render(**ctx)
 
 
 def render_access_denied_page(

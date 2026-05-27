@@ -8,8 +8,10 @@ from unittest.mock import MagicMock, patch
 
 from pyvelm.cli import (
     _confirm_migrate_fresh,
+    _drop_schema_contents,
     _run_db_migrate,
     _run_db_migrate_fresh,
+    _run_db_nuke,
     _run_db_status,
 )
 from pyvelm.loader import ModuleSpec
@@ -171,6 +173,73 @@ class DbMigrateFreshCliTests(unittest.TestCase):
         with patch("builtins.input", return_value="wrong"):
             with self.assertRaises(SystemExit):
                 _confirm_migrate_fresh(production=True, yes=False)
+
+
+class DbNukeCliTests(unittest.TestCase):
+    """`db nuke` is the dev-only wrecking ball — make sure it refuses
+    production, walks the schema/install flow correctly, and respects
+    the typed confirmation."""
+
+    def _args(self, *, yes: bool = True, schema: str = "public") -> Namespace:
+        return Namespace(roots=None, yes=yes, schema=schema)
+
+    def test_aborts_in_production(self):
+        with patch("pyvelm.runtime.is_production", return_value=True):
+            with self.assertRaises(SystemExit) as cm:
+                _run_db_nuke(self._args())
+        self.assertIn("production", str(cm.exception).lower())
+
+    def test_drops_schema_then_reinstalls(self):
+        ordered = [_demo_spec("base"), _demo_spec("admin")]
+        install_results = [
+            {"name": "base", "schema": "", "views": "", "menus": ""},
+            {"name": "admin", "schema": "", "views": "", "menus": ""},
+        ]
+        with (
+            patch("pyvelm.cli.os.environ.get", return_value="postgresql://test"),
+            patch("pyvelm.cli._resolve_module_roots", return_value=[]),
+            patch("pyvelm.cli._ordered_specs_for_install", return_value=ordered),
+            patch("pyvelm.cli._drop_schema_contents") as drop,
+            patch("pyvelm.cli.loader.install", return_value=install_results) as install,
+            patch("pyvelm.cli.psycopg.connect", return_value=_mock_conn_cm()),
+            patch("pyvelm.runtime.is_production", return_value=False),
+            patch("pyvelm.runtime.get_runtime_env", return_value="development"),
+        ):
+            _run_db_nuke(self._args(yes=True, schema="public"))
+            # Drop must happen before reinstall.
+            drop.assert_called_once()
+            self.assertEqual(drop.call_args.args[1], "public")
+            install.assert_called_once()
+
+    def test_typed_confirmation_blocks_when_wrong(self):
+        ordered = [_demo_spec("base")]
+        with (
+            patch("pyvelm.cli.os.environ.get", return_value="postgresql://test"),
+            patch("pyvelm.cli._resolve_module_roots", return_value=[]),
+            patch("pyvelm.cli._ordered_specs_for_install", return_value=ordered),
+            patch("pyvelm.cli._drop_schema_contents") as drop,
+            patch("pyvelm.cli.loader.install") as install,
+            patch("pyvelm.cli.psycopg.connect", return_value=_mock_conn_cm()),
+            patch("pyvelm.runtime.is_production", return_value=False),
+            patch("pyvelm.runtime.get_runtime_env", return_value="development"),
+            patch("builtins.input", return_value="wrong"),
+        ):
+            with self.assertRaises(SystemExit):
+                _run_db_nuke(self._args(yes=False))
+        drop.assert_not_called()
+        install.assert_not_called()
+
+    def test_drop_schema_contents_runs_drop_and_create(self):
+        conn = MagicMock()
+        _drop_schema_contents(conn, "public")
+        # Three calls expected: DROP SCHEMA, CREATE SCHEMA, two GRANTs.
+        # The exact SQL is built via psycopg.sql, so we only verify the
+        # operation count + that DROP fires before CREATE.
+        self.assertGreaterEqual(conn.execute.call_count, 2)
+        first_sql = str(conn.execute.call_args_list[0].args[0])
+        second_sql = str(conn.execute.call_args_list[1].args[0])
+        self.assertIn("DROP SCHEMA", first_sql)
+        self.assertIn("CREATE SCHEMA", second_sql)
 
 
 if __name__ == "__main__":

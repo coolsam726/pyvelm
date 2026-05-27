@@ -13,7 +13,7 @@ Subcommands:
 | [`pyvelm cron`](#pyvelm-cron) | Run the background cron + mail-dispatcher worker. |
 | [`pyvelm init <name>`](#pyvelm-init) | Scaffold a new pyvelm project. |
 | [`pyvelm new <module>`](#pyvelm-new) | Drop a runnable module skeleton into a project. |
-| [`pyvelm db …`](#pyvelm-db) | Schema diff, autogen migrations, migrate, status. |
+| [`pyvelm db …`](#pyvelm-db) | Schema diff, autogen migrations, migrate, nuke, status. |
 | [`pyvelm list`](#artisan-style-commands) | List module commands (`make:module`, your own, …). |
 | [`pyvelm make:…`](#artisan-style-commands) | Run an Artisan-style command — see [Console commands](console.md). |
 
@@ -187,6 +187,7 @@ pyvelm db autogen tasks           # write migrations/0_x_to_0_y.py + bump VERSIO
 pyvelm db autogen tasks --with-views
 pyvelm db migrate                 # install/upgrade every discovered module
 pyvelm db migrate-fresh           # same, with plan + production confirmation
+pyvelm db nuke                    # DEV ONLY — drop schema + reinstall everything
 pyvelm db status                  # ir_module vs on-disk versions
 ```
 
@@ -197,6 +198,20 @@ Scaffolded Docker projects run it automatically via a `migrate` service.
 first. When `PYVELM_ENV=production`, you must type `migrate-fresh` to continue
 (unless `--yes` for CI). Use `--dry-run` to preview without writing, and
 `--module base` to limit to one module and its dependencies.
+
+**`db nuke`** drops every table, view, sequence, and function in the configured
+schema (`--schema public` by default), recreates it empty, and re-runs every
+module install + migration from scratch — equivalent to "delete the database
+and start over" without losing role grants or extensions. The command
+**refuses to run when `PYVELM_ENV=production`** and prompts you to type `nuke`
+before doing anything destructive (skip with `--yes` for scripted dev resets).
+There is no undo; use it on local dev databases, not anything you care about.
+
+```bash
+PYVELM_ENV=development \
+PYVELM_DSN=postgresql://user:pass@localhost/dev \
+pyvelm db nuke
+```
 
 ### Where the module lands
 

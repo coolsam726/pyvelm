@@ -1,0 +1,57 @@
+{% extends "layouts/main.html" %}
+{% block title %}{{ status_code }} {{ title }} — {% if brand is defined %}{{ brand.app_name }}{% else %}pyvelm{% endif %}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{# Centered card, no breadcrumb / heading strip. Mirrors access_denied.html
+   so 4xx/5xx pages share one visual language. #}
+{% block page_heading_region %}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-10">
+    <div class="bg-neutral-primary border border-default rounded-xl shadow-sm p-8 text-center space-y-5">
+        <div class="mx-auto w-14 h-14 rounded-full {{ icon_bg }} flex items-center justify-center">
+            <svg class="w-7 h-7 {{ icon_fg }}" fill="none" stroke="currentColor"
+                 viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true">
+                {{ icon_path | safe }}
+            </svg>
+        </div>
+
+        <div class="space-y-1.5">
+            <p class="text-2xs font-semibold uppercase tracking-wider text-body-subtle">
+                Error {{ status_code }}
+            </p>
+            <h1 class="text-xl font-semibold text-heading">{{ title }}</h1>
+            <p class="text-sm text-body-subtle">{{ message }}</p>
+        </div>
+
+        {% if retry_after %}
+        <p class="text-xs text-body-subtle bg-neutral-secondary border border-default
+                  rounded-md px-3 py-2">
+            Try again in <strong x-data="{ secs: {{ retry_after }} }"
+                                  x-init="const t = setInterval(() => { if (secs > 1) { secs--; } else { clearInterval(t); secs = 0; } }, 1000)"
+                                  x-text="secs"></strong> seconds.
+        </p>
+        {% endif %}
+
+        {% if detail %}
+        <p class="text-xs text-body-subtle/80 font-mono bg-neutral-secondary
+                  border border-default rounded-md px-3 py-2 break-words text-left">
+            {{ detail }}
+        </p>
+        {% endif %}
+
+        <div class="flex items-center justify-center gap-3 pt-1">
+            <a href="javascript:history.back()"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                      border border-default text-body rounded-md hover:bg-neutral-secondary transition">
+                Go back
+            </a>
+            <a href="{{ home_href | default('/web/admin') }}"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+                      rounded-md bg-fg-brand hover:opacity-90 transition">
+                {% if use_sidebar is defined and not use_sidebar %}Back to home{% else %}Back to dashboard{% endif %}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

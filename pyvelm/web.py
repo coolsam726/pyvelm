@@ -16,6 +16,7 @@ intended deployment puts a real authentication layer in front.
 from __future__ import annotations
 
 import json
+import logging
 import secrets
 import time
 from typing import Any
@@ -27,9 +28,12 @@ from fastapi import (
     Body, Depends, FastAPI, File, Form, HTTPException, Query, Request,
     UploadFile,
 )
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+
+log = logging.getLogger("pyvelm.web")
 
 from .env import Environment
 from .fields import Many2many, Many2one, One2many
@@ -359,6 +363,112 @@ def create_app(
             return True
         accept = request.headers.get("accept", "")
         return "text/html" in accept
+
+    def _render_styled_error(
+        request: Request,
+        status_code: int,
+        *,
+        detail: str | None = None,
+        message: str | None = None,
+        retry_after: int | None = None,
+        extra_headers: dict | None = None,
+    ) -> Response:
+        """Build a styled HTML error page or fall back to the plain default.
+
+        Browsers hitting ``/web/`` pages get the rendered card; API / HTMX
+        / JSON callers get the same status code with a small text body so
+        clients don't have to scrape HTML for the error message.
+        """
+        wants_html = _wants_html_error_page(request)
+        headers = dict(extra_headers or {})
+        if retry_after is not None:
+            headers.setdefault("Retry-After", str(retry_after))
+        if not wants_html:
+            body = detail or message or ""
+            if not body:
+                from http import HTTPStatus
+
+                try:
+                    body = HTTPStatus(status_code).phrase
+                except ValueError:
+                    body = "Error"
+            headers.setdefault("Content-Type", "text/plain; charset=utf-8")
+            return Response(content=body, status_code=status_code, headers=headers)
+
+        from pyvelm.request_env import apply_request_scope
+        from .render import render_error_page
+
+        with pool.connection() as conn:
+            env = Environment(conn, registry=registry, uid=None)
+            env = apply_request_scope(
+                env,
+                request,
+                resolve_session=_resolve_user_from_session,
+                resolve_basic=_resolve_user_from_basic,
+            )
+            html = render_error_page(
+                env,
+                status_code=status_code,
+                message=message,
+                detail=detail,
+                current_path=str(request.url.path),
+                retry_after=retry_after,
+            )
+        return HTMLResponse(html, status_code=status_code, headers=headers)
+
+    @app.exception_handler(StarletteHTTPException)
+    def _http_exception(request: Request, exc: StarletteHTTPException):
+        """Catch every ``HTTPException`` (incl. router 404s).
+
+        401 and 403 already have richer handlers (login redirect /
+        access-denied page); 404+ get the styled error card for browsers.
+        Pass-through to the styled page only for statuses that aren't
+        already specialised.
+        """
+        status = exc.status_code
+        if status == 401:
+            # Mirror the existing flow: redirect browsers to /login,
+            # 401 with WWW-Authenticate for API callers.
+            return _auth_required_response(request)
+        if status == 403:
+            # The PermissionError handler already covers domain-level
+            # denials. Bare 403 HTTPException uses the generic error page.
+            pass
+        detail = exc.detail if isinstance(exc.detail, str) else None
+        retry_after = None
+        extra_headers: dict = {}
+        if exc.headers:
+            extra_headers.update(exc.headers)
+            if "Retry-After" in exc.headers:
+                try:
+                    retry_after = int(exc.headers["Retry-After"])
+                except (TypeError, ValueError):
+                    retry_after = None
+        return _render_styled_error(
+            request,
+            status,
+            detail=detail,
+            retry_after=retry_after,
+            extra_headers=extra_headers,
+        )
+
+    @app.exception_handler(Exception)
+    def _unhandled_exception(request: Request, exc: Exception):
+        """Last-resort handler: turn an uncaught error into a styled 500.
+
+        Logs the traceback so the operator can diagnose; the rendered
+        page only shows the exception's ``str`` (no traceback in the
+        browser). API / JSON callers get the same status + a short
+        text body.
+        """
+        log.exception(
+            "unhandled exception on %s %s", request.method, request.url.path
+        )
+        return _render_styled_error(
+            request,
+            500,
+            detail=str(exc) or exc.__class__.__name__,
+        )
 
     @app.exception_handler(PermissionError)
     def _permission_error(request, exc):
@@ -3202,15 +3312,14 @@ def create_app(
         client_host = request.client.host if request.client else "unknown"
         ok, retry_after = _check_login_rate(client_host)
         if not ok:
-            return Response(
-                content=(
-                    f"Too many login attempts. Try again in {retry_after} seconds."
+            return _render_styled_error(
+                request,
+                429,
+                message=(
+                    "Too many sign-in attempts from this address. "
+                    "Please wait before trying again."
                 ),
-                status_code=429,
-                headers={
-                    "Retry-After": str(retry_after),
-                    "Content-Type": "text/plain; charset=utf-8",
-                },
+                retry_after=retry_after,
             )
 
         form = await request.form()

@@ -7,6 +7,47 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.14.0] — 2026-05-27
+
+UX pass: **Filament-style** page heading (h1 under the breadcrumbs, no
+more page-title subtitle in the sidebar brand), **styled error pages**
+for every 4xx/5xx (the rate-limit 429 now gets a card with a live
+countdown instead of plain text), and a new **`pyvelm db nuke`**
+development command that drops the schema and re-runs every install
+from scratch. See [docs/releases/v0.14.0.md](docs/releases/v0.14.0.md).
+
+### Added
+
+- **Styled error pages.** New `pyvelm/templates/error.html` + the
+  `render_error_page()` renderer cover 400 / 401 / 403 / 404 / 405 /
+  422 / 429 / 500 / 501 / 502 / 503 / 504 with per-status icon, title,
+  message, optional Retry-After countdown, and Back / Home buttons.
+  Global FastAPI handlers (`StarletteHTTPException` + last-resort
+  `Exception`) render the card for browser navigations and fall back
+  to plain-text / JSON for API and HTMX callers. The login throttle's
+  429 now returns the styled card instead of `text/plain`.
+- **`pyvelm db nuke`** (development only). `DROP SCHEMA … CASCADE` +
+  recreate + re-run every module install / migration from scratch.
+  Refuses to run when `PYVELM_ENV=production`. Prompts the operator
+  to type `nuke` before doing anything destructive (skip with
+  `--yes`). `--schema X` to target a non-default schema.
+
+### Changed
+
+- **Filament-style heading.** Pages render their title as a prominent
+  `<h1>` directly under the breadcrumbs in the main column; the
+  sidebar brand no longer carries a per-page subtitle.
+  `block page_heading` defaults emit the h1 + optional subtitle, so
+  the only callers that need to change are templates that overrode
+  `page_heading` themselves (none today).
+- **No record-count subtitle on lists / kanban.** The pager footer
+  already shows the total, so the heading region no longer renders
+  `5 records`. Lists pass `subtitle=""`, `_kanban_subtitle()` returns
+  `""`, and the corresponding `#pv-count-label` HTMX OOB swap is gone
+  from `list_rows.html` and `kanban_cards.html`. Pivot (`R rows × C
+  cols`) and graph (`N groups`) subtitles are preserved — they
+  describe structure, not counts.
+
 ## [0.13.0] — 2026-05-27
 
 Rich **email composer** with templates, multi-recipient To / Cc / Bcc,

@@ -1,8 +1,4 @@
-{# HTMX fragment: replaces #pv-table-container innerHTML.
-   Returns full table + pagination + OOB count label update. #}
+{# HTMX fragment: replaces #pv-table-container innerHTML. The pager
+   footer carries the record total, so no out-of-band count swap is
+   needed in the page heading. #}
 {% include "list_table.html" %}
-
-{# OOB swap: update the record count in the page heading #}
-<span id="pv-count-label" hx-swap-oob="true">
-    {{ total }} record{{ 's' if total != 1 else '' }}
-</span>
