@@ -1,0 +1,209 @@
+{# File picker dialog body. Loaded into PvDialog via
+   GET /web/files/picker?accept=…&multi=0|1.
+
+   Expected variables:
+     rows       list of {id, name, mimetype, size, thumbnail_url}
+     accept     optional mimetype filter (e.g. "image/*")
+     q          current search query
+     multi      bool — multi-select mode
+     can_upload bool — operator may upload new files
+
+   On pick: calls window.PvDialog.close({...}) (single) or
+   window.PvDialog.close([{...}, ...]) (multi). The opener's onResult
+   handler receives the payload and patches the bound field. #}
+<div class="pv-file-picker"
+     x-data="pvFilePicker({{ ({
+        'accept': accept,
+        'q': q,
+        'multi': multi,
+        'canUpload': can_upload,
+        'initial': rows,
+     }) | tojson }})">
+
+    {# Toolbar — search + upload + accept hint. #}
+    <div class="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-default">
+        <input type="search"
+               placeholder="Search by name…"
+               x-model="query"
+               class="flex-1 min-w-[14rem] text-sm rounded-md border border-default
+                      bg-neutral-primary text-body px-3 py-1.5
+                      focus:ring-2 focus:ring-fg-brand/30 focus:border-fg-brand">
+        {% if can_upload %}
+        <label class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                      text-fg-brand border border-fg-brand/30 rounded-md
+                      hover:bg-brand-softer cursor-pointer transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 7.5m0 0L7.5 12M12 7.5v9"/>
+            </svg>
+            <span x-text="uploading ? 'Uploading…' : 'Upload'"></span>
+            <input type="file"
+                   multiple
+                   class="sr-only"
+                   {% if accept %}accept="{{ accept }}"{% endif %}
+                   @change="onPickFiles($event)">
+        </label>
+        {% endif %}
+    </div>
+
+    {% if accept %}
+    <p class="text-xs text-body-subtle -mt-2 mb-3">
+        Accepting: <span class="font-mono">{{ accept }}</span>
+    </p>
+    {% endif %}
+
+    {# Grid of tiles. Click selects (single) or toggles (multi). #}
+    <div class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-3 max-h-[24rem] overflow-auto">
+        <template x-for="row in filteredRows()" :key="row.id">
+            <button type="button"
+                    @click="onTileClick(row)"
+                    :class="isSelected(row.id)
+                        ? 'border-fg-brand bg-brand-softer ring-2 ring-fg-brand'
+                        : 'border-default hover:border-fg-brand/50 hover:bg-neutral-secondary'"
+                    class="group relative rounded-lg border bg-neutral-primary
+                           p-2 text-left transition cursor-pointer">
+                <div class="aspect-square mb-2 rounded-md bg-neutral-secondary
+                            overflow-hidden flex items-center justify-center">
+                    <template x-if="row.thumbnail_url">
+                        <img :src="row.thumbnail_url"
+                             alt=""
+                             loading="lazy"
+                             class="w-full h-full object-cover"
+                             onerror="this.style.display='none'">
+                    </template>
+                    <template x-if="!row.thumbnail_url">
+                        <div class="flex flex-col items-center text-body-subtle">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor"
+                                 viewBox="0 0 24 24" stroke-width="1.5">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+                            </svg>
+                            <span class="text-2xs uppercase mt-1"
+                                  x-text="(row.mimetype || '').split('/').pop() || 'file'"></span>
+                        </div>
+                    </template>
+                </div>
+                <div class="text-xs font-medium text-heading truncate" x-text="row.name"></div>
+                <div class="text-2xs text-body-subtle"
+                     x-text="row.size ? humanSize(row.size) : ''"></div>
+            </button>
+        </template>
+        <template x-if="!filteredRows().length">
+            <div class="col-span-full text-center text-sm text-body-subtle py-10">
+                No files match.
+                {% if can_upload %}Use <strong>Upload</strong> to add one.{% endif %}
+            </div>
+        </template>
+    </div>
+
+    {# Footer — multi: show count + Done; single: auto-close on tile click. #}
+    {% if multi %}
+    <div class="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-default">
+        <span class="text-xs text-body-subtle">
+            <span x-text="selected.length"></span> selected
+        </span>
+        <div class="flex items-center gap-2">
+            <button type="button"
+                    @click="window.PvDialog && window.PvDialog.close(null)"
+                    class="px-3 py-1.5 text-sm border border-default text-body
+                           rounded-md hover:bg-neutral-secondary transition">
+                Cancel
+            </button>
+            <button type="button"
+                    @click="confirmMulti()"
+                    :disabled="!selected.length"
+                    class="px-3 py-1.5 text-sm font-medium text-white bg-fg-brand
+                           rounded-md hover:opacity-90 transition
+                           disabled:opacity-50 disabled:cursor-not-allowed">
+                Use selected
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
+    <p x-show="error" x-text="error" x-cloak
+       class="mt-3 text-sm text-fg-danger"></p>
+</div>
+
+<script>
+    if (typeof window.pvFilePicker !== 'function') {
+        window.pvFilePicker = function (cfg) {
+            return {
+                accept: cfg.accept || '',
+                query: cfg.q || '',
+                multi: !!cfg.multi,
+                canUpload: !!cfg.canUpload,
+                rows: cfg.initial || [],
+                selected: [],
+                uploading: false,
+                error: '',
+
+                isSelected(id) {
+                    return this.selected.some((r) => r.id === id);
+                },
+                onTileClick(row) {
+                    if (this.multi) {
+                        const idx = this.selected.findIndex((r) => r.id === row.id);
+                        if (idx >= 0) this.selected.splice(idx, 1);
+                        else this.selected.push(row);
+                        return;
+                    }
+                    window.PvDialog && window.PvDialog.close(row);
+                },
+                confirmMulti() {
+                    if (!this.selected.length) return;
+                    window.PvDialog && window.PvDialog.close(this.selected.slice());
+                },
+                filteredRows() {
+                    const q = (this.query || '').trim().toLowerCase();
+                    if (!q) return this.rows;
+                    return this.rows.filter((r) =>
+                        (r.name || '').toLowerCase().includes(q)
+                    );
+                },
+                async onPickFiles(event) {
+                    const files = Array.from(event.target.files || []);
+                    if (!files.length) return;
+                    this.uploading = true;
+                    this.error = '';
+                    try {
+                        for (const file of files) {
+                            const fd = new FormData();
+                            fd.append('file', file);
+                            const r = await fetch('/web/files/picker/upload', {
+                                method: 'POST',
+                                body: fd,
+                                credentials: 'same-origin',
+                            });
+                            if (!r.ok) {
+                                const text = await r.text();
+                                throw new Error(text || r.statusText);
+                            }
+                            const row = await r.json();
+                            row.thumbnail_url = (row.mimetype || '').startsWith('image/')
+                                ? `/api/attachment/${row.id}/download`
+                                : '';
+                            this.rows.unshift(row);
+                            if (!this.multi) {
+                                window.PvDialog && window.PvDialog.close(row);
+                                return;
+                            }
+                            this.selected.push(row);
+                        }
+                    } catch (err) {
+                        this.error = 'Upload failed: ' + (err.message || err);
+                    } finally {
+                        this.uploading = false;
+                        event.target.value = '';
+                    }
+                },
+                humanSize(bytes) {
+                    if (!bytes) return '';
+                    if (bytes < 1024) return bytes + ' B';
+                    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                    return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+                },
+            };
+        };
+    }
+</script>

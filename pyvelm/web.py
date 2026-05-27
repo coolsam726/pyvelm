@@ -2985,6 +2985,214 @@ def create_app(
             headers={"HX-Trigger": _json.dumps({"pv-toast": message})},
         )
 
+    # ---------------------------------------------------------------
+    # File library upload + picker (file_manager module)
+    # ---------------------------------------------------------------
+
+    def _file_manager_render(env, request, *, error: str | None = None):
+        from .render import _env as render_env, merge_template_context
+
+        template = render_env.get_template("file_manager_upload.html")
+        ctx = merge_template_context(env, str(request.url.path), error=error)
+        return template.render(**ctx)
+
+    def _store_uploaded_file(
+        env, file: UploadFile, *, public: bool, res_model: str | None = None,
+        res_id: int | None = None,
+    ) -> dict:
+        """Persist one ``UploadFile`` into ``ir.attachment`` and return its row dict.
+
+        Shared by the library Upload page and the file-picker dialog so the
+        bytes-to-attachment path is one well-tested implementation.
+        """
+        import mimetypes as _mimetypes
+
+        content = file.file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file")
+        from .storage import get_backend
+
+        backend = get_backend()
+        original_name = file.filename or "file"
+        storage_key = backend.save(original_name, content)
+        datas = (
+            base64.b64encode(content).decode("ascii")
+            if not storage_key
+            else None
+        )
+        mimetype = (
+            file.content_type
+            or _mimetypes.guess_type(original_name)[0]
+            or "application/octet-stream"
+        )
+        with env.transaction():
+            att = env["ir.attachment"].create(
+                {
+                    "name": original_name,
+                    "datas_fname": original_name,
+                    "mimetype": mimetype,
+                    "file_size": len(content),
+                    "res_model": res_model or None,
+                    "res_id": res_id if res_id else None,
+                    "type": "binary",
+                    "storage_key": storage_key,
+                    "datas": datas,
+                    "public": bool(public),
+                }
+            )
+        return {
+            "id": att.id,
+            "name": att.name,
+            "mimetype": att.mimetype,
+            "size": att.file_size,
+        }
+
+    @app.get("/web/files/upload", response_class=HTMLResponse)
+    def web_files_upload_form(
+        request: Request, env: Environment = Depends(get_env)
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager module is not installed")
+        env.check_access("ir.attachment", "create")
+        return HTMLResponse(_file_manager_render(env, request))
+
+    @app.post("/web/files/upload", response_class=HTMLResponse)
+    async def web_files_upload_submit(
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager module is not installed")
+        env.check_access("ir.attachment", "create")
+        form = await request.form()
+        raw_public = form.get("public")
+        public = str(raw_public or "").strip().lower() in ("1", "on", "true", "yes")
+        files = form.getlist("files")
+        if not files:
+            return HTMLResponse(
+                _file_manager_render(env, request, error="Pick at least one file."),
+                status_code=400,
+            )
+        try:
+            for upload in files:
+                if not isinstance(upload, UploadFile):
+                    continue
+                _store_uploaded_file(env, upload, public=public)
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            log.exception("file upload failed")
+            return HTMLResponse(
+                _file_manager_render(env, request, error=f"Upload failed: {exc}"),
+                status_code=500,
+            )
+        return RedirectResponse(
+            "/web/views/file_manager/file_manager.file.kanban", status_code=303
+        )
+
+    @app.get("/web/files/picker", response_class=HTMLResponse)
+    def web_files_picker(
+        request: Request,
+        env: Environment = Depends(get_env),
+        accept: str = "",
+        q: str = "",
+        multi: int = 0,
+    ):
+        """Picker dialog body for ``widget="file"`` / ``widget="files"``.
+
+        Opens inside ``PvDialog`` (the caller passes
+        ``url='/web/files/picker?accept=image/*'``). Returns an HTML
+        fragment with the library tile grid + search + inline upload.
+        """
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager module is not installed")
+        env.check_access("ir.attachment", "read")
+        accept = (accept or "").strip()
+        query = (q or "").strip()
+        rows = _file_manager_picker_rows(env, accept=accept, query=query)
+        from .render import _env as render_env
+
+        tpl = render_env.get_template("widgets/file_picker.html")
+        return HTMLResponse(
+            tpl.render(
+                rows=rows,
+                accept=accept,
+                q=query,
+                multi=bool(int(multi)),
+                can_upload=env.has_access("ir.attachment", "create"),
+            )
+        )
+
+    @app.post("/web/files/picker/upload", status_code=201)
+    async def web_files_picker_upload(
+        request: Request,
+        file: UploadFile = File(...),
+        public: bool = Form(False),
+        env: Environment = Depends(get_env),
+    ):
+        """Upload-and-return-row inside the picker dialog.
+
+        Lets the operator drop a new file onto the picker without having
+        to leave the dialog. Returns the row JSON so the picker's JS can
+        select the new attachment immediately.
+        """
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager module is not installed")
+        env.check_access("ir.attachment", "create")
+        return _store_uploaded_file(env, file, public=public)
+
+    def _file_manager_picker_rows(
+        env, *, accept: str, query: str, limit: int = 60
+    ) -> list[dict]:
+        Att = env["ir.attachment"]
+        domain: list = []
+        if query:
+            domain.append(("name", "ilike", query))
+        if accept:
+            # Translate the HTML ``accept`` token list ("image/*,application/pdf")
+            # into ``mimetype`` ilike clauses joined with OR.
+            tokens = [t.strip() for t in accept.split(",") if t.strip()]
+            mime_clauses: list = []
+            for tok in tokens:
+                if tok.endswith("/*"):
+                    prefix = tok[:-1]  # keeps the trailing "/"
+                    mime_clauses.append(("mimetype", "ilike", f"{prefix}%"))
+                elif "/" in tok:
+                    mime_clauses.append(("mimetype", "=", tok))
+            if mime_clauses:
+                if len(mime_clauses) == 1:
+                    domain.append(mime_clauses[0])
+                else:
+                    domain.append("|" * (len(mime_clauses) - 1))
+                    domain.extend(mime_clauses)
+        rows = Att.search(domain, limit=limit, order='"id" DESC')
+        out: list[dict] = []
+        for r in rows:
+            mime = (r.mimetype or "").lower()
+            thumb = (
+                f"/api/attachment/{r.id}/download"
+                if mime.startswith("image/")
+                else ""
+            )
+            out.append(
+                {
+                    "id": r.id,
+                    "name": r.name,
+                    "mimetype": r.mimetype or "",
+                    "size": r.file_size or 0,
+                    "thumbnail_url": thumb,
+                }
+            )
+        return out
+
     @app.post("/web/switch-company")
     async def web_switch_company(
         request: Request,

@@ -221,17 +221,26 @@ def card(
     subtitle: str | None = None,
     fields: list[FieldRefLike] | None = None,
     badges: list[FieldRefLike] | None = None,
+    image: str | None = None,
 ) -> ArchKanbanCard:
     """Build the ``card`` dict for a kanban arch.
 
     ``title`` is a field name whose value is rendered as the card
     heading. All other args are optional.
 
+    ``image`` names a Char/Text field whose value is a URL — when set,
+    the card renders an `<img>` thumbnail above the title. Empty / null
+    field values fall back to a plain text card. Used by media-library
+    kanbans (e.g. :mod:`pyvelm.modules.file_manager`) for thumbnail
+    browsing.
+
     Example::
 
         card("name", subtitle="code",
              fields=["age", "country_id"],
              badges=[field("active", widget="toggle"), "tag_ids"])
+
+        card("name", image="thumbnail_url", subtitle="mimetype")
     """
     result: ArchKanbanCard = {"title": title}
     if subtitle is not None:
@@ -240,6 +249,8 @@ def card(
         result["fields"] = fields
     if badges is not None:
         result["badges"] = badges
+    if image is not None:
+        result["image"] = image
     return result
 
 

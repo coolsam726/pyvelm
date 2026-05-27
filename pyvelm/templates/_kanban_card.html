@@ -22,6 +22,16 @@
         {% else %}
         <div class="block">
         {% endif %}
+            {% if card.image_url %}
+            <div class="mb-2 -mx-2 -mt-2 aspect-[4/3] overflow-hidden rounded-md bg-neutral-secondary
+                        flex items-center justify-center">
+                <img src="{{ card.image_url }}"
+                     alt=""
+                     loading="lazy"
+                     class="w-full h-full object-cover"
+                     onerror="this.style.display='none'">
+            </div>
+            {% endif %}
             {% if card.title %}
             <div class="font-semibold text-sm text-heading">{{ card.title }}</div>
             {% endif %}
@@ -58,6 +68,16 @@
            hover:shadow-md hover:border-fg-brand/40 transition
            {% if card.link %}cursor-pointer{% endif %}"
     data-record-id="{{ card.id }}">
+    {% if card.image_url %}
+    <div class="mb-3 -mx-3 -mt-3 aspect-[4/3] overflow-hidden rounded-t-lg bg-neutral-secondary
+                flex items-center justify-center">
+        <img src="{{ card.image_url }}"
+             alt=""
+             loading="lazy"
+             class="w-full h-full object-cover"
+             onerror="this.style.display='none'">
+    </div>
+    {% endif %}
     {% if card.title %}
     <div class="font-semibold text-sm text-heading">{{ card.title }}</div>
     {% endif %}

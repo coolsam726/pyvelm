@@ -1,0 +1,135 @@
+{# Form-field side of the file picker — chips + "Pick a file" button.
+
+   Posts the selection back to the parent form as one or more hidden
+   inputs named ``name`` carrying the attachment id(s). For Many2one
+   the value is a single id; for Many2many the parent's M2m machinery
+   accepts comma-separated ids in one input (and also accepts repeated
+   inputs with the same name — we use the comma form).
+
+   Variables:
+     name      field name
+     multi     bool — multi-select
+     readonly  bool — disables the picker button
+     accept    optional mimetype filter ("image/*")
+     initial   list of {id, name, mimetype, thumbnail_url}
+#}
+<div class="pv-file-picker-field"
+     x-data='pvFilePickerField({{ ({
+        "name": name,
+        "multi": multi,
+        "readonly": readonly,
+        "accept": accept,
+        "initial": initial,
+     }) | tojson }})'>
+
+    {# Hidden input(s) for form submission. For Many2many the parent
+       parser accepts comma-separated ids; for Many2one a single int. #}
+    <input type="hidden" :name="name" :value="hiddenValue()">
+
+    <div class="flex flex-wrap items-center gap-2">
+        <template x-for="row in selected" :key="row.id">
+            <div class="inline-flex items-center gap-2 rounded-md border border-default
+                        bg-neutral-secondary px-2 py-1 text-xs">
+                <template x-if="row.thumbnail_url">
+                    <img :src="row.thumbnail_url" alt=""
+                         class="w-8 h-8 rounded object-cover" loading="lazy"
+                         onerror="this.style.display='none'">
+                </template>
+                <template x-if="!row.thumbnail_url">
+                    <span class="inline-flex items-center justify-center w-8 h-8 rounded
+                                 bg-neutral-primary text-body-subtle text-2xs uppercase"
+                          x-text="(row.mimetype || '').split('/').pop() || 'file'"></span>
+                </template>
+                <div class="min-w-0 max-w-[12rem]">
+                    <a :href="'/api/attachment/' + row.id + '/download'"
+                       target="_blank"
+                       class="block truncate text-body hover:text-fg-brand hover:underline"
+                       x-text="row.name"></a>
+                </div>
+                <button type="button"
+                        x-show="!readonly"
+                        @click="remove(row.id)"
+                        class="text-body-subtle hover:text-fg-danger"
+                        aria-label="Remove">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                         viewBox="0 0 24 24" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </template>
+
+        <template x-if="!readonly && (multi || !selected.length)">
+            <button type="button"
+                    @click="openPicker()"
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium
+                           text-fg-brand border border-fg-brand/30 rounded-md
+                           hover:bg-brand-softer transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                     viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 7.5m0 0L7.5 12M12 7.5v9"/>
+                </svg>
+                <span x-text="selected.length ? 'Add another' : 'Pick a file'"></span>
+            </button>
+        </template>
+
+        <template x-if="readonly && !selected.length">
+            <span class="text-xs text-body-subtle">No file.</span>
+        </template>
+    </div>
+</div>
+
+<script>
+    if (typeof window.pvFilePickerField !== 'function') {
+        window.pvFilePickerField = function (cfg) {
+            return {
+                name: cfg.name,
+                multi: !!cfg.multi,
+                readonly: !!cfg.readonly,
+                accept: cfg.accept || '',
+                selected: (cfg.initial || []).slice(),
+
+                hiddenValue() {
+                    if (!this.selected.length) return '';
+                    if (this.multi) return this.selected.map((r) => r.id).join(',');
+                    return String(this.selected[0].id);
+                },
+
+                openPicker() {
+                    if (!window.PvDialog) return;
+                    const params = new URLSearchParams({
+                        multi: this.multi ? '1' : '0',
+                    });
+                    if (this.accept) params.set('accept', this.accept);
+                    window.PvDialog.open({
+                        url: '/web/files/picker?' + params.toString(),
+                        title: this.multi ? 'Pick files' : 'Pick a file',
+                        onResult: (result) => {
+                            if (!result) return;
+                            if (this.multi && Array.isArray(result)) {
+                                for (const r of result) this.addRow(r);
+                            } else {
+                                this.addRow(result);
+                            }
+                        },
+                    });
+                },
+
+                addRow(row) {
+                    if (!row || !row.id) return;
+                    if (this.multi) {
+                        if (this.selected.some((r) => r.id === row.id)) return;
+                        this.selected.push(row);
+                    } else {
+                        this.selected = [row];
+                    }
+                },
+
+                remove(id) {
+                    this.selected = this.selected.filter((r) => r.id !== id);
+                },
+            };
+        };
+    }
+</script>

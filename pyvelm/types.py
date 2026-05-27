@@ -206,6 +206,7 @@ class ArchKanbanCard(TypedDict, total=False):
     subtitle: str
     fields: list[FieldRefLike]
     badges: list[FieldRefLike]
+    image: str
 
 
 class ArchKanban(TypedDict, total=False):

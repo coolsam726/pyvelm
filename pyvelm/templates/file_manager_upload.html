@@ -1,0 +1,57 @@
+{% extends "layouts/main.html" %}
+{% block title %}Upload files — {% if brand is defined %}{{ brand.app_name }}{% else %}pyvelm{% endif %}{% endblock %}
+{% block page_title %}Upload files{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <form method="post"
+          action="/web/files/upload"
+          enctype="multipart/form-data"
+          class="bg-neutral-primary border border-default rounded-xl shadow-sm p-6 space-y-5">
+
+        <div>
+            <label class="block text-sm font-medium text-heading mb-2">
+                Files
+            </label>
+            <input type="file" name="files" multiple required
+                   class="block w-full text-sm text-body
+                          file:mr-3 file:py-2 file:px-4
+                          file:rounded-md file:border-0
+                          file:text-sm file:font-medium
+                          file:bg-fg-brand file:text-white
+                          hover:file:opacity-90
+                          file:cursor-pointer cursor-pointer">
+            <p class="mt-2 text-xs text-body-subtle">
+                Pick one or more files. They land in the library unattached;
+                use the file picker on any record to link them.
+            </p>
+        </div>
+
+        <label class="flex items-center gap-2 text-sm text-body cursor-pointer">
+            <input type="checkbox" name="public" value="1"
+                   class="w-4 h-4 rounded border-default bg-neutral-secondary
+                          text-fg-brand checked:bg-fg-brand focus:ring-2 focus:ring-fg-brand">
+            <span>Public — serve without an access grant
+                  (use for logos / shared assets).</span>
+        </label>
+
+        {% if error %}
+        <p class="text-sm text-fg-danger bg-danger-soft border border-fg-danger/30
+                  rounded-md px-3 py-2">{{ error }}</p>
+        {% endif %}
+
+        <div class="flex items-center justify-end gap-3 pt-2 border-t border-default">
+            <a href="/web/views/file_manager/file_manager.file.kanban"
+               class="px-3 py-1.5 text-sm font-medium border border-default text-body
+                      rounded-md hover:bg-neutral-secondary transition">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="px-3 py-1.5 text-sm font-medium text-white
+                           rounded-md bg-fg-brand hover:opacity-90 transition">
+                Upload
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

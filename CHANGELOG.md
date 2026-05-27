@@ -7,6 +7,45 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.17.0] — 2026-05-27
+
+New bundled **`file_manager`** module: a Files app with thumbnail
+kanban + sortable list over `ir.attachment`, a multipart upload
+page, and `widget="file"` / `widget="files"` pickers that combine
+browse-the-library + inline-upload in one dialog. Kanban cards grow
+a generic `image=<field>` slot so any model with a URL field gets a
+thumbnail tile for free. See
+[docs/releases/v0.17.0.md](docs/releases/v0.17.0.md).
+
+### Added
+
+- **`file_manager` module** — `pyvelm/modules/file_manager/`. Files
+  app (kanban default + list view) over `ir.attachment`, a Library
+  upload page at `/web/files/upload`, and a picker dialog at
+  `/web/files/picker` (live name search, mimetype filter, inline
+  upload, single / multi modes). Install hook grants Admin CRUD and
+  User read on `ir.attachment`.
+- **`widget="file"` / `widget="files"`** for
+  `Many2one("ir.attachment")` / `Many2many("ir.attachment")`. Edit
+  mode renders chips + a **Pick a file** button that opens the picker
+  in `PvDialog`; display mode shows image thumbnails (image MIMEs) or
+  a file pill with a download link. Field spec accepts
+  `accept="image/*"` (or comma-separated tokens) to filter both the
+  picker library query and the upload input.
+- **`card(image=<field>)`** — new generic kanban slot. Renderer pulls
+  the field's string value into `card["image_url"]`; the card
+  template renders a 4:3 thumbnail above the title when non-empty.
+  `ir.attachment` gets a computed `thumbnail_url` Char (returns
+  `/api/attachment/{id}/download` for image MIMEs, the external URL
+  for URL-typed image attachments, otherwise `""`) so the Files
+  kanban renders out of the box.
+
+### Changed
+
+- **`/api/attachment/*` endpoints** are unchanged. The new
+  `/web/files/upload` and `/web/files/picker/upload` reuse the same
+  storage backend selection (`PYVELM_STORAGE_BACKEND=db|local`).
+
 ## [0.16.0] — 2026-05-27
 
 A new bundled **`technical`** module exposes low-level record editors

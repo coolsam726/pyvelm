@@ -1281,6 +1281,123 @@ def _edit_boolean(value, spec, field):
     )
 
 
+def _render_file_picker_widget(
+    value, spec, field, *, multi: bool, readonly: bool
+) -> Markup:
+    """Edit-mode widget for ``Many2one("ir.attachment") widget="file"``
+    (or M2m widget="files"). Renders a chip list of already-picked
+    attachments + a button that opens the picker dialog.
+
+    ``widget_options`` accepted on the field spec:
+      - ``accept``: mimetype filter passed to the dialog and the file
+        input ("image/*", "application/pdf,image/*").
+    """
+    accept = (
+        spec.get("accept")
+        or (spec.get("widget_options") or {}).get("accept")
+        or ""
+    )
+    initial: list[dict] = []
+    if multi:
+        records = value if hasattr(value, "_ids") else None
+        if records is not None:
+            for rec in records:
+                mime = (getattr(rec, "mimetype", "") or "").lower()
+                initial.append(
+                    {
+                        "id": rec.id,
+                        "name": getattr(rec, "name", "") or f"#{rec.id}",
+                        "mimetype": mime,
+                        "thumbnail_url": (
+                            f"/api/attachment/{rec.id}/download"
+                            if mime.startswith("image/")
+                            else ""
+                        ),
+                    }
+                )
+    else:
+        rec = value if (value and hasattr(value, "_ids") and value._ids) else None
+        if rec is not None:
+            mime = (getattr(rec, "mimetype", "") or "").lower()
+            initial.append(
+                {
+                    "id": rec.id,
+                    "name": getattr(rec, "name", "") or f"#{rec.id}",
+                    "mimetype": mime,
+                    "thumbnail_url": (
+                        f"/api/attachment/{rec.id}/download"
+                        if mime.startswith("image/")
+                        else ""
+                    ),
+                }
+            )
+    partial = _env.get_template("widgets/file_picker_field.html")
+    return Markup(
+        partial.render(
+            name=spec["name"],
+            multi=multi,
+            readonly=readonly,
+            accept=accept,
+            initial=initial,
+        )
+    )
+
+
+@widget(Many2one, hint="file", mode="edit")
+def _edit_file(value, spec, field):
+    return _render_file_picker_widget(
+        value, spec, field, multi=False, readonly=bool(spec.get("readonly"))
+    )
+
+
+@widget(Many2many, hint="files", mode="edit")
+def _edit_files(value, spec, field):
+    return _render_file_picker_widget(
+        value, spec, field, multi=True, readonly=bool(spec.get("readonly"))
+    )
+
+
+@widget(Many2one, hint="file")
+def _display_file(value, spec, field):
+    """Display: chip + link to download (or thumbnail for image MIMEs)."""
+    if not value or not getattr(value, "_ids", None):
+        return Markup("")
+    rec = value
+    mime = (getattr(rec, "mimetype", "") or "").lower()
+    name = escape(getattr(rec, "name", "") or f"#{rec.id}")
+    url = f"/api/attachment/{rec.id}/download"
+    if mime.startswith("image/"):
+        return Markup(
+            f'<a href="{url}" target="_blank" '
+            f'class="inline-block max-w-[8rem] rounded-md overflow-hidden border border-default">'
+            f'<img src="{url}" alt="" loading="lazy" '
+            f'class="block w-full h-auto object-cover" '
+            f'onerror="this.style.display=\'none\'"></a>'
+        )
+    return Markup(
+        f'<a href="{url}" target="_blank" '
+        f'class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-default '
+        f'text-xs text-body hover:bg-neutral-secondary transition">'
+        f'<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" '
+        f'stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" '
+        f'd="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>'
+        f'<span class="truncate max-w-[10rem]">{name}</span></a>'
+    )
+
+
+@widget(Many2many, hint="files")
+def _display_files(value, spec, field):
+    if not value or not getattr(value, "_ids", None):
+        return Markup("")
+    pieces = []
+    for rec in value:
+        single_spec = {**spec}
+        pieces.append(str(_display_file(rec, single_spec, field)))
+    return Markup(
+        '<div class="flex flex-wrap items-center gap-1.5">' + "".join(pieces) + "</div>"
+    )
+
+
 @widget(Many2one, mode="edit")
 def _edit_m2o(value, spec, field):
     """Searchable combobox with create-on-the-fly + open-record link.
@@ -3192,6 +3309,7 @@ def _kanban_card_kw(view, arch, form_view: str | None) -> dict:
     return dict(
         title_attr=card.get("title"),
         subtitle_attr=card.get("subtitle"),
+        image_attr=card.get("image"),
         fields_spec=list(card.get("fields", [])),
         badges_spec=list(card.get("badges", [])),
         form_view=form_view,
@@ -3343,6 +3461,7 @@ def _kanban_cards_for_records(
     badges_spec,
     form_view,
     view,
+    image_attr: str | None = None,
     nav_query: str = "",
 ) -> list[dict]:
     """Build card dicts for kanban template rendering."""
@@ -3353,6 +3472,11 @@ def _kanban_cards_for_records(
             link = f"/web/views/{view.module}/{form_view}/record/{rec.id}"
             if nav_query:
                 link = f"{link}?{nav_query}"
+        image_url = ""
+        if image_attr:
+            raw = getattr(rec, image_attr, None)
+            if raw:
+                image_url = str(raw).strip()
         cards.append(
             {
                 "id": rec.id,
@@ -3366,6 +3490,7 @@ def _kanban_cards_for_records(
                     if subtitle_attr
                     else Markup("")
                 ),
+                "image_url": image_url,
                 "fields": [_render_field_label(rec, s) for s in fields_spec],
                 "badges": [_render_field_label(rec, s) for s in badges_spec],
                 "link": link,
