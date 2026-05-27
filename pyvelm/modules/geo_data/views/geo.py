@@ -1,0 +1,171 @@
+"""List + form views for the geo_data models."""
+
+from pyvelm.builders import (
+    field,
+    form_view,
+    list_view,
+    section,
+)
+from pyvelm.types import View
+
+VIEWS: list[View] = [
+    # ---- res.continent -------------------------------------------------
+    list_view(
+        "geo_data.continent.list",
+        "res.continent",
+        title="Continents",
+        fields=["code", "name"],
+        form_view="geo_data.continent.form",
+    ),
+    form_view(
+        "geo_data.continent.form",
+        "res.continent",
+        title="Continent",
+        sections=[
+            section("identity", "Identity", ["code", "name"]),
+            section(
+                "countries",
+                "Countries",
+                [field("country_ids", widget="dialog")],
+                cols=1,
+            ),
+        ],
+    ),
+    # ---- res.country ---------------------------------------------------
+    list_view(
+        "geo_data.country.list",
+        "res.country",
+        title="Countries",
+        fields=[
+            "flag_emoji",
+            "name",
+            "code",
+            "iso3",
+            "continent_id",
+            "capital",
+            "currency_code",
+            "phone_code",
+            "population",
+        ],
+        form_view="geo_data.country.form",
+    ),
+    form_view(
+        "geo_data.country.form",
+        "res.country",
+        title="Country",
+        cols=2,
+        sections=[
+            section(
+                "identity",
+                "Identity",
+                [
+                    "flag_emoji",
+                    "name",
+                    "code",
+                    "iso3",
+                    "continent_id",
+                ],
+            ),
+            section(
+                "facts",
+                "Facts",
+                [
+                    "capital",
+                    "currency_code",
+                    "phone_code",
+                    "population",
+                ],
+            ),
+            section(
+                "states",
+                "States / provinces",
+                [field("state_ids", widget="dialog")],
+                cols=1,
+            ),
+            section(
+                "cities",
+                "Cities",
+                [field("city_ids", widget="dialog")],
+                cols=1,
+            ),
+        ],
+    ),
+    # ---- res.country.state --------------------------------------------
+    list_view(
+        "geo_data.state.list",
+        "res.country.state",
+        title="States / provinces",
+        fields=[
+            "country_id",
+            "name",
+            "short_code",
+            "code",
+            "type",
+        ],
+        form_view="geo_data.state.form",
+    ),
+    form_view(
+        "geo_data.state.form",
+        "res.country.state",
+        title="State / province",
+        cols=2,
+        sections=[
+            section(
+                "identity",
+                "Identity",
+                [
+                    "country_id",
+                    "name",
+                    "short_code",
+                    "code",
+                    "type",
+                    "parent_id",
+                ],
+            ),
+        ],
+    ),
+    # ---- res.city ------------------------------------------------------
+    list_view(
+        "geo_data.city.list",
+        "res.city",
+        title="Cities",
+        fields=[
+            "name",
+            "country_id",
+            "state_id",
+            "population",
+            field("is_capital", widget="toggle"),
+            "timezone",
+        ],
+        form_view="geo_data.city.form",
+    ),
+    form_view(
+        "geo_data.city.form",
+        "res.city",
+        title="City",
+        cols=2,
+        sections=[
+            section(
+                "identity",
+                "Identity",
+                [
+                    "name",
+                    "country_id",
+                    "state_id",
+                    field("is_capital", widget="toggle"),
+                    "geoname_id",
+                ],
+            ),
+            section(
+                "location",
+                "Location",
+                [
+                    "latitude",
+                    "longitude",
+                    "timezone",
+                    "population",
+                ],
+            ),
+        ],
+    ),
+]

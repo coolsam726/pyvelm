@@ -1,6 +1,6 @@
 [project]
 name = "pyvelm"
-version = "0.17.0"
+version = "0.18.0"
 description = "Odoo-style ERP framework — recordsets, declarative models, env-bound cache."
 requires-python = ">=3.10"
 dependencies = [
@@ -23,6 +23,14 @@ docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.27",
+]
+# Required by the `geo_data` bundled module — kept optional so the
+# wheel stays small for apps that don't need geography seed data.
+# Install with `pip install pyvelm[geo]` before installing the module
+# from Apps.
+geo = [
+    "pycountry>=24.6",
+    "geonamescache>=2.0",
 ]
 
 [project.scripts]

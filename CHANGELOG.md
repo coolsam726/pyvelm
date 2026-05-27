@@ -7,6 +7,45 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.18.0] — 2026-05-27
+
+New bundled **`geo_data`** module: 7 continents, ~250 countries
+(with ISO-3 / phone code / currency / capital / population / flag
+emoji), ~5,000 ISO 3166-2 states / provinces, and ~6,000 cities
+(every capital + cities with population ≥ 100,000) seeded from
+`pycountry` + `geonamescache`. Plus a framework fix so cross-module
+`_inherit` can add Many2one columns that reference tables owned by
+the extending module. See
+[docs/releases/v0.18.0.md](docs/releases/v0.18.0.md).
+
+### Added
+
+- **`geo_data` module** — `pyvelm/modules/geo_data/`. Adds
+  `res.continent`, `res.country.state`, `res.city`; extends
+  `res.country` with `continent_id`, `iso3`, `phone_code`,
+  `currency_code`, `capital`, `population`, `flag_emoji`. Install
+  hook seeds the full geo hierarchy in one transaction
+  (idempotent — keyed on natural ids). Sidebar adds
+  **Settings → Geography** with four leaves. Optional install
+  extras (`pip install pyvelm[geo]`) carry the source data
+  packages so the framework wheel stays small.
+- **`flag_emoji(iso_alpha2)`** in `pyvelm/geo_utils.py` — pure
+  helper that returns the regional-indicator emoji for any ISO
+  3166-1 alpha-2 code (e.g. `"US" → "🇺🇸"`). Also
+  `geo_packages_available()` / `require_geo_packages()` for opt-in
+  feature detection.
+
+### Fixed
+
+- **Cross-module FK ordering** — `BaseModel._setup_foreign_keys`
+  now probes `information_schema.tables` for the target table and
+  defers the constraint when it doesn't exist yet. The extending
+  module's own `_setup_module_schema` re-runs FK setup on the
+  extended model (via `_model_extensions`), so the constraint lands
+  exactly once at the right time. Previously a downstream
+  `_inherit` that added a Many2one to a model the module owned
+  would crash base's install with `UndefinedTable`.
+
 ## [0.17.0] — 2026-05-27
 
 New bundled **`file_manager`** module: a Files app with thumbnail

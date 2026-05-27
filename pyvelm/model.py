@@ -410,6 +410,21 @@ class BaseModel(metaclass=MetaModel):
                     f"{cls._name}.{f.name} references unknown model {f.comodel_name!r}"
                 )
             target = registry[f.comodel_name]
+            # Cross-module ``_inherit`` adds fields whose target table
+            # belongs to a not-yet-installed module. The extending
+            # module's own ``_setup_module_schema`` runs FK setup on
+            # this class again once its tables exist (via
+            # ``_model_extensions``), so we defer the constraint until
+            # then rather than failing the base install with
+            # ``UndefinedTable``. The DROP-IF-EXISTS below is also
+            # idempotent on the second pass.
+            row = conn.execute(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = current_schema() AND table_name = %s",
+                [target._table],
+            ).fetchone()
+            if row is None:
+                continue
             constraint = f"{cls._table}_{f.column}_fkey"
             conn.execute(
                 f'ALTER TABLE "{cls._table}" DROP CONSTRAINT IF EXISTS "{constraint}"'

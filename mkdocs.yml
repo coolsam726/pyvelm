@@ -87,6 +87,7 @@ nav:
       - Workflows: workflow.md
       - Email composer: mail-compose.md
       - File library: file-manager.md
+      - Geo data: geo-data.md
       - White-label branding: branding.md
       - Security: security.md
       - Deployment: deployment.md
