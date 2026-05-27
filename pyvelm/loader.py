@@ -576,6 +576,42 @@ def _sync_view_inherits(spec: ModuleSpec, env: Environment) -> None:
             View.create(vals)
 
 
+def _menu_sync_order(menus: list, module: str) -> list:
+    """Sort menus so every parent in *module* is upserted before its children."""
+    by_name = {m["name"]: m for m in menus}
+    depth_cache: dict[str, int] = {}
+
+    def depth(entry: dict) -> int:
+        name = entry["name"]
+        if name in depth_cache:
+            return depth_cache[name]
+        parent_ref = entry.get("parent")
+        if not parent_ref:
+            depth_cache[name] = 0
+            return 0
+        if "." not in parent_ref:
+            parent_name = parent_ref
+            external = True
+        else:
+            pmod, parent_name = parent_ref.split(".", 1)
+            external = pmod != module
+        if external:
+            depth_cache[name] = 1
+            return 1
+        parent_entry = by_name.get(parent_name)
+        if parent_entry is None:
+            depth_cache[name] = 1
+            return 1
+        d = depth(parent_entry) + 1
+        depth_cache[name] = d
+        return d
+
+    return sorted(
+        menus,
+        key=lambda m: (depth(m), m.get("sequence", 10), m.get("label", "")),
+    )
+
+
 def _sync_menus(spec: ModuleSpec, env: Environment) -> None:
     """Upsert this module's MENUS as `ir.ui.menu` records.
 
@@ -583,17 +619,15 @@ def _sync_menus(spec: ModuleSpec, env: Environment) -> None:
     another menu by `<module>.<name>` and is resolved to `parent_id`
     here — the parent must already be installed (i.e. live in this
     module or in a dep). Modules are installed in topo order, so the
-    only intra-module concern is that a child appears after its parent
-    in the MENUS list — sorting by absence-of-parent keeps that
-    automatic.
+    only intra-module concern is ordering: parents must be upserted
+    before children (including level 3 under a nested group).
     """
     if not spec.menus:
         return
     if "ir.ui.menu" not in env.registry:
         return
     Menu = env["ir.ui.menu"]
-    # Roots first so children in the same module can resolve their parent.
-    ordered = sorted(spec.menus, key=lambda m: 0 if not m.get("parent") else 1)
+    ordered = _menu_sync_order(spec.menus, spec.name)
     for m in ordered:
         required = {"name", "label"}
         missing = required - m.keys()

@@ -60,10 +60,13 @@ A read-only user lands on the list, kanban, and record-display pages
 without a single `403`; the framework simply omits the buttons they
 can't use (New, Edit, Delete, the row **Design** link, etc.).
 
-The **sidebar** follows the same idea: a menu entry that points at a
-view is shown only when the user can **read** (list) that view's model,
-and a group with no reachable children is dropped entirely. Home/Apps
-aren't model-backed, so they always show. Superuser sees the full tree.
+### Sidebar menus
+
+The **sidebar and top-bar menus** follow the same idea (see also
+[Navigation](navigation.md)): a menu entry that points at a view is
+shown only when the user can **read** (list) that view's model, and a
+group with no reachable children is dropped entirely. Home/Apps aren't
+model-backed, so they always show. Superuser sees the full tree.
 
 **Policies** are the preferred gate when ACL alone is too coarse — for
 example everyone gets read on `res.users` for the shell, but only
@@ -78,7 +81,7 @@ from pyvelm.policies.management import AdminManagementPolicy
 register_policy("res.users", AdminManagementPolicy)
 
 # menu.py
-m.item("settings.users", "Users", parent="settings",
+m.item("settings.users", "Users", parent="settings.access",
        view="user.list", policy="view_any")
 ```
 

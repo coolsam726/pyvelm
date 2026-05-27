@@ -119,8 +119,9 @@ pyvelm db migrate
 ```
 
 The Apps page lists `tasks` in the catalog. After migrate it should show
-**Installed**; otherwise click **Install**. The sidebar gains a **tasks**
-group once menus are synced.
+**Installed**; otherwise click **Install**. The shell gains a **tasks** app in the sidebar (and its pages in the
+top bar under the default `apps` layout) once menus are synced. See
+[Navigation](navigation.md) to switch layouts.
 
 For model changes later, see [Migrations workflow](migrations.md).
 

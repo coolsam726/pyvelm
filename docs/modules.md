@@ -136,13 +136,28 @@ this for side-effects like registering custom widgets via
 
 ## Sidebar menus
 
-A `MENUS` list contributes entries to the left-hand sidebar.
-Top-level **groups** have an optional `icon` and no `href`; **leaf items**
-link to a view (or other URL) and sit under a **parent** group.
+A `MENUS` list contributes entries to `ir.ui.menu`, which drives the
+signed-in shell. By default the UI uses the **apps** layout (applications
+in the left rail, pages in the top bar); set `PYVELM_MENU_LAYOUT=sidebar`
+for a three-level nested sidebar. See **[Navigation](navigation.md)**
+for layout modes, depth, and template context.
+
+Structure menus in **three levels** when using the default `apps` layout:
+
+| Level | Role | Example |
+|-------|------|---------|
+| 1 | Application (sidebar rail) | `Settings`, `CRM` |
+| 2 | Subsection (top bar tab or dropdown) | `Users & access`, `Pipeline` |
+| 3 | Page (link or dropdown item) | `Users`, `All Leads` |
+
+Keep level 2 sparse (a handful of subsections per app); put list/form
+routes at level 3. See **[Navigation](navigation.md)** for layout detail.
+
+Top-level **groups** have an optional `icon` and no `href`. Nested
+**groups** use `parent=`; **leaf items** link to a view or URL.
 
 Use the **`Menus`** builder so you only pass names you already know from
-`VIEWS` and `menu_group` — not hand-built `/web/views/...` paths or
-`"<module>.<group>"` strings:
+`VIEWS` — not hand-built `/web/views/...` paths:
 
 ```python
 # partners/views/menu.py  —  NAME in __pyvelm__.py is "partners"
@@ -152,22 +167,20 @@ m = Menus("partners")
 
 MENUS = [
     m.group("business", "Business", icon="square-3-stack-3d", sequence=50),
-    # parent="business"  →  partners.business
-    # view="partner.list"  →  /web/views/partners/partner.list
+    m.group("business.directory", "Directory", parent="business", sequence=10),
     m.item("business.partners", "Partners",
-           parent="business", view="partner.list", sequence=10),
-
-    # Cross-module parent: admin owns the Settings group
+           parent="business.directory", view="partner.list", sequence=10),
     m.item("business.tags", "Tags",
-           parent=("admin", "settings"), view="tag.list", sequence=40),
+           parent=("admin", "settings.reference"), view="tag.list", sequence=20),
 ]
 ```
 
 | What you write | What gets stored |
 |----------------|------------------|
 | `m.group("business", …)` | Menu `name` = `business` in module `partners` |
-| `parent="business"` | `parent` = `partners.business` |
-| `parent=("admin", "settings")` | `parent` = `admin.settings` |
+| `m.group("…", parent="business")` | Nested group under `partners.business` |
+| `parent="business.directory"` | `parent` = `partners.business.directory` |
+| `parent=("admin", "settings.reference")` | `parent` = `admin.settings.reference` |
 | `view="partner.list"` | `href` = `/web/views/partners/partner.list` |
 | `href="/web/apps"` | Use for non-view routes (Dashboard, Apps) |
 | `icon="home"` | [Heroicons](https://heroicons.com) name (outline by default) |
@@ -177,11 +190,18 @@ Pass a kebab-case name on groups and root-level items, e.g. `icon="chart-bar"`.
 Variants: `icon="solid:shield-check"`, `icon="mini:bell"`, `icon="micro:bell"`.
 Legacy inline SVG strings still work if they start with `<svg`.
 
-Low-level `menu_group` / `menu_item` still work with full `href` and
-`parent="partners.business"` if you prefer raw dicts.
+Nested groups pass `parent=` to `m.group()` (or `menu_group(..., parent=,
+menu_module=)`). Menu names may contain dots — use a short
+`parent="settings.organization"`, not a hand-written `admin.*` string;
+see [Navigation → Parent references](navigation.md#parent-references).
+
+Low-level `menu_item` still works with full `href` and tuple parents if
+you prefer raw dicts.
 
 The framework upserts these into the `ir.ui.menu` table on every
-install pass, so re-declaring an entry overwrites the previous one.
+install pass (parents before children), so re-declaring an entry
+overwrites the previous one. After changing menus in a running app, use
+**Apps → Sync** on that module.
 
 ## Loading a module
 

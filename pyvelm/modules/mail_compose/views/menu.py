@@ -9,12 +9,9 @@ MENUS: list[Menu] = [
     m.item(
         "workflows.mail_compose",
         "Compose drafts",
-        # The Workflows group is owned by the admin module — point at it
-        # with the (module, name) tuple so the menu loader resolves to
-        # ``admin.workflows`` instead of ``mail_compose.workflows``.
-        parent=("admin", "workflows"),
+        parent=("admin", "workflows.messaging"),
         view="mail_compose.list",
-        sequence=45,
+        sequence=30,
         policy="view_any",
     ),
 ]

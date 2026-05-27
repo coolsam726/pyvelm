@@ -1,0 +1,15 @@
+{# App rail: root applications only (PYVELM_MENU_LAYOUT=apps, default). #}
+<nav class="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto" aria-label="Applications">
+    {% for nav in menu_roots %}
+        <a href="{{ nav.nav_href or '#' }}" data-nav-link
+           class="nav-item flex items-center gap-2.5 px-3 py-2 rounded-md text-sm
+                  {% if menu_active_root_index is not none and nav.root_index == menu_active_root_index %}nav-active{% endif %}"
+           @click="sidebarOpen = false"
+           {% if not nav.nav_href %}aria-disabled="true" tabindex="-1"{% endif %}>
+            {% if nav.icon %}
+            <span class="shrink-0 w-4 h-4">{{ nav.icon | safe }}</span>
+            {% endif %}
+            <span class="truncate">{{ nav.label }}</span>
+        </a>
+    {% endfor %}
+</nav>

@@ -9,9 +9,11 @@ class Menu(BaseModel):
     foreign key; module data files address parents as
     `"<module>.<name>"` and the loader resolves the ref at sync time.
 
-    The sidebar renderer (`pyvelm.render._menu`) walks this table to
-    build a two-level tree: top-level entries (parent_id NULL) and
-    their direct children, ordered by sequence then label.
+    The shell renderer (:func:`pyvelm.menu.build_menu_tree`) walks this
+    table to build a tree of arbitrary depth, ordered by sequence then
+    label. Presentation is controlled by ``PYVELM_MENU_LAYOUT`` (see
+    :mod:`pyvelm.menu`): application roots in the sidebar with children in
+    the top bar (``apps``, default), or a three-level sidebar (``sidebar``).
     """
 
     _name = "ir.ui.menu"

@@ -73,7 +73,7 @@ Quick-start
                parent="business", view="partner.list", sequence=10),
         # Cross-module parent (admin owns the group):
         m.item("business.tags", "Tags",
-               parent=("admin", "settings"), view="tag.list", sequence=40),
+               parent=("admin", "settings.reference"), view="tag.list", sequence=40),
     ]
 """
 from __future__ import annotations
@@ -847,10 +847,15 @@ def _resolve_menu_parent(
     *,
     menu_module: str,
 ) -> str:
+    """Return ``"<module>.<menu_name>"`` for storage on ``ir.ui.menu``.
+
+    Menu **names** may contain dots (``settings.organization``). A string
+    ``parent`` is always the sibling/parent menu *name* in *menu_module*,
+    never a ``module.name`` pair. Cross-module parents use the
+    ``(module, name)`` tuple.
+    """
     if isinstance(parent, tuple):
         return menu_ref(parent[0], parent[1])
-    if "." in parent:
-        return parent
     return menu_ref(menu_module, parent)
 
 
@@ -914,8 +919,15 @@ class Menus:
         *,
         icon: str | None = None,
         sequence: int = 10,
+        parent: str | tuple[str, str] | None = None,
     ) -> Menu:
-        return menu_group(name, label, icon=icon, sequence=sequence)
+        """Menu group. Top-level groups take ``icon``; nested groups use ``parent``."""
+        result = menu_group(name, label, icon=icon, sequence=sequence)
+        if parent is not None:
+            result["parent"] = _resolve_menu_parent(
+                parent, menu_module=self.module
+            )
+        return result
 
     def item(
         self,
@@ -977,14 +989,23 @@ def menu_group(
     *,
     icon: str | None = None,
     sequence: int = 10,
+    parent: str | tuple[str, str] | None = None,
+    menu_module: str | None = None,
 ) -> Menu:
-    """Declare a top-level sidebar group (no ``href``, no ``parent``).
+    """Declare a menu group (no ``href``).
+
+    Top-level app groups use ``icon`` and no ``parent``. Nested section
+    groups (level 2 under an app) set ``parent`` to the containing app
+    (see ``docs/navigation.md``).
 
     Args:
         name:     Unique name within the module (e.g. ``"business"``).
         label:    Display text in the sidebar.
-        icon:     Heroicons name (e.g. ``"home"``, ``"solid:chart-bar"``) or raw SVG.
+        icon:     Heroicons name on root groups only.
         sequence: Ordering among siblings (lower = higher up).
+        parent:   Short group name, ``"module.group"``, or
+            ``("module", "group")`` for cross-module parents.
+        menu_module: Installing module when resolving a short ``parent``.
 
     Example::
 
@@ -993,6 +1014,10 @@ def menu_group(
     result: Menu = {"name": name, "label": label, "sequence": sequence}
     if icon is not None:
         result["icon"] = icon
+    if parent is not None:
+        result["parent"] = _resolve_menu_parent(
+            parent, menu_module=menu_module
+        )
     return result
 
 

@@ -7,6 +7,52 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.15.0] — 2026-05-27
+
+Configurable shell navigation: **apps** layout (application rail + top-bar
+subsections) as the default, **sidebar** layout alternative, three-level
+menu authoring across core and example modules, and
+[docs/navigation.md](docs/navigation.md). See
+[docs/releases/v0.15.0.md](docs/releases/v0.15.0.md).
+
+### Added
+
+- **`pyvelm.menu`** — `build_menu_tree`, `menu_layout`,
+  `menu_layout_context`, `find_menu_entry`; env `PYVELM_MENU_LAYOUT`
+  (`apps` | `sidebar`; `odoo` alias for `apps`).
+- **Apps layout templates** — `_nav_apps_roots.html`,
+  `_nav_topbar_secondary.html` (subsection tabs + toggle dropdowns for
+  level-3 pages).
+- **Sidebar layout template** — `_nav_sidebar.html` (section → group →
+  link).
+- **Mobile (`apps`)** — drawer uses full nested sidebar tree; top bar
+  shows active app name only.
+- **`m.group(..., parent=)`** — nested menu sections in the builder.
+- **`docs/navigation.md`** — layout modes, authoring convention, parent
+  references, template context.
+- **`pyvelm/tests/test_menu.py`** — tree build, layout context, parent
+  resolution, sync order.
+
+### Changed
+
+- **Default navigation** — `PYVELM_MENU_LAYOUT` defaults to `apps`
+  (was: two-level sidebar only).
+- **Menu structure** — `admin`, `reports`, `workflow`, `mail_compose`,
+  and example modules (`crm`, `partners`, `feedback_signals`,
+  `vellum_demo`) use L1 app → L2 subsection → L3 page.
+- **`_sync_menus`** — topological sort so nested parents install in one
+  pass; `_resolve_menu_parent` treats dotted names as menu names in the
+  declaring module.
+- **Main layout** — header outside `overflow-x-hidden` so top-bar
+  dropdowns are not clipped.
+- **Docs** — [modules.md](docs/modules.md), [security.md](docs/security.md),
+  [getting-started.md](docs/getting-started.md), [.env.example](.env.example).
+
+### Fixed
+
+- **Kanban Alpine** — `pvKanbanBoard` config via `window._pvKanbanCfg`
+  instead of inline `x-data` object literals (fixes `Unexpected token '}'`).
+
 ## [0.14.0] — 2026-05-27
 
 UX pass: **Filament-style** page heading (h1 under the breadcrumbs, no

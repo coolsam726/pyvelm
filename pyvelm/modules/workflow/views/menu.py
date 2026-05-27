@@ -1,4 +1,4 @@
-"""Sidebar entries under Admin → Workflows."""
+"""Menu entries under Admin → Workflows (level-3 leaves)."""
 
 from pyvelm.builders import Menus
 from pyvelm.types import Menu
@@ -9,16 +9,16 @@ MENUS: list[Menu] = [
     m.item(
         "workflow.inbox",
         "My approvals",
-        parent=("admin", "workflows"),
+        parent=("admin", "workflows.operations"),
         href="/web/workflow/inbox",
-        sequence=3,
+        sequence=5,
         model="workflow.approval",
         policy="inbox",
     ),
     m.item(
         "workflow.design",
         "Design workflow",
-        parent=("admin", "workflows"),
+        parent=("admin", "workflows.configuration"),
         href="/web/workflow/build",
         sequence=5,
         model="workflow.definition",
@@ -27,33 +27,9 @@ MENUS: list[Menu] = [
     m.item(
         "workflow.definitions",
         "Definitions",
-        parent=("admin", "workflows"),
+        parent=("admin", "workflows.configuration"),
         view="workflow_definition.list",
         sequence=15,
-        policy="view_any",
-    ),
-    m.item(
-        "workflow.instances",
-        "Instances",
-        parent=("admin", "workflows"),
-        view="workflow_instance.list",
-        sequence=25,
-        policy="view_any",
-    ),
-    m.item(
-        "workflow.approvals",
-        "Approvals",
-        parent=("admin", "workflows"),
-        view="workflow_approval.list",
-        sequence=35,
-        policy="view_any",
-    ),
-    m.item(
-        "workflow.tasks",
-        "Tasks",
-        parent=("admin", "workflows"),
-        view="workflow_task.list",
-        sequence=45,
         policy="view_any",
     ),
 ]

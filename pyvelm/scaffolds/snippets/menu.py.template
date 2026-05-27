@@ -6,5 +6,12 @@ m = Menus("{{module}}")
 
 MENUS = [
     m.group("{{group}}", "{{group_label}}", sequence={{sequence}}),
-    m.item("{{item_name}}", "{{item_label}}", parent="{{group}}", view="{{view_name}}", sequence=10),
+    m.group("{{group}}.main", "{{group_label}}", parent="{{group}}", sequence=10),
+    m.item(
+        "{{item_name}}",
+        "{{item_label}}",
+        parent="{{group}}.main",
+        view="{{view_name}}",
+        sequence=10,
+    ),
 ]

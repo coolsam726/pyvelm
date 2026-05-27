@@ -16,6 +16,16 @@
 {% endblock %}
 
 {% block content %}
+{% if kanban_draggable and group_field %}
+<script>
+    window._pvKanbanCfg = {
+        module: {{ view.module | tojson }},
+        name: {{ view.name | tojson }},
+        groupBy: {{ group_field | tojson }},
+        sequenceField: {{ sequence_field | tojson }},
+    };
+</script>
+{% endif %}
 {% if list_controls %}
 <script>
     window._pvListCfg = {
@@ -64,12 +74,7 @@
 
     <div id="pv-kanban-container">
         {% if kanban_draggable and group_field %}
-        <div x-data="pvKanbanBoard({
-                module: {{ view.module | tojson }},
-                name: {{ view.name | tojson }},
-                groupBy: {{ group_field | tojson }},
-                sequenceField: {{ sequence_field | tojson }},
-            })">
+        <div x-data="pvKanbanBoard(window._pvKanbanCfg)">
             {% include "kanban_body.html" %}
         </div>
         {% else %}
@@ -95,12 +100,7 @@
 </div>
 {% endif %}
 {% if kanban_draggable and group_field %}
-<div x-data="pvKanbanBoard({
-        module: {{ view.module | tojson }},
-        name: {{ view.name | tojson }},
-        groupBy: {{ group_field | tojson }},
-        sequenceField: {{ sequence_field | tojson }},
-    })">
+<div x-data="pvKanbanBoard(window._pvKanbanCfg)">
     {% include "kanban_body.html" %}
 </div>
 {% include "_pv_kanban_alpine.html" %}

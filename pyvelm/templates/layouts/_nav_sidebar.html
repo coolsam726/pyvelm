@@ -1,0 +1,71 @@
+{# Three-level sidebar (PYVELM_MENU_LAYOUT=sidebar).
+
+   Level 1 — section subheading when the root has children and no href
+             (typical ``menu_group``); otherwise a top-level link.
+   Level 2 — links or collapsible groups when they have level-3 children.
+   Level 3 — nested links under a level-2 group. #}
+<nav class="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+    {% for nav in menu %}
+        {% if nav.children and not nav.href %}
+            <p class="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-body-subtle truncate"
+               {% if loop.first %}style="padding-top: 0.25rem"{% endif %}>
+                {{ nav.label }}
+            </p>
+            {% for child in nav.children %}
+                {% if child.children %}
+                    <details class="group"
+                             {% if child.active %}open{% endif %}>
+                        <summary class="nav-item group/summary flex items-center gap-2.5 px-3 py-2
+                                        rounded-md text-sm cursor-pointer select-none
+                                        [&::-webkit-details-marker]:hidden marker:hidden
+                                        {% if child.active and not child.href %}nav-active{% endif %}">
+                            {% if child.icon %}
+                            <span class="shrink-0 w-4 h-4">{{ child.icon | safe }}</span>
+                            {% endif %}
+                            <span class="flex-1 truncate">{{ child.label }}</span>
+                            <svg class="w-3 h-3 text-body-subtle transition-transform group-open:rotate-180"
+                                 fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+                            </svg>
+                        </summary>
+                        <ul class="mt-1 ml-1 pl-3 border-l border-default space-y-0.5">
+                            {% for grandchild in child.children %}
+                                <li>
+                                    <a href="{{ grandchild.href }}" data-nav-link
+                                       class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm
+                                              {% if grandchild.active %}nav-active{% endif %}"
+                                       @click="sidebarOpen = false">
+                                        {% if grandchild.icon %}
+                                        <span class="shrink-0 w-4 h-4">{{ grandchild.icon | safe }}</span>
+                                        {% endif %}
+                                        {{ grandchild.label }}
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </details>
+                {% else %}
+                    <a href="{{ child.href }}" data-nav-link
+                       class="nav-item flex items-center gap-2.5 px-3 py-2 rounded-md text-sm
+                              {% if child.active %}nav-active{% endif %}"
+                       @click="sidebarOpen = false">
+                        {% if child.icon %}
+                        <span class="shrink-0 w-4 h-4">{{ child.icon | safe }}</span>
+                        {% endif %}
+                        {{ child.label }}
+                    </a>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <a href="{{ nav.href }}" data-nav-link
+               class="nav-item flex items-center gap-2.5 px-3 py-2 rounded-md text-sm
+                      {% if nav.active %}nav-active{% endif %}"
+               @click="sidebarOpen = false">
+                {% if nav.icon %}
+                <span class="shrink-0 w-4 h-4">{{ nav.icon | safe }}</span>
+                {% endif %}
+                {{ nav.label }}
+            </a>
+        {% endif %}
+    {% endfor %}
+</nav>

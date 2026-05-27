@@ -6025,155 +6025,34 @@ STATIC_DIR = Path(__file__).parent / "static"
 # individual renderers don't have to re-build it.
 
 
-def _resolve_menu_icon(icon: str | None):
-    from pyvelm.icons import resolve_icon
-
-    return resolve_icon(icon)
-
-
 def _menu_target_model(env, href: str | None) -> str | None:
-    """Model a menu entry ultimately lists, or None when it isn't a view.
+    """Model a menu entry lists; see :func:`pyvelm.menu.menu_target_model`."""
+    from pyvelm.menu import menu_target_model
 
-    Only ``/web/views/<module>/<name>`` hrefs map to a model (and thus a
-    "list" permission). Home/apps and custom feature pages return None —
-    they aren't gated by a model read grant. View metadata is resolved
-    under sudo (it's system metadata, same as the menu read itself).
-    """
-    if not href:
-        return None
-    path = href.split("?", 1)[0].rstrip("/")
-    if not path.startswith("/web/views/"):
-        return None
-    parts = path.split("/")
-    # ["", "web", "views", "<module>", "<name>", ...]
-    if len(parts) < 5:
-        return None
-    view = _load_ui_view(env.sudo(), parts[3], parts[4])
-    return view.model if view else None
+    return menu_target_model(env, href)
 
 
 def _menu_node_visible(env, node: dict) -> bool:
-    """Prune ``node``'s children to the permitted set; return its visibility.
+    """Sidebar visibility gate; see :func:`pyvelm.menu.menu_node_visible`."""
+    from pyvelm.menu import menu_node_visible
 
-    Leaf entries resolve a target *model* (explicit ``access_model``, or
-    inferred from a ``/web/views/…`` href). Then:
-
-    1. **ACL ceiling** — ``access_perm`` (default ``"read"``) via
-       :meth:`~pyvelm.env.Environment.has_access`.
-    2. **Policy** — when ``access_policy`` is set, require
-       :meth:`~pyvelm.env.Environment.can` on that method (e.g.
-       ``view_any`` for management lists). Prefer policies over
-       ``perm="write"`` when shell grants give everyone read.
-    3. If there is no model (e.g. Dashboard), the entry stays visible.
-       The Apps catalog uses ``model`` + ``policy`` like other gated pages.
-
-    A group survives only if at least one child does. Evaluated against
-    the real user (after menu-metadata ACL bypass is restored).
-    """
-    children = node.get("children") or []
-    if children:
-        node["children"] = [c for c in children if _menu_node_visible(env, c)]
-        if node["children"]:
-            return True
-        # An empty group with no destination of its own is just noise.
-        if not node.get("href"):
-            return False
-    model = node.get("access_model") or _menu_target_model(env, node.get("href"))
-    if model is None:
-        return True
-    perm = node.get("access_perm") or "read"
-    if not env.has_access(model, perm):
-        return False
-    policy = node.get("access_policy")
-    if policy:
-        return env.can(model, str(policy), perm=perm, model=model)
-    return True
+    return menu_node_visible(env, node)
 
 
 def _menu(env, current_path: str | None) -> list[dict]:
-    """Build the sidebar menu tree from `ir.ui.menu`.
+    """Build the navigation menu tree; see :func:`pyvelm.menu.build_menu_tree`."""
+    from pyvelm.menu import build_menu_tree
 
-    Each installed module contributes entries via its `MENUS` data
-    file; the loader upserts them keyed by `(module, name)`. Here we
-    walk the table once, group by parent, and emit a two-level tree
-    sorted by (sequence, label).
-
-    Reading the menu rows themselves is ACL-bypassed (system metadata),
-    but the resulting tree is then filtered to what the user may reach:
-    a view-backed entry is shown only if the user can read (list) its
-    target model, and empty groups are dropped. Superuser sees all.
-    """
-    if "ir.ui.menu" not in env.registry:
-        return []
-
-    def _mark(item: dict) -> dict:
-        href = item.get("href")
-        active = bool(
-            href
-            and current_path
-            and (current_path == href or current_path.startswith(href + "/"))
-        )
-        item["active"] = active
-        for child in item.get("children", []) or []:
-            _mark(child)
-            if child.get("active"):
-                item["active"] = True
-        return item
-
-    prev = env._acl_bypass
-    env._acl_bypass = True
-    try:
-        Menu = env["ir.ui.menu"]
-        records = Menu.search(
-            [("active", "=", True)], order='"sequence" ASC, "label" ASC'
-        )
-        by_parent: dict[int | None, list[dict]] = {}
-        for r in records:
-            entry = {
-                "label": r.label,
-                "href": r.href or None,
-                "icon": _resolve_menu_icon(r.icon),
-                "access_model": r.access_model or None,
-                "access_perm": r.access_perm or None,
-                "access_policy": getattr(r, "access_policy", None) or None,
-                "children": [],
-            }
-            parent_id = r.parent_id.id if r.parent_id else None
-            by_parent.setdefault(parent_id, []).append((r.id, entry))
-    finally:
-        env._acl_bypass = prev
-
-    # Stitch children onto parents.
-    items: list[dict] = []
-    for parent_id, group in by_parent.items():
-        if parent_id is None:
-            for _rid, entry in group:
-                items.append(entry)
-    for parent_id, children in by_parent.items():
-        if parent_id is None:
-            continue
-        # Find the entry whose id matches parent_id.
-        for top_id, top_entry in by_parent.get(None, []):
-            if top_id == parent_id:
-                top_entry["children"] = [c for _cid, c in children]
-                break
-    # Filter to the permitted set with the real user's grants (the
-    # bypass above has been restored), then compute active state.
-    items = [item for item in items if _menu_node_visible(env, item)]
-    return [_mark(item) for item in items]
+    return build_menu_tree(env, current_path)
 
 
 def _menu_entry_for_href(
     menu_tree: list, href: str
 ) -> tuple[dict | None, dict | None]:
-    """Return ``(parent_group, leaf)`` whose ``href`` equals *href*."""
-    for group in menu_tree:
-        if group.get("href") == href:
-            return None, group
-        for child in group.get("children", []) or []:
-            if child.get("href") == href:
-                return group, child
-    return None, None
+    """Return ``(parent, leaf)`` whose ``href`` equals *href*."""
+    from pyvelm.menu import find_menu_entry
+
+    return find_menu_entry(menu_tree, href)
 
 
 def _label_for_href(menu_tree: list, href: str, fallback: str) -> str:
@@ -6376,9 +6255,11 @@ def layout_context(
 
     from pyvelm.home import home_url
 
-    menu_tree = _menu(env, current_path)
+    from pyvelm.menu import build_menu_tree, menu_layout_context
+
+    menu_tree = build_menu_tree(env, current_path)
     return {
-        "menu": menu_tree,
+        **menu_layout_context(menu_tree, current_path),
         "home_href": home_url(),
         "current_user_name": name,
         "current_user_login": login,
