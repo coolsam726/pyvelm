@@ -7,6 +7,25 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.15.1] — 2026-05-27
+
+Fix active menu highlighting on form and record pages: the shell now
+derives the highlighted entry from the last linked breadcrumb (typically
+the parent list or kanban) instead of the form URL, so navigation no
+longer falls back to Dashboard. See
+[docs/releases/v0.15.1.md](docs/releases/v0.15.1.md).
+
+### Fixed
+
+- **Menu active state on forms** — `menu_active_path_from_breadcrumbs()`
+  and `layout_context()` use breadcrumb trails for menu highlighting;
+  `render_form_page()` passes form crumbs into the layout context.
+
+### Changed
+
+- **Dist CSS** — rebuilt `pyvelm/static/dist/pyvelm.css` so Tailwind
+  picks up classes from the apps/sidebar navigation templates.
+
 ## [0.15.0] — 2026-05-27
 
 Configurable shell navigation: **apps** layout (application rail + top-bar

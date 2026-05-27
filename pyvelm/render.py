@@ -2908,15 +2908,17 @@ def render_form_page(
     template_name = "form_body.html" if body_only else "form.html"
     template = _env.get_template(template_name)
     # Title lives in the layout heading only — breadcrumbs stop at the list.
-    ctx = {} if body_only else layout_context(env, current_path)
-    if not body_only:
-        ref_module = list_module
-        ref_name = list_name
-        ctx["breadcrumbs"] = build_form_breadcrumbs(
-            ctx.get("menu") or [],
+    if body_only:
+        ctx = {}
+    else:
+        from pyvelm.menu import build_menu_tree
+
+        prelim_menu = build_menu_tree(env, current_path)
+        form_crumbs = build_form_breadcrumbs(
+            prelim_menu,
             env,
-            ref_module=ref_module,
-            ref_name=ref_name,
+            ref_module=list_module,
+            ref_name=list_name,
             bc_stack=bc_stack,
             search=list_search,
             order=list_order,
@@ -2925,6 +2927,7 @@ def render_form_page(
             page=page,
             page_size=page_size,
         )
+        ctx = layout_context(env, current_path, breadcrumbs=form_crumbs)
         ctx["subtitle"] = f"{view.model} · {mode}"
     # Resolve header actions: substitute {id} with the current record's
     # id (display-mode only; new/edit records can't take row-level
@@ -6225,7 +6228,11 @@ def build_breadcrumbs(
 
 
 def layout_context(
-    env, current_path: str | None = None, leaf_label: str | None = None
+    env,
+    current_path: str | None = None,
+    leaf_label: str | None = None,
+    *,
+    breadcrumbs: list | None = None,
 ) -> dict:
     """Return the shell context every page renderer passes to the
     `layouts/main.html` base template."""
@@ -6255,12 +6262,25 @@ def layout_context(
 
     from pyvelm.home import home_url
 
-    from pyvelm.menu import build_menu_tree, menu_layout_context
+    from pyvelm.menu import (
+        build_menu_tree,
+        menu_active_path_from_breadcrumbs,
+        menu_layout_context,
+    )
 
-    menu_tree = build_menu_tree(env, current_path)
+    home_href = home_url()
+    if breadcrumbs is None:
+        prelim_menu = build_menu_tree(env, current_path)
+        breadcrumbs = build_breadcrumbs(prelim_menu, current_path, leaf_label)
+    menu_path = menu_active_path_from_breadcrumbs(
+        breadcrumbs,
+        current_path=current_path,
+        home_href=home_href,
+    )
+    menu_tree = build_menu_tree(env, menu_path)
     return {
-        **menu_layout_context(menu_tree, current_path),
-        "home_href": home_url(),
+        **menu_layout_context(menu_tree, menu_path),
+        "home_href": home_href,
         "current_user_name": name,
         "current_user_login": login,
         "current_user_initial": initial,
@@ -6273,5 +6293,5 @@ def layout_context(
         # different leaf label (e.g. the record name on a form view)
         # pass `leaf_label`; renderers can override `breadcrumbs`
         # directly when the page lives outside the menu altogether.
-        "breadcrumbs": build_breadcrumbs(menu_tree, current_path, leaf_label),
+        "breadcrumbs": breadcrumbs,
     }

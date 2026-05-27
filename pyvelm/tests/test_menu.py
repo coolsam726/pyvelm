@@ -8,9 +8,11 @@ from pyvelm.menu import (
     MENU_LAYOUT_APPS,
     MENU_LAYOUT_SIDEBAR,
     _attach_children,
+    _mark_active,
     active_menu_root,
     build_menu_tree,
     find_menu_entry,
+    menu_active_path_from_breadcrumbs,
     menu_entry_href,
     menu_layout,
     menu_layout_context,
@@ -135,6 +137,48 @@ class MenuLayoutTests(unittest.TestCase):
                          "/web/views/admin/user.list")
 
 
+class MenuActivePathTests(unittest.TestCase):
+    def test_form_uses_parent_list_crumb(self):
+        crumbs = [
+            {"label": "Home", "href": "/web/admin"},
+            {"label": "Leads", "href": "/web/views/crm/lead.list"},
+        ]
+        path = menu_active_path_from_breadcrumbs(
+            crumbs,
+            current_path="/web/views/crm/lead.form/record/7/edit",
+            home_href="/web/admin",
+        )
+        self.assertEqual(path, "/web/views/crm/lead.list")
+
+    def test_list_page_falls_back_to_current_path(self):
+        crumbs = [
+            {"label": "Home", "href": "/web/admin"},
+            {"label": "Leads", "href": None},
+        ]
+        path = menu_active_path_from_breadcrumbs(
+            crumbs,
+            current_path="/web/views/crm/lead.list",
+            home_href="/web/admin",
+        )
+        self.assertEqual(path, "/web/views/crm/lead.list")
+
+    def test_kanban_parent_from_deep_trail(self):
+        crumbs = [
+            {"label": "Home", "href": "/web/admin"},
+            {"label": "Comments", "href": "/web/views/demo/comment.list"},
+            {
+                "label": "Kanban",
+                "href": "/web/views/demo/comment.kanban?search=x",
+            },
+        ]
+        path = menu_active_path_from_breadcrumbs(
+            crumbs,
+            current_path="/web/views/demo/comment.form/record/1/edit",
+            home_href="/web/admin",
+        )
+        self.assertEqual(path, "/web/views/demo/comment.kanban")
+
+
 class ActiveRootTests(unittest.TestCase):
     def test_picks_root_by_path(self):
         tree = [
@@ -150,6 +194,34 @@ class ActiveRootTests(unittest.TestCase):
         root, index = active_menu_root(tree, "/web/b")
         self.assertEqual(root["label"], "B")
         self.assertEqual(index, 1)
+
+    def test_form_path_highlights_list_menu(self):
+        tree = [
+            {
+                "label": "Dashboard",
+                "href": "/web/admin",
+                "children": [],
+            },
+            {
+                "label": "CRM",
+                "href": None,
+                "children": [
+                    {
+                        "label": "Leads",
+                        "href": "/web/views/crm/lead.list",
+                        "children": [],
+                    },
+                ],
+            },
+        ]
+        for node in tree:
+            _mark_active(node, "/web/views/crm/lead.list")
+        root, index = active_menu_root(
+            tree, "/web/views/crm/lead.list"
+        )
+        self.assertEqual(root["label"], "CRM")
+        self.assertEqual(index, 1)
+        self.assertTrue(tree[1]["children"][0]["active"])
 
 
 class MenuEntryHrefTests(unittest.TestCase):

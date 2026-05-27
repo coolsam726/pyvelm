@@ -109,12 +109,51 @@ def _attach_children(nodes_by_id: dict[int, dict], ordered_ids: list[int]) -> li
     return roots
 
 
+def _normalize_menu_path(path: str | None) -> str | None:
+    if not path:
+        return None
+    base = path.split("?", 1)[0].rstrip("/")
+    return base or "/"
+
+
+def menu_active_path_from_breadcrumbs(
+    crumbs: list | None,
+    *,
+    current_path: str | None = None,
+    home_href: str | None = None,
+) -> str | None:
+    """Path used to mark the active menu entry.
+
+    On form and record pages the last breadcrumb with an ``href`` is
+    usually the parent list or kanban view. List pages only expose a
+    leaf crumb without ``href``, so *current_path* is used instead.
+    """
+    from pyvelm.home import home_url
+
+    home = _normalize_menu_path(home_href or home_url())
+    if crumbs:
+        for crumb in reversed(crumbs):
+            href = crumb.get("href")
+            if not href:
+                continue
+            path = _normalize_menu_path(href)
+            if path == home:
+                continue
+            return path
+    return _normalize_menu_path(current_path)
+
+
 def _mark_active(item: dict, current_path: str | None) -> dict:
+    norm_current = _normalize_menu_path(current_path)
     href = item.get("href")
+    norm_href = _normalize_menu_path(href)
     active = bool(
-        href
-        and current_path
-        and (current_path == href or current_path.startswith(href + "/"))
+        norm_href
+        and norm_current
+        and (
+            norm_current == norm_href
+            or norm_current.startswith(norm_href + "/")
+        )
     )
     item["active"] = active
     for child in item.get("children", []) or []:
@@ -183,9 +222,11 @@ def find_menu_entry(
 
 
 def _node_matches_path(node: dict, current_path: str) -> bool:
+    norm_current = _normalize_menu_path(current_path)
     href = node.get("href")
-    if href and (
-        current_path == href or current_path.startswith(href + "/")
+    norm_href = _normalize_menu_path(href)
+    if norm_href and norm_current and (
+        norm_current == norm_href or norm_current.startswith(norm_href + "/")
     ):
         return True
     for child in node.get("children") or []:
