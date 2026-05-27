@@ -52,6 +52,14 @@ def menu_target_model(env, href: str | None) -> str | None:
 
 def menu_node_visible(env, node: dict) -> bool:
     """Prune ``node``'s children to the permitted set; return its visibility."""
+    # Dev-only entries (e.g. the ``technical`` module's editors) are
+    # hidden outside ``PYVELM_ENV=development`` so they never reach a
+    # production sidebar even if the install hook fired there.
+    if node.get("dev_only"):
+        from pyvelm.runtime import is_development
+
+        if not is_development():
+            return False
     children = node.get("children") or []
     if children:
         node["children"] = [c for c in children if menu_node_visible(env, c)]
@@ -90,6 +98,7 @@ def _record_to_entry(r) -> dict[str, Any]:
         "access_model": r.access_model or None,
         "access_perm": r.access_perm or None,
         "access_policy": getattr(r, "access_policy", None) or None,
+        "dev_only": bool(getattr(r, "dev_only", False)),
         "children": [],
     }
 

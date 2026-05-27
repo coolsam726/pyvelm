@@ -179,6 +179,29 @@ Menu visibility uses the same rules as before; see
 - Empty groups are removed; in `apps` mode an application with no visible
   children still appears if the root itself has an `href`.
 
+### `dev_only`
+
+Pass `dev_only=True` on `m.item(...)` or `m.group(...)` to hide an entry
+unless `PYVELM_ENV=development`. Used by the bundled
+[`technical` module](modules.md) to expose `ir.ui.menu` / `ir.ui.view` /
+`ir.attachment` editors during development without leaking them into
+production sidebars (the install hook may have granted the underlying
+ACL, but the menu entry itself stays hidden). Combine `dev_only=True`
+with `perm=` + `model=` so even in development, non-admin developers
+don't see the editors.
+
+```python
+m.group(
+    "technical", "Technical", icon="wrench-screwdriver",
+    sequence=900, dev_only=True,
+)
+m.item(
+    "technical.ui.menus", "Menu entries",
+    parent="technical", view="technical.menu.list",
+    perm="write", model="ir.ui.menu", dev_only=True,
+)
+```
+
 ## Template context
 
 `pyvelm.render.layout_context` merges keys from

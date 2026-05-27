@@ -13,7 +13,14 @@
             </p>
             {% for child in nav.children %}
                 {% if child.children %}
+                    {# Shared ``name`` makes the browser handle the
+                       accordion: opening one ``<details>`` automatically
+                       closes any other with the same name. Supported in
+                       all modern browsers (Chrome 120+, Safari 17.4+,
+                       Firefox 123+); older browsers fall back to
+                       independent toggles, which is the previous UX. #}
                     <details class="group"
+                             name="pv-sidebar-accordion"
                              {% if child.active %}open{% endif %}>
                         <summary class="nav-item group/summary flex items-center gap-2.5 px-3 py-2
                                         rounded-md text-sm cursor-pointer select-none

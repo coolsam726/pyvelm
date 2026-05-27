@@ -664,6 +664,7 @@ def _sync_menus(spec: ModuleSpec, env: Environment) -> None:
             "access_model": m.get("access_model"),
             "access_perm": m.get("access_perm"),
             "access_policy": m.get("access_policy"),
+            "dev_only": bool(m.get("dev_only", False)),
         }
         existing = Menu.search([
             ("module", "=", spec.name),

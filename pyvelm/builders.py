@@ -920,9 +920,14 @@ class Menus:
         icon: str | None = None,
         sequence: int = 10,
         parent: str | tuple[str, str] | None = None,
+        dev_only: bool = False,
     ) -> Menu:
-        """Menu group. Top-level groups take ``icon``; nested groups use ``parent``."""
-        result = menu_group(name, label, icon=icon, sequence=sequence)
+        """Menu group. Top-level groups take ``icon``; nested groups use ``parent``.
+
+        ``dev_only=True`` hides the group (and its children, via the
+        recursive visibility prune) outside ``PYVELM_ENV=development``.
+        """
+        result = menu_group(name, label, icon=icon, sequence=sequence, dev_only=dev_only)
         if parent is not None:
             result["parent"] = _resolve_menu_parent(
                 parent, menu_module=self.module
@@ -943,6 +948,7 @@ class Menus:
         perm: str | None = None,
         model: str | None = None,
         policy: str | None = None,
+        dev_only: bool = False,
     ) -> Menu:
         """Leaf sidebar entry.
 
@@ -958,6 +964,9 @@ class Menus:
         ``perm`` / ``model`` without ``policy`` gate on ACL only. For a custom
         ``href`` you must name the ``model``; ``view=`` entries infer it
         from the view when ``model`` is omitted.
+
+        ``dev_only=True`` hides the entry unless ``PYVELM_ENV=development``
+        (see :mod:`pyvelm.menu`).
         """
         resolved_href = _resolve_menu_href(
             href=href,
@@ -980,6 +989,7 @@ class Menus:
             perm=perm,
             model=model,
             policy=policy,
+            dev_only=dev_only,
         )
 
 
@@ -991,6 +1001,7 @@ def menu_group(
     sequence: int = 10,
     parent: str | tuple[str, str] | None = None,
     menu_module: str | None = None,
+    dev_only: bool = False,
 ) -> Menu:
     """Declare a menu group (no ``href``).
 
@@ -1018,6 +1029,8 @@ def menu_group(
         result["parent"] = _resolve_menu_parent(
             parent, menu_module=menu_module
         )
+    if dev_only:
+        result["dev_only"] = True
     return result
 
 
@@ -1035,6 +1048,7 @@ def menu_item(
     perm: str | None = None,
     model: str | None = None,
     policy: str | None = None,
+    dev_only: bool = False,
 ) -> Menu:
     """Declare a leaf sidebar entry.
 
@@ -1058,6 +1072,10 @@ def menu_item(
                       ``policy`` is set on a non-view ``href``; inferred from
                       the view otherwise.
         policy:       Policy method name (e.g. ``"view_any"`` for list menus).
+        dev_only:     When True, the entry is hidden unless ``PYVELM_ENV=
+                      development``. Use for low-level developer editors
+                      (e.g. the ``technical`` module's ir.ui.menu / ir.ui.view
+                      lists) so production sidebars never surface them.
     """
     resolved_href = _resolve_menu_href(
         href=href,
@@ -1079,6 +1097,8 @@ def menu_item(
         result["access_model"] = model
     if policy is not None:
         result["access_policy"] = str(policy)
+    if dev_only:
+        result["dev_only"] = True
     if parent is not None:
         if (
             menu_module is None

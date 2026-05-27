@@ -7,6 +7,43 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.16.0] — 2026-05-27
+
+A new bundled **`technical`** module exposes low-level record editors
+(`ir.ui.menu`, `ir.ui.view`, `ir.attachment`) gated behind a generic
+`dev_only` flag on `ir.ui.menu`, plus accordion behaviour on the
+sidebar and top-bar nav so only one section stays expanded at a time.
+See [docs/releases/v0.16.0.md](docs/releases/v0.16.0.md).
+
+### Added
+
+- **`technical` module** — `pyvelm/modules/technical/`. List + form
+  views for `ir.ui.menu`, `ir.ui.view`, and `ir.attachment`. The view
+  arch / extension ops are rendered through the `Code` widget
+  (`language="json"`). Install hook grants Admin CRUD on the three
+  models; every menu entry is `dev_only=True` so the app vanishes
+  outside development. Depends on `base` + `admin`; hidden from the
+  Apps catalog for non-admin users.
+- **`ir.ui.menu.dev_only`** — Boolean (default `False`).
+  `pyvelm.menu.menu_node_visible()` short-circuits to hidden when the
+  flag is set and `PYVELM_ENV != development`. The `Menus.item(...)` /
+  `Menus.group(...)` builders and `menu_item` / `menu_group` factories
+  accept `dev_only=True`; `_sync_menus` persists it. Base bumped to
+  `(0, 28, 0)` (migration `0_27_to_0_28.py` is a doc breadcrumb —
+  schema autogen adds the new nullable column).
+
+### Changed
+
+- **Sidebar accordion.** Level-2 `<details>` elements in
+  `_nav_sidebar.html` share `name="pv-sidebar-accordion"`, so the
+  browser closes the previously open group when a new one opens
+  (Chrome 120+, Safari 17.4+, Firefox 123+). Older browsers fall back
+  to the previous independent-toggle behaviour.
+- **Top-bar dropdowns** lift their open state into one shared
+  `x-data="{ openKey: '' }"` on the nav. Opening a different section
+  auto-closes the previous one; click-outside and Escape reset the
+  state.
+
 ## [0.15.1] — 2026-05-27
 
 Fix active menu highlighting on form and record pages: the shell now

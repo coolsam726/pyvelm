@@ -34,3 +34,8 @@ class Menu(BaseModel):
     access_model = Char()
     access_perm = Char()
     access_policy = Char()
+    # When True, the entry is hidden unless ``PYVELM_ENV=development``.
+    # Used by the ``technical`` module to expose low-level record editors
+    # (ir.ui.menu, ir.ui.view, ir.module, …) without leaking them onto
+    # production sidebars even if the install hook fires there.
+    dev_only = Boolean(default=False)

@@ -331,6 +331,94 @@ class MenuSyncOrderTests(unittest.TestCase):
         )
 
 
+class DevOnlyMenuVisibilityTests(unittest.TestCase):
+    """``dev_only`` entries are hidden outside ``PYVELM_ENV=development``."""
+
+    class _Env:
+        def has_access(self, model, perm):
+            return True
+
+        def can(self, *_a, **_k):
+            return True
+
+    def _node(self, *, dev_only: bool, with_children: bool = False) -> dict:
+        children = []
+        if with_children:
+            children.append({
+                "label": "Leaf",
+                "href": "/web/views/technical/menu.list",
+                "children": [],
+                "dev_only": dev_only,
+                # access_model so menu_node_visible doesn't fall into the
+                # view-resolution branch (which needs env.sudo()).
+                "access_model": "ir.ui.menu",
+                "access_perm": "write",
+            })
+        return {
+            "label": "Technical",
+            "href": None,
+            "children": children,
+            "dev_only": dev_only,
+            "access_model": "ir.ui.menu",
+            "access_perm": "write",
+        }
+
+    def test_hidden_in_production(self):
+        env = self._Env()
+        node = self._node(dev_only=True, with_children=True)
+        with patch("pyvelm.runtime.is_development", return_value=False):
+            visible = menu_node_visible(env, node)
+        self.assertFalse(visible)
+
+    def test_visible_in_development(self):
+        env = self._Env()
+        node = self._node(dev_only=True, with_children=True)
+        with patch("pyvelm.runtime.is_development", return_value=True):
+            visible = menu_node_visible(env, node)
+        self.assertTrue(visible)
+
+    def test_non_dev_only_unaffected(self):
+        env = self._Env()
+        node = self._node(dev_only=False, with_children=True)
+        with patch("pyvelm.runtime.is_development", return_value=False):
+            self.assertTrue(menu_node_visible(env, node))
+        with patch("pyvelm.runtime.is_development", return_value=True):
+            self.assertTrue(menu_node_visible(env, node))
+
+    def test_dev_only_child_hidden_inside_visible_parent(self):
+        env = self._Env()
+        node = {
+            "label": "Settings",
+            "href": None,
+            "children": [
+                {
+                    "label": "Admin tool",
+                    "href": "/web/views/technical/menu.list",
+                    "children": [],
+                    "dev_only": True,
+                    "access_model": "ir.ui.menu",
+                    "access_perm": "write",
+                },
+                {
+                    "label": "Users",
+                    "href": "/web/views/admin/user.list",
+                    "children": [],
+                    "dev_only": False,
+                    "access_model": "res.users",
+                    "access_perm": "read",
+                },
+            ],
+            "dev_only": False,
+            "access_model": "ir.ui.menu",
+            "access_perm": "read",
+        }
+        with patch("pyvelm.runtime.is_development", return_value=False):
+            self.assertTrue(menu_node_visible(env, node))
+        # Only the non-dev child survives the prune.
+        labels = [c["label"] for c in node["children"]]
+        self.assertEqual(labels, ["Users"])
+
+
 class BuildMenuTreeIntegrationTests(unittest.TestCase):
     """Uses in-memory registry when PYVELM_DSN is unavailable — skip."""
 
