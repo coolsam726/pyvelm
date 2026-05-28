@@ -434,12 +434,27 @@ def _filter_o2m_table_fields(env, comodel_name, fields_spec: list) -> list:
     return out
 
 
-def _resolve_o2m_table_fields(env, comodel_name, list_view_url):
+def _o2m_inline_columns(spec: dict) -> list | None:
+    """Return arch inline column specs from ``columns`` on a field ref."""
+    raw = spec.get("columns")
+    if not raw or not isinstance(raw, list):
+        return None
+    return list(raw)
+
+
+def _resolve_o2m_table_fields(
+    env,
+    comodel_name: str,
+    list_view_url,
+    *,
+    inline_columns: list | None = None,
+):
     """Pick the field list for the inline-o2m table.
 
-    Prefers the comodel's list view fields (so the table matches what
-    users see on the standalone list page). Falls back to all stored
-    scalar fields on the comodel when no list view is installed."""
+    Priority: ``columns`` on the parent field spec → list view arch →
+    every stored scalar on the comodel."""
+    if inline_columns is not None:
+        return _filter_o2m_table_fields(env, comodel_name, inline_columns)
     if list_view_url and "ir.ui.view" in env.registry:
         # list_view_url looks like /web/views/<module>/<name>
         parts = list_view_url.rstrip("/").split("/")
@@ -524,9 +539,16 @@ def _render_o2m_table(value, spec, field):
     list_url = spec.get("_list_view_url")
     form_url = spec.get("_form_view_url")
     inverse = spec.get("_inverse_name") or field.inverse_name
+    inline_cols = _o2m_inline_columns(spec)
 
-    fields_spec = _resolve_o2m_table_fields(env, comodel, list_url)
-    sequence_field = _resolve_o2m_sequence(env, comodel, list_url)
+    fields_spec = _resolve_o2m_table_fields(
+        env, comodel, list_url, inline_columns=inline_cols
+    )
+    sequence_field = (
+        None
+        if inline_cols is not None
+        else _resolve_o2m_sequence(env, comodel, list_url)
+    )
     # Build header labels from the comodel's field strings.
     co_cls = env.registry[comodel]
     header_cells = []
@@ -773,8 +795,16 @@ def _edit_o2m_table(value, spec, field):
     oname = spec["name"]
     comodel = spec.get("_comodel") or field.comodel_name
     co_cls = env.registry[comodel]
-    fields_spec = _resolve_o2m_table_fields(env, comodel, spec.get("_list_view_url"))
-    sequence_field = _resolve_o2m_sequence(env, comodel, spec.get("_list_view_url"))
+    list_url = spec.get("_list_view_url")
+    inline_cols = _o2m_inline_columns(spec)
+    fields_spec = _resolve_o2m_table_fields(
+        env, comodel, list_url, inline_columns=inline_cols
+    )
+    sequence_field = (
+        None
+        if inline_cols is not None
+        else _resolve_o2m_sequence(env, comodel, list_url)
+    )
     cell_errors = spec.get("_o2m_errors") or {}
     form_playback = spec.get("_form_playback")
 
@@ -1713,7 +1743,13 @@ def merge_template_context(
     return ctx
 
 
-def _enrich_specs_for_edit(env, model_cls, fields_spec) -> list[dict]:
+def _enrich_specs_for_edit(
+    env,
+    model_cls,
+    fields_spec,
+    *,
+    view_module: str | None = None,
+) -> list[dict]:
     """For each Many2one field-spec, stash the data the combobox widget
     needs without re-resolving it per row:
 
@@ -1757,14 +1793,22 @@ def _enrich_specs_for_edit(env, model_cls, fields_spec) -> list[dict]:
         elif isinstance(field, One2many):
             spec_copy["_comodel"] = field.comodel_name
             spec_copy["_inverse_name"] = field.inverse_name
-            list_lookup = _list_view_for_model(env, field.comodel_name)
-            spec_copy["_list_view_url"] = (
-                f"/web/views/{list_lookup[0]}/{list_lookup[1]}" if list_lookup else None
+            list_ref = spec_copy.get("list_view", getattr(field, "list_view", None))
+            list_lookup = _resolve_list_view_for_comodel(
+                env,
+                field.comodel_name,
+                ref=list_ref,
+                default_module=view_module,
             )
-            form_lookup = _form_view_for_model(env, field.comodel_name)
-            spec_copy["_form_view_url"] = (
-                f"/web/views/{form_lookup[0]}/{form_lookup[1]}" if form_lookup else None
+            spec_copy["_list_view_url"] = _view_href(list_lookup)
+            form_ref = spec_copy.get("form_view", getattr(field, "form_view", None))
+            form_lookup = _resolve_form_view_for_comodel(
+                env,
+                field.comodel_name,
+                ref=form_ref,
+                default_module=view_module,
             )
+            spec_copy["_form_view_url"] = _view_href(form_lookup)
         if field is not None and field.readonly and "readonly" not in spec_copy:
             spec_copy["readonly"] = True
         out.append(spec_copy)
@@ -2414,6 +2458,8 @@ def _form_section_html(
     prefill: dict | None = None,
     form_playback=None,
     cols: int = 2,
+    *,
+    view_module: str | None = None,
 ) -> list[dict]:
     """Build the per-field HTML for one section.
 
@@ -2432,7 +2478,9 @@ def _form_section_html(
     fields_spec = list(section_spec.get("fields", []))
     # Spec enrichment (URLs for relationship widgets) is harmless in
     # display mode and required by the O2m table widget, so always run.
-    fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
+    fields_spec = _enrich_specs_for_edit(
+        env, model_cls, fields_spec, view_module=view_module
+    )
     cells: list[dict] = []
     for spec in fields_spec:
         fname = spec["name"]
@@ -2597,6 +2645,7 @@ def _form_sections(
                     prefill=prefill,
                     form_playback=form_playback,
                     cols=section_cols,
+                    view_module=view.module,
                 ),
             }
         )
@@ -4436,6 +4485,52 @@ def _list_view_for_model(env, model_name: str) -> tuple[str, str] | None:
     rec = matches
     rec.ensure_one()
     return (rec.module, rec.name)
+
+
+def _resolve_list_view_for_comodel(
+    env,
+    comodel_name: str,
+    *,
+    ref: str | tuple[str, str] | None,
+    default_module: str | None,
+) -> tuple[str, str] | None:
+    """Resolve an explicit list-view ref, else fall back to lowest-id list."""
+    if ref is not None:
+        mod, name = _parse_view_ref(ref, default_module or "")
+        rec = _load_ui_view(env, mod, name)
+        if (
+            rec is not None
+            and rec.view_type == "list"
+            and rec.model == comodel_name
+        ):
+            return (mod, name)
+    return _list_view_for_model(env, comodel_name)
+
+
+def _resolve_form_view_for_comodel(
+    env,
+    comodel_name: str,
+    *,
+    ref: str | tuple[str, str] | None,
+    default_module: str | None,
+) -> tuple[str, str] | None:
+    """Resolve an explicit form-view ref, else fall back to lowest-id form."""
+    if ref is not None:
+        mod, name = _parse_view_ref(ref, default_module or "")
+        rec = _load_ui_view(env, mod, name)
+        if (
+            rec is not None
+            and rec.view_type == "form"
+            and rec.model == comodel_name
+        ):
+            return (mod, name)
+    return _form_view_for_model(env, comodel_name)
+
+
+def _view_href(lookup: tuple[str, str] | None) -> str | None:
+    if not lookup:
+        return None
+    return f"/web/views/{lookup[0]}/{lookup[1]}"
 
 
 def _form_view_for_model(env, model_name: str) -> tuple[str, str] | None:

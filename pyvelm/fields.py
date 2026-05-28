@@ -645,6 +645,11 @@ class One2many(Field):
     Reads consult ``env.cache`` when a ``tuple`` of child ids is present
     (populated by a prior read or eager prefetch). Otherwise queries SQL
     and stores the result in the cache for the rest of the request.
+
+    On parent forms, optional ``list_view`` and ``form_view`` pin which
+    registered views drive the embedded sub-grid and row/dialog forms
+    (see ``docs/one2many-forms.md``). Inline ``columns`` are set on
+    ``field(...)`` in the form arch, not on this class.
     """
 
     is_stored = False
@@ -657,6 +662,8 @@ class One2many(Field):
         related: str | None = None,
         readonly: bool = False,
         tracking: bool = False,
+        list_view: str | tuple[str, str] | None = None,
+        form_view: str | tuple[str, str] | None = None,
     ) -> None:
         super().__init__(
             string=string,
@@ -668,6 +675,11 @@ class One2many(Field):
         )
         self.comodel_name = comodel_name
         self.inverse_name = inverse_name
+        # Optional UI views for embedded O2m tables / dialogs on parent forms.
+        # Same ref syntax as menus: ``"partner.list"`` in-module, or
+        # ``("inventory", "move.line.invoice")``, or ``"inventory/move.line.invoice"``.
+        self.list_view = list_view
+        self.form_view = form_view
 
     def _default_string(self, name: str) -> str:
         if name.endswith("_ids") and len(name) > 4:

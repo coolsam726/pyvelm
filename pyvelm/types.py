@@ -89,6 +89,13 @@ class FieldRef(_FieldRefRequired, total=False):
     server-side validator, etc.). App-specific attributes that aren't
     in this list are still accepted by the loader at runtime; the
     type checker just won't autocomplete them.
+
+  **One2many on parent forms** (see ``docs/one2many-forms.md``):
+
+  - ``widget`` — ``dialog`` (default) or ``inline`` / ``table``
+  - ``columns`` — inline sub-grid columns without a registered list view
+  - ``list_view`` — name of a comodel list view (columns + ``sequence``)
+  - ``form_view`` — comodel form for row links and dialog create
     """
 
     widget: WidgetHint
@@ -101,6 +108,16 @@ class FieldRef(_FieldRefRequired, total=False):
     # ``cols``) makes the cell occupy the full row. Ignored on list /
     # kanban / graph / pivot.
     colspan: Union[int, Literal["full"]]
+    # One2many / Many2many on parent forms: which comodel list view powers
+    # the embedded table (default: lowest ``ir.ui.view`` id for that model).
+    list_view: Union[str, tuple[str, str]]
+    # Which comodel form view opens for row links / dialog create (default:
+    # lowest-id form view on the comodel).
+    form_view: Union[str, tuple[str, str]]
+    # One2many only: table columns without registering a list view. Same
+    # entries as a list arch ``fields`` list (strings or ``field(...)`` dicts).
+    # Takes precedence over ``list_view`` for column layout.
+    columns: list[FieldRefLike]
 
 
 # Authoring form: string or dict.

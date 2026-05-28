@@ -45,6 +45,9 @@ list_view(
 
 Or in raw dict form: ``arch={"fields": [...], "domain": [("stage", "=", "won")]}``.
 
+This applies to **standalone list pages** only. Embedded One2many sub-grids use
+``list_view`` / ``columns`` instead — see [One2many on parent forms](one2many-forms.md).
+
 - **Search** — single text input, ILIKE-OR across every text field
   in the view. Debounced 400 ms.
 - **Filter** — drop-down builder for per-column constraints. Booleans
@@ -160,15 +163,26 @@ Edit-mode Many2one fields render as a searchable combobox:
 - **Keyboard nav** — ↑/↓ move the cursor, Enter selects (or fires
   Create), Esc closes.
 
-### Relational fields: `widget="dialog"` vs `widget="inline"`
+### Relational fields on forms (One2many / Many2many)
 
-For **One2many** and **Many2many** on parent forms, pick how users
-edit related records:
+For **One2many** and **Many2many** on parent forms you choose:
 
-| `widget` | One2many | Many2many |
-|----------|----------|-----------|
-| **`dialog`** (default when the comodel has a form view) | Read-only table; **Add** / row click open the floating dialog. Child saves on its own form — not bundled into the parent Save. | Chips + **Create new** / **Link existing…**; create/edit in the dialog. |
-| **`inline`** or **`table`** (alias) | Full-width **inline table**: edit cells on the parent form, **Add a line**, delete rows; all changes commit on parent Save. | Chip editor with inline typeahead search (previous default). |
+1. **Edit mode** — `widget="dialog"` vs `widget="inline"` / `table`
+2. **Sub-grid columns** — `columns=`, `list_view=`, or defaults
+3. **Row / Add form** — `form_view=` on the field spec or model
+
+**Full guide:** [One2many on parent forms](one2many-forms.md) (column
+precedence, view ref syntax, invoice vs entry example, `FieldRef` keys).
+
+Quick reference:
+
+| Goal | One2many |
+|------|----------|
+| Reuse a list page's columns | `list_view="that.list"` on model or `field(...)` |
+| Columns without any list view | `field("ids", columns=["a", "b"])` |
+| Different list per parent form | `field("ids", list_view="other.list")` |
+| Inline edit on parent Save | `widget="inline"` |
+| Dialog edit (default) | `widget="dialog"` or omit when form exists |
 
 ```python
 section(
@@ -176,60 +190,30 @@ section(
     "Relations",
     [
         field("tag_ids", widget="dialog"),
-        field("child_ids", widget="dialog"),
-        field("rate_ids", widget="inline"),  # small child rows — keep on parent form
+        field(
+            "comment_ids",
+            widget="dialog",
+            list_view="comment.compact",
+            form_view="comment.form",
+        ),
+        field("rate_ids", widget="inline", columns=["currency_id", "rate"]),
     ],
 )
 ```
 
-If the comodel has **no** form view yet, One2many falls back to a
-chip summary and Many2many falls back to the inline chip search.
+If the comodel has **no** form view, One2many falls back to a chip
+summary; Many2many falls back to inline chip search.
 
 ### Many2many — dialog mode
 
 Selected records appear as chips. **Create new** opens the comodel
 form in the dialog; **Link existing…** opens a search field to pick
-records. Edit/remove use the chip actions. Same `/api/m2o/search` and
-hidden inputs as the inline editor.
+records. Edit/remove use the chip actions.
 
 ### Many2many — inline mode
 
 `widget="inline"`: removable chips plus an always-visible typeahead
-input (no dialog-only buttons).
-
-### One2many — dialog mode
-
-When the comodel has a form view, the default is a read-only table
-(matching the comodel list columns). Rows and **Add** open the dialog;
-the inverse FK is prefilled on `/new`:
-
-```
-/web/views/<module>/<view>/new?<inverse_name>=<parent_id>
-```
-
-After the child form saves, the parent table refreshes
-(`data-pv-dialog-refresh`).
-
-### One2many — inline table
-
-`widget="inline"` or `widget="table"`: editable grid on the parent
-form. In **edit** / **new** mode each row is inputs keyed by
-`<o2m_name>[<idx>][<sub_field>]`, with `_op` / `id` markers. **Add a
-line** clones a template row; delete marks `_op=delete`. On parent
-Save, `harvest_o2m_commands` applies create/update/delete inside the
-parent transaction. Drag-reorder works when the comodel list view
-sets `sequence`.
-
-Example (currency exchange rates — many small rows):
-
-```python
-form_view("currency.form", "res.currency",
-    sections=[
-        section("main",  "Currency", ["code", "name", "symbol", "rounding"]),
-        section("rates", "Exchange rates",
-                [field("rate_ids", widget="inline")]),
-    ])
-```
+input.
 
 ## Kanban views
 

@@ -5,13 +5,13 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.20.1](releases/v0.20.1.md) (2026-05-28) — list view
-**fixed `domain`**, plus IDE stub fixes (`make:stubs`, Pylance `include` paths).
-See [releases](releases/v0.20.1.md) and the
+**Latest release:** [v0.20.2](releases/v0.20.2.md) (2026-05-28) — per-field
+**One2many** `list_view` / `form_view` / `columns` on parent forms.
+See [releases](releases/v0.20.2.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.20.1
+pip install pyvelm==0.20.2
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -53,6 +53,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.20.2](releases/v0.20.2.md) | **One2many** `list_view` / `form_view` / `columns` on parent forms |
 | [v0.20.1](releases/v0.20.1.md) | List view **`domain=`**; IDE stub / Pylance `include` fixes |
 | [v0.20.0](releases/v0.20.0.md) | **[IDE typing stubs](ide-typing.md)** — `make:stubs`, Pyright/Pylance literals, `pyrightconfig.json` auto-setup |
 | [v0.19.0](releases/v0.19.0.md) | **Drive-style [file library](file-manager.md)** — folders, bulk actions, Properties page, company scoping, `file_url` widget |
@@ -93,12 +94,14 @@ If you're new, read these in order:
 3. **[Vellum](vellum.md)** — optional Eloquent-style queries and
    ergonomics (`env.query`, scopes, soft deletes).
 4. **[Building UIs](views.md)** — list, form, and kanban views;
-   widgets; the search bar; row reorder.
-5. **[Extending views](inheritance.md)** — patch views from another
+   widgets; list `domain`; the search bar; row reorder.
+5. **[One2many on parent forms](one2many-forms.md)** — embedded sub-grids:
+   `list_view`, `columns`, `form_view`, dialog vs inline.
+6. **[Extending views](inheritance.md)** — patch views from another
    module without forking them.
-6. **[Modules](modules.md)** — the manifest, data files, the
+7. **[Modules](modules.md)** — the manifest, data files, the
    loader, writing migrations, the Apps catalog.
-7. **[Report Builder](report-builder.md)** — user-defined reports,
+8. **[Report Builder](report-builder.md)** — user-defined reports,
    visual builder, secure SQL compilation, export and scheduling.
 
 Then as you need them:

@@ -127,6 +127,22 @@ Read `alice.child_ids` to get the recordset of partners whose
 `parent_id` is `alice`. Write through the inverse: setting
 `child.parent_id = alice` is the canonical way to add a child.
 
+When the field appears on a **parent form**, you can pin which list
+columns and form open in the embedded grid (defaults used to be
+“lowest `ir.ui.view` id” only):
+
+```python
+line_ids = One2many(
+    "account.move.line",
+    "move_id",
+    list_view="account.move.line.invoice",   # registered list view
+    form_view="account.move.line.invoice.form",
+)
+```
+
+Or set `columns=[...]` / `list_view` / `form_view` on `field(...)` in the
+form arch. See [One2many on parent forms](one2many-forms.md).
+
 ### Many2many
 
 A symmetric relationship backed by a junction table:

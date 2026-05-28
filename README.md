@@ -47,7 +47,8 @@ invalidation, and the singleton guard.
   recordsets, what `env.cache` is for, how the dependency graph works, the
   multi-pass init sequence.
 - [Migrations](docs/migrations.md) — schema autogen, module upgrades, writing migrations.
-- [Views](docs/views.md) — list / form / kanban, widgets, search and filtering.
+- [Views](docs/views.md) — list / form / kanban, widgets, search and filtering, list `domain`.
+- [One2many on forms](docs/one2many-forms.md) — `list_view`, `columns`, `form_view` on parent forms.
 - [Security](docs/security.md) — groups, ACL, record rules, multi-company, login flow.
 - [Module reference](docs/modules.md) — what lives in each module, the
   public surface, and the invariants worth knowing.

@@ -25,7 +25,15 @@ VIEWS: list[View] = [
             section(
                 "main",
                 "Note",
-                ["title", "body", "score", "publish_on", "event_at", "standup_at", "active"],
+                [
+                    "title",
+                    "body",
+                    "score",
+                    "publish_on",
+                    "event_at",
+                    "standup_at",
+                    "active",
+                ],
             ),
             section(
                 "snippet",
@@ -35,7 +43,7 @@ VIEWS: list[View] = [
             section(
                 "comments",
                 "Comments",
-                [field("comment_ids", widget="dialog")],
+                [field("comment_ids", widget="dialog", list_view="demo_comment.compact")],
             ),
             section("metadata", "Record info", ["created_at", "updated_at"]),
         ],
@@ -44,6 +52,12 @@ VIEWS: list[View] = [
         "demo_comment.list",
         "vellum.demo.comment",
         fields=["note_id", "body", "active", "created_at", "updated_at"],
+        form_view="demo_comment.form",
+    ),
+    list_view(
+        "demo_comment.compact",
+        "vellum.demo.comment",
+        fields=["body", "active"],
         form_view="demo_comment.form",
     ),
     form_view(

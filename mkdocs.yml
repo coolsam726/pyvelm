@@ -80,6 +80,7 @@ nav:
       - Declaring models: models.md
       - Vellum (optional ORM): vellum.md
       - Building UIs: views.md
+      - One2many on forms: one2many-forms.md
       - Extending views: inheritance.md
       - Modules: modules.md
       - Migrations: migrations.md

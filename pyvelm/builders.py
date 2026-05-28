@@ -169,9 +169,19 @@ def field(
     Extra keyword arguments are forwarded as-is (e.g. custom
     ``filter_kind``/``group_kind`` attributes).
 
+    On parent-form One2many fields (full guide: ``docs/one2many-forms.md``):
+
+    - ``list_view`` — name of a registered comodel **list** view (columns
+      + optional ``sequence`` for drag-reorder). String ref, not ``list_view()``.
+    - ``columns`` — inline column list with **no** list view required (same
+      shape as list arch ``fields``). Highest priority for column layout.
+    - ``form_view`` — comodel form for row links / dialog create.
+
     Example::
 
         field("active", widget="toggle")
+        field("line_ids", widget="dialog", list_view="move.line.invoice")
+        field("comment_ids", widget="dialog", columns=["body", "active"])
         # → {"name": "active", "widget": "toggle"}
 
         field("notes", colspan="full")

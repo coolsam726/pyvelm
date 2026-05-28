@@ -193,6 +193,13 @@ resolution on top of that.
 | `env["…"]` not completing | `env` must be typed (`Environment`); ad-hoc untyped locals won't |
 | Stubs outdated | Re-run `make:stubs` after model/view changes |
 
+## One2many field specs
+
+`field("line_ids", list_view="move.line.invoice")` and `columns=[...]` are
+documented in [One2many on parent forms](one2many-forms.md). Stubs autocomplete
+**view names** from generated `names.pyi` the same way as menu `view=` strings;
+`columns` entries are plain field names on the comodel (no literal union yet).
+
 ## Limitations
 
 - Stubs reflect **declared** models and `DATA` views, not records created only

@@ -7,6 +7,26 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.20.2] — 2026-05-28
+
+### Added
+
+- **One2many `list_view` / `form_view`** — on the model field (`One2many(...)`)
+  and on parent form `field(...)` specs. Embedded sub-grids use the named
+  comodel list/form view instead of always picking the lowest `ir.ui.view` id.
+- **One2many inline `columns`** — ad-hoc sub-grid columns on `field(...)` with
+  no registered list view (`columns` wins over `list_view` for layout).
+- **`_resolve_list_view_for_comodel` / `_resolve_form_view_for_comodel`** —
+  shared view-ref parsing (short name, slash, tuple) with fallback.
+- **Docs** — [One2many on parent forms](docs/one2many-forms.md); cross-links
+  from views, models, IDE typing, README, and builder/field docstrings.
+- **Tests** — `pyvelm.tests.test_o2m_list_view`.
+
+### Changed
+
+- **vellum_demo** — `comment_ids` uses `list_view="demo_comment.compact"` on
+  the note form.
+
 ## [0.20.1] — 2026-05-28
 
 ### Added
