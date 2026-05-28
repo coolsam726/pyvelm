@@ -72,6 +72,11 @@ give you the login screen, the sidebar shell, the Apps catalog, and
 the settings pages. There's no demo data because this is your
 project, not the framework's example tree.
 
+Depending on configuration, visiting `/` as an anonymous user may show
+the public landing page (Get started → login). This is controlled by
+`PYVELM_LANDING` (default: enabled). If you disable it, `/` redirects
+straight to `/login`.
+
 Click around:
 
 - **Apps** — install / upgrade / uninstall modules. The framework's

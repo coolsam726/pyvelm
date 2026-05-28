@@ -4,7 +4,7 @@ An Odoo-style ERP framework in Python, built from first principles. The point
 isn't to reinvent Odoo — it's to keep the core ideas visible so the design
 trade-offs stay legible while the framework grows.
 
-Status: **v0.11.0** — full-stack ERP framework on PostgreSQL (psycopg 3):
+Status: **v0.15.x** — full-stack ERP framework on PostgreSQL (psycopg 3):
 ORM + module loader, list/form/kanban/graph/pivot UI (HTMX), session
 auth + ACL + policies + record rules, multi-company, workflows, report
 builder, mail/chatter + **email templates**, **Html** field sanitizer,
@@ -46,18 +46,12 @@ invalidation, and the singleton guard.
 - [Architecture overview](docs/architecture.md) — the big picture: why
   recordsets, what `env.cache` is for, how the dependency graph works, the
   multi-pass init sequence.
-- [Module loading & migrations](docs/module-loading.md) — manifest format,
-  loader lifecycle, the active-registry contextvar, writing migrations.
-- [Web layer & views as data](docs/web-layer.md) — `ir.ui.view`, the
-  `VIEWS` manifest key, the FastAPI app factory, JSON serialization
-  shape, three view types, mutations, inline edit.
-- [Access control](docs/acl.md) — the four ACL models, HTTP Basic
-  authentication, superuser bypass, record rules, anonymous access
-  conventions.
+- [Migrations](docs/migrations.md) — schema autogen, module upgrades, writing migrations.
+- [Views](docs/views.md) — list / form / kanban, widgets, search and filtering.
+- [Security](docs/security.md) — groups, ACL, record rules, multi-company, login flow.
 - [Module reference](docs/modules.md) — what lives in each module, the
   public surface, and the invariants worth knowing.
-- [Extending fields](docs/extending-fields.md) — implementing a custom field
-  type without breaking the cache contract.
+- [Fields API](docs/api/fields.md) — field types, specs, and widget hooks.
 - [CONTEXT.md](CONTEXT.md) — current stage state, deferred items, and the
   next concrete task.
 
