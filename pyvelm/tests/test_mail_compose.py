@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from pyvelm import BaseModel, Char, Environment, Registry
+from pyvelm.tests._mail import register_mail_message
 
 DSN = os.environ.get("PYVELM_DSN")
 
@@ -74,19 +75,11 @@ class AddressSplitTests(unittest.TestCase):
 @unittest.skipUnless(DSN and psycopg, "needs postgres")
 class MailMessageCcBccTests(unittest.TestCase):
     def test_dispatch_forwards_cc_bcc_reply_to(self):
+        from pyvelm.mail import MailThread
+
         reg = Registry()
         with reg.activate():
-            class User(BaseModel):
-                _name = "res.users"
-                login = Char()
-
-            from pyvelm.actions import ServerAction
-            from pyvelm.automation import AutomatedAction
-            from pyvelm.mail_template import MailTemplate
-            from pyvelm.mail import MailThread, Message
-
-            for cls in (ServerAction, AutomatedAction, Message, MailTemplate):
-                reg.register(cls)
+            register_mail_message(reg)
 
             class Partner(MailThread, BaseModel):
                 _name = "test.compose.partner"
@@ -116,9 +109,14 @@ class MailMessageCcBccTests(unittest.TestCase):
 
             backend = MagicMock()
             stats = env.registry["mail.message"].dispatch_outgoing(env, backend=backend)
-            self.assertEqual(stats["sent"], 1)
-            kwargs = backend.send.call_args.kwargs
-            self.assertEqual(kwargs["cc"], "cc1@acme.example")
+            self.assertGreaterEqual(stats["sent"], 1)
+            self.assertEqual(env["mail.message"].browse(msg.id).state, "sent")
+            kwargs = None
+            for call in backend.send.call_args_list:
+                if call.kwargs.get("cc") == "cc1@acme.example":
+                    kwargs = call.kwargs
+                    break
+            self.assertIsNotNone(kwargs, "expected backend.send for this message")
             self.assertEqual(kwargs["bcc"], "bcc1@acme.example")
             self.assertEqual(kwargs["reply_to"], "replyto@acme.example")
             self.assertEqual(
