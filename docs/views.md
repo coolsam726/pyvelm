@@ -85,7 +85,7 @@ you tweak per-field attributes:
 | `Char`, `Text` | Plain text | — |
 | `Integer`, `Float` | Number | — |
 | `Boolean` | Coloured Yes / No pill | `"toggle"` — animated switch |
-| `Many2one` | Display value with "open" link on hover | — |
+| `Many2one` | Display value + separate **open** button (dialog) | — |
 | `One2many`, `Many2many` | Up to 3 chips + "+N" overflow | — |
 
 The bare-string sugar is just shorthand for `{"name": "x"}`. Use the
@@ -138,20 +138,27 @@ fixes the offending field and saves again.
 
 ### Autosave on navigation
 
-Forms in edit and new mode opt into **autosave on link clicks**: if
-you've typed something into a form and then click any sidebar or
-When you open a record from a list or kanban view, the breadcrumb
-trail remembers where you came from (including view-switcher history:
-List → Kanban → Form shows both ancestors). Search, filters, and
-group-by state are restored when you click back.
+Forms in **edit** and **new** mode opt into **autosave on link clicks**:
+if you've changed the form and then click a normal in-app link (sidebar,
+breadcrumb, menu), the framework **POSTs the form first** and only follows
+the link when that save succeeds. **Save**, **Cancel**, and **Ctrl+S**
+bypass this interceptor.
 
-breadcrumb entry, the framework saves the form first and only
-follows the link on success. Cancel and Save buttons inside the
-form bypass the interceptor on purpose — they own their own flows.
+Browser-initiated navigation (Back, reload, tab close) cannot finish async
+work; a dirty form triggers the native **Leave site?** prompt instead.
 
-Browser-initiated navigation (Back button, hard reload, tab close)
-falls back to the native "Leave site?" prompt — async work can't
-complete on those transitions.
+When you open a record from a list or kanban, breadcrumbs remember where you
+came from (including List → Kanban → Form). Search, filters, and group-by
+are restored when you go back.
+
+### Sticky actions, Ctrl+S, and save toasts
+
+See **[Form UX](form-ux.md)** for:
+
+- **Sticky** Edit / Save / Cancel bar while scrolling long forms
+- **Ctrl+S** / **Cmd+S** to save
+- **Success toasts** after Save / Create
+- Opening related records in **`PvDialog`** (Many2one open button, O2M rows)
 
 ### Many2one combobox
 
@@ -164,8 +171,9 @@ Edit-mode Many2one fields render as a searchable combobox:
   record with just `name`. If the comodel needs more required fields
   the framework redirects to the comodel's form view in `/new` mode
   ("Create and edit…").
-- **Open record** — a small "↗" appears next to a selected value;
-  click to jump to that comodel record's form.
+- **Open record** — a small **↗** button beside the selected value opens
+  the comodel form in **`PvDialog`** (not full-page navigation). Use
+  **Open full page** in the dialog title when you need the normal route.
 - **Keyboard nav** — ↑/↓ move the cursor, Enter selects (or fires
   Create), Esc closes.
 

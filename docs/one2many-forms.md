@@ -189,8 +189,13 @@ field(
   comodel form in the floating dialog (saves on the child form).
 - **Inline grid** — editable cells on the parent form (saved on **parent Save**).
 
-The choice is remembered per record in ``localStorage``. Only the active
-inline pane is included in the parent POST (the inactive pane is disabled).
+The choice is remembered per record in ``localStorage`` (key
+``pv-o2m-edit-<model>-<id>-<field_name>``). Only one pane is visible at a
+time; the inactive pane is hidden with CSS (``data-o2m-mode`` on the toggle
+root) so it is not submitted with the parent form.
+
+On **display** forms, ``edit_toggle`` is ignored — you always get the dialog
+table until you click **Edit** on the parent record.
 
 ### Excel-style keyboard (inline / `table` widget)
 
@@ -333,6 +338,7 @@ a string or a dict. Relational keys (see `pyvelm.types.FieldRef`):
 |-----|------|---------|
 | `name` | `str` | **Required.** `One2many` field name on the parent model. |
 | `widget` | `"dialog"` \| `"inline"` \| `"table"` | Edit UX (default: dialog when form exists). |
+| `edit_toggle` | `bool` | **Edit only:** show **Dialog \| Inline grid** switch (needs `list_view` or `columns`). |
 | `columns` | `list[str \| FieldRef]` | Inline column list; no list view needed. |
 | `list_view` | `str` \| `(module, name)` | Registered list view for columns + `sequence`. |
 | `form_view` | `str` \| `(module, name)` | Form for row links and dialog create. |
@@ -368,6 +374,7 @@ arch overrides them.
 
 ## Related
 
+- [Form UX](form-ux.md) — notebooks, sticky actions, Ctrl+S, toasts, `PvDialog`
 - [Building UIs](views.md) — list / form / kanban views, list `domain`, widgets
 - [Declaring models → One2many](models.md#one2many)
 - [IDE typing stubs](ide-typing.md) — `list_view=` / `columns` string literals (partial)

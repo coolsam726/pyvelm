@@ -46,6 +46,20 @@ render usefully out of the box:
 | `res.country.state` | `{name} ({short_code})` |
 | `res.city` | `{name}, {state.short_code or country.code}` |
 
+## Country form (notebook demo)
+
+The **Countries** form (`geo_data.country.form`) demonstrates **[Form UX](form-ux.md)**
+features:
+
+- Flat **Identity** and **Facts** sections for scalar fields.
+- A **Subdivisions** notebook with **States / provinces** and **Cities** tabs.
+- `state_ids` and `city_ids` each use **`edit_toggle=True`** with compact
+  list views (`geo_data.state.compact`, `geo_data.city.compact`) so users can
+  switch between dialog lines and an inline grid on the parent **Edit** form.
+
+After upgrading to **geo_data 0.1.3+**, run **`pyvelm db migrate`** (or Apps →
+Sync) so `ir.ui.view` picks up the arch.
+
 ## Sidebar
 
 Adds **Settings → Geography** with four leaves:

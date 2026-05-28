@@ -104,6 +104,9 @@ op_after(
 )
 ```
 
+Path segments: `sections` → notebook `name` → `"pages"` → page `name` →
+`"fields"` → field `name`. See [Form UX → Tabbed notebooks](form-ux.md#tabbed-notebooks).
+
 Errors at any segment raise during install — there's no silent skip.
 
 ### Predicates: matching by any attribute

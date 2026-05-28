@@ -144,6 +144,8 @@ outside an init'd tree.
   fields, model inheritance.
 - **[Building UIs](views.md)** — list / form / kanban arches,
   widgets, search and filtering.
+- **[Form UX](form-ux.md)** — notebooks, Ctrl+S, save toasts, opening
+  related records in a dialog.
 - **[Extending views](inheritance.md)** — patching another module's
   arches without forking them.
 - **[Security](security.md)** — groups, ACL, record rules,

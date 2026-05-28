@@ -96,13 +96,15 @@ If you're new, read these in order:
    ergonomics (`env.query`, scopes, soft deletes).
 4. **[Building UIs](views.md)** — list, form, and kanban views;
    widgets; list `domain`; the search bar; row reorder.
-5. **[One2many on parent forms](one2many-forms.md)** — embedded sub-grids:
-   `list_view`, `columns`, `form_view`, dialog vs inline.
-6. **[Extending views](inheritance.md)** — patch views from another
+5. **[Form UX](form-ux.md)** — notebooks, sticky actions, Ctrl+S, save
+   toasts, opening related records in `PvDialog`.
+6. **[One2many on parent forms](one2many-forms.md)** — embedded sub-grids:
+   `list_view`, `columns`, `form_view`, `edit_toggle`, dialog vs inline.
+7. **[Extending views](inheritance.md)** — patch views from another
    module without forking them.
-7. **[Modules](modules.md)** — the manifest, data files, the
+8. **[Modules](modules.md)** — the manifest, data files, the
    loader, writing migrations, the Apps catalog.
-8. **[Report Builder](report-builder.md)** — user-defined reports,
+9. **[Report Builder](report-builder.md)** — user-defined reports,
    visual builder, secure SQL compilation, export and scheduling.
 
 Then as you need them:

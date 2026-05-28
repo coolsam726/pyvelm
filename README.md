@@ -4,7 +4,7 @@ An Odoo-style ERP framework in Python, built from first principles. The point
 isn't to reinvent Odoo — it's to keep the core ideas visible so the design
 trade-offs stay legible while the framework grows.
 
-Status: **v0.15.x** — full-stack ERP framework on PostgreSQL (psycopg 3):
+Status: **v0.21.x** — full-stack ERP framework on PostgreSQL (psycopg 3):
 ORM + module loader, list/form/kanban/graph/pivot UI (HTMX), session
 auth + ACL + policies + record rules, multi-company, workflows, report
 builder, mail/chatter + **email templates**, **Html** field sanitizer,
@@ -48,7 +48,8 @@ invalidation, and the singleton guard.
   multi-pass init sequence.
 - [Migrations](docs/migrations.md) — schema autogen, module upgrades, writing migrations.
 - [Views](docs/views.md) — list / form / kanban, widgets, search and filtering, list `domain`.
-- [One2many on forms](docs/one2many-forms.md) — `list_view`, `columns`, `form_view` on parent forms.
+- [Form UX](docs/form-ux.md) — notebooks, sticky actions, Ctrl+S, save toasts, `PvDialog` for related records.
+- [One2many on forms](docs/one2many-forms.md) — `list_view`, `columns`, `form_view`, `edit_toggle` on parent forms.
 - [Security](docs/security.md) — groups, ACL, record rules, multi-company, login flow.
 - [Module reference](docs/modules.md) — what lives in each module, the
   public surface, and the invariants worth knowing.
