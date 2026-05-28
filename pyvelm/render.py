@@ -276,6 +276,38 @@ def _render_toggle(value, spec, field):
     )
 
 
+def _m2o_record_href(form_view_url: str | None, record_id: int | None) -> str | None:
+    if not form_view_url or record_id is None:
+        return None
+    return f"{form_view_url}/record/{record_id}"
+
+
+def _render_m2o_open_button(
+    href: str,
+    *,
+    title: str = "Open record",
+    dialog_title: str | None = None,
+) -> Markup:
+    """Odoo-style external-link control — opens the record in ``PvDialog``."""
+    dlg_title = dialog_title or title
+    return Markup(
+        f'<button type="button" '
+        f'data-pv-dialog data-pv-dialog-url="{escape(href)}" '
+        f'data-pv-dialog-title="{escape(dlg_title)}" '
+        f'class="pv-m2o-open inline-flex items-center justify-center w-6 h-6 rounded '
+        f"border border-default bg-neutral-primary text-body-subtle "
+        f'hover:text-fg-brand hover:border-fg-brand shrink-0 transition-colors" '
+        f'onclick="event.stopPropagation()" '
+        f'title="{escape(title)}" aria-label="{escape(title)}">'
+        f'<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '
+        f'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+        f'<path stroke-linecap="round" stroke-linejoin="round" '
+        f'd="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5'
+        f'A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>'
+        f"</svg></button>"
+    )
+
+
 @widget(Many2one)
 def _render_m2o(value, spec, field):
     if not value:
@@ -284,9 +316,6 @@ def _render_m2o(value, spec, field):
     from .web import _display_value
 
     label = escape(_display_value(value))
-    # When the spec was enriched with the comodel's form-view URL,
-    # wrap the label in a quiet inline link with a small "open"
-    # affordance — same UX as the edit-mode combobox's arrow icon.
     form_view_url = spec.get("_form_view_url")
     if not form_view_url:
         return label
@@ -297,19 +326,13 @@ def _render_m2o(value, spec, field):
         target_id = value._ids[0] if getattr(value, "_ids", None) else None
     except Exception:  # noqa: BLE001
         target_id = None
-    href = f"{form_view_url}/record/{target_id or value.id}"
+    href = _m2o_record_href(form_view_url, target_id)
+    if not href:
+        return label
+    btn = _render_m2o_open_button(href, dialog_title=label)
     return Markup(
-        f'<a href="{href}" '
-        f'class="inline-flex items-center gap-1 group/m2o '
-        f'text-body hover:text-fg-brand transition-colors">'
-        f'<span class="truncate">{label}</span>'
-        f'<svg class="w-3 h-3 opacity-0 group-hover/m2o:opacity-100 transition-opacity" '
-        f'fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
-        f'<path stroke-linecap="round" stroke-linejoin="round" '
-        f'd="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5'
-        f'A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>'
-        f"</svg>"
-        f"</a>"
+        f'<span class="inline-flex items-center gap-1.5 max-w-full min-w-0">'
+        f'<span class="truncate text-body">{label}</span>{btn}</span>'
     )
 
 
@@ -321,8 +344,34 @@ def _relational_widget(spec: dict) -> str | None:
     return w
 
 
+def _o2m_edit_toggle_enabled(spec: dict) -> bool:
+    """Show a Dialog / Inline grid switch instead of a fixed ``widget``."""
+    return bool(spec.get("edit_toggle"))
+
+
+def _o2m_toggle_default_mode(spec: dict) -> str:
+    """Default pane when ``edit_toggle`` is set (``widget`` or dialog if form exists)."""
+    w = _relational_widget(spec)
+    if w in ("dialog", "inline"):
+        return w
+    return "dialog" if spec.get("_form_view_url") else "inline"
+
+
+def _o2m_toggle_storage_key(spec: dict) -> str:
+    rec = spec.get("_record")
+    if rec is not None and getattr(rec, "_ids", None):
+        model = type(rec)._name
+        rid = rec.id
+    else:
+        model = spec.get("_host_model") or "record"
+        rid = "new"
+    return f"pv-o2m-edit-{model}-{rid}-{spec['name']}"
+
+
 def _o2m_use_inline_edit(spec: dict) -> bool:
     """Editable inline table on the parent form (``widget="inline"``)."""
+    if _o2m_edit_toggle_enabled(spec):
+        return False
     return _relational_widget(spec) in ("inline", "table")
 
 
@@ -407,9 +456,41 @@ def _render_collection(value, spec, field):
     return Markup(f'<span class="inline-flex gap-1 flex-wrap">{"".join(parts)}</span>')
 
 
+def _render_o2m_edit_toggle(value, spec, field, *, mode: str) -> Markup:
+    """Dialog vs inline grid switch — both panes rendered; inline submits only when active."""
+    default = _o2m_toggle_default_mode(spec)
+    spec_d = {**spec, "widget": "dialog", "edit_toggle": False}
+    spec_i = {**spec, "widget": "inline", "edit_toggle": False}
+
+    if _o2m_show_table(spec_d):
+        pane_dialog = _render_o2m_table(value, spec_d, field)
+    else:
+        pane_dialog = _render_collection(value, spec_d, field)
+
+    pane_inline = _edit_o2m_table(value, spec_i, field)
+
+    partial = _env.get_template("widgets/o2m_edit_toggle.html")
+    return Markup(
+        partial.render(
+            storage_key=_o2m_toggle_storage_key(spec),
+            default_mode=default,
+            field_name=spec["name"],
+            pane_dialog=pane_dialog,
+            pane_inline=pane_inline,
+        )
+    )
+
+
 @widget(One2many)
 def _render_o2m_field(value, spec, field):
     """Display-mode O2m: table (dialog on row click) or chips."""
+    # ``edit_toggle`` only applies on parent edit forms — inline grid is not
+    # rendered in display mode, so skip the switcher and show the dialog table.
+    if _o2m_edit_toggle_enabled(spec):
+        spec_d = {**spec, "widget": "dialog", "edit_toggle": False}
+        if _o2m_show_table(spec_d):
+            return _render_o2m_table(value, spec_d, field)
+        return _render_collection(value, spec_d, field)
     if _o2m_show_table(spec):
         return _render_o2m_table(value, spec, field)
     return _render_collection(value, spec, field)
@@ -698,13 +779,18 @@ def _render_o2m_edit_row(
     # input is the source of truth and a visible edit cell with the
     # same name would collide on form-parse.
     td_cells: list[str] = []
+    col_idx = 0
     for fs in fields_spec:
         sub_name = fs["name"]
         if sequence_field and sub_name == sequence_field:
             continue
         sub_field = comodel_cls._fields.get(sub_name)
         if sub_field is None:
-            td_cells.append('<td class="px-3 py-2"></td>')
+            td_cells.append(
+                f'<td class="px-2 py-1 pv-o2m-cell" data-pv-o2m-cell '
+                f'data-pv-o2m-col="{col_idx}" tabindex="-1"></td>'
+            )
+            col_idx += 1
             continue
         spec = _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname)
         renderer = find_renderer(sub_field, fs.get("widget"), mode="edit")
@@ -729,9 +815,12 @@ def _render_o2m_edit_row(
         if not td_cells:
             cell_html = hidden_html + cell_html
         td_cells.append(
-            f'<td class="px-3 py-2 align-top{err_cls}"{err_title}>'
-            f"{cell_html}</td>"
+            f'<td class="px-2 py-1 align-middle pv-o2m-cell{err_cls}"'
+            f' data-pv-o2m-cell data-pv-o2m-col="{col_idx}" tabindex="-1"'
+            f"{err_title}>"
+            f'<div class="pv-o2m-field">{cell_html}</div></td>'
         )
+        col_idx += 1
 
     # Trailing cell: delete button.
     delete_btn = (
@@ -766,7 +855,9 @@ def _render_o2m_edit_row(
     )
     if not td_cells:
         td_cells.append(
-            f'<td class="px-3 py-2 align-top">{hidden_html}</td>'
+            f'<td class="px-2 py-1 align-middle pv-o2m-cell" data-pv-o2m-cell '
+            f'data-pv-o2m-col="0" tabindex="-1">'
+            f'<div class="pv-o2m-field">{hidden_html}</div></td>'
         )
     return (
         f'<tr data-pv-o2m-row{del_cls}{tr_attrs}>'
@@ -899,105 +990,19 @@ def _edit_o2m_table(value, spec, field):
         f"Add a line</span></td></tr>"
     )
 
-    drag_enabled = "true" if sequence_field else "false"
+    drag_flag = "true" if sequence_field else "false"
     js = (
-        "<script>(function(){\n"
-        "var root=document.currentScript.parentElement;\n"
-        'var tbody=root.querySelector("tbody");\n'
-        'var tmpl=root.querySelector("template[data-pv-o2m-template]");\n'
-        'var addLineRow=root.querySelector("[data-pv-o2m-add-row]");\n'
-        "var nextIdx=parseInt(root.dataset.pvO2mNext,10)||0;\n"
-        f"var dragOn={drag_enabled};\n"
-        "function renumber(){\n"
-        "  if(!dragOn) return;\n"
-        '  var rows=tbody.querySelectorAll("tr[data-pv-o2m-row]");\n'
-        "  rows.forEach(function(tr,i){\n"
-        '    if(tr.classList.contains("line-through")) return;\n'
-        '    var seq=tr.querySelector("input[data-pv-o2m-seq]");\n'
-        "    if(seq) seq.value=String((i+1)*10);\n"
-        "  });\n"
-        "}\n"
-        "function rewriteIdx(node,idx){\n"
-        "  if(!node||node.nodeType!==1) return;\n"
-        '  ["name","id","for"].forEach(function(a){\n'
-        "    if(!node.hasAttribute(a)) return;\n"
-        '    var v=node.getAttribute(a);\n'
-        '    if(v.indexOf("__IDX__")>=0) node.setAttribute(a,v.split("__IDX__").join(idx));\n'
-        "  });\n"
-        '  if(node.hasAttribute("x-data")){\n'
-        '    var xd=node.getAttribute("x-data");\n'
-        '    if(xd.indexOf("__IDX__")>=0) node.setAttribute("x-data",xd.split("__IDX__").join(idx));\n'
-        "  }\n"
-        "  for(var i=0;i<node.children.length;i++) rewriteIdx(node.children[i],idx);\n"
-        "}\n"
-        "function addRow(){\n"
-        "  if(!tmpl||!tmpl.content||!tmpl.content.firstElementChild) return;\n"
-        "  var idx=String(nextIdx++);\n"
-        "  root.dataset.pvO2mNext=String(nextIdx);\n"
-        "  var row=tmpl.content.firstElementChild.cloneNode(true);\n"
-        "  rewriteIdx(row,idx);\n"
-        '  var emptyRow=tbody.querySelector("[data-pv-o2m-empty]");\n'
-        "  if(emptyRow) emptyRow.remove();\n"
-        "  if(addLineRow) tbody.insertBefore(row, addLineRow);\n"
-        "  else tbody.appendChild(row);\n"
-        "  if(window.Alpine&&typeof window.Alpine.initTree===\"function\") window.Alpine.initTree(row);\n"
-        "  renumber();\n"
-        "  var first=row.querySelector('input:not([type=hidden]),select,textarea');\n"
-        "  if(first) first.focus();\n"
-        "}\n"
-        'root.addEventListener("click",function(e){\n'
-        '  if(e.target.closest("[data-pv-o2m-add]")||e.target.closest("[data-pv-o2m-add-row]")){\n'
-        "    e.preventDefault();\n"
-        "    addRow();\n"
-        "    return;\n"
-        "  }\n"
-        '  var btn=e.target.closest("[data-pv-o2m-delete]");\n'
-        "  if(!btn||!root.contains(btn)) return;\n"
-        '  var tr=btn.closest("tr");\n'
-        "  if(!tr) return;\n"
-        '  var op=tr.querySelector("input[name$=\\"[_op]\\"]");\n'
-        '  if(op && op.value==="create"){ tr.remove(); renumber(); return; }\n'
-        '  if(op) op.value="delete";\n'
-        '  tr.classList.add("opacity-40","line-through","pointer-events-none");\n'
-        "  renumber();\n"
-        "});\n"
-        "if(dragOn){\n"
-        "  var dragged=null;\n"
-        '  tbody.addEventListener("dragstart",function(e){\n'
-        '    var tr=e.target.closest("tr[data-pv-o2m-row]");\n'
-        "    if(!tr) return;\n"
-        "    dragged=tr;\n"
-        '    e.dataTransfer.effectAllowed="move";\n'
-        '    tr.classList.add("opacity-50");\n'
-        "  });\n"
-        '  tbody.addEventListener("dragend",function(){\n'
-        '    if(dragged) dragged.classList.remove("opacity-50");\n'
-        "    dragged=null;\n"
-        "  });\n"
-        '  tbody.addEventListener("dragover",function(e){\n'
-        "    if(!dragged) return;\n"
-        "    e.preventDefault();\n"
-        '    e.dataTransfer.dropEffect="move";\n'
-        '    var tr=e.target.closest("tr[data-pv-o2m-row]");\n'
-        "    if(!tr||tr===dragged) return;\n"
-        "    var rect=tr.getBoundingClientRect();\n"
-        "    var before=(e.clientY-rect.top)<(rect.height/2);\n"
-        "    tbody.insertBefore(dragged, before?tr:tr.nextSibling);\n"
-        "  });\n"
-        '  tbody.addEventListener("drop",function(e){\n'
-        "    if(!dragged) return;\n"
-        "    e.preventDefault();\n"
-        "    renumber();\n"
-        "  });\n"
-        "}\n"
+        "<script>(function(){"
+        "var r=document.currentScript&&document.currentScript.parentElement;"
+        "if(r&&window.pvO2mBindRoot)window.pvO2mBindRoot(r);"
         "})();</script>"
     )
 
     return Markup(
         f'<div class="border border-default rounded-lg overflow-visible" '
         f'data-pv-o2m-root data-pv-o2m-name="{escape(oname)}" '
-        f'data-pv-o2m-next="{next_idx}">'
-        f'<table class="min-w-full divide-y divide-default">'
+        f'data-pv-o2m-next="{next_idx}" data-pv-o2m-drag="{drag_flag}">'
+        f'<table class="min-w-full divide-y divide-default pv-o2m-grid">'
         f'<thead class="bg-neutral-secondary"><tr>{"".join(header_cells)}</tr></thead>'
         f'<tbody class="divide-y divide-default">'
         f'{"".join(body_rows) or empty_html}'
@@ -1538,6 +1543,8 @@ def _render_m2m_editor(value, spec, field, *, dialog_only: bool) -> Markup:
 @widget(One2many, mode="edit")
 def _edit_o2m_field(value, spec, field):
     """Edit-mode O2m: inline table (``widget=\"inline\"``) or dialog table."""
+    if _o2m_edit_toggle_enabled(spec):
+        return _render_o2m_edit_toggle(value, spec, field, mode="edit")
     if _o2m_use_inline_edit(spec):
         return _edit_o2m_table(value, spec, field)
     if _o2m_show_table(spec):
@@ -2610,6 +2617,37 @@ def _form_section_html(
     return cells
 
 
+def _form_layout_cells(
+    fields_spec: list,
+    *,
+    record_or_none,
+    env,
+    model_cls,
+    mode: str,
+    errors,
+    submitted,
+    prefill,
+    form_playback,
+    cols: int,
+    view_module: str | None,
+) -> list[dict]:
+    """Render a field list (section or notebook page) to form cells."""
+    section_spec = {"fields": fields_spec}
+    return _form_section_html(
+        section_spec,
+        record_or_none,
+        env,
+        model_cls,
+        mode,
+        errors=errors,
+        submitted=submitted,
+        prefill=prefill,
+        form_playback=form_playback,
+        cols=cols,
+        view_module=view_module,
+    )
+
+
 def _form_sections(
     view,
     record_or_none,
@@ -2628,18 +2666,58 @@ def _form_sections(
     form_cols = _resolve_form_cols(arch.get("cols"))
     out: list[dict] = []
     for spec in sections_spec:
+        pages_spec = spec.get("pages")
+        if pages_spec is not None:
+            pages_out: list[dict] = []
+            for page_spec in pages_spec:
+                page_cols = _resolve_form_cols(
+                    page_spec.get("cols"), default=form_cols
+                )
+                pages_out.append(
+                    {
+                        "name": page_spec.get("name"),
+                        "title": page_spec.get("title")
+                        or page_spec.get("name", ""),
+                        "cols": page_cols,
+                        "cells": _form_layout_cells(
+                            list(page_spec.get("fields", [])),
+                            record_or_none=record_or_none,
+                            env=env,
+                            model_cls=model_cls,
+                            mode=mode,
+                            errors=errors,
+                            submitted=submitted,
+                            prefill=prefill,
+                            form_playback=form_playback,
+                            cols=page_cols,
+                            view_module=view.module,
+                        ),
+                    }
+                )
+            nb_name = spec.get("name", "")
+            out.append(
+                {
+                    "kind": "notebook",
+                    "name": nb_name,
+                    "title": spec.get("title") or "",
+                    "storage_key": f"pv-nb-{view.module}-{view.name}-{nb_name}",
+                    "pages": pages_out,
+                }
+            )
+            continue
         section_cols = _resolve_form_cols(spec.get("cols"), default=form_cols)
         out.append(
             {
+                "kind": "section",
                 "name": spec.get("name"),
                 "title": spec.get("title") or spec.get("name", ""),
                 "cols": section_cols,
-                "cells": _form_section_html(
-                    spec,
-                    record_or_none,
-                    env,
-                    model_cls,
-                    mode,
+                "cells": _form_layout_cells(
+                    list(spec.get("fields", [])),
+                    record_or_none=record_or_none,
+                    env=env,
+                    model_cls=model_cls,
+                    mode=mode,
                     errors=errors,
                     submitted=submitted,
                     prefill=prefill,
@@ -3104,6 +3182,7 @@ def render_form_page(
     form_error: str | None = None,
     prefill: dict | None = None,
     form_playback=None,
+    in_dialog: bool = False,
 ) -> str:
     """Render the form HTML.
 
@@ -3220,6 +3299,7 @@ def render_form_page(
         title=title,
         mode=mode,
         body_only=body_only,
+        in_dialog=in_dialog,
         sections=sections,
         form_error=form_error,
         header_actions=header_actions,

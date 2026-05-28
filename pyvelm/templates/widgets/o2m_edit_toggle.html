@@ -1,0 +1,36 @@
+{# Dialog vs inline switch for One2many on parent forms (edit mode only).
+   Pane visibility uses CSS on data-o2m-mode — not x-show/hidden — so global
+   [x-cloak] and notebook tab hiding cannot leave the inline grid stuck invisible. #}
+<div class="pv-o2m-edit-toggle space-y-2"
+     data-pv-o2m-edit-toggle
+     :data-o2m-mode="mode"
+     x-data='pvO2mEditToggle({{ storage_key | tojson }}, {{ default_mode | tojson }})'>
+    <div class="flex flex-wrap items-center justify-end gap-2">
+        <span class="text-2xs font-medium uppercase tracking-wider text-body-subtle">Edit lines as</span>
+        <div class="inline-flex rounded-lg border border-default p-0.5 text-xs font-medium" role="group"
+             aria-label="One2many edit mode for {{ field_name }}">
+            <button type="button"
+                    @click="setMode('dialog')"
+                    :class="mode === 'dialog'
+                        ? 'bg-fg-brand text-white'
+                        : 'text-body hover:bg-neutral-secondary'"
+                    class="px-3 py-1.5 rounded-md transition-colors">
+                Dialog
+            </button>
+            <button type="button"
+                    @click="setMode('inline')"
+                    :class="mode === 'inline'
+                        ? 'bg-fg-brand text-white'
+                        : 'text-body hover:bg-neutral-secondary'"
+                    class="px-3 py-1.5 rounded-md transition-colors">
+                Inline grid
+            </button>
+        </div>
+    </div>
+    <div data-pane="dialog" class="pv-o2m-pane min-w-0">
+        {{ pane_dialog | safe }}
+    </div>
+    <div data-pane="inline" class="pv-o2m-pane min-w-0">
+        {{ pane_inline | safe }}
+    </div>
+</div>

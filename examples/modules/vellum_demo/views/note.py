@@ -1,6 +1,6 @@
 """Views for Vellum demo models (browse via examples/serve.py)."""
 
-from pyvelm.builders import field, form_view, list_view, section
+from pyvelm.builders import field, form_view, list_view, notebook, page, section
 from pyvelm.types import View
 
 VIEWS: list[View] = [
@@ -35,15 +35,28 @@ VIEWS: list[View] = [
                     "active",
                 ],
             ),
-            section(
-                "snippet",
-                "Snippet",
-                ["snippet"],
-            ),
-            section(
-                "comments",
-                "Comments",
-                [field("comment_ids", widget="dialog", list_view="demo_comment.compact")],
+            notebook(
+                "extra",
+                pages=[
+                    page("snippet", "Snippet", ["snippet"]),
+                    page(
+                        "comments",
+                        "Comments",
+                        [
+                            field(
+                                "comment_ids",
+                                widget="dialog",
+                                edit_toggle=True,
+                                list_view="demo_comment.compact",
+                                form_view="demo_comment.form",
+                                columns=[
+                                    "body",
+                                    field("active", widget="toggle"),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
             ),
             section("metadata", "Record info", ["created_at", "updated_at"]),
         ],

@@ -4,6 +4,8 @@ from pyvelm.builders import (
     field,
     form_view,
     list_view,
+    notebook,
+    page,
     section,
 )
 from pyvelm.types import View
@@ -49,6 +51,23 @@ VIEWS: list[View] = [
         ],
         form_view="geo_data.country.form",
     ),
+    list_view(
+        "geo_data.state.compact",
+        "res.country.state",
+        fields=["name", "short_code", "code", "type"],
+        form_view="geo_data.state.form",
+    ),
+    list_view(
+        "geo_data.city.compact",
+        "res.city",
+        fields=[
+            "name",
+            "state_id",
+            "population",
+            field("is_capital", widget="toggle"),
+        ],
+        form_view="geo_data.city.form",
+    ),
     form_view(
         "geo_data.country.form",
         "res.country",
@@ -76,17 +95,49 @@ VIEWS: list[View] = [
                     "population",
                 ],
             ),
-            section(
-                "states",
-                "States / provinces",
-                [field("state_ids", widget="dialog")],
-                cols=1,
-            ),
-            section(
-                "cities",
-                "Cities",
-                [field("city_ids", widget="dialog")],
-                cols=1,
+            notebook(
+                "subdivisions",
+                title="Subdivisions",
+                pages=[
+                    page(
+                        "states",
+                        "States / provinces",
+                        [
+                            field(
+                                "state_ids",
+                                widget="dialog",
+                                edit_toggle=True,
+                                list_view="geo_data.state.compact",
+                                form_view="geo_data.state.form",
+                                columns=[
+                                    "name",
+                                    "short_code",
+                                    "code",
+                                    "type",
+                                ],
+                            ),
+                        ],
+                    ),
+                    page(
+                        "cities",
+                        "Cities",
+                        [
+                            field(
+                                "city_ids",
+                                widget="dialog",
+                                edit_toggle=True,
+                                list_view="geo_data.city.compact",
+                                form_view="geo_data.city.form",
+                                columns=[
+                                    "name",
+                                    "state_id",
+                                    "population",
+                                    field("is_capital", widget="toggle"),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
             ),
         ],
     ),

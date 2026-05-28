@@ -7,6 +7,45 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.21.0] — 2026-05-29
+
+### Added
+
+- **Form notebooks** — `notebook()` / `page()` builders and `<notebook>` /
+  `<page>` in view XML; tabbed sections on parent forms with persisted tab
+  choice (`pvFormNotebook`).
+- **One2many `edit_toggle`** — **Dialog / Inline grid** switch per field on
+  edit forms (`edit_toggle=True` with `list_view` or `columns`).
+- **Inline O2M keyboard grid** — Excel-style cell navigation in
+  `pyvelm/static/pv_o2m_grid.js` (Tab, Enter, arrows) for inline edit tables.
+- **Many2one open in dialog** — display values show a separate Odoo-style
+  external-link button; opens `PvDialog` with **Open full page** in the title
+  bar (edit-mode combobox uses the same pattern).
+- **Ctrl+S / Cmd+S** — saves the active pyvelm form (Save / Create button).
+- **Save confirmation toast** — successful form save/create emits
+  `HX-Trigger: pv-toast` (“Saved …” / “Created …”).
+- **Sticky form action bar** — Edit / Save / Cancel / Delete stay visible while
+  scrolling long forms.
+- **Tests** — `test_form_notebook`, `test_o2m_edit_toggle`, `test_m2o_open_button`,
+  `test_form_save_toast`.
+
+### Changed
+
+- **geo_data** **0.1.3** — country form uses a **Subdivisions** notebook
+  (States / Cities) with `edit_toggle` on `state_ids` and `city_ids`.
+- **vellum_demo** **0.5.3** — note form notebook (Comments tab) with
+  `edit_toggle` on `comment_ids`.
+- **Display-mode O2m** with `edit_toggle` — shows the dialog table only (no
+  inline switch until Edit).
+
+### Fixed
+
+- **M2O dialog from lists** — row `onclick` navigation no longer fires when
+  opening a linked record in `PvDialog` (capture-phase handler +
+  `pvListRowNavigate`).
+- **Inline O2M pane blank** — pane visibility uses `data-o2m-mode` CSS instead
+  of Alpine `x-show` / `x-cloak` conflicts.
+
 ## [0.20.2] — 2026-05-28
 
 ### Added

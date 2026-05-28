@@ -2,9 +2,9 @@
     class="hover:bg-neutral-secondary transition-colors cursor-pointer"
     {{ row_extra | default('') | safe }}
     {% if record_href and access.can_write %}
-    onclick="window.location.href='{{ record_href.replace('{id}', row.id | string) }}'"
+    onclick="pvListRowNavigate(event, '{{ record_href.replace('{id}', row.id | string) }}')"
     {% elif form_view_name %}
-    onclick="window.location.href='/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}{% if list_nav_query %}?{{ list_nav_query }}{% endif %}'"
+    onclick="pvListRowNavigate(event, '/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}{% if list_nav_query %}?{{ list_nav_query }}{% endif %}')"
     {% endif %}>
     {# Leftmost checkbox — placeholder for future bulk selection. #}
     <td class="w-9 px-3 py-4 align-middle" onclick="event.stopPropagation()">

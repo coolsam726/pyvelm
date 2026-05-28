@@ -5,13 +5,13 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.20.2](releases/v0.20.2.md) (2026-05-28) — per-field
-**One2many** `list_view` / `form_view` / `columns` on parent forms.
-See [releases](releases/v0.20.2.md) and the
+**Latest release:** [v0.21.0](releases/v0.21.0.md) (2026-05-29) — form
+**notebooks**, O2M **edit_toggle**, M2O dialog open, **Ctrl+S**, save toasts.
+See [releases](releases/v0.21.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.20.2
+pip install pyvelm==0.21.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -53,6 +53,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.21.0](releases/v0.21.0.md) | Form **notebooks**; O2M **edit_toggle** + keyboard grid; M2O **dialog** open; **Ctrl+S** + save toast; sticky actions |
 | [v0.20.2](releases/v0.20.2.md) | **One2many** `list_view` / `form_view` / `columns` on parent forms |
 | [v0.20.1](releases/v0.20.1.md) | List view **`domain=`**; IDE stub / Pylance `include` fixes |
 | [v0.20.0](releases/v0.20.0.md) | **[IDE typing stubs](ide-typing.md)** — `make:stubs`, Pyright/Pylance literals, `pyrightconfig.json` auto-setup |

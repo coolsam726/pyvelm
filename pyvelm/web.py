@@ -125,6 +125,32 @@ def _display_value(record) -> str:
     return str(record.id)
 
 
+def _form_save_toast_payload(record, *, created: bool = False) -> dict[str, str]:
+    """Toast body for ``HX-Trigger: pv-toast`` after a successful form save."""
+    label = _display_value(record) if record else ""
+    if created:
+        message = f"Created {label}." if label else "Record created."
+        title = "Created"
+    else:
+        message = f"Saved {label}." if label else "Changes saved."
+        title = "Saved"
+    return {"message": message, "variant": "success", "title": title}
+
+
+def _form_save_toast_headers(record, *, created: bool = False) -> dict[str, str]:
+    """``HX-Trigger`` header so the layout shows a success toast after save."""
+    return {
+        "HX-Trigger": json.dumps({
+            "pv-toast": _form_save_toast_payload(record, created=created),
+        }),
+    }
+
+
+def _form_in_dialog(request: Request) -> bool:
+    """True when the client is loading/saving inside ``PvDialog``."""
+    return request.headers.get("X-PV-Dialog") == "1"
+
+
 def serialize_record(record, fields: list[str] | None = None) -> dict[str, Any]:
     """Convert a singleton recordset into a JSON-friendly dict.
 
@@ -1276,6 +1302,7 @@ def create_app(
                 env,
                 mode="new",
                 body_only=body_only,
+                in_dialog=_form_in_dialog(request),
                 current_path=str(request.url.path),
                 prefill=prefill or None,
                 **_form_list_nav(request),
@@ -1308,6 +1335,7 @@ def create_app(
                 env,
                 mode="display",
                 body_only=body_only,
+                in_dialog=_form_in_dialog(request),
                 current_path=str(request.url.path),
                 **_form_list_nav(request),
             )
@@ -1340,6 +1368,7 @@ def create_app(
                 env,
                 mode="edit",
                 body_only=body_only,
+                in_dialog=_form_in_dialog(request),
                 current_path=str(request.url.path),
                 **_form_list_nav(request),
             )
@@ -1371,6 +1400,7 @@ def create_app(
         vals, errors = parse_form_vals(cls, form, env)
         o2m_cmds, o2m_errors = harvest_o2m_commands(cls, form, env)
         body_only = request.headers.get("HX-Request") == "true"
+        in_dialog = _form_in_dialog(request)
         if errors or o2m_errors:
             errors = {**errors, **o2m_errors}
             # Parse-side validation failed. Re-render the edit form with
@@ -1383,6 +1413,7 @@ def create_app(
                     env,
                     mode="edit",
                     body_only=body_only,
+                    in_dialog=in_dialog,
                     errors=errors,
                     submitted=vals,
                     form_playback=form,
@@ -1406,6 +1437,7 @@ def create_app(
                     env,
                     mode="edit",
                     body_only=body_only,
+                    in_dialog=in_dialog,
                     submitted=vals,
                     form_playback=form,
                     form_error=str(exc),
@@ -1436,7 +1468,10 @@ def create_app(
             return Response(
                 status_code=204,
                 headers={
-                    "HX-Trigger": json.dumps({"pv-dialog-saved": payload}),
+                    "HX-Trigger": json.dumps({
+                        "pv-dialog-saved": payload,
+                        "pv-toast": _form_save_toast_payload(rec),
+                    }),
                 },
             )
         return HTMLResponse(
@@ -1448,7 +1483,8 @@ def create_app(
                 body_only=body_only,
                 current_path=str(request.url.path),
                 **_form_list_nav(request),
-            )
+            ),
+            headers=_form_save_toast_headers(rec),
         )
 
     @app.post("/web/views/{module}/{name}", response_class=HTMLResponse)
@@ -1473,6 +1509,7 @@ def create_app(
         vals, errors = parse_form_vals(cls, form, env)
         o2m_cmds, o2m_errors = harvest_o2m_commands(cls, form, env)
         body_only = request.headers.get("HX-Request") == "true"
+        in_dialog = _form_in_dialog(request)
         if errors or o2m_errors:
             errors = {**errors, **o2m_errors}
             return HTMLResponse(
@@ -1482,6 +1519,7 @@ def create_app(
                     env,
                     mode="new",
                     body_only=body_only,
+                    in_dialog=in_dialog,
                     errors=errors,
                     submitted=vals,
                     form_playback=form,
@@ -1502,6 +1540,7 @@ def create_app(
                     env,
                     mode="new",
                     body_only=body_only,
+                    in_dialog=in_dialog,
                     submitted=vals,
                     form_playback=form,
                     form_error=str(exc),
@@ -1529,7 +1568,10 @@ def create_app(
             return Response(
                 status_code=204,
                 headers={
-                    "HX-Trigger": json.dumps({"pv-dialog-saved": payload}),
+                    "HX-Trigger": json.dumps({
+                        "pv-dialog-saved": payload,
+                        "pv-toast": _form_save_toast_payload(rec, created=True),
+                    }),
                 },
             )
         return HTMLResponse(
@@ -1541,7 +1583,8 @@ def create_app(
                 body_only=body_only,
                 current_path=str(request.url.path),
                 **_form_list_nav(request),
-            )
+            ),
+            headers=_form_save_toast_headers(rec, created=True),
         )
 
     # ---- graph / pivot interactive data endpoints ----

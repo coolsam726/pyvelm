@@ -58,20 +58,20 @@
             </button>
         </div>
 
-        {# Open-record icon — only when a value is selected and the comodel
-           has a form view. Navigates to the linked record. #}
-        <a x-show="value !== null && formViewUrl"
-           :href="formViewUrl + '/record/' + value"
-           target="_self"
-           title="Open record"
-           class="inline-flex items-center justify-center px-1.5 rounded border border-default
-                  bg-neutral-primary text-body-subtle hover:text-fg-brand hover:border-fg-brand">
+        {# Open-record — Odoo-style button; loads the form in PvDialog. #}
+        <button type="button"
+                x-show="value !== null && formViewUrl"
+                @click.stop="openRecord()"
+                title="Open record"
+                aria-label="Open record"
+                class="pv-m2o-open inline-flex items-center justify-center w-6 h-6 rounded border border-default
+                       bg-neutral-primary text-body-subtle hover:text-fg-brand hover:border-fg-brand shrink-0">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
-                 viewBox="0 0 24 24" stroke-width="2">
+                 viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round"
                       d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/>
             </svg>
-        </a>
+        </button>
     </div>
 
     {# Dropdown. #}

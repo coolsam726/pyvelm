@@ -1,5 +1,5 @@
 NAME: str = "geo_data"
-VERSION: tuple[int, ...] = (0, 1, 0)
+VERSION: tuple[int, ...] = (0, 1, 3)
 SUMMARY: str = (
     "Continents, countries, states/provinces, and cities — seeded from "
     "pycountry + geonamescache."

@@ -169,6 +169,48 @@ summary** (no table / dialog).
 
 ## Edit mode: dialog vs inline
 
+### Dialog / Inline toggle (`edit_toggle`)
+
+Instead of duplicating fields or notebook pages, enable a segmented
+**Dialog | Inline grid** switch on one field:
+
+```python
+field(
+    "state_ids",
+    widget="dialog",          # default mode when the form loads
+    edit_toggle=True,
+    list_view="move.line.compact",
+    form_view="move.line.form",
+    columns=["name", "short_code", "code", "type"],
+)
+```
+
+- **Dialog** — read-only sub-table on the parent form; row / Add open the
+  comodel form in the floating dialog (saves on the child form).
+- **Inline grid** — editable cells on the parent form (saved on **parent Save**).
+
+The choice is remembered per record in ``localStorage``. Only the active
+inline pane is included in the parent POST (the inactive pane is disabled).
+
+### Excel-style keyboard (inline / `table` widget)
+
+Inline grids (`widget="inline"` or `widget="table"`) support spreadsheet-style
+navigation (since v0.20.x):
+
+| Key | Action |
+|-----|--------|
+| **Tab** / **Shift+Tab** | Next / previous editable cell (wraps across rows) |
+| **Enter** | Move to the cell below (Shift+Enter = newline in textarea) |
+| **Arrow keys** | Move between cells; in text fields, arrows move the caret until the edge, then jump cells |
+| **Ctrl/Cmd + arrows** | Always jump cells |
+| **Escape** | Clear the active-cell highlight |
+| **Click** | Focus the cell editor |
+
+The active cell is highlighted. **Add a line** appends a row and focuses the
+first column; Tab past the last cell on the last row also triggers **Add a line**.
+
+Many2one comboboxes keep their own ↑/↓/Enter behaviour while the dropdown is open.
+
 | `widget` | One2many behaviour |
 |----------|-------------------|
 | **`dialog`** (default when a comodel form exists) | Read-only table; edit in floating dialog; child save is separate from parent Save. |
@@ -189,6 +231,41 @@ Column selection (`list_view` / `columns`) applies to **both** modes.
 
 See [Building UIs → Relational fields](views.md#relational-fields-widgetdialog-vs-widgetinline)
 for Many2many and more UI detail.
+
+---
+
+## Tabbed notebooks on the parent form
+
+When several One2many fields (or other heavy widgets) should not all
+appear on one long scroll, group them in a **notebook** — each tab is
+a `page(...)` with its own field list:
+
+```python
+from pyvelm.builders import field, form_view, notebook, page, section
+
+form_view(
+    "move.form", "account.move",
+    sections=[
+        section("header", "Header", ["partner_id", "date"]),
+        notebook("lines", pages=[
+            page(
+                "invoice",
+                "Invoice lines",
+                [field("invoice_line_ids", list_view="move.line.invoice")],
+            ),
+            page(
+                "entry",
+                "Journal items",
+                [field("entry_line_ids", list_view="move.line.entry")],
+            ),
+        ]),
+    ],
+)
+```
+
+See [Building UIs → Form views](views.md#form-views). View inheritance
+targets notebook fields with paths like
+``["sections", "lines", "pages", "invoice", "fields", "qty"]``.
 
 ---
 

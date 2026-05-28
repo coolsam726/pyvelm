@@ -43,7 +43,10 @@ _LIST_PROMOTION_PATHS: dict[str, list[tuple[str, ...]]] = {
     # Form view: `sections` is a list of section dicts, each with its
     # own `fields` list. `*` means "every entry in this list" — so the
     # promotion applies to fields inside every section.
-    "form": [("sections", "*", "fields")],
+    "form": [
+        ("sections", "*", "fields"),
+        ("sections", "*", "pages", "*", "fields"),
+    ],
     # Kanban view: card.fields and card.badges are field-spec lists.
     # title/subtitle stay as plain strings (single-field references)
     # because addressing them by name doesn't help inheritance.

@@ -32,6 +32,7 @@
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
     <script src="/web/static/dist/flowbite.min.js" defer></script>
     <script src="/web/static/pv_datetime_picker.js" defer></script>
+    <script src="/web/static/pv_o2m_grid.js" defer></script>
     <link rel="stylesheet" href="/web/static/pv_html_editor.css">
     <link rel="stylesheet" href="/web/static/pv_code_editor.css">
 
@@ -469,16 +470,22 @@
                  }"
                  x-ref="card"
                  :style="cardStyle">
-                <div class="pv-fdialog-title flex items-center justify-between
+                <div class="pv-fdialog-title flex items-center gap-2
                             px-4 py-3 border-b border-default bg-neutral-secondary"
                      @mousedown="startDrag($event)">
-                    <h3 class="text-sm font-semibold text-heading truncate"
+                    <h3 class="text-sm font-semibold text-heading truncate flex-1 min-w-0"
                         x-text="title || 'Dialog'"></h3>
+                    <a x-show="recordUrl && mode === 'content'"
+                       :href="recordUrl"
+                       class="shrink-0 text-xs font-medium text-fg-brand hover:underline whitespace-nowrap"
+                       title="Open this record on the full page">
+                        Open full page
+                    </a>
                     <button type="button"
                             x-show="mode !== 'alert'"
                             @click.stop="close()"
                             aria-label="Close"
-                            class="p-1 rounded text-body-subtle hover:text-heading">
+                            class="p-1 rounded text-body-subtle hover:text-heading shrink-0">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor"
                              viewBox="0 0 24 24" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round"
@@ -617,6 +624,79 @@
         // which closes the dialog and invokes `onResult(result)`. Any
         // request originating from inside the body gets tagged with
         // `X-PV-Dialog: 1` so the server knows to emit that trigger.
+        /** Bind inline O2M grids inside edit_toggle roots (scope = element or document). */
+        window.pvRefreshO2mEditToggles = function (scope) {
+            const base = scope && scope.querySelectorAll ? scope : document;
+            base.querySelectorAll('[data-pv-o2m-edit-toggle]').forEach((el) => {
+                if (!window.Alpine) return;
+                try {
+                    const data = window.Alpine.$data(el);
+                    if (data && typeof data._bindInlineIfNeeded === 'function') {
+                        data._bindInlineIfNeeded();
+                    }
+                } catch (_) { /* not an Alpine root yet */ }
+            });
+        };
+
+        Alpine.data('pvO2mEditToggle', (storageKey, defaultMode) => ({
+            mode: defaultMode === 'inline' ? 'inline' : 'dialog',
+            init() {
+                try {
+                    const saved = localStorage.getItem(storageKey);
+                    if (saved === 'dialog' || saved === 'inline') this.mode = saved;
+                } catch (_) { /* private mode */ }
+                this.$watch('mode', () => {
+                    this.$nextTick(() => this._bindInlineIfNeeded());
+                });
+                this.$nextTick(() => this._bindInlineIfNeeded());
+            },
+            setMode(next) {
+                this.mode = next === 'inline' ? 'inline' : 'dialog';
+                try {
+                    localStorage.setItem(storageKey, this.mode);
+                } catch (_) { /* private mode */ }
+            },
+            _bindInlineIfNeeded() {
+                if (this.mode !== 'inline') return;
+                const pane = this.$el.querySelector('[data-pane="inline"]');
+                if (!pane) return;
+                if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+                    window.Alpine.initTree(pane);
+                }
+                pane.querySelectorAll('[data-pv-o2m-root]').forEach((root) => {
+                    if (window.pvO2mBindRoot) window.pvO2mBindRoot(root);
+                });
+                if (typeof window.pvO2mGridInitAll === 'function') {
+                    window.pvO2mGridInitAll(pane);
+                }
+            },
+        }));
+
+        Alpine.data('pvFormNotebook', (storageKey, defaultTab, pageNames) => ({
+            tab: defaultTab,
+            init() {
+                const valid = Array.isArray(pageNames) && pageNames.length
+                    ? pageNames
+                    : [defaultTab];
+                try {
+                    const saved = localStorage.getItem(storageKey);
+                    if (saved && valid.includes(saved)) this.tab = saved;
+                } catch (_) { /* private mode */ }
+                if (!valid.includes(this.tab)) this.tab = defaultTab;
+            },
+            pick(name) {
+                this.tab = name;
+                try {
+                    localStorage.setItem(storageKey, name);
+                } catch (_) { /* private mode */ }
+                this.$nextTick(() => {
+                    if (typeof window.pvRefreshO2mEditToggles === 'function') {
+                        window.pvRefreshO2mEditToggles(this.$el);
+                    }
+                });
+            },
+        }));
+
         Alpine.data('pvFormDialog', () => ({
             open: false,
             mode: 'content',       // 'content' | 'confirm' | 'alert'
@@ -627,6 +707,7 @@
             confirmLabel: 'Confirm',
             cancelLabel: 'Cancel',
             closeOnBackdrop: false,
+            recordUrl: null,              // full-page URL for "Open full page" link
             dragging: false,
             _x: null, _y: null,           // current top-left position (px)
             _dragOffset: null,            // mousedown offset within title bar
@@ -662,6 +743,8 @@
                 // hook via `data-pv-dialog-refresh` (when set, hits
                 // the current pathname again to reload the parent
                 // form's body after a save — used by o2m tables).
+                // Capture phase so list-row `onclick` navigation does not
+                // fire after we open the dialog (bubble hits <tr> first).
                 document.addEventListener('click', (e) => {
                     const trigger = e.target.closest('[data-pv-dialog]');
                     if (!trigger) return;
@@ -669,18 +752,14 @@
                         || trigger.getAttribute('href');
                     if (!url) return;
                     e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
                     const refresh = trigger.hasAttribute('data-pv-dialog-refresh');
                     this.openWith({
                         url,
                         title: trigger.dataset.pvDialogTitle || 'Edit',
                         onResult: (result) => {
                             if (refresh && result && result.id) {
-                                // Re-fetch the parent form into its
-                                // own shell. The parent shell carries
-                                // [data-pv-form-shell]; we want the
-                                // outermost (page-level) one, not the
-                                // dialog's own which has already
-                                // closed by this point.
                                 const shells = document.querySelectorAll(
                                     '[data-pv-form-shell]');
                                 const pageShell = shells.length
@@ -693,7 +772,7 @@
                             }
                         },
                     });
-                });
+                }, true);
             },
 
             get cardStyle() {
@@ -741,6 +820,7 @@
                 this.mode = 'content';
                 this.message = '';
                 this.title = cfg.title || '';
+                this.recordUrl = cfg.url || cfg.recordUrl || null;
                 this.closeOnBackdrop = !!cfg.closeOnBackdrop;
                 this._resolve = cfg.onResult || null;
                 this._x = null;
@@ -758,6 +838,10 @@
                         await window.htmx.ajax('GET', cfg.url, {
                             target: this.$refs.content,
                             swap: 'innerHTML',
+                            headers: {
+                                'HX-Request': 'true',
+                                'X-PV-Dialog': '1',
+                            },
                         });
                     }
                 } finally {
@@ -781,6 +865,7 @@
                 this.mode = 'content';
                 this.title = '';
                 this.message = '';
+                this.recordUrl = null;
                 this.loading = false;
                 this._x = null;
                 this._y = null;
@@ -861,6 +946,19 @@
             window.dispatchEvent(new CustomEvent('pv-toast-request', {
                 detail: { message, variant: 'info', duration: 6000, ...opts },
             }));
+
+        /** List row click → form; skip when the click was on a control. */
+        window.pvListRowNavigate = function (event, url) {
+            if (!url) return;
+            const t = event.target;
+            if (t && t.closest(
+                'button, a, input, select, textarea, label, '
+                + '[data-pv-dialog], .pv-m2o-open, [data-pv-row-handle]',
+            )) {
+                return;
+            }
+            window.location.href = url;
+        };
 
         // Survives full-page redirects (e.g. Apps Sync → /web/admin).
         window.pvStashFlash = (xhr) => {
@@ -951,6 +1049,23 @@
         }
         document.addEventListener('DOMContentLoaded', pvInitPickers);
         document.body.addEventListener('htmx:afterSwap', () => pvInitPickers());
+
+        function pvInitO2mGrids(scope) {
+            const base = scope || document;
+            if (typeof window.pvO2mGridInitAll === 'function') {
+                window.pvO2mGridInitAll(base);
+            }
+            if (base.querySelectorAll) {
+                base.querySelectorAll('[data-pv-o2m-root]').forEach((root) => {
+                    if (window.pvO2mBindRoot) window.pvO2mBindRoot(root);
+                });
+            }
+            if (typeof window.pvRefreshO2mEditToggles === 'function') {
+                window.pvRefreshO2mEditToggles(base);
+            }
+        }
+        document.addEventListener('DOMContentLoaded', () => pvInitO2mGrids());
+        document.body.addEventListener('htmx:afterSwap', e => pvInitO2mGrids(e.detail.target));
 
         // HTMX fires `htmx:confirm` before it would call window.confirm.
         // We intercept every request that carries an hx-confirm message,
@@ -1126,6 +1241,16 @@
                 this.cursor = 0;
                 this.open = false;
                 this.$refs.input.focus();
+            },
+            openRecord() {
+                if (this.value === null || !this.formViewUrl) return;
+                const url = this.formViewUrl + '/record/' + this.value;
+                const title = this.label || 'Open record';
+                if (window.PvDialog) {
+                    window.PvDialog.open({ url, title });
+                    return;
+                }
+                window.location.href = url;
             },
             async createFromQuery() {
                 const name = this.query.trim();
@@ -1744,6 +1869,23 @@
                 }
             },
         }));
+    });
+
+    // ---- Ctrl+S / Cmd+S — save active form (edit or new) ----------------
+    document.addEventListener('keydown', (e) => {
+        if (!(e.ctrlKey || e.metaKey) || e.key !== 's') return;
+        const t = e.target;
+        if (t && (t.closest('.pv-code-editor, .pv-html-editor, [contenteditable="true"]')
+            || (t.tagName === 'TEXTAREA' && t.closest('.pv-o2m-grid')))) {
+            return;
+        }
+        const form = document.querySelector('#pyvelm-form');
+        if (!form) return;
+        const shell = form.closest('[data-pv-form-shell]');
+        const btn = shell && shell.querySelector('[data-pv-form-save]:not([disabled])');
+        if (!btn) return;
+        e.preventDefault();
+        btn.click();
     });
 
     // ---- Odoo-style autosave on navigation ----------------------------

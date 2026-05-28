@@ -20,7 +20,7 @@ or (chatter_context and chatter_context.enabled)
 {% set stack_activity = show_activity and body_only %}
 
 {# HTMX body swap: keep prev/next in the layout heading (top-right). #}
-{% if body_only and record_pager %}
+{% if body_only and record_pager and not in_dialog %}
 <div id="pv-page-actions" hx-swap-oob="true" class="flex flex-wrap items-center justify-end gap-2">
     {% include "_record_pager.html" %}
 </div>
@@ -57,8 +57,10 @@ or (chatter_context and chatter_context.enabled)
         <div class="pv-form-split__main space-y-6">
             {% endif %}
 
-            {# Action toolbar — small, right-aligned, mode-aware. #}
-            <div class="flex items-center justify-between gap-3">
+            {# Action toolbar — sticky while scrolling long forms (Filament-style). #}
+            <div class="pv-form-actions-bar flex items-center justify-between gap-3
+                        sticky top-0 z-20 -mx-1 px-1 py-2 mb-2
+                        bg-neutral-primary/95 backdrop-blur-sm border-b border-default/80">
                 <span class="inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider
                      px-2 py-0.5 rounded-full
                      {% if mode == 'edit' %}bg-warning-soft text-warning-strong
@@ -113,7 +115,8 @@ or (chatter_context and chatter_context.enabled)
                     <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
                            rounded-md bg-success hover:opacity-90 transition" hx-post="{{ rec_url }}"
                         hx-include="closest [data-pv-form-shell]" hx-target="closest [data-pv-form-shell]"
-                        hx-swap="innerHTML">
+                        hx-swap="innerHTML"
+                        data-pv-form-save title="Save (Ctrl+S)">
                         Save
                     </button>
                     <button class="px-3 py-1.5 text-sm border border-default bg-neutral-primary text-body
@@ -125,7 +128,8 @@ or (chatter_context and chatter_context.enabled)
                     <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
                            rounded-md bg-success hover:opacity-90 transition" hx-post="{{ base }}"
                         hx-include="closest [data-pv-form-shell]" hx-target="closest [data-pv-form-shell]"
-                        hx-swap="innerHTML">
+                        hx-swap="innerHTML"
+                        data-pv-form-save title="Create (Ctrl+S)">
                         Create
                     </button>
                     <button type="button" class="px-3 py-1.5 text-sm border border-default bg-neutral-primary text-body
@@ -156,50 +160,60 @@ or (chatter_context and chatter_context.enabled)
             <form id="pyvelm-form" class="space-y-6" onsubmit="return false" {% if mode in ("edit", "new" ) %}
                 data-pv-autosave="{{ rec_url if mode == 'edit' else base }}" data-pv-autosave-method="POST" {% endif %}>
                 {% for section in sections %}
-                {# Per-section responsive grid via CSS custom properties — see
-                `.pv-form-grid` in static/tailwind.css. The section emits
-                `--pv-cols` (used from `lg`) and `--pv-cols-md` (used from
-                `md` to `<lg`, capped at min(cols, 2)). Cells emit
-                `--cell-span` and the global rule clamps each span to the
-                effective track count at the current breakpoint. #}
-                {% set section_cols = section.cols or 2 %}
-                {% set section_cols_md = section_cols if section_cols < 2 else 2 %}
+                {% if section.kind == 'notebook' %}
+                {% set default_tab = section.pages[0].name if section.pages else '' %}
+                {# Single-quoted Alpine attrs: tojson emits double-quoted strings. #}
+                {% set page_names = section.pages | map(attribute='name') | list %}
+                <fieldset class="bg-neutral-primary border border-default rounded-xl p-6 shadow-sm"
+                          x-data='pvFormNotebook({{ section.storage_key | tojson }}, {{ default_tab | tojson }}, {{ page_names | tojson }})'>
+                    {% if section.title %}
+                    <legend class="px-2 text-xs font-semibold uppercase tracking-wider text-body-subtle">
+                        {{ section.title }}
+                    </legend>
+                    {% endif %}
+                    <div class="mb-4 border-b border-default"
+                         aria-label="{{ section.title or section.name }}">
+                        <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" role="tablist">
+                            {% for page in section.pages %}
+                            <li class="{% if not loop.last %}me-2{% endif %}" role="presentation">
+                                <button type="button"
+                                        role="tab"
+                                        :id='"tab-" + {{ page.name | tojson }}'
+                                        :aria-controls='"panel-" + {{ page.name | tojson }}'
+                                        :aria-selected='tab === {{ page.name | tojson }}'
+                                        @click='pick({{ page.name | tojson }})'
+                                        class="inline-block p-4 border-b-2 rounded-t-base transition-colors"
+                                        :class='tab === {{ page.name | tojson }} ? "text-fg-brand border-brand" : "border-transparent text-body hover:text-fg-brand hover:border-brand"'>
+                                    {{ page.title }}
+                                </button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% for page in section.pages %}
+                    <div role="tabpanel"
+                         :id='"panel-" + {{ page.name | tojson }}'
+                         :aria-labelledby='"tab-" + {{ page.name | tojson }}'
+                         x-show='tab === {{ page.name | tojson }}'
+                         class="pt-2">
+                        {% with cells=page.cells, cols=page.cols %}
+                        {% include "_form_field_grid.html" %}
+                        {% endwith %}
+                    </div>
+                    {% endfor %}
+                </fieldset>
+                {% else %}
                 <fieldset class="bg-neutral-primary border border-default rounded-xl p-6 shadow-sm">
                     {% if section.title %}
                     <legend class="px-2 text-xs font-semibold uppercase tracking-wider text-body-subtle">
                         {{ section.title }}
                     </legend>
                     {% endif %}
-                    <div class="pv-form-grid"
-                         style="--pv-cols: {{ section_cols }}; --pv-cols-md: {{ section_cols_md }};">
-                        {% for cell in section.cells %}
-                        {% set cell_span = cell.colspan or (section_cols if cell.wide else 1) %}
-                        <div data-field="{{ cell.name }}"
-                             {% if cell.error %}data-pv-field-error{% endif %}
-                             class="flex flex-col gap-1.5 min-w-0
-                                {% if cell.error %}pv-cell-error{% endif %}"
-                             style="--cell-span: {{ cell_span }};">
-                            <label class="block text-sm font-medium text-heading">
-                                {{ cell.label }}
-                                {% if mode in ("edit", "new") and cell.required %}
-                                <span class="text-fg-danger ml-0.5" aria-hidden="true">*</span>
-                                {% endif %}
-                            </label>
-                            <div class="text-sm text-body">{{ cell.html }}</div>
-                            {% if cell.error %}
-                            <p class="text-xs text-fg-danger flex items-center gap-1">
-                                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                    stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                        d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                                </svg>
-                                {{ cell.error }}
-                            </p>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
+                    {% with cells=section.cells, cols=section.cols %}
+                    {% include "_form_field_grid.html" %}
+                    {% endwith %}
                 </fieldset>
+                {% endif %}
                 {% endfor %}
             </form>
 

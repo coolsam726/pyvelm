@@ -95,6 +95,15 @@ and applies the op at the final position.
 `["sections", "profile", "fields", "active"]` reaches the `active`
 field inside the `profile` section.
 
+For a field inside a notebook page:
+
+```python
+op_after(
+    ["sections", "lines", "pages", "invoice", "fields", "qty"],
+    {"name": "price_unit"},
+)
+```
+
 Errors at any segment raise during install — there's no silent skip.
 
 ### Predicates: matching by any attribute

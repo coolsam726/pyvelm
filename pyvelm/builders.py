@@ -88,11 +88,14 @@ from pyvelm.types import (
     ArchKanbanCard,
     ArchList,
     ArchPivot,
+    ArchNotebook,
+    ArchPage,
     ArchSection,
     DashboardColspan,
     DashboardWidget,
     FieldRef,
     FieldRefLike,
+    FormLayoutItem,
     FormView,
     GraphView,
     KanbanView,
@@ -110,6 +113,8 @@ __all__ = [
     # field / section / card helpers
     "field",
     "section",
+    "page",
+    "notebook",
     "card",
     # view constructors
     "list_view",
@@ -176,6 +181,11 @@ def field(
     - ``columns`` — inline column list with **no** list view required (same
       shape as list arch ``fields``). Highest priority for column layout.
     - ``form_view`` — comodel form for row links / dialog create.
+    - ``edit_toggle`` — render a **Dialog / Inline grid** switch (``widget`` is
+      the default mode). Supply both ``list_view`` and ``columns`` as needed.
+
+    Inline / ``table`` widgets support Excel-style keyboard navigation in the
+    sub-grid (Tab, Enter, arrows) — see ``docs/one2many-forms.md``.
 
     Example::
 
@@ -222,6 +232,55 @@ def section(
     result: ArchSection = {"name": name, "title": title, "fields": fields}
     if cols is not None:
         result["cols"] = cols
+    return result
+
+
+def page(
+    name: str,
+    title: str,
+    fields: list[FieldRefLike],
+    *,
+    cols: int | None = None,
+) -> ArchPage:
+    """Build one tab page inside a form ``notebook(...)``.
+
+    Example::
+
+        page("invoice", "Invoice lines", [
+            field("invoice_line_ids", widget="dialog", list_view="move.line.invoice"),
+        ])
+    """
+    result: ArchPage = {"name": name, "title": title, "fields": fields}
+    if cols is not None:
+        result["cols"] = cols
+    return result
+
+
+def notebook(
+    name: str,
+    pages: list[ArchPage],
+    *,
+    title: str | None = None,
+) -> ArchNotebook:
+    """Build a tabbed notebook block on a parent form.
+
+    Each ``page(...)`` holds its own field grid — useful for grouping
+    several One2many sub-grids (different ``list_view`` per tab).
+
+    Example::
+
+        notebook("lines", pages=[
+            page("invoice", "Invoice lines", [
+                field("invoice_line_ids", list_view="move.line.invoice"),
+            ]),
+            page("entry", "Journal items", [
+                field("entry_line_ids", list_view="move.line.entry"),
+            ]),
+        ])
+    """
+    result: ArchNotebook = {"name": name, "pages": pages}
+    if title is not None:
+        result["title"] = title
     return result
 
 
@@ -328,7 +387,7 @@ def list_view(
 def form_view(
     name: str,
     model: str,
-    sections: list[ArchSection],
+    sections: list[FormLayoutItem],
     *,
     title: str | None = None,
     header_actions: list[dict] | None = None,
@@ -340,7 +399,7 @@ def form_view(
     Args:
         name:      Unique view name (e.g. ``"partner.form"``).
         model:     Dotted model name (e.g. ``"res.partner"``).
-        sections:  List of ``section(...)`` dicts.
+        sections:  List of ``section(...)`` and/or ``notebook(...)`` blocks.
         title:     Optional heading override (default: humanized model name).
         header_actions: Optional list of buttons rendered in display
                    mode next to Edit / Delete. Each is a dict with

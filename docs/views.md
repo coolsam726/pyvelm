@@ -96,27 +96,33 @@ at the end of this page.
 
 ## Form views
 
-A form arch declares **sections**, each with a `name`, a display
-`title`, and a `fields` list. The same string-or-dict sugar applies.
+A form arch declares a list of layout blocks: flat **sections** and/or
+tabbed **notebooks** (Odoo-style `<notebook>` / `<page>`).
+
+Each `section(...)` has a `name`, display `title`, and `fields` list.
+Each `notebook(...)` has a `name` and `pages=[page(...), ...]`; each
+`page(...)` is a tab with its own `fields` grid — ideal for several
+One2many sub-grids with different `list_view` values.
 
 ```python
-from pyvelm.builders import form_view, section, field
+from pyvelm.builders import form_view, section, notebook, page, field
 
 form_view(
     "partner.form", "res.partner",
     sections=[
         section("identity", "Identity", ["name", "code"]),
-        section("profile",  "Profile",
-                ["age", "country_id", "parent_id",
-                 field("active", widget="toggle")]),
-        section("relations", "Relations", ["tag_ids", "child_ids"]),
+        notebook("relations", pages=[
+            page("children", "Contacts", ["child_ids"]),
+            page("tags", "Tags", [field("tag_ids", widget="dialog")]),
+        ]),
     ],
 )
 ```
 
 The form lives at `/web/views/{module}/{name}/record/{id}` (display
-mode) and `…/edit` (edit mode). The template renders each section as
-a card with a 2-column responsive grid. Edit mode swaps each value
+mode) and `…/edit` (edit mode). Flat sections render as stacked cards;
+notebooks render a tab strip (the active tab is remembered per view in
+`localStorage`). Edit mode swaps each value
 for the corresponding edit-mode widget — text inputs, number
 inputs, checkboxes, the [Many2one combobox](#many2one-combobox), and
 the [Many2many chip editor](#many2many-chip-editor).
@@ -183,6 +189,7 @@ Quick reference:
 | Different list per parent form | `field("ids", list_view="other.list")` |
 | Inline edit on parent Save | `widget="inline"` |
 | Dialog edit (default) | `widget="dialog"` or omit when form exists |
+| Let the user pick dialog vs inline | `edit_toggle=True` (+ `list_view` / `columns`) |
 
 ```python
 section(
@@ -193,13 +200,17 @@ section(
         field(
             "comment_ids",
             widget="dialog",
+            edit_toggle=True,
             list_view="comment.compact",
             form_view="comment.form",
+            columns=["body", "active"],
         ),
-        field("rate_ids", widget="inline", columns=["currency_id", "rate"]),
     ],
 )
 ```
+
+Use ``edit_toggle=True`` for a **Dialog | Inline grid** switch on one field
+instead of separate tabs (see [One2many on parent forms](one2many-forms.md)).
 
 If the comodel has **no** form view, One2many falls back to a chip
 summary; Many2many falls back to inline chip search.

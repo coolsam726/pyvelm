@@ -21,12 +21,15 @@ Recommended usage in a data file:
 
 Or, for maximum ergonomics, use the builder helpers in ``pyvelm.builders``:
 
-    from pyvelm.builders import list_view, form_view, section
+    from pyvelm.builders import list_view, form_view, section, notebook, page
 
     VIEWS = [
         list_view("partner.list", "res.partner", fields=["name", "code"]),
         form_view("partner.form", "res.partner", sections=[
             section("identity", "Identity", ["name", "code"]),
+            notebook("extra", pages=[
+                page("tags", "Tags", ["tag_ids"]),
+            ]),
         ]),
     ]
 
@@ -92,11 +95,16 @@ class FieldRef(_FieldRefRequired, total=False):
 
   **One2many on parent forms** (see ``docs/one2many-forms.md``):
 
-  - ``widget`` — ``dialog`` (default) or ``inline`` / ``table``
+  - ``widget`` — ``dialog`` (default) or ``inline`` / ``table``; also the
+    default when ``edit_toggle`` is true
+  - ``edit_toggle`` — show **Dialog / Inline grid** switch (needs ``columns``
+    or ``list_view`` for both modes)
   - ``columns`` — inline sub-grid columns without a registered list view
   - ``list_view`` — name of a comodel list view (columns + ``sequence``)
   - ``form_view`` — comodel form for row links and dialog create
     """
+
+    edit_toggle: bool
 
     widget: WidgetHint
     label: str
@@ -170,6 +178,39 @@ class ArchSection(_ArchSectionRequired, total=False):
     cols: int
 
 
+class _ArchPageRequired(TypedDict):
+    name: str
+    title: str
+    fields: list[FieldRefLike]
+
+
+class ArchPage(_ArchPageRequired, total=False):
+    """One tab page inside a form notebook.
+
+    Same grid rules as ``ArchSection``; ``title`` is the tab label.
+    """
+
+    cols: int
+
+
+class _ArchNotebookRequired(TypedDict):
+    name: str
+    pages: list[ArchPage]
+
+
+class ArchNotebook(_ArchNotebookRequired, total=False):
+    """Tabbed notebook block on a form (Odoo ``<notebook>``).
+
+    Use ``pages`` instead of ``fields``. Optional ``title`` renders as an
+    outer fieldset legend above the tab strip.
+    """
+
+    title: str
+
+
+FormLayoutItem = Union[ArchSection, ArchNotebook]
+
+
 class ArchHeaderAction(TypedDict, total=False):
     """One button rendered in the form's display-mode action toolbar.
 
@@ -200,20 +241,22 @@ class ArchHeaderAction(TypedDict, total=False):
 
 
 class _ArchFormRequired(TypedDict):
-    sections: list[ArchSection]
+    sections: list[FormLayoutItem]
 
 
 class ArchForm(_ArchFormRequired, total=False):
     """Arch for ``view_type="form"`` views.
 
-    Only ``sections`` is required. Optional keys:
+    Only ``sections`` is required. Each entry is either a flat
+    ``section(...)`` (``fields``) or a ``notebook(...)`` (``pages``).
+    Optional keys:
 
     - ``title`` — overrides the auto-generated page heading.
     - ``header_actions`` — list of buttons rendered next to Edit /
       Delete in display mode (e.g. "Run Now" on a cron form).
     - ``cols`` — number of columns each section uses (default 2). Each
       ``field(...)`` may set ``colspan`` to span multiple cells; a
-      section may override ``cols`` for its own block.
+      section or notebook page may override ``cols`` for its own block.
     """
 
     title: str
@@ -571,8 +614,11 @@ __all__ = [
     "ArchKanbanCard",
     "ArchList",
     "ArchPivot",
+    "ArchNotebook",
+    "ArchPage",
     "ArchSection",
     "FieldRef",
+    "FormLayoutItem",
     "FieldRefLike",
     "FormView",
     "GraphView",
