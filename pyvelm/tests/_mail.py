@@ -17,8 +17,11 @@ def register_res_users(reg: Registry) -> None:
 
 def register_mail_message(reg: Registry) -> None:
     from pyvelm.mail import Message
+    from pyvelm.mail_template import MailTemplate
 
     register_res_users(reg)
+    if "mail.template" not in reg:
+        reg.register(MailTemplate)
     reg.register(Message)
 
 

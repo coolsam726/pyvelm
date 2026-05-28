@@ -69,25 +69,29 @@ def test_validate_definition_rejects_duplicate_state():
 @pytest.fixture
 def workflow_env():
     import psycopg
+    from pathlib import Path
 
     dsn = __import__("os").environ.get("PYVELM_DSN")
     if not dsn:
         pytest.skip("PYVELM_DSN not set")
+    examples = Path(__file__).resolve().parents[2] / "examples" / "modules"
     reg = Registry()
     with psycopg.connect(dsn, autocommit=True) as conn:
         env = Environment(conn, registry=reg, uid=1)
         env._acl_bypass = True
-        loader.load_and_install(list(BUILTIN_MODULE_ROOTS), env)
+        loader.load_and_install(list(BUILTIN_MODULE_ROOTS) + [examples], env)
         yield env
 
 
 def test_workflow_start_and_transition(workflow_env):
     if "workflow.definition" not in workflow_env.registry:
         pytest.skip("workflow module not installed")
+    if "res.partner" not in workflow_env.registry:
+        pytest.skip("res.partner not installed (need examples/modules)")
     env = workflow_env
     Definition = env["workflow.definition"]
     Partner = env["res.partner"]
-    rec = Partner.create({"name": "Workflow test partner"})
+    rec = Partner.create({"name": "Workflow test partner", "code": "WF01"})
     inst = WorkflowEngine.start(env, rec)
     assert inst.state == "draft"
     WorkflowEngine.apply_transition(

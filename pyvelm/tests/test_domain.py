@@ -156,7 +156,9 @@ class DomainCacheTests(unittest.TestCase):
 
     def test_comodel_unlink_clears_many2one_cache(self):
         country = self.Country.create({"name": "CacheUnlink", "code": "CU"})
-        partner = self.Partner.create({"name": "CachePartner", "country_id": country})
+        partner = self.Partner.create(
+            {"name": "CachePartner", "code": "CP1", "country_id": country}
+        )
         self.assertEqual(partner.country_id.id, country.id)
         country.unlink()
         p = self.Partner.browse(partner.id)
@@ -185,7 +187,9 @@ class M2mSymmetricCacheTests(unittest.TestCase):
 
     def test_partner_tag_write_clears_tag_partner_ids_cache(self):
         tag = self.Tag.create({"name": "SymCache"})
-        partner = self.Partner.create({"name": "SymPartner", "tag_ids": [tag]})
+        partner = self.Partner.create(
+            {"name": "SymPartner", "code": "SP1", "tag_ids": [tag]}
+        )
         t = self.Tag.browse(tag.id)
         self.assertIn(partner, t.partner_ids)
         partner.write({"tag_ids": []})
