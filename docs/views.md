@@ -29,6 +29,22 @@ That's enough to get a sortable, paginated, searchable table at
 `/web/views/partners/partner.list`. The toolbar above the rows ships
 with:
 
+### Fixed domain
+
+Pin a list to a subset of records with ``domain`` on the arch (ANDed
+with toolbar search and filter chips — same as graph/pivot views):
+
+```python
+list_view(
+    "partner.active", "res.partner",
+    fields=["name", "code"],
+    form_view="partner.form",
+    domain=[("active", "=", True)],
+)
+```
+
+Or in raw dict form: ``arch={"fields": [...], "domain": [("stage", "=", "won")]}``.
+
 - **Search** — single text input, ILIKE-OR across every text field
   in the view. Debounced 400 ms.
 - **Filter** — drop-down builder for per-column constraints. Booleans

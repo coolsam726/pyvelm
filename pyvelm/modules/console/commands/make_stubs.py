@@ -7,8 +7,8 @@ from pyvelm.scaffold_generators import _load_dotenv_for_scaffold
 from pyvelm.scaffolder import find_project_root
 from pyvelm.stub_generators import (
     default_stubs_dir,
-    ensure_pyrightconfig,
     generate_stubs,
+    write_pyrightconfig,
 )
 
 
@@ -59,6 +59,6 @@ class MakeStubsCommand(Command):
             f"{len(index.qualified_views)} qualified views"
         )
         config_root = project or Path.cwd()
-        if ensure_pyrightconfig(config_root, stubs_dir=written):
-            self.info(f"Created {config_root / 'pyrightconfig.json'}")
+        if write_pyrightconfig(config_root, stubs_dir=written):
+            self.info(f"Updated {config_root / 'pyrightconfig.json'}")
         return 0

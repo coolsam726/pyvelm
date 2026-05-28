@@ -2743,6 +2743,21 @@ def encode_list_nav_query(
     )
 
 
+def _list_page_domain(
+    model_cls,
+    arch: dict,
+    fields_spec: list,
+    search: str,
+    filters: str,
+) -> list:
+    """Base domain for list pages: static ``arch["domain"]`` + search + chips."""
+    domain: list = list(arch.get("domain") or [])
+    if search:
+        domain.extend(_build_search_domain(model_cls, fields_spec, search))
+    domain.extend(_parse_filters(model_cls, fields_spec, filters))
+    return domain
+
+
 def _list_view_domain_and_order(
     list_view,
     env,
@@ -2758,10 +2773,7 @@ def _list_view_domain_and_order(
     fields_spec = arch.get("fields", [])
     model_cls = env.registry[list_view.model]
 
-    domain: list = list(arch.get("domain") or [])
-    if search:
-        domain.extend(_build_search_domain(model_cls, fields_spec, search))
-    domain.extend(_parse_filters(model_cls, fields_spec, filters))
+    domain = _list_page_domain(model_cls, arch, fields_spec, search, filters)
 
     sequence_field = arch.get("sequence")
     if sequence_field and sequence_field in model_cls._fields:
@@ -4668,8 +4680,7 @@ def render_list_page(
     model_cls = env.registry[view.model]
     Model = env[view.model]
 
-    domain = _build_search_domain(model_cls, fields_spec, search) if search else []
-    domain.extend(_parse_filters(model_cls, fields_spec, filters))
+    domain = _list_page_domain(model_cls, arch, fields_spec, search, filters)
 
     # Drag-reorder: `arch["sequence"]` names the Integer field that
     # backs the row ordering. When present we force-sort by that
@@ -4795,8 +4806,7 @@ def render_list_rows(
     model_cls = env.registry[view.model]
     Model = env[view.model]
 
-    domain = _build_search_domain(model_cls, fields_spec, search) if search else []
-    domain.extend(_parse_filters(model_cls, fields_spec, filters))
+    domain = _list_page_domain(model_cls, arch, fields_spec, search, filters)
 
     sequence_field = arch.get("sequence")
     if sequence_field and sequence_field in model_cls._fields:

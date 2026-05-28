@@ -7,6 +7,24 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.20.1] — 2026-05-28
+
+### Added
+
+- **List view fixed domain** — `arch["domain"]` and `list_view(..., domain=[...])`
+  are now applied in `render_list_page` and HTMX list refreshes (ANDed with
+  toolbar search and filter chips). Graph/pivot already supported this; list
+  navigation had read the domain but the table did not.
+- **IDE stubs (follow-up)** — `make:stubs` refreshes `pyrightconfig.json`
+  `include` paths (`examples/modules`, `app/`, etc.), adds `fields.pyi`
+  (`Many2one("…")` completions) and `builders.pyi` (`view="…"` on menus),
+  and simplifies `env`/`registry` overloads for Pylance.
+
+### Fixed
+
+- **Pylance not analyzing example apps** — default `pyrightconfig.json` only
+  listed `["app"]`, so files under `examples/` were excluded from type checking.
+
 ## [0.20.0] — 2026-05-28
 
 ### Added

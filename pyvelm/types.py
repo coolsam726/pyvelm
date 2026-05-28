@@ -124,6 +124,8 @@ class ArchList(_ArchListRequired, total=False):
     - ``create_href`` — URL for the list's New button (full navigation).
     - ``sequence``  — name of an integer field; when set the renderer
                       adds a drag handle and forces sort by that field.
+    - ``domain``    — static domain ANDed with toolbar search / filter chips
+                      (same semantics as graph/pivot views).
     """
 
     title: str
@@ -131,6 +133,7 @@ class ArchList(_ArchListRequired, total=False):
     record_href: str
     create_href: str
     sequence: str
+    domain: list
 
 
 class _ArchSectionRequired(TypedDict):

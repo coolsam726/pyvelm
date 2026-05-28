@@ -268,6 +268,7 @@ def list_view(
     record_href: str | None = None,
     create_href: str | None = None,
     sequence: str | None = None,
+    domain: list | None = None,
     priority: int = 16,
 ) -> ListView:
     """Declare a ``view_type="list"`` view.
@@ -281,13 +282,15 @@ def list_view(
         record_href: Optional URL for row navigation; ``{id}`` is replaced.
         create_href: Optional URL for the New button (bypasses form create).
         sequence:   Field name of an integer field enabling drag-reorder.
+        domain:     Static domain ANDed with search / filter chips on the list.
         priority:   Inheritance chain priority (default 16).
 
     Example::
 
         list_view("partner.list", "res.partner",
                   fields=["name", "code", field("active", widget="toggle")],
-                  form_view="partner.form")
+                  form_view="partner.form",
+                  domain=[("active", "=", True)])
     """
     arch: ArchList = {"fields": fields}
     if title is not None:
@@ -300,6 +303,8 @@ def list_view(
         arch["create_href"] = create_href
     if sequence is not None:
         arch["sequence"] = sequence
+    if domain is not None:
+        arch["domain"] = domain
     result: ListView = {
         "name": name,
         "model": model,

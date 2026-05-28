@@ -1,5 +1,7 @@
 {
-  "include": ["app"],
+  "include": {{include_json}},
   "stubPath": "{{stub_path}}",
-  "extraPaths": ["{{stub_path}}"]
+  "extraPaths": ["{{stub_path}}"],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "basic"
 }

@@ -89,24 +89,41 @@ if you need to reset paths after moving the stub directory.
 
 ### VS Code / Cursor (Pylance)
 
-1. Run `pyvelm make:stubs` (creates or confirms `pyrightconfig.json`).
-2. Reload the window if types do not update immediately.
+1. Install pyvelm into the **same interpreter** VS Code selected
+   (`Python: Select Interpreter` → your venv with `pip install -e .`).
+2. Run `pyvelm make:stubs` (writes stubs and **refreshes** `pyrightconfig.json`).
+3. **Developer: Reload Window** if completions do not appear.
+4. Set **Python › Analysis: Type Checking Mode** to at least **basic**
+   (workspace or user settings). Completions for string literals need
+   type checking enabled — `off` will not suggest `ModelName` members.
 
-The generated config looks like:
+`make:stubs` sets `include` to every code tree it finds (`app/`,
+`examples/modules/`, your `pyvelm.toml` `modules_root`, etc.). If you
+only had `["app"]` but edit files under `examples/`, Pylance was not
+analyzing those files — that is the most common reason completions
+appear to do nothing.
 
 ```json
 {
-  "include": ["app"],
+  "include": ["app", "examples/modules"],
   "stubPath": ".pyvelm/typing",
-  "extraPaths": [".pyvelm/typing"]
+  "extraPaths": [".pyvelm/typing"],
+  "typeCheckingMode": "basic"
 }
 ```
 
-- **`stubPath`** — merges `pyvelm/env.pyi` and `pyvelm/registry.pyi` with the
-  installed package so `env["res.company"]` is checked against `ModelName`.
+- **`stubPath`** — merges `pyvelm/env.pyi`, `fields.pyi`, `builders.pyi`
+  with the installed package (`env["…"]`, `Many2one("…")`, `view="…"`).
 - **`extraPaths`** — lets you `from names import ModelName` in app code.
 
-Adjust `include` if your Python tree is not under `app/` (e.g. `examples`).
+Where completions apply:
+
+| Location | Example |
+|----------|---------|
+| `Many2one("…")` | Comodel technical name |
+| `m.item(…, view="…")` | Short view name (`ViewSlug`) |
+| `env["…"]` | Model technical name (when `env` is typed as `Environment`) |
+| Record fields | Not stubbed yet (`record.name` stays unstructured) |
 
 ### PyCharm
 
@@ -166,6 +183,16 @@ resolution on top of that.
 | [`pyvelm make:view`](console.md) | Scaffold views from model fields |
 | [`pyvelm init`](cli.md) | New project with `pyrightconfig.json` + `.gitignore` |
 
+## Troubleshooting (VS Code)
+
+| Symptom | Fix |
+|---------|-----|
+| No completions anywhere | Type checking mode `off` → set **basic** or **standard** |
+| No completions in `examples/` | Re-run `make:stubs` so `include` lists `examples/modules` |
+| `Many2one` / `view=` still plain `str` | Reload window; confirm `stubPath` in `pyrightconfig.json` |
+| `env["…"]` not completing | `env` must be typed (`Environment`); ad-hoc untyped locals won't |
+| Stubs outdated | Re-run `make:stubs` after model/view changes |
+
 ## Limitations
 
 - Stubs reflect **declared** models and `DATA` views, not records created only
@@ -173,5 +200,6 @@ resolution on top of that.
 - Dynamic domains and runtime-built view refs are not analyzed.
 - Very large registries truncate the `Literal` union (see comment in `names.pyi`);
   narrow with `--modules-root` or `--app-only`.
+- Record **field** names on recordsets are not completed (only model/view strings).
 - The web app and `pyvelm db` commands do **not** auto-generate stubs on
   startup — run `make:stubs` explicitly (or add a pre-commit hook).

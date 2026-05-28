@@ -5,14 +5,13 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.20.0](releases/v0.20.0.md) (2026-05-28) — **`pyvelm make:stubs`**
-for IDE typing (`ModelName`, view literals, `env[]` overloads) plus automatic
-`pyrightconfig.json` when missing. See
-[releases](releases/v0.20.0.md) and the
+**Latest release:** [v0.20.1](releases/v0.20.1.md) (2026-05-28) — list view
+**fixed `domain`**, plus IDE stub fixes (`make:stubs`, Pylance `include` paths).
+See [releases](releases/v0.20.1.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.20.0
+pip install pyvelm==0.20.1
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -54,6 +53,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.20.1](releases/v0.20.1.md) | List view **`domain=`**; IDE stub / Pylance `include` fixes |
 | [v0.20.0](releases/v0.20.0.md) | **[IDE typing stubs](ide-typing.md)** — `make:stubs`, Pyright/Pylance literals, `pyrightconfig.json` auto-setup |
 | [v0.19.0](releases/v0.19.0.md) | **Drive-style [file library](file-manager.md)** — folders, bulk actions, Properties page, company scoping, `file_url` widget |
 | [v0.18.0](releases/v0.18.0.md) | **[geo_data](geo-data.md)** module (continents/countries/states/cities), cross-module FK ordering fix |

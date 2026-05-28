@@ -1,15 +1,18 @@
 """Typing stub generation (``pyvelm make:stubs``)."""
 from __future__ import annotations
 
+import json
 import tempfile
 import textwrap
 import unittest
 from pathlib import Path
 
 from pyvelm.stub_generators import (
+    discover_include_paths,
     ensure_pyrightconfig,
     generate_stubs,
     load_stub_index,
+    write_pyrightconfig,
 )
 
 
@@ -72,6 +75,28 @@ class StubGeneratorTests(unittest.TestCase):
             self.assertIn("demo.item.list", index.qualified_views)
             self.assertEqual(index.view_models.get("demo.item.list"), "demo.item")
 
+    def test_discover_include_paths_finds_examples_modules(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            (root / "examples" / "modules").mkdir(parents=True)
+            includes = discover_include_paths(root)
+            self.assertIn("examples/modules", includes)
+
+    def test_write_pyrightconfig_refreshes_include(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            (root / "examples" / "modules").mkdir(parents=True)
+            (root / "pyrightconfig.json").write_text(
+                '{"include": ["app"], "stubPath": "old"}', encoding="utf-8"
+            )
+            stubs = root / ".pyvelm" / "typing"
+            stubs.mkdir(parents=True)
+            self.assertTrue(write_pyrightconfig(root, stubs_dir=stubs))
+            cfg = json.loads((root / "pyrightconfig.json").read_text(encoding="utf-8"))
+            self.assertIn("examples/modules", cfg["include"])
+            self.assertEqual(cfg["stubPath"], ".pyvelm/typing")
+
     def test_ensure_pyrightconfig_creates_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._mini_project(Path(tmp))
@@ -99,7 +124,9 @@ class StubGeneratorTests(unittest.TestCase):
             self.assertIn('"demo.item"', names)
             self.assertIn('"demo.item.list"', names)
             env_stub = (written / "pyvelm" / "env.pyi").read_text(encoding="utf-8")
-            self.assertIn('Literal["demo.item"]', env_stub)
+            self.assertIn("ModelName", env_stub)
+            fields_stub = (written / "pyvelm" / "fields.pyi").read_text(encoding="utf-8")
+            self.assertIn("comodel_name: ModelName", fields_stub)
             self.assertGreater(len(index.models), 0)
 
 

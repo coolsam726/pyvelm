@@ -213,7 +213,11 @@ def _run_init(args: argparse.Namespace) -> None:
         materialise(
             "project",
             target,
-            variables={"name": name, "stub_path": ".pyvelm/typing"},
+            variables={
+                "name": name,
+                "stub_path": ".pyvelm/typing",
+                "include_json": '["app"]',
+            },
         )
     except FileExistsError:
         sys.exit(f"{target} already exists — pick a different name.")
