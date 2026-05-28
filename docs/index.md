@@ -18,7 +18,11 @@ pip install pyvelm==0.22.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
-Support development: [**Sponsor on GitHub**](https://github.com/sponsors/coolsam726).
+Maintained by [Sam Maosa](https://github.com/coolsam726) alongside
+[Filament modules](https://github.com/savannabits/filament-modules),
+[flatpickr](https://github.com/coolsam726/flatpickr),
+[nested-comments](https://github.com/coolsam726/nested-comments), and other packages —
+[**sponsor on GitHub**](https://github.com/sponsors/coolsam726) (one profile, all projects).
 
 ## Quick start
 

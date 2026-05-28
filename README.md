@@ -52,8 +52,21 @@ Maintainer notes: [CHANGELOG.md](CHANGELOG.md) · [CONTEXT.md](CONTEXT.md).
 
 ## Sponsor
 
-PyVELM is maintained by [Sam Maosa](https://github.com/coolsam726).  
-If it saves you time, consider [**sponsoring on GitHub**](https://github.com/sponsors/coolsam726).
+Open-source business-app tooling maintained by [Sam Maosa](https://github.com/coolsam726).
+[**Sponsor on GitHub**](https://github.com/sponsors/coolsam726) supports **all** of these
+projects—not just PyVELM.
+
+| | Project |
+|---|---------|
+| **This repo** | [**PyVELM**](https://github.com/coolsam726/pyvelm) — declarative Python ERP |
+| 1 | [**filament-modules**](https://github.com/savannabits/filament-modules) — Filament + `nWidart/laravel-modules` |
+| 2 | [**flatpickr**](https://github.com/coolsam726/flatpickr) — Flatpickr date picking for Filament |
+| 3 | [**nested-comments**](https://github.com/coolsam726/nested-comments) — nested comments on Filament forms & pages |
+| 4 | [**typeorm-pagination**](https://github.com/savannabits/typeorm-pagination) — pagination for Express + TypeORM |
+| 5 | [**filament-signature-pad**](https://github.com/savannabits/filament-signature-pad) — signature field for Filament forms |
+
+Same craft across stacks: admin UX that feels intentional, released in the open with
+docs and tests. If any of this saves you a sprint, sponsorship keeps it sustainable.
 
 ## License
 
