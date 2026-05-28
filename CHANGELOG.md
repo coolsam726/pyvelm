@@ -7,6 +7,38 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.22.0] — 2026-05-29
+
+### Added
+
+- **LGPL-3.0-or-later** — `LICENSE` file and SPDX license metadata on the
+  PyPI package.
+- **CI** — GitHub Actions workflow (`.github/workflows/ci.yml`): pytest on
+  Postgres, coverage report, Codecov upload.
+- **PyPI package metadata** — `readme`, `[project.urls]`, keywords,
+  `license-files`, and optional **`[test]`** extra (`pytest`, `pytest-cov`).
+- **Docs** — [Form UX](docs/form-ux.md) guide (notebooks, sticky actions,
+  Ctrl+S, save toasts, `PvDialog`, O2M `edit_toggle`); cross-links from
+  views, one2many-forms, geo-data, and index.
+- **README** — minimal landing page with CI, coverage, PyPI, docs, and
+  license badges.
+
+### Changed
+
+- **PyVELM** branding in README, docs site title, and PyPI description
+  (package/CLI remain `pyvelm`).
+- **Tagline** — Odoo semantics, Laravel ergonomics, Filament craft, bespoke
+  Tailwind admin shell.
+- **MkDocs** — `site_url` / `repo_url` point at `coolsam726.github.io/pyvelm`
+  and the real GitHub repo.
+
+### Fixed
+
+- **`load_registry_for_module`** — honours `modules_root` so scaffold/stub
+  tests do not pick up `examples/modules_demo/demo` by mistake.
+- **Test isolation** — purge temp `demo` modules from `sys.modules` after
+  scaffold/stub tests.
+
 ## [0.21.0] — 2026-05-29
 
 ### Added

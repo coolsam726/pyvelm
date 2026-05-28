@@ -265,8 +265,9 @@ def load_registry_for_module(
     from . import loader
     from .registry import Registry
 
-    # Always discover all addon roots so ``depends`` (e.g. ``base``) resolve.
-    roots = modules_root_candidates(None)
+    # When ``modules_root`` is set (tests, single-addon scaffolds), scan only
+    # that tree; otherwise discover all configured roots so ``depends`` resolve.
+    roots = modules_root_candidates(modules_root)
     specs = loader.discover(roots)
     if module_name not in specs:
         return None

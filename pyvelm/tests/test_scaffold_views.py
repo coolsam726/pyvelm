@@ -11,9 +11,13 @@ from pyvelm.scaffold_generators import (
     generate_views,
     load_registry_for_module,
 )
+from pyvelm.tests._isolation import purge_import_prefix
 
 
 class ViewScaffoldFromModelTests(unittest.TestCase):
+    def tearDown(self):
+        purge_import_prefix("demo")
+
     def test_build_sections_for_partner_like_model(self):
         from pyvelm import BaseModel, Boolean, Char, Many2many, Many2one, One2many
         from pyvelm.registry import Registry
@@ -88,7 +92,5 @@ class ViewScaffoldFromModelTests(unittest.TestCase):
                 self.assertIn("section(\"main\"", text)
             finally:
                 sys.path.remove(str(root))
-                for key in list(sys.modules):
-                    if key == "demo.models" or key.startswith("demo.models."):
-                        del sys.modules[key]
+                purge_import_prefix("demo")
 

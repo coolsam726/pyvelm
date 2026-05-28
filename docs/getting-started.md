@@ -1,10 +1,10 @@
 # Getting started
 
-This walks through creating a brand-new pyvelm app, from
-`pip install` to your first custom module showing in the browser.
+This walks through creating a brand-new **PyVELM** app, from
+`pip install pyvelm` to your first custom module showing in the browser.
 Three steps:
 
-1. Install pyvelm and scaffold a project.
+1. Install the `pyvelm` package and scaffold a project.
 2. Boot the app and explore.
 3. Add a module.
 

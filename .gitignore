@@ -1,6 +1,9 @@
 .pyvelm/
 pyrightconfig.json
 .venv/
+.coverage
+htmlcov/
+.pytest_cache/
 __pycache__/
 *.pyc
 *.egg-info/

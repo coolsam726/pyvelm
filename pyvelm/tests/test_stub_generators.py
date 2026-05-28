@@ -14,9 +14,13 @@ from pyvelm.stub_generators import (
     load_stub_index,
     write_pyrightconfig,
 )
+from pyvelm.tests._isolation import purge_import_prefix
 
 
 class StubGeneratorTests(unittest.TestCase):
+    def tearDown(self):
+        purge_import_prefix("demo")
+
     def _mini_project(self, tmp: Path) -> Path:
         root = tmp / "erp"
         root.mkdir()

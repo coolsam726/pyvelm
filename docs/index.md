@@ -1,17 +1,20 @@
-# pyvelm
+# PyVELM
 
-An Odoo-style ERP framework in Python. Declarative models, view
-inheritance via dict-op patches, HTMX-driven UI, real cron and
-mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
-Jinja2.
+**Odoo's semantics. Laravel's ergonomics. Filament's craft — in a Tailwind-native
+ERP shell that exists only here.**
 
-**Latest release:** [v0.21.0](releases/v0.21.0.md) (2026-05-29) — form
-**notebooks**, O2M **edit_toggle**, M2O dialog open, **Ctrl+S**, save toasts.
-See [releases](releases/v0.21.0.md) and the
+**PyVELM** is a declarative Python ERP framework. Models, Odoo-style recordsets and modules, view inheritance via
+dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
+bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on
+PostgreSQL (psycopg 3), FastAPI, and Jinja2.
+
+**Latest release:** [v0.22.0](releases/v0.22.0.md) (2026-05-29) — **LGPL-3.0**,
+**CI** + coverage, **PyVELM** branding, [Form UX](form-ux.md) docs.
+See [releases](releases/v0.22.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.21.0
+pip install pyvelm==0.22.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -53,6 +56,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.22.0](releases/v0.22.0.md) | **LGPL-3.0**; **CI** + Codecov; **PyVELM** branding; [Form UX](form-ux.md) guide |
 | [v0.21.0](releases/v0.21.0.md) | Form **notebooks**; O2M **edit_toggle** + keyboard grid; M2O **dialog** open; **Ctrl+S** + save toast; sticky actions |
 | [v0.20.2](releases/v0.20.2.md) | **One2many** `list_view` / `form_view` / `columns` on parent forms |
 | [v0.20.1](releases/v0.20.1.md) | List view **`domain=`**; IDE stub / Pylance `include` fixes |
@@ -128,7 +132,7 @@ docstrings if you want the per-class details.
 
 ## What ships in the wheel
 
-`pyvelm` bundles modules under `pyvelm/modules/` so a fresh install
+The **`pyvelm`** package bundles modules under `pyvelm/modules/` so a fresh install
 produces a bootable app:
 
 - **`base`** — `ir.ui.view`, `res.users`, `res.groups`,
