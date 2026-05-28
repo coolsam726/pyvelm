@@ -38,6 +38,14 @@ theme:
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+extra:
+  social:
+    - icon: fontawesome/solid/heart
+      link: https://github.com/sponsors/coolsam726
+      name: Sponsor on GitHub
 
 plugins:
   - search

@@ -8,6 +8,7 @@
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-2563eb)](https://coolsam726.github.io/pyvelm/)
 [![Changelog](https://img.shields.io/badge/changelog-CHANGELOG-64748b)](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://github.com/coolsam726/pyvelm/blob/main/LICENSE)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/coolsam726?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/coolsam726)
 
 **Odoo's semantics. Laravel's ergonomics. Filament's craft — in a Tailwind-native
 ERP shell that exists only here.**
@@ -48,6 +49,11 @@ cp .env.example .env   # set PYVELM_DSN
 Contributing, tests (`pip install -e ".[test]" && pytest`), local docs (`mkdocs serve`),
 and releases: [CONTRIBUTING.md](CONTRIBUTING.md).
 Maintainer notes: [CHANGELOG.md](CHANGELOG.md) · [CONTEXT.md](CONTEXT.md).
+
+## Sponsor
+
+PyVELM is maintained by [Sam Maosa](https://github.com/coolsam726).  
+If it saves you time, consider [**sponsoring on GitHub**](https://github.com/sponsors/coolsam726).
 
 ## License
 

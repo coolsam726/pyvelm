@@ -17,7 +17,8 @@ See [releases](releases/v0.22.0.md) and the
 pip install pyvelm==0.22.0
 ```
 
-Published on [PyPI](https://pypi.org/project/pyvelm/).
+Published on [PyPI](https://pypi.org/project/pyvelm/).  
+Support development: [**Sponsor on GitHub**](https://github.com/sponsors/coolsam726).
 
 ## Quick start
 
