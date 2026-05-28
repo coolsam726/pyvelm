@@ -7,6 +7,31 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.22.1] — 2026-05-28
+
+### Added
+
+- **GitHub Sponsors** — `.github/FUNDING.yml`, README badge and maintainer
+  portfolio table, PyPI `[project.urls] Sponsor`, docs site footer link.
+
+### Changed
+
+- **Migrations docs** — `db migrate` / Apps Sync always run **`SYNC_HOOK`**
+  plus additive schema; migration `.py` bodies run only on a version gap;
+  idempotent backfills and orphan-column cleanup belong in the sync hook.
+- **Report Builder docs** — known limitations (summary group-by on root stored
+  fields only; shared Many2one join pool for columns and filters).
+
+### Fixed
+
+- **Report Builder** — duplicate `LEFT JOIN` alias when detail columns and
+  filters traverse the same Many2one hop (`DuplicateAlias` on e.g.
+  `move_id.date` + `move_id.state` with a filter on `move_id.state`).
+- **CI** — integration tests under shared Postgres: mail compose dispatch
+  assertions, `Environment(conn, reg, uid=1)` argument order, menu loader
+  test, workflow/partner `code` backfill, optional `[geo]` extra for
+  `geo_data` tests.
+
 ## [0.22.0] — 2026-05-29
 
 ### Added

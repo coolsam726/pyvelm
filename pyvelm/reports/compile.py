@@ -218,7 +218,14 @@ def compile_report(
             )
 
     domain = _compact_domain(_merge_domain(defn, params))
-    where, bind_params, domain_joins = domain_to_sql(domain, root_cls, registry)
+    where, bind_params, _domain_joins = domain_to_sql(
+        domain,
+        root_cls,
+        registry,
+        joins=joins,
+        join_aliases=join_aliases,
+        join_counter=join_counter,
+    )
 
     order_specs = list(defn.get("order") or [])
     order_sql_cache: dict[str, str] = {}
@@ -238,8 +245,7 @@ def compile_report(
                 continue
 
     extra_joins = " ".join(joins)
-    join_sql = f"{domain_joins} {extra_joins}".strip()
-    join_clause = f" {join_sql}" if join_sql else ""
+    join_clause = f" {extra_joins}" if extra_joins else ""
 
     sql = f'SELECT {", ".join(select_parts)} FROM {base_alias}{join_clause} WHERE {where}'
     if group_sql_parts:

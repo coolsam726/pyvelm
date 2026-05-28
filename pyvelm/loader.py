@@ -707,8 +707,8 @@ def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
                 _setup_module_schema(spec, env)
                 if current < spec.version:
                     _run_migrations(spec, env, current, spec.version)
-                # Sync before schema apply so hooks can backfill data
-                # required for SET NOT NULL (e.g. nullable legacy columns).
+                # Sync hook before schema apply: idempotent backfills and
+                # orphan cleanup (runs every upgrade/Sync, not only on bump).
                 if spec.sync_hook is not None:
                     spec.sync_hook(env)
                 applied = db_autogen.apply_schema_diff(env, spec.name)

@@ -266,27 +266,32 @@ partners/migrations/0_1_to_0_2.py
 `<from>_to_<to>.py` with `_`-separated version parts. The loader
 parses it and only runs scripts whose target version is greater
 than the recorded version and less than or equal to the manifest
-version.
+version — **not** on Apps **Sync** when versions already match.
+
+For **idempotent backfills** (NULL rows before `SET NOT NULL`, orphan
+column cleanup), use **`SYNC_HOOK`** instead. It runs before schema
+apply on every upgrade, Sync, and `db migrate`. Migration scripts are
+for version-gapped, one-time work (`ALTER TYPE … USING`, renames).
 
 ```python
-def migrate(env):
-    # 1. Schema change.
-    env.conn.execute(
-        'ALTER TABLE "res_partner" '
-        'ADD COLUMN IF NOT EXISTS "code" text'
-    )
-    # 2. Backfill via the ORM. partner.code = … goes through the
-    #    descriptor and updates env.cache, so subsequent reads
-    #    see the new value without manual invalidation.
+# partners/hooks.py — runs on every Sync / migrate
+def sync(env):
     Partner = env["res.partner"]
     for partner in Partner.search([("code", "=", None)]):
         prefix = (partner.name or "?")[:3].upper()
         partner.code = f"{prefix}-{partner.id}"
 ```
 
-The function receives a live `Environment`. Use the ORM or drop to
-raw SQL via `env.conn.execute(...)` — your choice. The migration
-runs inside the installer's per-module transaction.
+Optional migration file for the same version bump (runs once on upgrade):
+
+```python
+def migrate(env):
+    env.conn.execute(
+        'ALTER TABLE "res_partner" '
+        'ADD COLUMN IF NOT EXISTS "code" text'
+    )
+    # Backfill is in SYNC_HOOK — see partners/hooks.py
+```
 
 ### Idempotency is your responsibility
 
@@ -340,7 +345,7 @@ and run DDL.
 | Action | What happens |
 |---|---|
 | **Install** | Topologically installs the target and any uninstalled prerequisites. Models are imported into the live registry; the standard install pass runs (schema, hook, view/menu sync). |
-| **Upgrade** / **Sync** | Available for every installed module (including when the manifest version matches `ir_module`). Reloads models and `DATA` files from disk, runs additive schema (`_setup_table` + in-process autogen diff), executes version-gap migration scripts when the manifest version increased, then re-syncs views and menus. No uninstall/reinstall needed for new `views/*.py` entries. |
+| **Upgrade** / **Sync** | Available for every installed module (including when the manifest version matches `ir_module`). Reloads models and `DATA` files from disk, runs **`SYNC_HOOK`**, then additive schema (`_setup_table` + in-process autogen diff). Version-gap **`migrations/*.py`** run only when the manifest version increased. Re-syncs views and menus. No uninstall/reinstall needed for new `views/*.py` entries. |
 | **Uninstall** | Drops tables owned by the module, deletes its `ir.ui.view` and `ir.ui.menu` rows, removes the `ir_module` entry. All inside one transaction. |
 
 POST endpoints respond with `HX-Redirect: /web/apps` so the sidebar

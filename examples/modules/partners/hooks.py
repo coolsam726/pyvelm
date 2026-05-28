@@ -19,7 +19,12 @@ def _backfill_partner_codes(env) -> None:
 
 
 def sync(env):
-    """Runs before schema apply on upgrade/migrate — backfill then SET NOT NULL."""
+    """Runs before schema apply on upgrade/migrate/Sync — backfill then SET NOT NULL.
+
+    Idempotent data fixups and orphan-column drops belong here (not only in
+    ``migrations/*.py``), because migration bodies run once per version gap while
+    this hook runs on every ``db migrate`` and Apps Sync.
+    """
     _backfill_partner_codes(env)
 
 

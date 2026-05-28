@@ -79,18 +79,31 @@ def domain_to_sql(
     domain: Iterable[tuple[str, str, Any]] | None,
     model_cls,
     registry,
+    *,
+    joins: list[str] | None = None,
+    join_aliases: dict[tuple, str] | None = None,
+    join_counter: list[int] | None = None,
 ) -> tuple[str, list[Any], str]:
+    """Compile a domain to SQL.
+
+    When ``joins`` / ``join_aliases`` / ``join_counter`` are passed, JOIN
+    emission appends to those shared structures (used by the report compiler
+    so column and filter paths reuse the same ``_jN`` aliases). In that
+    mode the third return value is always ``""`` — read ``joins`` instead.
+    """
     if not domain:
         return "TRUE", [], ""
 
     base_alias = f'"{model_cls._table}"'
     clauses: list[str] = []
     params: list[Any] = []
-    joins: list[str] = []
-    # Memoize JOIN aliases per (base, attr) chain so the same traversal in
-    # two leaves shares aliases — avoids redundant JOINs.
-    join_aliases: dict[tuple, str] = {}
-    join_counter = [0]
+    shared_joins = joins is not None
+    if joins is None:
+        joins = []
+    if join_aliases is None:
+        join_aliases = {}
+    if join_counter is None:
+        join_counter = [0]
 
     def _emit_chain(hops) -> str:
         """Emit LEFT JOINs for a Many2one chain; return the alias of the
@@ -384,5 +397,7 @@ def domain_to_sql(
             raise ValueError(f"Unknown operator: {op!r}")
 
     where = " AND ".join(clauses) if clauses else "TRUE"
+    if shared_joins:
+        return where, params, ""
     joins_sql = (" " + " ".join(joins)) if joins else ""
     return where, params, joins_sql

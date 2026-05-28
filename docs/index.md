@@ -8,13 +8,13 @@ dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
 bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on
 PostgreSQL (psycopg 3), FastAPI, and Jinja2.
 
-**Latest release:** [v0.22.0](releases/v0.22.0.md) (2026-05-29) — **LGPL-3.0**,
-**CI** + coverage, **PyVELM** branding, [Form UX](form-ux.md) docs.
-See [releases](releases/v0.22.0.md) and the
+**Latest release:** [v0.22.1](releases/v0.22.1.md) (2026-05-28) — Report Builder
+join fix, CI hardening, [SYNC_HOOK migrations](migrations.md) docs, GitHub Sponsors.
+See [releases](releases/v0.22.1.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.22.0
+pip install pyvelm==0.22.1
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
@@ -61,6 +61,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.22.1](releases/v0.22.1.md) | Report Builder **join dedup**; **SYNC_HOOK** migration docs; CI fixes; **GitHub Sponsors** |
 | [v0.22.0](releases/v0.22.0.md) | **LGPL-3.0**; **CI** + Codecov; **PyVELM** branding; [Form UX](form-ux.md) guide |
 | [v0.21.0](releases/v0.21.0.md) | Form **notebooks**; O2M **edit_toggle** + keyboard grid; M2O **dialog** open; **Ctrl+S** + save toast; sticky actions |
 | [v0.20.2](releases/v0.20.2.md) | **One2many** `list_view` / `form_view` / `columns` on parent forms |

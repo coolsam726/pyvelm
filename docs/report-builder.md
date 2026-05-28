@@ -66,7 +66,8 @@ Switch to **Summary** in step 1:
 - **Order by** — sort by group-by keys or measure keys only.
 
 Summary mode uses SQL `GROUP BY`; relation drill-down for group-by is limited
-to root-model fields in v1.
+to **root-model stored fields** in v1 (no dotted paths like `move_id.state`).
+See [Known limitations](#known-limitations-v1).
 
 ### Filters and parameters
 
@@ -232,6 +233,26 @@ See [Deployment → Background cron runner](deployment.md#the-cron-worker).
 | `pyvelm/templates/report_builder.html` | Visual builder UI |
 | `pyvelm/templates/report_run.html` | Run + export page |
 | `pyvelm/templates/widgets/field_drill_browser.html` | Drill-down field picker |
+
+## Known limitations (v1)
+
+**Summary group-by**
+
+- **Root stored fields only** — `groupby` entries must be field names on the
+  report root model (e.g. `stage_id`, `date:month`). Dotted paths such as
+  `move_id.state` are rejected; related dimensions belong in **detail** columns
+  or a report rooted on the comodel.
+- **Stored columns only** — computed or related fields without a database column
+  cannot be grouped or measured (`Cannot group by non-stored field`).
+
+**Detail columns**
+
+- **Many2one chains** — multiple columns through the same relation (e.g.
+  `move_id.date` and `move_id.state`) share one `LEFT JOIN`; filters on the
+  same hop reuse that alias (one shared join pool for columns + domain).
+- **One2many / Many2many** — rendered as correlated subqueries with
+  `subaggregate` (`string_agg`, `sum`, `count`, …); nested collection paths
+  are not supported.
 
 ## Dependencies
 

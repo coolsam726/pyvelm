@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import unittest
 
-from pyvelm import BaseModel, Char, Many2one, Registry
+from pyvelm import BaseModel, Char, Date, Many2one, Registry
 from pyvelm.reports.compile import compile_report, parse_definition
 from pyvelm.reports.fields_api import list_exportable_fields, list_fields_level
 from pyvelm.reports.format import format_display_value, normalize_column_format
@@ -109,6 +109,33 @@ class ReportCompileTests(unittest.TestCase):
         }
         compiled = compile_report(defn, _registry(), params={})
         self.assertIn("TRUE", compiled.sql)
+
+    def test_reuses_m2o_join_for_repeated_hops_and_filters(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Move(BaseModel):
+                _name = "account.move"
+                _table = "account_move"
+                date = Date()
+                state = Char()
+
+            class Line(BaseModel):
+                _name = "account.move.line"
+                _table = "account_move_line"
+                move_id = Many2one("account.move")
+
+        defn = {
+            "version": 1,
+            "root": "account.move.line",
+            "columns": [
+                {"expr": "move_id.date", "label": "Move date"},
+                {"expr": "move_id.state", "label": "Move state"},
+            ],
+            "filters": [["move_id.state", "=", "posted"]],
+        }
+        compiled = compile_report(defn, reg)
+        self.assertEqual(compiled.sql.count('LEFT JOIN "account_move" _j1'), 1)
 
 
 class ReportFieldsApiTests(unittest.TestCase):
