@@ -8,7 +8,7 @@ string and the renderer falls back to the textual card.
 
 from __future__ import annotations
 
-from pyvelm import BaseModel, Char, depends
+from pyvelm import BaseModel, Char, Many2one, depends
 
 
 _IMAGE_MIME_PREFIX = "image/"
@@ -21,6 +21,20 @@ class Attachment(BaseModel):
     # time. Kept in the cache for the duration of a request via the
     # standard compute mechanism.
     thumbnail_url = Char(string="Thumbnail", compute="_compute_thumbnail_url")
+
+    # Optional Drive-style folder grouping. Nullable on purpose —
+    # attachments uploaded via the chatter / picker / record-bound
+    # paths never carry a folder, and that's a valid "Unfiled" state.
+    folder_id = Many2one(
+        "res.attachment.folder", ondelete="SET NULL", string="Folder"
+    )
+
+    # Company stamp for the file library. NOT ``_company_scoped`` on the
+    # model — ``ir.attachment`` backs avatars, mail, reports, etc. that
+    # must stay cross-company. The library / picker queries filter on
+    # this column explicitly instead, so only the *library UI* is
+    # company-scoped while system attachments keep working.
+    company_id = Many2one("res.company", ondelete="SET NULL", string="Company")
 
     @depends("id", "mimetype", "type", "url")
     def _compute_thumbnail_url(self):

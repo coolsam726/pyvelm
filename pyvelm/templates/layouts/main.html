@@ -517,6 +517,7 @@
     </template>
 </div>
 
+{% include "_pv_files_alpine.html" %}
 <script>
     document.addEventListener('alpine:init', () => {
         // Shared sidebar / theme / nav-active state.
@@ -932,21 +933,10 @@
         document.addEventListener('DOMContentLoaded', () => pvInjectCsrfFields());
         document.body.addEventListener('htmx:afterSwap', e => {
             pvInjectCsrfFields(e.target);
-            // Re-init Alpine on HTMX fragments (chatter panel, attachment widget, …).
+            // Re-init Alpine on HTMX fragments (dialog bodies, chatter, kanban, …).
             const tgt = e.detail.target;
             if (tgt && window.Alpine && typeof window.Alpine.initTree === 'function') {
-                const chatter = tgt.id === 'pv-chatter-root'
-                    ? tgt
-                    : (tgt.querySelector && tgt.querySelector('#pv-chatter-root'));
-                if (chatter) {
-                    window.Alpine.initTree(chatter);
-                }
-                const kanban = tgt.id === 'pv-kanban-container'
-                    ? tgt
-                    : (tgt.querySelector && tgt.querySelector('#pv-kanban-container'));
-                if (kanban) {
-                    window.Alpine.initTree(kanban);
-                }
+                window.Alpine.initTree(tgt);
             }
         });
 

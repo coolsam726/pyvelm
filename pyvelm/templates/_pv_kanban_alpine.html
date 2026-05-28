@@ -32,6 +32,41 @@ document.addEventListener('alpine:init', () => {
                     zone.classList.remove('bg-brand-soft/30');
                 }
             });
+            // Emit tile-level events for shells that want to overlay
+            // their own selection / context-menu logic on top of the
+            // standard kanban (file_manager Library is the first).
+            // Stays a no-op for the default kanban — listeners opt in.
+            this.$el.addEventListener('click', (e) => {
+                const card = e.target.closest('[data-pv-kanban-card]');
+                if (!card || !this.$el.contains(card)) return;
+                // Don't fight tile-internal links (e.g. the form_view
+                // anchor wrap added by the default kanban). The library
+                // shell renders cards without `form_view` so this guard
+                // doesn't fire there.
+                if (e.target.closest('a, button, input, label')) return;
+                const id = Number(card.dataset.recordId);
+                if (Number.isNaN(id)) return;
+                document.dispatchEvent(new CustomEvent('pv:kanban:tile-click', {
+                    detail: {
+                        id,
+                        shiftKey: e.shiftKey,
+                        ctrlKey: e.ctrlKey || e.metaKey,
+                    },
+                }));
+            });
+            this.$el.addEventListener('contextmenu', (e) => {
+                const card = e.target.closest('[data-pv-kanban-card]');
+                if (!card || !this.$el.contains(card)) return;
+                const id = Number(card.dataset.recordId);
+                if (Number.isNaN(id)) return;
+                // Hand off to any shell-level listener — the listener
+                // is responsible for calling `detail.native.preventDefault()`
+                // when it wants to suppress the browser's menu. Default
+                // kanban has no listener, so the native menu still works.
+                document.dispatchEvent(new CustomEvent('pv:kanban:tile-contextmenu', {
+                    detail: { id, x: e.clientX, y: e.clientY, native: e },
+                }));
+            });
         },
 
         onDragStart(e, handle) {

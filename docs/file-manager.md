@@ -1,48 +1,137 @@
 # File library (`file_manager` module)
 
 A bundled library + picker for `ir.attachment` rows. Install the
-module to get a **Files** app on the rail (a thumbnail kanban + a
-sortable list), an upload page, and two field widgets that pick
-existing files (or upload a new one inline) from any record form.
+module to get a **Files** app on the rail with a Drive-style library
+(folder tree + thumbnail grid + selection + details slide-over + bulk
+actions), a Properties page that surfaces real metadata (size,
+dimensions for images, owner, folder breadcrumb), and two field
+widgets that pick existing files from any record form.
 
 ## Install
 
-`file_manager` ships in the wheel alongside `base`/`admin`/`technical`.
-Install it from **Apps**, or include the module root when you boot
-your project. The install hook grants:
+`file_manager` ships in the wheel alongside `base` / `admin` /
+`technical`. Install it from **Apps**, or include the module root
+when you boot your project.
 
-- **Admin** — full CRUD on `ir.attachment`.
-- **User** — read on `ir.attachment` (so non-admins can pick from
-  the library through the field widgets, even though they can't reach
-  the management UI).
+The install hook grants:
 
-## Library
+- **Admin** — full CRUD on `ir.attachment` and `res.attachment.folder`.
+- **User** — read on `ir.attachment` and `res.attachment.folder` (so
+  non-admins can pick files via the widgets and browse folders even
+  when they can't manage them).
 
-- **Files → Library** (`/web/views/file_manager/file_manager.file.kanban`)
-  — thumbnail grid. Image MIME types render their bytes as the tile
-  (via `/api/attachment/{id}/download`); everything else shows a
-  MIME-icon tile.
-- **Files → All files**
-  (`/web/views/file_manager/file_manager.file.list`) — sortable
-  table: name, MIME, size, owning record, public flag, uploaded-at.
-  The **+ New** button jumps to the multipart upload page.
+## Library (Drive-style shell)
 
-The kanban thumbnail is driven by a new `card(image=<field>)` slot
-on the kanban builder; it expects the field to hold a URL. The
-`file_manager` module extends `ir.attachment` with a computed
-`thumbnail_url` Char that returns
-`/api/attachment/{id}/download` for image MIMEs and an empty
-string otherwise. Reuse the slot in your own kanbans by exposing a
-Char field that resolves to an image URL.
+**Files → Library** opens `/web/files/library`: a three-column shell
+modelled on Nautilus / Windows Explorer / Google Drive.
 
-## Upload page
+| Column | What's there |
+|--------|--------------|
+| Left (tree) | **All files**, **Unfiled** (no folder), and the folder tree (nested via `parent_id`). Click a node to filter the grid. Branches collapse / expand via the chevron; on load only the path leading to the active folder (the working directory) is expanded, everything else starts collapsed. Drag a tile onto a node to move. The pane header **+** and the right-click **New subfolder** both open a create dialog (the subfolder lands under the folder you are browsing, or at top level on **All files**). Right-click for rename / delete. |
+| Centre (grid) | Shows the active folder's **subfolders** as navigable tiles (click to open, right-click for rename / delete / new subfolder, drop files onto them to move) followed by its **files**, rendered client-side by the `pvFileLibrary` Alpine component from the browse payload (`_file_manager_browse`). Three switchable **view modes** — **Grid** (tight thumbnails), **Tiles** (icon + name + meta), **Details** (a row list) — with the choice persisted to `localStorage` (`pvFileView`). A **New folder** button in the header and a dashed **New folder** tile in the subfolder grid both open the create dialog. **Upload** opens a `PvDialog` and lands files in the folder you are browsing (or **Unfiled** on **All files**). |
+| Right (details) | Slide-over Properties panel — appears when a tile is selected; mirrors the full Properties page. |
 
-`GET /web/files/upload` renders a simple multipart form (file input
-+ Public checkbox). `POST /web/files/upload` accepts the form data,
-loops the uploads through the same code path as
-`/api/attachment/upload`, and redirects back to the library kanban.
-Files arrive without `res_model` / `res_id`; the picker is the way
-to attach them to a record later.
+Non-image files show a tinted type glyph (`pvFileIcon`: pdf / doc /
+xls / ppt / json / text / zip / audio / video / fallback) instead of a
+broken thumbnail. On small screens every grid collapses to a single
+column for legibility.
+
+The subfolder tiles are drawn client-side from the same folder tree
+the left pane uses (`childFolders()` in the Alpine component), so
+opening a folder shows its child folders and files together — like a
+desktop file manager. **All files** lists every top-level folder;
+**Unfiled** has no subfolders by definition.
+
+The centre header carries a **clickable breadcrumb** (All files ›
+Marketing › Logos, built client-side by `breadcrumb()` walking up
+`parent_id`) plus an **Up** button — the same Windows-Explorer
+navigation the picker dialog uses.
+
+### Selection model
+
+- **Click** a tile → single-select + open the details panel.
+- **Shift-click** a second tile → range fill over the currently
+  visible order (server publishes the order so range stays
+  deterministic across pagination).
+- **Ctrl/Cmd-click** → toggle the tile in / out of the selection.
+- The selection clears when you click the toolbar's ✕ or navigate.
+
+### Bulk actions
+
+Once at least one tile is selected, a sticky action bar appears at
+the top of the centre column:
+
+| Action | What happens |
+|--------|--------------|
+| Download | One file → direct `GET /api/attachment/{id}/download`. Two or more → hidden-form `POST /web/files/bulk/download` that streams a `.zip` (URL-typed rows are skipped with a `X-PV-Skipped` response header). |
+| Toggle public | `POST /web/files/bulk/public` flips every selected row to `public=true`. |
+| Delete | Confirms via `pvConfirm`, then `POST /web/files/bulk/delete` (204 on success). |
+
+### Context menu
+
+Right-clicking a tile opens a floating menu at the cursor: **Open
+details**, **Properties page**, **Download**, **Toggle public**,
+**Delete**. The same shortcuts are available on the action bar when
+multiple files are selected.
+
+### Drag-and-drop into folders
+
+Tiles set `draggable="true"`. The drag payload is the current
+selection if non-empty, otherwise just the dragged tile. Dropping
+onto a tree node (or **Unfiled**) `POST`s `/web/files/move` to
+update `folder_id` on every dragged row.
+
+## Properties page
+
+`/web/files/{id}/properties` is a Filament-shaped two-column page:
+
+- **Left** — large preview. Image MIMEs render
+  `<img src="/api/attachment/{id}/download">` in a 4:3 frame.
+  Everything else shows a centred MIME-family icon + extension badge.
+- **Right** — folder breadcrumb, metadata grid (Name, Filename,
+  Type, Size, Dimensions, Created, Updated, Linked record, Storage,
+  Public), and big **Download / Open linked record / Delete**
+  action buttons.
+
+**Image dimensions** are computed at render time by
+`pyvelm.image_meta.read_image_dimensions` — a stdlib-only header
+parser for PNG / JPEG / GIF / WebP. Other
+image formats fall through to `—`. No schema column; no Pillow
+dependency.
+
+The same template body renders as a fragment at
+`/web/files/{id}/properties_panel` for the right-side slide-over
+in the Library shell — keeping "what shows in the panel" and "what
+shows on the full page" in lockstep.
+
+## Folders
+
+`res.attachment.folder` is a hierarchical model (self M2o on
+`parent_id` with `ondelete="RESTRICT"`). Folder rows carry `name`,
+`sequence`, an optional `color`, and a computed `display_name` that
+walks the parent chain into a slash breadcrumb (`Marketing / Logos
+/ 2026`, depth-capped at 32 to defuse cycles).
+
+`ir.attachment.folder_id` (Many2one with `ondelete="SET NULL"`) is
+the link. `NULL` is the "Unfiled" bucket — every attachment created
+by the chatter / picker / record-bound paths lands there by default.
+
+Deletion guard: `DELETE /web/files/folders/{id}` returns **409
+Conflict** when the folder still has children or attachments — empty
+it first.
+
+### Company scoping
+
+The whole library is **per-company**. `res.attachment.folder` sets
+`_company_scoped = True`, so the framework auto-injects a `company_id`
+and filters every `search` by `env.company_id` — folders created under
+one company are invisible to another. `ir.attachment` is shared
+(avatars, mail, reports), so it stays cross-company; file_manager adds
+a *nullable* `company_id` Many2one (not `_company_scoped`) and the
+library / picker / tree queries scope to the active company explicitly
+via `_library_company_domain`. Attachments are stamped with
+`env.company_id` on upload and on copy. System attachments with no
+company simply don't surface in a company-scoped library view.
 
 ## File-picker widgets
 
@@ -77,13 +166,22 @@ form_view(
 
 Edit mode renders a chip list of already-picked attachments plus a
 **Pick a file** button. The button opens
-`/web/files/picker?accept=image/*` in `PvDialog` — a browseable
-grid of existing files with:
+`/web/files/picker?accept=image/*` in `PvDialog` — a **folder-navigable**
+browser (same organisation as the Library):
 
-- live name search (client-side over the library snapshot),
-- mimetype filter — derived from the field spec's `accept` token,
-- inline **Upload** button that POSTs to
-  `/web/files/picker/upload` and selects the new row immediately.
+- a **breadcrumb** (All files › Marketing › Logos) with an **Up** button —
+  every segment is clickable;
+- **folder tiles** (click to drill in) above the **file tiles**;
+- **search** across *every* file regardless of folder (substring,
+  case-insensitive) — typing hides folders and shows flat results;
+  clearing the box returns to the current folder;
+- mimetype filter — derived from the field spec's `accept` token;
+- inline **Upload** button that POSTs to `/web/files/picker/upload`
+  (into the folder you're browsing) and selects the new row immediately.
+
+Folder navigation is a client-side re-fetch of
+`/web/files/picker/browse` (returns `{breadcrumb, folders, rows}`), so a
+multi-select made in one folder **survives** drilling into another.
 
 Single-mode picks close the dialog on tile click; multi-mode picks
 collect a selection and emit it via the **Use selected** footer
@@ -95,17 +193,82 @@ Display mode renders the chip (image MIMEs → thumbnail link;
 everything else → a small file pill with download link). For empty
 read-only fields it renders **No file**.
 
+### `widget="file_url"` — pick into a URL column
+
+`widget="file"` / `widget="files"` need a `Many2one` / `Many2many`
+to `ir.attachment`. Many models instead carry an image as a plain
+**URL `Char`** — company branding is the canonical case
+(`res.company.logo_url`, `logo_url_dark`, `favicon_url`). For those,
+use `widget="file_url"`:
+
+```python
+section("branding", "Branding & white-label", [
+    field("logo_url", widget="file_url"),
+    field("logo_url_dark", widget="file_url"),
+    field("favicon_url", widget="file_url"),
+])
+```
+
+It renders a preview thumbnail, a **Pick from library** button, a
+manual URL input (for external links), and a **Clear** action. On
+pick it opens the same `/web/files/picker?accept=image/*` dialog,
+then:
+
+1. flips the chosen attachment **public** (`POST /web/files/bulk/public`)
+   — branding logos / favicons are served on unauthenticated pages
+   (login, public shell), so they must be readable without a session;
+2. stores `/api/attachment/{id}/download` into the `Char`.
+
+`accept` defaults to `image/*`; override via
+`field("doc_url", widget="file_url", accept="application/pdf")`. The
+widget reads its config from a per-element `data-pv-cfg` attribute,
+so several instances on one form (light logo, dark logo, favicon)
+don't clobber each other.
+
+This is the bundled, working example of the library's picking flow —
+open **Settings → Companies → (a company) → Branding** to try it.
+
+## Uploading into a folder
+
+1. **Click the folder** in the left tree (e.g. **Marketing**) so the
+   grid shows only that folder's files.
+2. Click **Upload** in the page header — a dialog opens titled
+   **Upload to Marketing**.
+3. Pick files and confirm — they are stored with `folder_id` set to
+   that folder.
+
+If you upload while on **All files**, files go to **Unfiled**
+(`folder_id` empty). You can move them later by dragging tiles onto a
+folder in the tree.
+
+The full-page `GET /web/files/upload?folder_id=…` route still exists
+for direct links; the library prefers the dialog via
+`GET /web/files/upload_panel`.
+
 ## HTTP endpoints
 
 | Method | URL | Purpose |
 |--------|-----|---------|
-| GET    | `/web/files/upload` | Multipart upload page (Library "+ New" button lands here) |
-| POST   | `/web/files/upload` | Process the upload + redirect to Library |
-| GET    | `/web/files/picker?accept=&q=&multi=0\|1` | Picker dialog body |
-| POST   | `/web/files/picker/upload` | Upload-from-dialog, returns the new row JSON |
-| POST   | `/api/attachment/upload` | Existing record-bound upload (unchanged) |
-| GET    | `/api/attachment/{id}/download` | Existing download endpoint (unchanged) |
-| DELETE | `/api/attachment/{id}` | Existing delete (unchanged) |
+| GET    | `/web/files/library?folder_id=&q=&page=` | Drive-style shell (folder tree + grid + details). |
+| GET    | `/web/files/upload_panel?folder_id=` | Upload dialog body (library). |
+| GET    | `/web/files/upload?folder_id=` | Full-page multipart upload (optional). |
+| POST   | `/web/files/upload` | Process full-page upload + redirect to Library. |
+| GET    | `/web/files/picker?accept=&q=&multi=0\|1&folder_id=` | Picker dialog body (seeds the initial folder browse). |
+| GET    | `/web/files/picker/browse?accept=&q=&folder_id=` | JSON `{breadcrumb, folders, rows, searching}` for in-dialog folder navigation. |
+| POST   | `/web/files/picker/upload` | Upload-from-dialog (returns row JSON). |
+| GET    | `/web/files/{id}/properties` | Full Properties page. |
+| GET    | `/web/files/{id}/properties_panel` | Properties fragment for the slide-over. |
+| GET    | `/web/files/tree` | Folder list + per-folder counts JSON. |
+| POST   | `/web/files/folders` | Create a folder (`{name, parent_id?}`). |
+| PATCH  | `/web/files/folders/{id}` | Rename / move folder; rejects cycles. |
+| DELETE | `/web/files/folders/{id}` | 204 if empty; 409 otherwise. |
+| POST   | `/web/files/move` | Bulk move (`{attachment_ids, folder_id\|null}`). |
+| POST   | `/web/files/bulk/download` | Stream a ZIP of selected ids. |
+| POST   | `/web/files/bulk/delete` | Bulk delete. |
+| POST   | `/web/files/bulk/public` | Bulk set `public=true|false`. |
+| POST   | `/api/attachment/upload` | Existing record-bound upload (unchanged). |
+| GET    | `/api/attachment/{id}/download` | Existing download endpoint (unchanged). |
+| DELETE | `/api/attachment/{id}` | Existing delete (unchanged). |
 
 ## Storage
 
@@ -113,3 +276,24 @@ The picker / library reuse the existing storage stack
 (`PYVELM_STORAGE_BACKEND=db|local`). Operators don't choose a backend
 per upload — the configured backend wins for every file dropped via
 the library or picker.
+
+## Migration notes (0.1 → 0.3)
+
+- **Base bumped to 0.29.0** — migration `0_28_to_0_29.py` adds the
+  nullable `ir_attachment.folder_id` column. Schema autogen covers
+  fresh installs; the explicit `ALTER TABLE … ADD COLUMN IF NOT
+  EXISTS` in the migration is a safety net for databases that update
+  base before re-installing file_manager.
+- **Base bumped to 0.30.0** — migration `0_29_to_0_30.py` adds the
+  nullable `ir_attachment.company_id` column (same safety-net `ALTER`).
+  No backfill: existing attachments stay company-less and simply don't
+  appear in a company-scoped library view.
+- **file_manager bumped to 0.3.0** — install hook grants Admin CRUD +
+  User read on `res.attachment.folder` (now `_company_scoped`) in
+  addition to the existing `ir.attachment` grants.
+- **Existing attachments** stay in the "Unfiled" bucket
+  (`folder_id IS NULL`). No data backfill needed.
+- The legacy Library menu entry used to point at the bare kanban view;
+  it now points at the new `/web/files/library` shell. **Re-sync** the
+  module via Apps → Sync (or restart the server) so the menu URL
+  updates.

@@ -163,9 +163,9 @@ VIEWS: list[View] = [
                 [
                     "app_name",
                     "app_tagline",
-                    field("logo_url", widget="image"),
-                    field("logo_url_dark", widget="image"),
-                    field("favicon_url", widget="image"),
+                    field("logo_url", widget="file_url"),
+                    field("logo_url_dark", widget="file_url"),
+                    field("favicon_url", widget="file_url"),
                     field("primary_color", widget="color"),
                     "copyright_text",
                     "support_email",

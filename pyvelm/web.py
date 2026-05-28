@@ -294,6 +294,14 @@ def create_app(
                 header_token = request.headers.get(_CSRF_HEADER)
                 ok = header_token == cookie_token
                 if not ok:
+                    # Query-string fallback. Used by multipart HTML
+                    # forms (file uploads) whose body the middleware
+                    # deliberately doesn't buffer — the form template
+                    # renders ``action="…?_csrf={{ csrf_token }}"``.
+                    qs_token = request.query_params.get(_CSRF_FORM_FIELD)
+                    if qs_token and qs_token == cookie_token:
+                        ok = True
+                if not ok:
                     # Form-encoded body fallback. We only inspect
                     # bodies that are actually form-urlencoded so
                     # later multipart uploads don't get buffered into
@@ -2989,16 +2997,55 @@ def create_app(
     # File library upload + picker (file_manager module)
     # ---------------------------------------------------------------
 
-    def _file_manager_render(env, request, *, error: str | None = None):
+    def _upload_folder_context(env, folder_id: int | None) -> tuple[int | None, str]:
+        """Resolve folder_id + human label for upload UI."""
+        if not folder_id or folder_id <= 0:
+            return None, "Unfiled"
+        if "res.attachment.folder" not in registry:
+            return None, "Unfiled"
+        rec = _folder_or_404(env, int(folder_id))
+        return rec.id, rec.name
+
+    def _file_manager_render(
+        env,
+        request,
+        *,
+        error: str | None = None,
+        folder_id: int | None = None,
+    ):
         from .render import _env as render_env, merge_template_context
 
+        fid, label = _upload_folder_context(env, folder_id)
         template = render_env.get_template("file_manager_upload.html")
-        ctx = merge_template_context(env, str(request.url.path), error=error)
+        ctx = merge_template_context(
+            env,
+            str(request.url.path),
+            error=error,
+            folder_id=fid,
+            folder_label=label,
+            # The upload form is multipart, so the CSRF middleware's
+            # body-parse fallback can't run (it skips multipart on
+            # purpose to avoid buffering large uploads). The template
+            # echoes the token in the form's action query string —
+            # the middleware accepts ``?_csrf=…`` as a fallback.
+            csrf_token=getattr(request.state, "csrf_token", ""),
+        )
         return template.render(**ctx)
 
+    def _parse_upload_folder_id(raw) -> int | None:
+        """Normalize folder_id from form/query — ``0`` / empty → None (unfiled)."""
+        if raw in (None, "", 0, "0"):
+            return None
+        return int(raw)
+
     def _store_uploaded_file(
-        env, file: UploadFile, *, public: bool, res_model: str | None = None,
+        env,
+        file: UploadFile,
+        *,
+        public: bool,
+        res_model: str | None = None,
         res_id: int | None = None,
+        folder_id: int | None = None,
     ) -> dict:
         """Persist one ``UploadFile`` into ``ir.attachment`` and return its row dict.
 
@@ -3025,21 +3072,28 @@ def create_app(
             or _mimetypes.guess_type(original_name)[0]
             or "application/octet-stream"
         )
+        vals: dict = {
+            "name": original_name,
+            "datas_fname": original_name,
+            "mimetype": mimetype,
+            "file_size": len(content),
+            "res_model": res_model or None,
+            "res_id": res_id if res_id else None,
+            "type": "binary",
+            "storage_key": storage_key,
+            "datas": datas,
+            "public": bool(public),
+        }
+        # Stamp the active company so the library / picker can scope by it.
+        if "company_id" in env["ir.attachment"]._fields and env.company_id:
+            vals["company_id"] = env.company_id
+        if folder_id:
+            if "res.attachment.folder" not in registry:
+                raise HTTPException(404, "file_manager is not installed")
+            _folder_or_404(env, int(folder_id))
+            vals["folder_id"] = int(folder_id)
         with env.transaction():
-            att = env["ir.attachment"].create(
-                {
-                    "name": original_name,
-                    "datas_fname": original_name,
-                    "mimetype": mimetype,
-                    "file_size": len(content),
-                    "res_model": res_model or None,
-                    "res_id": res_id if res_id else None,
-                    "type": "binary",
-                    "storage_key": storage_key,
-                    "datas": datas,
-                    "public": bool(public),
-                }
-            )
+            att = env["ir.attachment"].create(vals)
         return {
             "id": att.id,
             "name": att.name,
@@ -3047,16 +3101,43 @@ def create_app(
             "size": att.file_size,
         }
 
+    @app.get("/web/files/upload_panel", response_class=HTMLResponse)
+    def web_files_upload_panel(
+        request: Request,
+        env: Environment = Depends(get_env),
+        folder_id: int | None = None,
+    ):
+        """Multipart upload form fragment for ``PvDialog`` from the library."""
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager module is not installed")
+        env.check_access("ir.attachment", "create")
+        fid, label = _upload_folder_context(env, folder_id)
+        from .render import _env as render_env
+
+        return HTMLResponse(
+            render_env.get_template("file_manager_upload_panel.html").render(
+                folder_id=fid,
+                folder_label=label,
+                csrf_token=getattr(request.state, "csrf_token", ""),
+            )
+        )
+
     @app.get("/web/files/upload", response_class=HTMLResponse)
     def web_files_upload_form(
-        request: Request, env: Environment = Depends(get_env)
+        request: Request,
+        env: Environment = Depends(get_env),
+        folder_id: int | None = None,
     ):
         if env.uid is None:
             return _auth_required_response(request)
         if "ir.attachment" not in registry:
             raise HTTPException(404, "file_manager module is not installed")
         env.check_access("ir.attachment", "create")
-        return HTMLResponse(_file_manager_render(env, request))
+        return HTMLResponse(
+            _file_manager_render(env, request, folder_id=folder_id)
+        )
 
     @app.post("/web/files/upload", response_class=HTMLResponse)
     async def web_files_upload_submit(
@@ -3071,28 +3152,49 @@ def create_app(
         form = await request.form()
         raw_public = form.get("public")
         public = str(raw_public or "").strip().lower() in ("1", "on", "true", "yes")
+        target_folder = _parse_upload_folder_id(form.get("folder_id"))
         files = form.getlist("files")
         if not files:
             return HTMLResponse(
-                _file_manager_render(env, request, error="Pick at least one file."),
+                _file_manager_render(
+                    env,
+                    request,
+                    error="Pick at least one file.",
+                    folder_id=target_folder,
+                ),
                 status_code=400,
             )
         try:
             for upload in files:
-                if not isinstance(upload, UploadFile):
+                # Starlette's multipart parser returns its own
+                # ``starlette.datastructures.UploadFile``; FastAPI
+                # re-exports a subclass, so a strict
+                # ``isinstance(upload, fastapi.UploadFile)`` check
+                # silently rejected every file (parent isn't an
+                # instance of child). Filter out raw strings (empty
+                # file inputs) instead, and duck-type the rest.
+                if isinstance(upload, str) or not hasattr(upload, "filename"):
                     continue
-                _store_uploaded_file(env, upload, public=public)
+                _store_uploaded_file(
+                    env, upload, public=public, folder_id=target_folder
+                )
         except HTTPException:
             raise
         except Exception as exc:  # noqa: BLE001
             log.exception("file upload failed")
             return HTMLResponse(
-                _file_manager_render(env, request, error=f"Upload failed: {exc}"),
+                _file_manager_render(
+                    env,
+                    request,
+                    error=f"Upload failed: {exc}",
+                    folder_id=target_folder,
+                ),
                 status_code=500,
             )
-        return RedirectResponse(
-            "/web/views/file_manager/file_manager.file.kanban", status_code=303
-        )
+        dest = "/web/files/library"
+        if target_folder:
+            dest = f"{dest}?folder_id={target_folder}"
+        return RedirectResponse(dest, status_code=303)
 
     @app.get("/web/files/picker", response_class=HTMLResponse)
     def web_files_picker(
@@ -3101,12 +3203,15 @@ def create_app(
         accept: str = "",
         q: str = "",
         multi: int = 0,
+        folder_id: int | None = None,
     ):
         """Picker dialog body for ``widget="file"`` / ``widget="files"``.
 
         Opens inside ``PvDialog`` (the caller passes
         ``url='/web/files/picker?accept=image/*'``). Returns an HTML
-        fragment with the library tile grid + search + inline upload.
+        fragment with a folder-navigable tile grid + breadcrumb +
+        search + inline upload. Folder navigation after the first paint
+        is client-side via ``/web/files/picker/browse``.
         """
         if env.uid is None:
             return _auth_required_response(request)
@@ -3115,13 +3220,15 @@ def create_app(
         env.check_access("ir.attachment", "read")
         accept = (accept or "").strip()
         query = (q or "").strip()
-        rows = _file_manager_picker_rows(env, accept=accept, query=query)
+        browse = _file_manager_browse(
+            env, folder_id=folder_id, accept=accept, query=query
+        )
         from .render import _env as render_env
 
         tpl = render_env.get_template("widgets/file_picker.html")
         return HTMLResponse(
             tpl.render(
-                rows=rows,
+                browse=browse,
                 accept=accept,
                 q=query,
                 multi=bool(int(multi)),
@@ -3129,11 +3236,38 @@ def create_app(
             )
         )
 
+    @app.get("/web/files/picker/browse")
+    def web_files_picker_browse(
+        request: Request,
+        env: Environment = Depends(get_env),
+        accept: str = "",
+        q: str = "",
+        folder_id: int | None = None,
+    ):
+        """JSON browse payload used by the picker for folder navigation.
+
+        Returns ``{folder_id, breadcrumb, folders, rows, searching}`` so
+        the dialog's Alpine component can re-render in place — keeping
+        any multi-select made in other folders.
+        """
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager module is not installed")
+        env.check_access("ir.attachment", "read")
+        return _file_manager_browse(
+            env,
+            folder_id=folder_id,
+            accept=(accept or "").strip(),
+            query=(q or "").strip(),
+        )
+
     @app.post("/web/files/picker/upload", status_code=201)
     async def web_files_picker_upload(
         request: Request,
         file: UploadFile = File(...),
         public: bool = Form(False),
+        folder_id: int | None = Form(None),
         env: Environment = Depends(get_env),
     ):
         """Upload-and-return-row inside the picker dialog.
@@ -3147,51 +3281,695 @@ def create_app(
         if "ir.attachment" not in registry:
             raise HTTPException(404, "file_manager module is not installed")
         env.check_access("ir.attachment", "create")
-        return _store_uploaded_file(env, file, public=public)
+        target_folder = _parse_upload_folder_id(folder_id)
+        return _store_uploaded_file(
+            env, file, public=public, folder_id=target_folder
+        )
+
+    def _accept_mime_domain(accept: str) -> list:
+        """Translate an HTML ``accept`` token list into mimetype clauses.
+
+        ``"image/*,application/pdf"`` → an OR-joined domain fragment
+        (prefix-polish notation) suitable for ``Model.search``.
+        """
+        if not accept:
+            return []
+        tokens = [t.strip() for t in accept.split(",") if t.strip()]
+        clauses: list = []
+        for tok in tokens:
+            if tok.endswith("/*"):
+                clauses.append(("mimetype", "ilike", f"{tok[:-1]}%"))
+            elif "/" in tok:
+                clauses.append(("mimetype", "=", tok))
+        if not clauses:
+            return []
+        if len(clauses) == 1:
+            return clauses
+        return ["|"] * (len(clauses) - 1) + clauses
+
+    def _library_company_domain(env) -> list:
+        """Scope library / picker attachment queries to the active company.
+
+        Returns ``[("company_id", "=", cid)]`` when a company scope is
+        active and ``ir.attachment`` carries the column (added by
+        file_manager); otherwise ``[]`` (no scoping). System attachments
+        without a company simply don't surface in the library UI.
+        """
+        if (
+            env.company_id
+            and "ir.attachment" in registry
+            and "company_id" in env["ir.attachment"]._fields
+        ):
+            return [("company_id", "=", env.company_id)]
+        return []
+
+    def _attachment_to_row(r) -> dict:
+        from .file_icons import file_icon_key
+
+        mime = (r.mimetype or "").lower()
+        return {
+            "id": r.id,
+            "name": r.name,
+            "mimetype": r.mimetype or "",
+            "size": r.file_size or 0,
+            "thumbnail_url": (
+                f"/api/attachment/{r.id}/download"
+                if mime.startswith("image/")
+                else ""
+            ),
+            # Coarse type key → the JS ``pvFileIcon`` map renders a glyph
+            # for non-image files (pdf / doc / xls / zip / …).
+            "icon": file_icon_key(r.mimetype, r.datas_fname or r.name),
+        }
 
     def _file_manager_picker_rows(
         env, *, accept: str, query: str, limit: int = 60
     ) -> list[dict]:
         Att = env["ir.attachment"]
-        domain: list = []
+        domain: list = list(_library_company_domain(env))
         if query:
-            domain.append(("name", "ilike", query))
-        if accept:
-            # Translate the HTML ``accept`` token list ("image/*,application/pdf")
-            # into ``mimetype`` ilike clauses joined with OR.
-            tokens = [t.strip() for t in accept.split(",") if t.strip()]
-            mime_clauses: list = []
-            for tok in tokens:
-                if tok.endswith("/*"):
-                    prefix = tok[:-1]  # keeps the trailing "/"
-                    mime_clauses.append(("mimetype", "ilike", f"{prefix}%"))
-                elif "/" in tok:
-                    mime_clauses.append(("mimetype", "=", tok))
-            if mime_clauses:
-                if len(mime_clauses) == 1:
-                    domain.append(mime_clauses[0])
-                else:
-                    domain.append("|" * (len(mime_clauses) - 1))
-                    domain.extend(mime_clauses)
+            # ``ilike`` takes the pattern verbatim — wrap for substring.
+            domain.append(("name", "ilike", f"%{query}%"))
+        domain.extend(_accept_mime_domain(accept))
         rows = Att.search(domain, limit=limit, order='"id" DESC')
-        out: list[dict] = []
-        for r in rows:
-            mime = (r.mimetype or "").lower()
-            thumb = (
-                f"/api/attachment/{r.id}/download"
-                if mime.startswith("image/")
-                else ""
+        return [_attachment_to_row(r) for r in rows]
+
+    def _folder_breadcrumb(env, folder_id: int | None) -> list[dict]:
+        """Root→leaf chain of ``{id, name}`` for a folder, or ``[]`` at root."""
+        if not folder_id or "res.attachment.folder" not in registry:
+            return []
+        Folder = env["res.attachment.folder"]
+        chain: list[dict] = []
+        cursor = Folder.browse(int(folder_id))
+        for _ in range(32):
+            if not cursor._ids:
+                break
+            chain.append({"id": cursor.id, "name": cursor.name})
+            cursor = cursor.parent_id
+            if not cursor or not cursor._ids:
+                break
+        chain.reverse()
+        return chain
+
+    def _file_manager_browse(
+        env, *, folder_id: int | None, accept: str, query: str, limit: int = 120
+    ) -> dict:
+        """Folder-scoped browse payload for the picker dialog.
+
+        - With a search ``query``: flat search across every file (no
+          folders), matching desktop "search in this PC" behaviour.
+        - Otherwise: the subfolders of ``folder_id`` (top-level when
+          None) plus the files filed directly in it (Unfiled when None).
+        """
+        Att = env["ir.attachment"]
+        if query:
+            return {
+                "folder_id": folder_id,
+                "breadcrumb": [],
+                "folders": [],
+                "rows": _file_manager_picker_rows(
+                    env, accept=accept, query=query, limit=limit
+                ),
+                "searching": True,
+            }
+
+        target = int(folder_id) if folder_id else None
+        folders: list[dict] = []
+        if "res.attachment.folder" in registry:
+            Folder = env["res.attachment.folder"]
+            subs = Folder.search(
+                [("parent_id", "=", target)], order='"sequence" ASC, "name" ASC'
             )
-            out.append(
+            child_counts: dict[int, int] = {}
+            for f in Folder.search([]):
+                if f.parent_id:
+                    child_counts[f.parent_id.id] = child_counts.get(f.parent_id.id, 0) + 1
+            cdom = _library_company_domain(env)
+            for f in subs:
+                file_n = Att.search_count([("folder_id", "=", f.id)] + cdom)
+                folders.append(
+                    {
+                        "id": f.id,
+                        "name": f.name,
+                        "child_count": child_counts.get(f.id, 0),
+                        "file_count": file_n,
+                    }
+                )
+
+        file_domain: list = [("folder_id", "=", target)]
+        file_domain.extend(_library_company_domain(env))
+        file_domain.extend(_accept_mime_domain(accept))
+        rows = Att.search(file_domain, limit=limit, order='"id" DESC')
+        return {
+            "folder_id": target,
+            "breadcrumb": _folder_breadcrumb(env, target),
+            "folders": folders,
+            "rows": [_attachment_to_row(r) for r in rows],
+            "searching": False,
+        }
+
+    # ---------------------------------------------------------------
+    # File library — folders, bulk actions, Drive-style library shell
+    # ---------------------------------------------------------------
+
+    def _properties_context(env, att_id: int, *, panel_only: bool) -> dict:
+        """Build the template ctx for both Properties endpoints.
+
+        Shared so the side-panel fragment and the full page show
+        exactly the same metadata for the same record.
+        """
+        Att = env["ir.attachment"]
+        att = Att.browse(int(att_id))
+        if not att._ids:
+            raise HTTPException(404, f"ir.attachment({att_id}) not found")
+        env.check_access("ir.attachment", "read")
+        mimetype = (att.mimetype or "").lower().split(";", 1)[0].strip()
+        is_image = mimetype.startswith("image/")
+        # Extension hint from the original filename or display name.
+        source = (att.datas_fname or att.name or "").rsplit(".", 1)
+        extension = source[1].lower() if len(source) == 2 and source[1] else ""
+        dimensions = None
+        if is_image:
+            try:
+                from .image_meta import read_image_dimensions
+
+                payload = att.fetch_content()
+                if payload:
+                    dimensions = read_image_dimensions(payload, mimetype)
+            except Exception:  # noqa: BLE001 — corrupt file → no dimensions
+                dimensions = None
+        owner_url = ""
+        if att.res_model and att.res_id and att.res_model in registry:
+            owner_url = f"/web/records/{att.res_id}?model={att.res_model}"
+        folder_chain: list[dict] = []
+        if att.folder_id and "res.attachment.folder" in registry:
+            cursor = att.folder_id
+            for _ in range(32):
+                if not cursor or not cursor._ids:
+                    break
+                folder_chain.append({"id": cursor.id, "name": cursor.name})
+                cursor = cursor.parent_id
+            folder_chain.reverse()
+        return {
+            "att": att,
+            "mimetype": mimetype,
+            "is_image": is_image,
+            "extension": extension,
+            "dimensions": dimensions,
+            "owner_url": owner_url,
+            "folder_chain": folder_chain,
+            "panel_only": panel_only,
+        }
+
+    @app.get("/web/files/{att_id}/properties", response_class=HTMLResponse)
+    def web_files_properties(
+        att_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        from .render import _env as render_env, merge_template_context
+
+        ctx = _properties_context(env, att_id, panel_only=False)
+        layout = merge_template_context(env, str(request.url.path))
+        layout.update(ctx)
+        return HTMLResponse(
+            render_env.get_template("file_manager_properties.html").render(**layout)
+        )
+
+    @app.get("/web/files/{att_id}/properties_panel", response_class=HTMLResponse)
+    def web_files_properties_panel(
+        att_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        """Fragment variant — same template, ``panel_only=True``."""
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        from .render import _env as render_env
+
+        ctx = _properties_context(env, att_id, panel_only=True)
+        return HTMLResponse(
+            render_env.get_template("file_manager_properties.html").render(**ctx)
+        )
+
+    @app.get("/web/files/library", response_class=HTMLResponse)
+    def web_files_library(
+        request: Request,
+        env: Environment = Depends(get_env),
+        folder_id: int | None = None,
+        q: str = "",
+    ):
+        """Drive-style library shell: folder tree + file area + details panel.
+
+        The file area is rendered client-side (Alpine) from the
+        ``_file_manager_browse`` payload, so it supports the grid / tiles
+        / details view switch, type-icon previews, multi-select, and
+        drag-to-folder without leaning on the generic kanban renderer.
+        ``folder_id=0`` keeps the "Unfiled" convention (loose files, no
+        subfolder tiles — the client suppresses them for that node).
+        """
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry or "res.attachment.folder" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        env.check_access("ir.attachment", "read")
+        env.check_access("res.attachment.folder", "read")
+        from .render import _env as render_env, merge_template_context
+
+        query = (q or "").strip()
+        if folder_id == 0:
+            active, target = 0, None
+        elif folder_id:
+            active, target = int(folder_id), int(folder_id)
+        else:
+            active, target = None, None
+
+        browse = _file_manager_browse(
+            env, folder_id=target, accept="", query=query
+        )
+        files = browse["rows"]
+        visible_ids = [int(r["id"]) for r in files]
+
+        tree_payload = web_files_tree(request, env)  # type: ignore[arg-type]
+
+        layout = merge_template_context(
+            env,
+            str(request.url.path),
+            csrf_token=getattr(request.state, "csrf_token", ""),
+        )
+        layout.update(
+            {
+                "active_folder_id": active,
+                "folder_tree": tree_payload["folders"],
+                "unfiled_count": tree_payload["unfiled_count"],
+                "files": files,
+                "visible_ids": visible_ids,
+                "query": query,
+                "searching": browse.get("searching", False),
+                "can_write": env.has_access("ir.attachment", "write"),
+            }
+        )
+        return HTMLResponse(
+            render_env.get_template("file_manager_library.html").render(**layout)
+        )
+
+    def _folder_or_404(env, folder_id: int):
+        if "res.attachment.folder" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        Folder = env["res.attachment.folder"]
+        rec = Folder.browse(int(folder_id))
+        if not rec._ids:
+            raise HTTPException(404, f"res.attachment.folder({folder_id}) not found")
+        return rec
+
+    def _folder_chain_includes(env, ancestor_id: int, candidate_id: int) -> bool:
+        """Return True if ``candidate_id`` is ``ancestor_id`` or a descendant.
+
+        Used to reject cycles on folder-move: a folder cannot become its
+        own ancestor. Walks up the candidate's parent chain (depth-capped
+        at the same 32 levels the display_name computer uses).
+        """
+        if ancestor_id == candidate_id:
+            return True
+        Folder = env["res.attachment.folder"]
+        cursor = Folder.browse(candidate_id)
+        for _ in range(32):
+            if not cursor._ids:
+                return False
+            parent = cursor.parent_id
+            if not parent or not parent._ids:
+                return False
+            if parent.id == ancestor_id:
+                return True
+            cursor = parent
+        return False
+
+    @app.get("/web/files/tree")
+    def web_files_tree(
+        request: Request, env: Environment = Depends(get_env)
+    ):
+        """Flat folder list for the Library's left-side tree.
+
+        The client tree-renders by parent_id. Counts are denormalised
+        per folder so the tree can show ``Marketing (12)`` without a
+        second round-trip.
+        """
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "res.attachment.folder" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        env.check_access("res.attachment.folder", "read")
+        Folder = env["res.attachment.folder"]
+        Att = env["ir.attachment"]
+        # Folder is _company_scoped → this search is auto-filtered.
+        rows = Folder.search([], order='"sequence" ASC, "name" ASC')
+        # Pull attachment counts in one pass, scoped to the active
+        # company so the tree tallies match the file area.
+        counts: dict[int | None, int] = {}
+        for att in Att.search(_library_company_domain(env)):
+            counts[att.folder_id.id if att.folder_id else None] = counts.get(
+                att.folder_id.id if att.folder_id else None, 0
+            ) + 1
+        # Child counts per folder.
+        child_count: dict[int, int] = {}
+        for r in rows:
+            if r.parent_id:
+                child_count[r.parent_id.id] = child_count.get(r.parent_id.id, 0) + 1
+        return {
+            "folders": [
                 {
                     "id": r.id,
                     "name": r.name,
-                    "mimetype": r.mimetype or "",
-                    "size": r.file_size or 0,
-                    "thumbnail_url": thumb,
+                    "parent_id": r.parent_id.id if r.parent_id else None,
+                    "sequence": r.sequence,
+                    "color": r.color or "",
+                    "child_count": child_count.get(r.id, 0),
+                    "file_count": counts.get(r.id, 0),
                 }
-            )
+                for r in rows
+            ],
+            "unfiled_count": counts.get(None, 0),
+        }
+
+    @app.post("/web/files/folders", status_code=201)
+    async def web_files_folder_create(
+        request: Request, env: Environment = Depends(get_env)
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "res.attachment.folder" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        env.check_access("res.attachment.folder", "create")
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        name = (payload.get("name") or "").strip()
+        if not name:
+            raise HTTPException(400, "name is required")
+        parent_id = payload.get("parent_id") or None
+        Folder = env["res.attachment.folder"]
+        vals = {"name": name}
+        if parent_id:
+            _folder_or_404(env, int(parent_id))
+            vals["parent_id"] = int(parent_id)
+        with env.transaction():
+            rec = Folder.create(vals)
+        return {"id": rec.id, "name": rec.name, "parent_id": parent_id}
+
+    @app.patch("/web/files/folders/{folder_id}")
+    async def web_files_folder_patch(
+        folder_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "res.attachment.folder" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        env.check_access("res.attachment.folder", "write")
+        rec = _folder_or_404(env, folder_id)
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        vals: dict = {}
+        if "name" in payload:
+            name = (payload.get("name") or "").strip()
+            if not name:
+                raise HTTPException(400, "name cannot be empty")
+            vals["name"] = name
+        if "parent_id" in payload:
+            new_parent = payload.get("parent_id")
+            if new_parent in (None, "", 0):
+                vals["parent_id"] = None
+            else:
+                new_parent_id = int(new_parent)
+                _folder_or_404(env, new_parent_id)
+                if _folder_chain_includes(env, rec.id, new_parent_id):
+                    raise HTTPException(
+                        400, "parent_id would create a folder cycle"
+                    )
+                vals["parent_id"] = new_parent_id
+        if vals:
+            with env.transaction():
+                rec.write(vals)
+        return {
+            "id": rec.id,
+            "name": rec.name,
+            "parent_id": rec.parent_id.id if rec.parent_id else None,
+        }
+
+    @app.delete("/web/files/folders/{folder_id}", status_code=204, response_class=Response)
+    def web_files_folder_delete(
+        folder_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "res.attachment.folder" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        env.check_access("res.attachment.folder", "unlink")
+        rec = _folder_or_404(env, folder_id)
+        # Empty-check: no child folders, no attachments.
+        Folder = env["res.attachment.folder"]
+        Att = env["ir.attachment"]
+        if Folder.search([("parent_id", "=", rec.id)]):
+            raise HTTPException(409, "Folder has subfolders — empty it first")
+        if Att.search([("folder_id", "=", rec.id)]):
+            raise HTTPException(409, "Folder has files — empty it first")
+        with env.transaction():
+            rec.unlink()
+        return Response(status_code=204)
+
+    @app.post("/web/files/move")
+    async def web_files_move(
+        request: Request, env: Environment = Depends(get_env)
+    ):
+        """Bulk move attachments into a folder (or to Unfiled)."""
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry or "res.attachment.folder" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        env.check_access("ir.attachment", "write")
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        ids = [int(x) for x in payload.get("attachment_ids") or [] if x]
+        folder_id = payload.get("folder_id")
+        if folder_id not in (None, "", 0):
+            _folder_or_404(env, int(folder_id))
+            target = int(folder_id)
+        else:
+            target = None
+        if not ids:
+            return {"updated": 0}
+        with env.transaction():
+            for aid in ids:
+                rec = env["ir.attachment"].browse(aid)
+                if rec._ids:
+                    rec.write({"folder_id": target})
+        return {"updated": len(ids)}
+
+    @app.post("/web/files/copy")
+    async def web_files_copy(
+        request: Request, env: Environment = Depends(get_env)
+    ):
+        """Duplicate attachments into a folder (or Unfiled).
+
+        Each copy is an independent ``ir.attachment`` row with its own
+        stored bytes (re-saved through the storage backend) so deleting
+        the original never strands the copy. Needs ``create`` on
+        ``ir.attachment``.
+        """
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        env.check_access("ir.attachment", "create")
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        ids = [int(x) for x in payload.get("attachment_ids") or [] if x]
+        folder_id = payload.get("folder_id")
+        if folder_id not in (None, "", 0):
+            _folder_or_404(env, int(folder_id))
+            target = int(folder_id)
+        else:
+            target = None
+        if not ids:
+            return {"copied": 0}
+        from .storage import get_backend
+
+        backend = get_backend()
+        Att = env["ir.attachment"]
+        copied = 0
+        with env.transaction():
+            for aid in ids:
+                src = Att.browse(aid)
+                if not src._ids:
+                    continue
+                name = src.name or "file"
+                vals = {
+                    "name": name,
+                    "datas_fname": src.datas_fname or name,
+                    "mimetype": src.mimetype,
+                    "file_size": src.file_size,
+                    "res_model": None,
+                    "res_id": None,
+                    "type": src.type or "binary",
+                    "public": bool(src.public),
+                    "folder_id": target,
+                }
+                if "company_id" in Att._fields:
+                    vals["company_id"] = (
+                        src.company_id.id if src.company_id else env.company_id
+                    )
+                if src.type == "url":
+                    vals["url"] = src.url
+                else:
+                    # Re-store the bytes so the copy owns an independent
+                    # blob (db backend: inline base64; local: a new key).
+                    data = src.fetch_content()
+                    storage_key = backend.save(name, data) if data else ""
+                    vals["storage_key"] = storage_key
+                    vals["datas"] = (
+                        base64.b64encode(data).decode("ascii")
+                        if (data and not storage_key)
+                        else None
+                    )
+                Att.create(vals)
+                copied += 1
+        return {"copied": copied}
+
+    def _attachments_or_403(env, ids: list[int], perm: str):
+        env.check_access("ir.attachment", perm)
+        Att = env["ir.attachment"]
+        out = []
+        for aid in ids:
+            rec = Att.browse(int(aid))
+            if rec._ids:
+                out.append(rec)
         return out
+
+    @app.post("/web/files/bulk/download")
+    async def web_files_bulk_download(
+        request: Request, env: Environment = Depends(get_env)
+    ):
+        """Stream a ZIP of every selected attachment.
+
+        URL-typed rows are listed as ``<name>.url`` text shortcuts.
+        Failures on a single row (e.g. missing blob) are skipped with a
+        warning header rather than failing the whole archive.
+        """
+        import io
+        import zipfile
+
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        # Fall back to form-encoded for hidden-form submits (browser
+        # zip downloads use a hidden form, not a JSON fetch).
+        if not payload:
+            form = await request.form()
+            raw = form.get("ids") or ""
+            ids = [int(x) for x in str(raw).split(",") if x.strip().isdigit()]
+        else:
+            ids = [int(x) for x in payload.get("ids") or [] if x]
+        if not ids:
+            raise HTTPException(400, "ids is required")
+        recs = _attachments_or_403(env, ids, "read")
+        buf = io.BytesIO()
+        skipped = 0
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            seen: dict[str, int] = {}
+            for rec in recs:
+                base_name = (rec.datas_fname or rec.name or f"attachment-{rec.id}").strip() or f"attachment-{rec.id}"
+                # Disambiguate filename collisions inside the archive.
+                count = seen.get(base_name, 0)
+                seen[base_name] = count + 1
+                arc_name = base_name if count == 0 else f"{count}-{base_name}"
+                if rec.type == "url":
+                    body = f"[InternetShortcut]\nURL={rec.url or ''}\n".encode()
+                    zf.writestr(arc_name + ".url", body)
+                    continue
+                try:
+                    data = rec.fetch_content()
+                except Exception:  # noqa: BLE001
+                    skipped += 1
+                    continue
+                if not data:
+                    skipped += 1
+                    continue
+                zf.writestr(arc_name, data)
+        archive_name = f"files-{len(recs)}.zip"
+        headers = {
+            "Content-Disposition": f'attachment; filename="{archive_name}"',
+        }
+        if skipped:
+            headers["X-PV-Skipped"] = str(skipped)
+        return Response(
+            content=buf.getvalue(),
+            media_type="application/zip",
+            headers=headers,
+        )
+
+    @app.post("/web/files/bulk/delete", status_code=204, response_class=Response)
+    async def web_files_bulk_delete(
+        request: Request, env: Environment = Depends(get_env)
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        ids = [int(x) for x in payload.get("ids") or [] if x]
+        if not ids:
+            raise HTTPException(400, "ids is required")
+        recs = _attachments_or_403(env, ids, "unlink")
+        with env.transaction():
+            for rec in recs:
+                rec.unlink()
+        return Response(status_code=204)
+
+    @app.post("/web/files/bulk/public")
+    async def web_files_bulk_public(
+        request: Request, env: Environment = Depends(get_env)
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        if "ir.attachment" not in registry:
+            raise HTTPException(404, "file_manager is not installed")
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            payload = {}
+        ids = [int(x) for x in payload.get("ids") or [] if x]
+        public = bool(payload.get("public"))
+        if not ids:
+            raise HTTPException(400, "ids is required")
+        recs = _attachments_or_403(env, ids, "write")
+        with env.transaction():
+            for rec in recs:
+                rec.write({"public": public})
+        return {"updated": len(recs)}
 
     @app.post("/web/switch-company")
     async def web_switch_company(

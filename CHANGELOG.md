@@ -7,6 +7,93 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.19.0] — 2026-05-28
+
+### Added
+
+- **Drive-style File library** (`file_manager` **0.3.0**). The Library
+  menu now lands on a three-column shell (`/web/files/library`): a
+  folder tree on the left, a client-rendered file grid in the centre
+  (`pvFileLibrary` Alpine component fed by `_file_manager_browse`), and
+  a slide-over Properties panel on the right. Click selects + opens
+  the panel; shift-click extends the range; ctrl/cmd-click toggles;
+  right-click opens a context menu (Open details / Properties /
+  Download / Move to / Copy to / Toggle public / Delete). HTML5
+  drag-and-drop moves the selected files between folders.
+- **Three view modes** — **Grid** (tight thumbnails), **Tiles**
+  (icon + name + meta), **Details** (row list), switchable from the
+  header and persisted to `localStorage`. Non-image files render a
+  tinted type glyph (`pvFileIcon`: pdf / doc / xls / ppt / json / text
+  / zip / audio / video / fallback) via `pyvelm/file_icons.py`. On
+  small screens every grid collapses to a single column.
+- **Collapsible folder tree** — branches collapse / expand from a
+  chevron; on load only the path to the active working directory is
+  expanded, the rest start collapsed.
+- **Copy / Move bulk actions** — `POST /web/files/copy` duplicates the
+  selected attachments (own bytes, stamped with the active company);
+  Move and Copy targets are chosen from the action bar.
+- **Company-scoped library** — `res.attachment.folder` is now
+  `_company_scoped` (auto `company_id` + per-company `search` filter);
+  `ir.attachment` gains a nullable `company_id` (stays cross-company
+  for avatars / mail / reports) that the library / picker / tree
+  queries scope to via `_library_company_domain`, and that uploads /
+  copies stamp with `env.company_id`.
+- **`widget="file_url"`** — a `Char`-backed picker that stores
+  `/api/attachment/{id}/download` (flipping the row public). Wired to
+  company branding (`logo_url`, `logo_url_dark`, `favicon_url`).
+- **Folder-navigable picker** — `/web/files/picker` and the
+  `/web/files/picker/browse` JSON endpoint give the picker dialog the
+  same breadcrumb / drill-in navigation as the Library.
+- **Folder-create UX** — a **New folder** button in the centre header
+  and a dashed **New folder** tile in the subfolder grid both open a
+  modal dialog (replacing the inline sidebar form); the pane-header
+  **+** and the right-click **New subfolder** now open the same dialog.
+- **Folders**. New `res.attachment.folder` model (hierarchical via
+  self-`parent_id`, `ondelete="RESTRICT"`) plus a nullable
+  `folder_id` on `ir.attachment` (`ondelete="SET NULL"`).
+  Endpoints: `GET/POST /web/files/folders`,
+  `PATCH /web/files/folders/{id}` (rejects cycles),
+  `DELETE /web/files/folders/{id}` (409 unless empty),
+  `POST /web/files/move`, `GET /web/files/tree`. Install hook grants
+  Admin CRUD + User read.
+- **Bulk actions** — `POST /web/files/bulk/download` (streams a ZIP;
+  URL-typed rows skipped with `X-PV-Skipped` header),
+  `POST /web/files/bulk/delete`,
+  `POST /web/files/bulk/public` (`{ids, public:bool}`).
+- **Properties page** — `/web/files/{id}/properties` and the matching
+  `/web/files/{id}/properties_panel` fragment. Two-column layout: big
+  preview (image bytes for image MIMEs, MIME-family icon otherwise) +
+  metadata grid (Name, Filename, Type, **Size** in human-readable
+  units, **Dimensions** for images, Created, Updated, Owner record,
+  Folder breadcrumb, Public toggle) + Download / Open linked record /
+  Delete buttons.
+- **`pyvelm.image_meta.read_image_dimensions`** — stdlib-only header
+  parser for PNG, JPEG, GIF, WebP. Returns `None` on truncated or
+  unknown input so the Properties page renders `—` gracefully.
+- **`pyvelm.file_size.human_size`** — Jinja filter registered on the
+  shared template environment. `1024 → "1.0 KB"`, `None → "—"`.
+
+### Changed
+
+- **base bumped to 0.29.0** — migration `0_28_to_0_29.py` adds the
+  nullable `ir_attachment.folder_id` column for existing databases
+  that upgrade base before re-installing file_manager.
+- **base bumped to 0.30.0** — migration `0_29_to_0_30.py` adds the
+  nullable `ir_attachment.company_id` column (same belt-and-braces
+  `ALTER … IF NOT EXISTS`). No backfill; company-less attachments stay
+  out of company-scoped library views.
+- **Kanban renderer** — `_render_kanban_content` and `_kanban_fetch`
+  accept an optional `extra_domain=` kwarg so callers can inject a
+  base filter without forking the renderer.
+- **Kanban tile events** — `_pv_kanban_alpine.html` now emits
+  `pv:kanban:tile-click` and `pv:kanban:tile-contextmenu` `CustomEvent`s
+  on the document. Listeners (the Library shell is the first) opt in
+  to add selection / context-menu behaviour without re-implementing
+  the kanban renderer.
+- **`card(image=…)`** builder unchanged but documented for reuse —
+  any model that exposes a URL-typed field can plug into the
+  thumbnail slot the file library uses.
+
 ## [0.18.0] — 2026-05-27
 
 New bundled **`geo_data`** module: 7 continents, ~250 countries

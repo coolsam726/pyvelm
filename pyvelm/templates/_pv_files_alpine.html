@@ -1,0 +1,239 @@
+{# Shared Alpine factories for file picker / upload HTMX fragments.
+   Included from layouts/main.html so PvDialog swaps work without
+   relying on <script> tags inside the loaded fragment. #}
+<script>
+(function () {
+    if (window.__pvFilesAlpineRegistered) return;
+    window.__pvFilesAlpineRegistered = true;
+
+    // Type-icon previews for non-image files. Keys match
+    // pyvelm.file_icons.file_icon_key(); each is { color, label }.
+    const ICONS = {
+        pdf:   { color: '#dc2626', label: 'PDF' },
+        doc:   { color: '#2563eb', label: 'DOC' },
+        xls:   { color: '#16a34a', label: 'XLS' },
+        ppt:   { color: '#ea580c', label: 'PPT' },
+        json:  { color: '#ca8a04', label: 'JSON' },
+        text:  { color: '#64748b', label: 'TXT' },
+        zip:   { color: '#9333ea', label: 'ZIP' },
+        audio: { color: '#0891b2', label: 'AUD' },
+        video: { color: '#db2777', label: 'VID' },
+        file:  { color: '#64748b', label: '' },
+    };
+
+    // Returns an SVG string — a document glyph tinted per type with a
+    // short label ribbon (generic `file` omits the label). Used by the
+    // library + picker tiles for any row without a real thumbnail.
+    window.pvFileIcon = function (key, sizeClass) {
+        const spec = ICONS[key] || ICONS.file;
+        const cls = sizeClass || 'w-9 h-9';
+        const label = spec.label
+            ? `<text x="12" y="17.6" text-anchor="middle" font-size="5.5"
+                     font-weight="700" fill="#fff" font-family="ui-sans-serif,system-ui">${spec.label}</text>`
+            : '';
+        return `
+            <svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 2.75h7.5L19.25 8.5V20A1.25 1.25 0 0118 21.25H6A1.25 1.25 0 014.75 20V4A1.25 1.25 0 016 2.75z"
+                      fill="${spec.color}" opacity="0.12"/>
+                <path d="M6 2.75h7.5L19.25 8.5V20A1.25 1.25 0 0118 21.25H6A1.25 1.25 0 014.75 20V4A1.25 1.25 0 016 2.75z"
+                      stroke="${spec.color}" stroke-width="1.3"/>
+                <path d="M13.5 2.75V8.5h5.75" stroke="${spec.color}" stroke-width="1.3"
+                      stroke-linejoin="round" fill="none"/>
+                <rect x="4.75" y="12.5" width="14.5" height="6.25" rx="1" fill="${spec.color}"/>
+                ${label}
+            </svg>`;
+    };
+
+    const pickerFactory = (cfg) => ({
+        accept: cfg.accept || '',
+        query: cfg.q || '',
+        multi: !!cfg.multi,
+        canUpload: !!cfg.canUpload,
+        // Folder-scoped browse state, seeded from the server's first
+        // paint. `selected` lives on the component (survives folder
+        // navigation, which is a client-side re-fetch — not a swap).
+        folderId: (cfg.browse && cfg.browse.folder_id) || null,
+        breadcrumb: (cfg.browse && cfg.browse.breadcrumb) || [],
+        folders: (cfg.browse && cfg.browse.folders) || [],
+        rows: (cfg.browse && cfg.browse.rows) || [],
+        searching: !!(cfg.browse && cfg.browse.searching),
+        selected: [],
+        uploading: false,
+        loading: false,
+        error: '',
+
+        isSelected(id) {
+            return this.selected.some((r) => r.id === id);
+        },
+        onTileClick(row) {
+            if (this.multi) {
+                const idx = this.selected.findIndex((r) => r.id === row.id);
+                if (idx >= 0) this.selected.splice(idx, 1);
+                else this.selected.push(row);
+                return;
+            }
+            window.PvDialog && window.PvDialog.close(row);
+        },
+        confirmMulti() {
+            if (!this.selected.length) return;
+            window.PvDialog && window.PvDialog.close(this.selected.slice());
+        },
+
+        async browse(params) {
+            this.loading = true;
+            this.error = '';
+            try {
+                const qs = new URLSearchParams();
+                if (this.accept) qs.set('accept', this.accept);
+                if (params.q) qs.set('q', params.q);
+                if (params.folderId) qs.set('folder_id', String(params.folderId));
+                const r = await fetch('/web/files/picker/browse?' + qs.toString(), {
+                    credentials: 'same-origin',
+                });
+                if (!r.ok) throw new Error(await r.text() || r.statusText);
+                const data = await r.json();
+                this.folderId = data.folder_id || null;
+                this.breadcrumb = data.breadcrumb || [];
+                this.folders = data.folders || [];
+                this.rows = data.rows || [];
+                this.searching = !!data.searching;
+            } catch (err) {
+                this.error = 'Could not load folder: ' + (err.message || err);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        navigate(folderId) {
+            // Drilling into a folder implicitly clears the search box.
+            this.query = '';
+            this.browse({ folderId });
+        },
+
+        goUp() {
+            const len = this.breadcrumb.length;
+            const parent = len >= 2 ? this.breadcrumb[len - 2].id : null;
+            this.navigate(parent);
+        },
+
+        runSearch() {
+            const q = (this.query || '').trim();
+            // Empty search snaps back to the current folder view.
+            if (!q) { this.browse({ folderId: this.folderId }); return; }
+            this.browse({ q });
+        },
+
+        async onPickFiles(event) {
+            const files = Array.from(event.target.files || []);
+            if (!files.length) return;
+            this.uploading = true;
+            this.error = '';
+            try {
+                for (const file of files) {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    // Upload lands in the folder currently being browsed.
+                    if (this.folderId) fd.append('folder_id', String(this.folderId));
+                    const r = await fetch('/web/files/picker/upload', {
+                        method: 'POST',
+                        body: fd,
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                        },
+                    });
+                    if (!r.ok) {
+                        throw new Error(await r.text() || r.statusText);
+                    }
+                    const row = await r.json();
+                    row.thumbnail_url = (row.mimetype || '').startsWith('image/')
+                        ? `/api/attachment/${row.id}/download`
+                        : '';
+                    this.rows.unshift(row);
+                    if (!this.multi) {
+                        window.PvDialog && window.PvDialog.close(row);
+                        return;
+                    }
+                    this.selected.push(row);
+                }
+            } catch (err) {
+                this.error = 'Upload failed: ' + (err.message || err);
+            } finally {
+                this.uploading = false;
+                event.target.value = '';
+            }
+        },
+        humanSize(bytes) {
+            if (!bytes) return '';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+        },
+    });
+
+    const uploadPanelFactory = (cfg) => ({
+        folderId: cfg.folderId || null,
+        folderLabel: cfg.folderLabel || 'Unfiled',
+        csrfToken: cfg.csrfToken || '',
+        files: [],
+        isPublic: false,
+        uploading: false,
+        error: '',
+
+        onPick(ev) {
+            this.files = Array.from(ev.target.files || []);
+            this.error = '';
+        },
+
+        cancel() {
+            window.PvDialog && window.PvDialog.close(null);
+        },
+
+        async submit() {
+            if (!this.files.length || this.uploading) return;
+            this.uploading = true;
+            this.error = '';
+            try {
+                for (const file of this.files) {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('public', this.isPublic ? '1' : '0');
+                    if (this.folderId) {
+                        fd.append('folder_id', String(this.folderId));
+                    }
+                    const url = '/web/files/picker/upload'
+                        + (this.csrfToken
+                            ? `?_csrf=${encodeURIComponent(this.csrfToken)}`
+                            : '');
+                    const r = await fetch(url, {
+                        method: 'POST',
+                        body: fd,
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                        },
+                    });
+                    if (!r.ok) {
+                        throw new Error(await r.text() || r.statusText);
+                    }
+                }
+                window.PvDialog && window.PvDialog.close({ uploaded: true });
+            } catch (err) {
+                this.error = 'Upload failed: ' + (err.message || err);
+            } finally {
+                this.uploading = false;
+            }
+        },
+    });
+
+    window.pvFilePicker = pickerFactory;
+    window.pvFileUploadPanel = uploadPanelFactory;
+
+    const register = () => {
+        Alpine.data('pvFilePicker', pickerFactory);
+        Alpine.data('pvFileUploadPanel', uploadPanelFactory);
+    };
+    if (typeof Alpine !== 'undefined') register();
+    else document.addEventListener('alpine:init', register);
+})();
+</script>

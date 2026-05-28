@@ -1550,6 +1550,50 @@ def _edit_image(value, spec, field):
     return _render_image_widget(value, spec, readonly=bool(spec.get("readonly")))
 
 
+# ---- file_url widget (Char-backed; pick an image from the file library) ----
+
+
+def _render_file_url_widget(value, spec, *, readonly: bool) -> Markup:
+    """Char widget that stores an image URL picked from the file library.
+
+    Bridges the ``file_manager`` library and plain URL columns (company
+    logo / favicon, etc.): the operator clicks **Pick from library**,
+    chooses an image in the standard ``/web/files/picker`` dialog, and
+    the widget stores that attachment's public download URL into the
+    Char. A manual URL field stays available for external links.
+
+    ``accept`` (widget option, default ``image/*``) filters the picker.
+    """
+    accept = (
+        spec.get("accept")
+        or (spec.get("widget_options") or {}).get("accept")
+        or "image/*"
+    )
+    partial = _env.get_template("widgets/file_url.html")
+    return Markup(
+        partial.render(
+            name=spec["name"],
+            value=value or "",
+            accept=accept,
+            readonly=readonly,
+        )
+    )
+
+
+@widget(Char, hint="file_url")
+@widget(Text, hint="file_url")
+def _display_file_url(value, spec, field):
+    return _render_file_url_widget(value, spec, readonly=True)
+
+
+@widget(Char, hint="file_url", mode="edit")
+@widget(Text, hint="file_url", mode="edit")
+def _edit_file_url(value, spec, field):
+    return _render_file_url_widget(
+        value, spec, readonly=bool(spec.get("readonly"))
+    )
+
+
 # ---- color widget (Char-backed hex for company themes) ----
 
 
@@ -1637,6 +1681,7 @@ _env = jinja2.Environment(
     lstrip_blocks=True,
 )
 
+from pyvelm.file_size import human_size as _human_size
 from pyvelm.icons import register_jinja_globals as _register_icon_globals
 
 
@@ -1647,6 +1692,7 @@ def register_shell_globals(jinja_env) -> None:
     _register_icon_globals(jinja_env)
     for key, val in default_brand_globals().items():
         jinja_env.globals.setdefault(key, val)
+    jinja_env.filters.setdefault("human_size", _human_size)
 
 
 register_shell_globals(_env)
@@ -3357,8 +3403,14 @@ def _kanban_fetch(
     order: str,
     filters: str,
     url_group_by: str,
+    extra_domain: list | None = None,
 ) -> dict:
-    """Resolve domain, grouping, and record slice for a kanban view."""
+    """Resolve domain, grouping, and record slice for a kanban view.
+
+    ``extra_domain`` lets callers inject a base filter (e.g. the
+    file_manager Library page applies ``[("folder_id","=",X)]``)
+    without forking the renderer or building a new view per filter.
+    """
     arch_group_by = arch.get("group_by")
     list_controls = not arch_group_by
     model_cls = env.registry[view.model]
@@ -3375,7 +3427,7 @@ def _kanban_fetch(
             if seq_field
             else '"id" ASC'
         )
-        recs = Model.search([], order=order)
+        recs = Model.search(list(extra_domain or []), order=order)
         return {
             "list_controls": False,
             "grouped": True,
@@ -3396,7 +3448,7 @@ def _kanban_fetch(
 
     fields_spec = _kanban_fields_spec(view, arch, env)
     headers = _field_headers(model_cls, fields_spec)
-    domain: list = []
+    domain: list = list(extra_domain or [])
     if search:
         domain.extend(_build_search_domain(model_cls, fields_spec, search))
     domain.extend(_parse_filters(model_cls, fields_spec, filters))
@@ -3511,8 +3563,14 @@ def _render_kanban_content(
     filters: str,
     url_group_by: str,
     bc_stack: list[tuple[str, str]] | None = None,
+    extra_domain: list | None = None,
 ) -> dict:
-    """Shared kanban fetch + card layout for full page and HTMX fragments."""
+    """Shared kanban fetch + card layout for full page and HTMX fragments.
+
+    ``extra_domain`` lets callers (file_manager Library page is the
+    first) inject a base filter that survives alongside the user's
+    search / column filters.
+    """
     state = _kanban_fetch(
         view,
         arch,
@@ -3523,6 +3581,7 @@ def _render_kanban_content(
         order=order,
         filters=filters,
         url_group_by=url_group_by,
+        extra_domain=extra_domain,
     )
     card_kw = _kanban_card_kw(view, arch, state["form_view"])
     nav_query = encode_view_nav_query(

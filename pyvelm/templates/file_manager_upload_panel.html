@@ -1,0 +1,56 @@
+{# Upload fragment (optional PvDialog embed). Library uses inline upload. #}
+<div class="pv-file-upload-panel space-y-4"
+     data-pv-cfg="{{ ({
+        'folderId': folder_id,
+        'folderLabel': folder_label,
+        'csrfToken': csrf_token,
+     }) | tojson }}"
+     x-data="pvFileUploadPanel(JSON.parse($el.dataset.pvCfg))">
+    <p class="text-sm text-body-subtle">
+        Files will be added to
+        <span class="font-medium text-heading" x-text="folderLabel"></span>.
+    </p>
+
+    <div>
+        <label class="block text-sm font-medium text-heading mb-2">Files</label>
+        <input type="file"
+               multiple
+               @change="onPick($event)"
+               class="block w-full text-sm text-body
+                      file:mr-3 file:py-2 file:px-4
+                      file:rounded-md file:border-0
+                      file:text-sm file:font-medium
+                      file:bg-fg-brand file:text-white
+                      hover:file:opacity-90
+                      file:cursor-pointer cursor-pointer">
+    </div>
+
+    <label class="flex items-center gap-2 text-sm text-body cursor-pointer">
+        <input type="checkbox" x-model="isPublic"
+               class="w-4 h-4 rounded border-default bg-neutral-secondary
+                      text-fg-brand checked:bg-fg-brand focus:ring-2 focus:ring-fg-brand">
+        <span>Public — serve without an access grant</span>
+    </label>
+
+    <p x-show="error" x-text="error" x-cloak
+       class="text-sm text-fg-danger bg-danger-soft border border-fg-danger/30
+              rounded-md px-3 py-2"></p>
+    <p x-show="uploading" x-cloak class="text-sm text-body-subtle">Uploading…</p>
+
+    <div class="flex items-center justify-end gap-2 pt-2 border-t border-default">
+        <button type="button"
+                @click="cancel()"
+                class="px-3 py-1.5 text-sm border border-default text-body
+                       rounded-md hover:bg-neutral-secondary transition">
+            Cancel
+        </button>
+        <button type="button"
+                @click="submit()"
+                :disabled="!files.length || uploading"
+                class="px-3 py-1.5 text-sm font-medium text-white bg-fg-brand
+                       rounded-md hover:opacity-90 transition
+                       disabled:opacity-50 disabled:cursor-not-allowed">
+            Upload
+        </button>
+    </div>
+</div>

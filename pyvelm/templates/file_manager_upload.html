@@ -3,11 +3,19 @@
 {% block page_title %}Upload files{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto">
+<div class="max-w-2xl">
     <form method="post"
-          action="/web/files/upload"
+          action="/web/files/upload?_csrf={{ csrf_token }}"
           enctype="multipart/form-data"
           class="bg-neutral-primary border border-default rounded-xl shadow-sm p-6 space-y-5">
+
+        <p class="text-sm text-body-subtle">
+            Destination:
+            <span class="font-medium text-heading">{{ folder_label | default('Unfiled') }}</span>
+        </p>
+        {% if folder_id %}
+        <input type="hidden" name="folder_id" value="{{ folder_id }}">
+        {% endif %}
 
         <div>
             <label class="block text-sm font-medium text-heading mb-2">
@@ -22,8 +30,8 @@
                           hover:file:opacity-90
                           file:cursor-pointer cursor-pointer">
             <p class="mt-2 text-xs text-body-subtle">
-                Pick one or more files. They land in the library unattached;
-                use the file picker on any record to link them.
+                Open a folder in the library first to upload directly into it,
+                or use the Upload button while browsing that folder.
             </p>
         </div>
 
@@ -41,7 +49,7 @@
         {% endif %}
 
         <div class="flex items-center justify-end gap-3 pt-2 border-t border-default">
-            <a href="/web/views/file_manager/file_manager.file.kanban"
+            <a href="/web/files/library{% if folder_id %}?folder_id={{ folder_id }}{% endif %}"
                class="px-3 py-1.5 text-sm font-medium border border-default text-body
                       rounded-md hover:bg-neutral-secondary transition">
                 Cancel

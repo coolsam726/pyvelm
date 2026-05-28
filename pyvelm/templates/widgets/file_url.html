@@ -1,0 +1,143 @@
+{# Char-backed image picker: stores a URL, sourced from the file library.
+
+   The hidden input carries a plain URL string (so the value drops into a
+   Char column like ``res.company.logo_url`` unchanged). The operator can:
+     * Pick from library  → opens /web/files/picker (image filter), stores
+       the chosen attachment's public download URL.
+     * Paste a URL        → external links still work.
+     * Clear              → empties the value.
+
+   Config rides on ``data-pv-cfg`` (per-element) rather than a shared
+   global, so multiple instances on one form (logo / dark logo / favicon)
+   don't clobber each other.
+
+   Variables: name, value, accept, readonly
+#}
+<div class="pv-file-url"
+     data-pv-cfg="{{ ({'name': name, 'value': value, 'accept': accept, 'readonly': readonly}) | tojson | forceescape }}"
+     x-data="pvFileUrl(JSON.parse($el.dataset.pvCfg))">
+
+    <input type="hidden" :name="name" :value="value">
+
+    <div class="flex items-start gap-3">
+        {# Preview thumbnail (or placeholder). #}
+        <div class="w-20 h-20 rounded-lg border border-default bg-neutral-secondary
+                    flex items-center justify-center overflow-hidden shrink-0">
+            <template x-if="value">
+                <img :src="value" alt="" class="w-full h-full object-contain"
+                     onerror="this.style.display='none'">
+            </template>
+            <template x-if="!value">
+                <svg class="w-7 h-7 text-body-subtle" fill="none" stroke="currentColor"
+                     viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M5.25 6h.008v.008H5.25V6zM21 16.5V18a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18V6a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 6v10.5z"/>
+                </svg>
+            </template>
+        </div>
+
+        <div class="min-w-0 flex-1 space-y-2">
+            <template x-if="!readonly">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button"
+                            @click="pick()"
+                            :disabled="busy"
+                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium
+                                   text-fg-brand border border-fg-brand/30 rounded-md
+                                   hover:bg-brand-softer transition disabled:opacity-60">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                             viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                  d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+                        </svg>
+                        <span x-text="busy ? 'Working…' : 'Pick from library'"></span>
+                    </button>
+                    <button type="button"
+                            x-show="value"
+                            @click="clearValue()"
+                            class="text-xs text-body-subtle hover:text-fg-danger">
+                        Clear
+                    </button>
+                </div>
+            </template>
+
+            {# Manual URL — external links / fine-tuning. #}
+            <input type="url"
+                   x-model="value"
+                   :readonly="readonly"
+                   placeholder="https://… or pick from library"
+                   class="w-full text-xs rounded-md border border-default bg-neutral-primary
+                          text-body px-2 py-1.5
+                          focus:ring-2 focus:ring-fg-brand/30 focus:border-fg-brand
+                          disabled:opacity-60">
+
+            <p x-show="error" x-text="error" x-cloak
+               class="text-xs text-fg-danger"></p>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const factory = (cfg) => ({
+        name: cfg.name,
+        value: cfg.value || '',
+        accept: cfg.accept || 'image/*',
+        readonly: !!cfg.readonly,
+        busy: false,
+        error: '',
+
+        pick() {
+            this.error = '';
+            const params = new URLSearchParams({ multi: '0' });
+            if (this.accept) params.set('accept', this.accept);
+            const url = '/web/files/picker?' + params.toString();
+            if (!window.PvDialog) {
+                window.location.href = url;
+                return;
+            }
+            window.PvDialog.open({
+                url,
+                title: 'Pick an image',
+                onResult: (row) => {
+                    if (!row || !row.id) return;
+                    this.applyPick(row);
+                },
+            });
+        },
+
+        async applyPick(row) {
+            this.busy = true;
+            this.error = '';
+            try {
+                // A branding logo / favicon is served on unauthenticated
+                // pages (login, public shell), so the chosen attachment
+                // must be public. Flip it before storing the URL.
+                const r = await fetch('/web/files/bulk/public', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                    },
+                    body: JSON.stringify({ ids: [row.id], public: true }),
+                });
+                if (!r.ok) throw new Error(await r.text() || r.statusText);
+                this.value = '/api/attachment/' + row.id + '/download';
+            } catch (err) {
+                this.error = 'Could not use file: ' + (err.message || err);
+            } finally {
+                this.busy = false;
+            }
+        },
+
+        clearValue() {
+            this.value = '';
+        },
+    });
+    window.pvFileUrl = factory;
+    const register = () => Alpine.data('pvFileUrl', factory);
+    if (typeof Alpine !== 'undefined') register();
+    else document.addEventListener('alpine:init', register);
+})();
+</script>

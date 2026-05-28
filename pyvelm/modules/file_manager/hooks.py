@@ -39,5 +39,7 @@ def install(env):
         )
 
     _grant(admin, "ir.attachment", write=True)
+    _grant(admin, "res.attachment.folder", write=True)
     if user:
         _grant(user, "ir.attachment", write=False)
+        _grant(user, "res.attachment.folder", write=False)

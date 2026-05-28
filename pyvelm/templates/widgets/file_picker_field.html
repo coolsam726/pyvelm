@@ -13,14 +13,17 @@
      accept    optional mimetype filter ("image/*")
      initial   list of {id, name, mimetype, thumbnail_url}
 #}
+<script>
+    window._pvFilePickerFieldCfg = {{ ({
+        'name': name,
+        'multi': multi,
+        'readonly': readonly,
+        'accept': accept,
+        'initial': initial,
+    }) | tojson }};
+</script>
 <div class="pv-file-picker-field"
-     x-data='pvFilePickerField({{ ({
-        "name": name,
-        "multi": multi,
-        "readonly": readonly,
-        "accept": accept,
-        "initial": initial,
-     }) | tojson }})'>
+     x-data="pvFilePickerField(window._pvFilePickerFieldCfg)">
 
     {# Hidden input(s) for form submission. For Many2many the parent
        parser accepts comma-separated ids; for Many2one a single int. #}
@@ -81,9 +84,8 @@
 </div>
 
 <script>
-    if (typeof window.pvFilePickerField !== 'function') {
-        window.pvFilePickerField = function (cfg) {
-            return {
+(function () {
+    const factory = (cfg) => ({
                 name: cfg.name,
                 multi: !!cfg.multi,
                 readonly: !!cfg.readonly,
@@ -97,13 +99,17 @@
                 },
 
                 openPicker() {
-                    if (!window.PvDialog) return;
                     const params = new URLSearchParams({
                         multi: this.multi ? '1' : '0',
                     });
                     if (this.accept) params.set('accept', this.accept);
+                    const url = '/web/files/picker?' + params.toString();
+                    if (!window.PvDialog) {
+                        window.location.href = url;
+                        return;
+                    }
                     window.PvDialog.open({
-                        url: '/web/files/picker?' + params.toString(),
+                        url,
                         title: this.multi ? 'Pick files' : 'Pick a file',
                         onResult: (result) => {
                             if (!result) return;
@@ -129,7 +135,10 @@
                 remove(id) {
                     this.selected = this.selected.filter((r) => r.id !== id);
                 },
-            };
-        };
-    }
+    });
+    window.pvFilePickerField = factory;
+    const register = () => Alpine.data('pvFilePickerField', factory);
+    if (typeof Alpine !== 'undefined') register();
+    else document.addEventListener('alpine:init', register);
+})();
 </script>
