@@ -210,7 +210,11 @@ def _run_init(args: argparse.Namespace) -> None:
         )
     target = Path.cwd() / name
     try:
-        materialise("project", target, variables={"name": name})
+        materialise(
+            "project",
+            target,
+            variables={"name": name, "stub_path": ".pyvelm/typing"},
+        )
     except FileExistsError:
         sys.exit(f"{target} already exists — pick a different name.")
     echo_next_steps_for_init(name)

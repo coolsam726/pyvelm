@@ -51,6 +51,8 @@ invalidation, and the singleton guard.
 - [Security](docs/security.md) — groups, ACL, record rules, multi-company, login flow.
 - [Module reference](docs/modules.md) — what lives in each module, the
   public surface, and the invariants worth knowing.
+- [IDE typing stubs](docs/ide-typing.md) — `pyvelm make:stubs`, Pyright/Pylance,
+  and automatic `pyrightconfig.json` setup.
 - [Fields API](docs/api/fields.md) — field types, specs, and widget hooks.
 - [CONTEXT.md](CONTEXT.md) — current stage state, deferred items, and the
   next concrete task.

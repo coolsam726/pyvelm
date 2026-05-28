@@ -85,7 +85,8 @@ The generated tree:
 ```
 my_erp/
 ├── .env.example                 # PYVELM_DSN, SMTP knobs, gunicorn vars
-├── .gitignore
+├── .gitignore                   # includes .pyvelm/ (generated IDE stubs)
+├── pyrightconfig.json           # stubPath → .pyvelm/typing (after make:stubs)
 ├── README.md
 ├── Dockerfile                   # python:3.13-slim + gunicorn
 ├── docker-compose.yml           # postgres + app + cron
@@ -118,6 +119,19 @@ After `init`, you have two equivalent ways to bring the app up:
   units under `deploy/systemd/` and the nginx config under
   `deploy/nginx.conf` when you're ready to put it behind TLS. See
   [Deployment](deployment.md) for the bare-metal walkthrough.
+
+### IDE typing (optional)
+
+`pyvelm init` includes `pyrightconfig.json` and gitignores `.pyvelm/`.
+After you add models and views, run:
+
+```bash
+pyvelm make:stubs
+```
+
+That generates `.pyvelm/typing/` (model/view `Literal` unions and
+`env[]` overloads) and creates `pyrightconfig.json` when the file does
+not exist yet. Full details: [IDE typing stubs](ide-typing.md).
 
 ## Legacy `pyvelm-cron` entry point
 
@@ -165,6 +179,7 @@ pyvelm make:view tasks.todo --module=tasks
 # Builds list + form from the model's fields (sections, toggle, dialog relations).
 # Use --minimal for a name-only stub; --force to overwrite.
 pyvelm make:menu --view=todo.list --module=tasks
+pyvelm make:stubs
 ```
 
 After scaffolding you typically:

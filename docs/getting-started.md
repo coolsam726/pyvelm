@@ -130,6 +130,10 @@ top bar under the default `apps` layout) once menus are synced. See
 
 For model changes later, see [Migrations workflow](migrations.md).
 
+Optional: run `pyvelm make:stubs` so your editor validates model and
+view string literals (creates `.pyvelm/typing/` and `pyrightconfig.json`
+when missing). See [IDE typing stubs](ide-typing.md).
+
 See the [CLI reference](cli.md#pyvelm-new) for the full command
 shape, including the `--in <path>` override when you're working
 outside an init'd tree.

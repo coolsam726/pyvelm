@@ -1,0 +1,5 @@
+{
+  "include": ["app"],
+  "stubPath": "{{stub_path}}",
+  "extraPaths": ["{{stub_path}}"]
+}

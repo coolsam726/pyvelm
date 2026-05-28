@@ -93,6 +93,7 @@ nav:
       - Deployment: deployment.md
       - CLI reference: cli.md
       - Console commands: console.md
+      - IDE typing stubs: ide-typing.md
       - Architecture: architecture.md
   - API reference:
       - Overview: api/index.md

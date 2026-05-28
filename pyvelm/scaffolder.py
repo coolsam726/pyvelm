@@ -154,6 +154,15 @@ def _substitute(text: str, variables: dict[str, str]) -> str:
     return _PLACEHOLDER_RE.sub(repl, text)
 
 
+def find_project_root(start: Path | None = None) -> Path | None:
+    """Directory containing ``pyvelm.toml``, or ``None`` if not in a project."""
+    here = (start or Path.cwd()).resolve()
+    for candidate in [here, *here.parents]:
+        if (candidate / "pyvelm.toml").is_file():
+            return candidate
+    return None
+
+
 def find_modules_root(start: Path | None = None) -> Path | None:
     """Walk upward from ``start`` looking for ``pyvelm.toml`` and
     return the configured ``modules_root`` path (resolved against the
@@ -162,12 +171,10 @@ def find_modules_root(start: Path | None = None) -> Path | None:
     The `pyvelm new` subcommand uses this so users don't have to
     pass ``--in`` from inside an init'd project.
     """
-    here = (start or Path.cwd()).resolve()
-    for candidate in [here, *here.parents]:
-        marker = candidate / "pyvelm.toml"
-        if marker.is_file():
-            return _read_modules_root(marker)
-    return None
+    marker = find_project_root(start)
+    if marker is None:
+        return None
+    return _read_modules_root(marker / "pyvelm.toml")
 
 
 def _read_modules_root(marker: Path) -> Path:
@@ -207,5 +214,8 @@ Add a module:
   pyvelm new my_module
   pyvelm db autogen my_module    # after you add models
   pyvelm db migrate              # install/upgrade (also runs in compose)
+
+IDE stubs (optional):
+  pyvelm make:stubs              # → .pyvelm/typing/ (see pyrightconfig.json)
 """.rstrip()
     print(msg, file=sys.stderr)

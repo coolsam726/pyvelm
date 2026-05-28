@@ -1,6 +1,6 @@
 [project]
 name = "pyvelm"
-version = "0.19.0"
+version = "0.20.0"
 description = "Odoo-style ERP framework — recordsets, declarative models, env-bound cache."
 requires-python = ">=3.10"
 dependencies = [
@@ -50,6 +50,7 @@ exclude = ["examples*", "tests*"]
 
 [tool.setuptools.package-data]
 pyvelm = [
+    "py.typed",
     "templates/*.html",
     "templates/**/*.html",
     "static/*.css",

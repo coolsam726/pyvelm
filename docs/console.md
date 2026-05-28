@@ -78,6 +78,7 @@ Discovery uses the same module roots as the web app (`pyvelm.toml`
 | `make:view` | `views/<stem>.py` list + form + `DATA` entry (from model fields by default) |
 | `make:menu` | `views/menu.py` (or `--append` to existing) |
 | `make:command` | `commands/<name>.py` Artisan command class |
+| `make:stubs` | Generate `.pyvelm/typing/` + create `pyrightconfig.json` when missing — see [IDE typing stubs](ide-typing.md) |
 
 Typical workflow:
 
@@ -90,6 +91,7 @@ pyvelm make:view inventory.product --module=inventory
 # Default: introspect stored fields → list columns + form sections
 # (booleans → toggle, O2m/M2m → widget="dialog"). Use --minimal for name-only stub.
 pyvelm make:menu --view=product.list --module=inventory
+pyvelm make:stubs                              # IDE literals + pyrightconfig.json
 pyvelm db autogen inventory --with-views   # migration + views for new models
 docker compose restart app
 # Install via /web/apps
@@ -104,4 +106,4 @@ model touched by the schema diff that does not already have a list view.
 - :class:`pyvelm.console.CommandContext` — `info`, `line`, `warn`, `error`
 - :func:`pyvelm.loader.discover_commands` — build a registry programmatically
 
-See also [CLI reference](cli.md).
+See also [CLI reference](cli.md) and [IDE typing stubs](ide-typing.md).

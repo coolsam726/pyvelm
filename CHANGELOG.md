@@ -7,6 +7,27 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.20.0] — 2026-05-28
+
+### Added
+
+- **`pyvelm make:stubs`** — generates `.pyvelm/typing/` at the project root
+  (next to `pyvelm.toml`) with `ModelName` and view `Literal` unions,
+  per-model recordset stub classes, and `Environment` / `Registry`
+  `__getitem__` overloads for Pyright and Pylance.
+- **Automatic `pyrightconfig.json`** — `make:stubs` writes the same config
+  template as `pyvelm init` when the file is missing (`stubPath` and
+  `extraPaths` match the stub output directory). Existing configs are never
+  overwritten.
+- **`pyvelm/py.typed`** — PEP 561 marker on the framework package.
+- **Docs** — [IDE typing stubs](docs/ide-typing.md) (editors, git workflow,
+  limitations); cross-links from CLI, console, modules, and getting started.
+
+### Changed
+
+- **`pyvelm init`** scaffold — `pyrightconfig.json`, `.gitignore` entry for
+  `.pyvelm/`, and post-init hint to run `make:stubs`.
+
 ## [0.19.0] — 2026-05-28
 
 ### Added

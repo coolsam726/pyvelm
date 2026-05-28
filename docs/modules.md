@@ -58,6 +58,11 @@ recognised key. Annotating each global with its declared type lets
 your IDE catch typos like `DEPNEDS` at edit time. The loader
 ignores the annotations.
 
+For **model and view technical names** (`env["res.partner"]`,
+`view="lead.list"`), run [`pyvelm make:stubs`](ide-typing.md) to
+generate `Literal` unions and checker config — see
+[IDE typing stubs](ide-typing.md).
+
 ### Catalog metadata
 
 These optional keys drive the **Apps catalog** UI (more below).
