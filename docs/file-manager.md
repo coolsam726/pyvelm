@@ -27,8 +27,8 @@ modelled on Nautilus / Windows Explorer / Google Drive.
 
 | Column | What's there |
 |--------|--------------|
-| Left (tree) | **All files**, **Unfiled** (no folder), and the folder tree (nested via `parent_id`). Click a node to filter the grid. Drag a tile onto a node to move. **New subfolder** is available via the per-row **+** button (hover) or the folder right-click menu. |
-| Centre (grid) | Server-rendered kanban grid for the current folder filter (reuses the standard kanban renderer). Clicking a file tile selects it and opens the details panel. The centre header also includes an **Upload** button that opens an inline upload dialog (no navigation away). |
+| Left (tree) | **All files**, **Unfiled** (no folder), and the folder tree (nested via `parent_id`). Click a node to filter the grid. Branches collapse / expand via the chevron; on load only the path to the active working directory is expanded. Drag a tile onto a node to move. The pane-header **+** and the right-click **New subfolder** both open the create dialog. |
+| Centre (grid) | Subfolder tiles + files for the active folder, rendered client-side by the `pvFileLibrary` Alpine component from the browse payload (`_file_manager_browse`). Three switchable **view modes** — **Grid** (tight thumbnails), **Tiles** (icon + name + meta), **Details** (row list) — persisted to `localStorage` (`pvFileView`). A **New folder** button (header) and a dashed **New folder** tile (subfolder grid) open the create dialog; an **Upload** button opens an inline upload dialog. |
 | Right (details) | Slide-over Properties panel — appears when a tile is selected; mirrors the full Properties page. |
 
 Non-image files show a tinted type glyph (`pvFileIcon`: pdf / doc /
@@ -36,8 +36,11 @@ xls / ppt / json / text / zip / audio / video / fallback) instead of a
 broken thumbnail. On small screens every grid collapses to a single
 column for legibility.
 
-Folder creation uses the library’s create endpoint (`POST /web/files/folders`)
-with `parent_id` set to the folder you chose (or `null` for top level).
+Folder creation happens in a **modal dialog** (header button, dashed
+grid tile, pane-header **+**, or right-click **New subfolder** — all
+open it). The dialog `POST`s to `/web/files/folders` with `parent_id`
+set to the folder you're in (or `null` for top level), then expands
+the parent so the new folder is visible.
 
 ### Selection model
 
@@ -158,14 +161,18 @@ form_view(
 
 Edit mode renders a chip list of already-picked attachments plus a
 **Pick a file** button. The button opens
-`/web/files/picker?accept=image/*` in `PvDialog` — a searchable tile grid
-of existing files, with an optional mimetype filter derived from the
-field spec’s `accept`.
+`/web/files/picker?accept=image/*` in `PvDialog` — a **folder-navigable**
+browser (breadcrumb + drill-in, same organisation as the Library) with
+search and an optional mimetype filter derived from the field spec's
+`accept`. First paint travels in the dialog body; subsequent folder
+moves fetch JSON from `/web/files/picker/browse`, preserving any
+multi-select made in other folders.
 
 Implementation notes (why the picker works inside a dialog):
 
-- The picker’s config is carried in a `data-pv-cfg` attribute (JSON),
-  and the component reads it with `JSON.parse($el.dataset.pvCfg)`.
+- The picker's config (including the initial folder browse payload) is
+  carried in a `data-pv-cfg` attribute (JSON), and the component reads
+  it with `JSON.parse($el.dataset.pvCfg)`.
 - The app re-initializes Alpine on HTMX swaps (dialog bodies) so the
   picker mounts reliably without relying on `<script>` execution inside
   swapped fragments.
@@ -243,7 +250,7 @@ direct links.
 | GET    | `/web/files/upload?folder_id=` | Full-page multipart upload (optional). |
 | POST   | `/web/files/upload` | Process full-page upload + redirect to Library. |
 | GET    | `/web/files/picker?accept=&q=&multi=0\|1` | Picker dialog body (used by `widget="file"` / `widget="files"`). |
-| GET    | `/web/files/picker/browse` | Legacy/unused by current picker UI (kept for compatibility). |
+| GET    | `/web/files/picker/browse` | JSON folder browse for the picker's breadcrumb / drill-in navigation. |
 | POST   | `/web/files/picker/upload` | Upload-from-dialog (returns row JSON). |
 | GET    | `/web/files/{id}/properties` | Full Properties page. |
 | GET    | `/web/files/{id}/properties_panel` | Properties fragment for the slide-over. |

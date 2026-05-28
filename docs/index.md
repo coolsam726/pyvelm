@@ -5,13 +5,14 @@ inheritance via dict-op patches, HTMX-driven UI, real cron and
 mail-dispatch story. Built on PostgreSQL (psycopg 3), FastAPI, and
 Jinja2.
 
-**Latest release:** [v0.15.1](releases/v0.15.1.md) (2026-05-27) — **Menu highlighting fix**
-on record forms (active app follows breadcrumbs). See
-[releases](releases/v0.15.1.md) and the
+**Latest release:** [v0.19.0](releases/v0.19.0.md) (2026-05-28) — **Drive-style file
+library**: folder tree, multi-select + bulk actions, slide-over Properties, and a
+company-scoped, folder-navigable picker. See
+[releases](releases/v0.19.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.15.1
+pip install pyvelm==0.19.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).
@@ -53,10 +54,15 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.19.0](releases/v0.19.0.md) | **Drive-style [file library](file-manager.md)** — folders, bulk actions, Properties page, company scoping, `file_url` widget |
+| [v0.18.0](releases/v0.18.0.md) | **[geo_data](geo-data.md)** module (continents/countries/states/cities), cross-module FK ordering fix |
+| [v0.17.0](releases/v0.17.0.md) | **[file_manager](file-manager.md)** module — Files app + `widget="file"`/`"files"` pickers |
+| [v0.16.0](releases/v0.16.0.md) | **technical** module (ir.ui.menu/view/attachment editors), `dev_only` menu flag, nav accordion |
 | [v0.15.1](releases/v0.15.1.md) | **Menu active state** on forms follows breadcrumbs (no Dashboard fallback) |
 | [v0.15.0](releases/v0.15.0.md) | **Apps / sidebar** navigation layouts, three-level menus, [navigation.md](navigation.md) |
 | [v0.14.0](releases/v0.14.0.md) | Styled error pages, Filament-style heading, **`pyvelm db nuke`** |
 | [v0.13.0](releases/v0.13.0.md) | **Email templates**, rich composer, multi-recipient mail |
+| [v0.12.0](releases/v0.12.0.md) | **Code** field — `Code(language=…)`, CodeMirror 6 + VSCode-style highlighting |
 | [v0.11.0](releases/v0.11.0.md) | **Html** sanitizer, TipTap + CodeMirror editor, form **cols** / **colspan** |
 | [v0.10.0](releases/v0.10.0.md) | **Policies**, UI access gating, **landing page**, **sudo**, public attachments |
 | [v0.9.0](releases/v0.9.0.md) | **Kanban** drag-drop, schema **db diff/migrate**, dialog O2M/M2M, breadcrumb **history** |
