@@ -109,7 +109,7 @@ class DisplayNameRuntimeTests(unittest.TestCase):
         with psycopg.connect(DSN) as conn:
             reg.init_db(conn)
             conn.commit()
-            env = Environment(reg, conn, uid=1)
+            env = Environment(conn, reg, uid=1)
             item = env["test.dn.item"].create({"label": "ignored"})
             tagged = env["test.dn.tagged"].create({"label": "Hello"})
             self.assertEqual(item.display_name, "test.dn.item #1")

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 from pyvelm import BaseModel, Char, Environment, Registry
 from pyvelm.mail_template_fields import list_template_variables
+from pyvelm.tests._mail import register_mail_template
 from pyvelm.mail_template_render import (
     build_mail_template_context,
     render_mail_template_string,
@@ -68,17 +69,11 @@ class MailTemplateRenderTests(unittest.TestCase):
 @unittest.skipUnless(DSN and psycopg, "needs postgres")
 class MailTemplateSendTests(unittest.TestCase):
     def test_send_mail_queues_html_message(self):
+        from pyvelm.mail import MailThread, Message
+
         reg = Registry()
         with reg.activate():
-
-            class User(BaseModel):
-                _name = "res.users"
-                login = Char()
-
-            from pyvelm.actions import ServerAction
-            from pyvelm.automation import AutomatedAction
-            from pyvelm.mail_template import MailTemplate
-            from pyvelm.mail import MailThread, Message
+            register_mail_template(reg)
 
             class Partner(MailThread, BaseModel):
                 _name = "test.mail.tpl.partner"

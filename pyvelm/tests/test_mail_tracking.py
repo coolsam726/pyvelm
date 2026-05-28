@@ -6,6 +6,7 @@ import unittest
 
 from pyvelm import BaseModel, Char, Environment, Many2one, Registry
 from pyvelm import mail_tracking
+from pyvelm.tests._mail import register_mail_message
 
 DSN = os.environ.get("PYVELM_DSN")
 
@@ -82,7 +83,7 @@ class TrackingFormatTests(unittest.TestCase):
 @unittest.skipUnless(DSN and psycopg, "needs postgres")
 class TrackingWriteTests(unittest.TestCase):
     def test_write_posts_tracking_message(self):
-        from pyvelm.mail import MailThread, Message
+        from pyvelm.mail import MailThread
 
         reg = Registry()
         with reg.activate():
@@ -92,7 +93,7 @@ class TrackingWriteTests(unittest.TestCase):
                 name = Char(tracking=True)
                 note = Char()
 
-            reg.register(Message)
+            register_mail_message(reg)
 
         with psycopg.connect(DSN) as conn:
             reg.init_db(conn)
@@ -127,8 +128,6 @@ class TrackingWriteTests(unittest.TestCase):
             self.assertEqual(len(tracking2), 1)
 
     def test_non_mail_thread_skips_tracking(self):
-        from pyvelm.mail import Message
-
         reg = Registry()
         with reg.activate():
 
@@ -136,7 +135,7 @@ class TrackingWriteTests(unittest.TestCase):
                 _name = "test.track.plain"
                 name = Char(tracking=True)
 
-            reg.register(Message)
+            register_mail_message(reg)
 
         with psycopg.connect(DSN) as conn:
             reg.init_db(conn)

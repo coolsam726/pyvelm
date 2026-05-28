@@ -6,6 +6,7 @@ import unittest
 
 from pyvelm import BaseModel, Char, Environment, Registry
 from pyvelm import mail_chatter
+from pyvelm.tests._mail import register_mail_message
 
 DSN = os.environ.get("PYVELM_DSN")
 
@@ -51,7 +52,7 @@ class ChatterContextTests(unittest.TestCase):
 @unittest.skipUnless(DSN and psycopg, "needs postgres")
 class ChatterWriteTests(unittest.TestCase):
     def test_post_note_and_render(self):
-        from pyvelm.mail import MailThread, Message
+        from pyvelm.mail import MailThread
         from pyvelm.render import render_chatter_panel
 
         reg = Registry()
@@ -61,7 +62,7 @@ class ChatterWriteTests(unittest.TestCase):
                 _name = "test.chatter.doc"
                 name = Char()
 
-            reg.register(Message)
+            register_mail_message(reg)
 
         with psycopg.connect(DSN) as conn:
             reg.init_db(conn)
@@ -79,7 +80,7 @@ class ChatterWriteTests(unittest.TestCase):
             self.assertIn("Log note", html)
 
     def test_excludes_workflow_subtype(self):
-        from pyvelm.mail import MailThread, Message
+        from pyvelm.mail import MailThread
 
         reg = Registry()
         with reg.activate():
@@ -88,7 +89,7 @@ class ChatterWriteTests(unittest.TestCase):
                 _name = "test.chatter.filter"
                 name = Char()
 
-            reg.register(Message)
+            register_mail_message(reg)
 
         with psycopg.connect(DSN) as conn:
             reg.init_db(conn)
@@ -116,7 +117,7 @@ class ChatterWriteTests(unittest.TestCase):
             self.assertIn("User note", msgs[0]["body"])
 
     def test_email_filter_and_notify(self):
-        from pyvelm.mail import MailThread, Message
+        from pyvelm.mail import MailThread
 
         reg = Registry()
         with reg.activate():
@@ -125,7 +126,7 @@ class ChatterWriteTests(unittest.TestCase):
                 _name = "test.chatter.email"
                 name = Char()
 
-            reg.register(Message)
+            register_mail_message(reg)
 
         with psycopg.connect(DSN) as conn:
             reg.init_db(conn)
