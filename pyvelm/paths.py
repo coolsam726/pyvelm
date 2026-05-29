@@ -260,4 +260,4 @@ def parse_path(model_cls, path: str, registry) -> Path:
                 f"{current._name}.{attr} is not relational "
                 f"(got {type(field).__name__})"
             )
-    raise RuntimeError("unreachable")  # tokens is non-empty
+    raise RuntimeError("unreachable")  # tokens is non-empty  # pragma: no cover

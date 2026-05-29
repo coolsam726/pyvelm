@@ -1,9 +1,12 @@
 """Unit tests for the geo_data seed helpers (flag emoji + pure logic)."""
 from __future__ import annotations
 
+import builtins
 import unittest
+from unittest.mock import patch
 
 
+from pyvelm import geo_utils
 from pyvelm.geo_utils import (
     flag_emoji,
     geo_packages_available,
@@ -41,6 +44,23 @@ class GeoPackageAvailabilityTests(unittest.TestCase):
             require_geo_packages()
         except RuntimeError as exc:
             self.assertIn("pyvelm[geo]", str(exc))
+
+    def test_available_false_when_import_fails(self):
+        real_import = builtins.__import__
+
+        def _boom(name, *args, **kwargs):
+            if name in ("geonamescache", "pycountry"):
+                raise ImportError(name)
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", _boom):
+            self.assertFalse(geo_packages_available())
+
+    def test_require_raises_when_unavailable(self):
+        with patch.object(geo_utils, "geo_packages_available", return_value=False):
+            with self.assertRaises(RuntimeError) as ctx:
+                require_geo_packages()
+        self.assertIn("pyvelm[geo]", str(ctx.exception))
 
 
 if __name__ == "__main__":

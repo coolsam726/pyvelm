@@ -51,14 +51,6 @@ def _pick_str(company_val: str | None, env_key: str, default: str = "") -> str:
     return default
 
 
-def _pick_bool(company_val: bool | None, env_key: str, *, default: bool) -> bool:
-    if company_val is not None:
-        return bool(company_val)
-    if _env_str(env_key):
-        return _env_bool(env_key, default=default)
-    return default
-
-
 def _load_company_branding(env, company_id: int | None) -> dict[str, Any] | None:
     if env is None or company_id is None or "res.company" not in env.registry:
         return None

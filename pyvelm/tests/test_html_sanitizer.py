@@ -4,7 +4,7 @@ from __future__ import annotations
 import unittest
 
 from pyvelm import BaseModel, Html, Registry
-from pyvelm.html_sanitizer import sanitize_html
+from pyvelm.html_sanitizer import _safe_url, _scheme_of, sanitize_html
 
 
 class SanitizerTests(unittest.TestCase):
@@ -83,6 +83,76 @@ class SanitizerTests(unittest.TestCase):
     def test_keeps_color_style(self):
         out = sanitize_html('<p><span style="color: #ff0066">bold</span></p>')
         self.assertIn('style="color: #ff0066"', out)
+
+
+class SanitizerBranchTests(unittest.TestCase):
+    """Targets the remaining edge branches in the parser/helpers."""
+
+    def test_scheme_of_empty(self):
+        self.assertEqual(_scheme_of(""), "")
+        self.assertEqual(_scheme_of("no-scheme/here"), "")
+
+    def test_safe_url_none_and_blank(self):
+        self.assertIsNone(_safe_url(None))
+        self.assertIsNone(_safe_url("   "))
+
+    def test_blank_href_dropped(self):
+        out = sanitize_html('<a href="   ">x</a>')
+        self.assertNotIn("href", out)
+        self.assertIn("<a>x</a>", out)
+
+    def test_blank_style_dropped(self):
+        out = sanitize_html('<p style="">x</p>')
+        self.assertEqual(out, "<p>x</p>")
+
+    def test_style_empty_and_unbalanced_declarations_dropped(self):
+        # First decl is kept; the empty one is skipped; the unbalanced
+        # paren decl is dropped, leaving only the safe property.
+        out = sanitize_html('<p style="color: red; ; width: calc(100% ">x</p>')
+        self.assertIn("color: red", out)
+        self.assertNotIn("calc", out)
+
+    def test_disallowed_attribute_dropped(self):
+        out = sanitize_html('<p foo="bar">x</p>')
+        self.assertEqual(out, "<p>x</p>")
+
+    def test_img_src_kept(self):
+        out = sanitize_html('<img src="https://x/y.png" alt="a">')
+        self.assertIn('src="https://x/y.png"', out)
+
+    def test_unknown_tag_stripped_keeps_text(self):
+        out = sanitize_html("<font>hi</font>")
+        self.assertEqual(out, "hi")
+
+    def test_contents_inside_script_fully_dropped(self):
+        # <script>/<style> bodies are CDATA in HTMLParser (one data event).
+        out = sanitize_html("<script>var x=1<2;</script>tail")
+        self.assertEqual(out, "tail")
+
+    def test_contents_inside_iframe_fully_dropped(self):
+        # iframe is parsed normally, so nested start/end tags, entity refs
+        # and char refs each fire their callback while _drop_depth > 0.
+        out = sanitize_html("<iframe><b>x</b>&amp;&#65;</iframe>tail")
+        self.assertEqual(out, "tail")
+
+    def test_self_closing_variants(self):
+        self.assertEqual(sanitize_html("<br/>"), "<br />")
+        self.assertIn("<img", sanitize_html('<img src="https://x" alt="a"/>'))
+        self.assertEqual(sanitize_html("<font/>after"), "after")   # not allowed
+        self.assertEqual(sanitize_html("<script/>x"), "x")         # drop tag
+        self.assertEqual(sanitize_html('<input type="text"/>'), "")  # guarded type
+
+    def test_unclosed_unknown_end_tag_stripped(self):
+        out = sanitize_html("<p>x</p></font>")
+        self.assertEqual(out, "<p>x</p>")
+
+    def test_entity_and_charref_preserved_outside_drop(self):
+        out = sanitize_html("Tom &amp; Jerry &#169;")
+        self.assertEqual(out, "Tom &amp; Jerry &#169;")
+
+    def test_comment_pi_and_decl_discarded(self):
+        out = sanitize_html("<!-- c --><?xml v?><p>keep</p><!DOCTYPE html>")
+        self.assertEqual(out, "<p>keep</p>")
 
 
 class HtmlFieldTests(unittest.TestCase):
