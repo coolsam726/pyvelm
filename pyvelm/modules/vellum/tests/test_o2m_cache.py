@@ -31,8 +31,10 @@ class O2mCacheTests(unittest.TestCase):
         cls.conn.close()
 
     def test_one2many_populates_and_reuses_cache(self):
-        parent = self.Partner.create({"name": "CacheParent"})
-        child = self.Partner.create({"name": "CacheChild", "parent_id": parent})
+        parent = self.Partner.create({"name": "CacheParent", "code": "CP"})
+        child = self.Partner.create(
+            {"name": "CacheChild", "code": "CC", "parent_id": parent}
+        )
         self.assertTrue(child.parent_id == parent)
         p = self.Partner.browse(parent.id)
         self.assertIsNone(
@@ -52,9 +54,11 @@ class O2mCacheTests(unittest.TestCase):
             self.assertEqual(execute.call_count, 0)
 
     def test_parent_id_write_invalidates_child_ids_cache(self):
-        parent_a = self.Partner.create({"name": "ParentA"})
-        parent_b = self.Partner.create({"name": "ParentB"})
-        child = self.Partner.create({"name": "Mover", "parent_id": parent_a})
+        parent_a = self.Partner.create({"name": "ParentA", "code": "PA"})
+        parent_b = self.Partner.create({"name": "ParentB", "code": "PB"})
+        child = self.Partner.create(
+            {"name": "Mover", "code": "MV", "parent_id": parent_a}
+        )
         _ = parent_a.child_ids
         child.write({"parent_id": parent_b})
         self.assertIsNone(
@@ -65,9 +69,9 @@ class O2mCacheTests(unittest.TestCase):
         self.assertEqual(parent_b.child_ids._ids, (child.id,))
 
     def test_env_query_with_eager_child_ids(self):
-        parent = self.Partner.create({"name": "EagerParent"})
-        c1 = self.Partner.create({"name": "E1", "parent_id": parent})
-        c2 = self.Partner.create({"name": "E2", "parent_id": parent})
+        parent = self.Partner.create({"name": "EagerParent", "code": "EP"})
+        c1 = self.Partner.create({"name": "E1", "code": "E1", "parent_id": parent})
+        c2 = self.Partner.create({"name": "E2", "code": "E2", "parent_id": parent})
         parents = self.env.query("res.partner").where(
             "id", "=", parent.id
         ).with_("child_ids").get()

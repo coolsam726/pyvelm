@@ -31,6 +31,37 @@ mkdocs serve          # http://localhost:8000 with live reload
 mkdocs build --strict # what CI runs
 ```
 
+## Test coverage
+
+CI runs `pytest --cov=pyvelm` with a **65%** floor (`fail_under` in
+`pyproject.toml`; the measured tree is ~**68%** today). The goal is to move
+toward **90%** over time without gaming the metric.
+
+What counts:
+
+- All of `pyvelm/` except paths listed under `[tool.coverage.run] omit` in
+  `pyproject.toml` (declarative addon files, plus `web.py` / `render.py` which
+  are covered via `test_http_smoke.py` but omitted from the percentage so the
+  gate reflects testable framework code).
+- `examples/` is **not** measured; it drives integration tests only.
+
+Integration tests (require `PYVELM_DSN`, same as CI Postgres service):
+
+```bash
+pytest pyvelm/tests/test_http_smoke.py -v          # minimal HTTP smoke
+PYVELM_RUN_FULL_BASIC=1 pytest pyvelm/tests/test_zzz_integration_smoke.py -v  # full examples/basic.py
+```
+
+Vellum slice tests under `pyvelm/modules/vellum/tests/` are collected via
+`pyvelm/tests/test_vellum_all.py` (the `pyvelm.modules` package is not
+importable as a normal namespace).
+
+Local coverage report:
+
+```bash
+pytest --cov=pyvelm --cov-report=term-missing
+```
+
 ## Codecov (CI badge)
 
 CI uploads `coverage.xml` on every push to `main`. The README badge stays

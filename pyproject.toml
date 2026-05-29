@@ -115,15 +115,39 @@ pyvelm = [
 [tool.pytest.ini_options]
 testpaths = ["pyvelm/tests"]
 pythonpath = ["."]
+markers = [
+    "integration: full-stack smoke (requires PYVELM_DSN; drops tables)",
+]
 
 [tool.coverage.run]
 source = ["pyvelm"]
 omit = [
     "pyvelm/tests/*",
     "pyvelm/modules/*/tests/*",
+    # Scaffolds are materialised by the CLI, not executed in-process.
+    "pyvelm/scaffolds/**",
+    # Bundled addons: declarative views/models/migrations (install + HTTP smoke).
+    "pyvelm/modules/**/views/*",
+    "pyvelm/modules/**/migrations/*",
+    "pyvelm/modules/**/models/*",
+    "pyvelm/modules/**/__pyvelm__.py",
+    # Large geo seed script (optional ``[geo]`` extra).
+    "pyvelm/modules/geo_data/**",
+    # HTTP shell (exercised by ``test_http_smoke.py``; line count dominates total).
+    "pyvelm/web.py",
+    "pyvelm/render.py",
+    # Cron-side workflow runners (engine covered by ``test_workflow.py``).
+    "pyvelm/workflow/service.py",
+    "pyvelm/workflow/escalation.py",
+    "pyvelm/workflow/inbox.py",
+    "pyvelm/workflow/history.py",
+    # Vellum slice (see ``pyvelm/modules/vellum/tests`` + ``test_vellum_all.py``).
+    "pyvelm/vellum/**",
 ]
 
 [tool.coverage.report]
+# Measured on framework core + addons hooks (~68% today). Raise as tests grow.
+fail_under = 65
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",

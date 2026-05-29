@@ -313,6 +313,25 @@ def reload_models(spec: ModuleSpec, registry: Registry) -> None:
         _sync_models_from_package(spec, registry, before_models)
 
 
+def reload_installed_models(env: Environment, specs: dict[str, ModuleSpec]) -> None:
+    """Re-import models for every installed module in dependency order.
+
+    Reloading a single module overwrites ``_inherit`` merges on shared
+    models (e.g. upgrading ``base`` alone drops ``geo_data`` fields on
+    ``res.country`` while ``res.continent`` still references them).
+    """
+    _ensure_ir_module(env)
+    rows = env.conn.execute(
+        f'SELECT name FROM "{IR_MODULE_TABLE}"',
+    ).fetchall()
+    installed = {r[0] for r in rows}
+    subset = {k: v for k, v in specs.items() if k in installed}
+    if not subset:
+        return
+    for spec in resolve_order(subset):
+        reload_models(spec, env.registry)
+
+
 def _ensure_ir_module(env: Environment) -> None:
     env.conn.execute(
         f'CREATE TABLE IF NOT EXISTS "{IR_MODULE_TABLE}" ('

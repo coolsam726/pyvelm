@@ -5931,7 +5931,7 @@ def upgrade_module_action(env, module_roots: list, target_name: str) -> dict:
         raise ValueError(
             f"Module {target_name!r} is not installed — use Install first."
         )
-    _loader.reload_models(spec, env.registry)
+    _loader.reload_installed_models(env, specs)
     outcomes = _loader.install([spec], env)
     detail = outcomes[0] if outcomes else {}
     parts = [
@@ -5997,7 +5997,19 @@ def uninstall_preview(env, module_roots: list, target_name: str) -> dict:
     # reversible today — the new columns sit on tables owned by
     # other modules and we don't track per-module column ownership.
     registry = env.registry
-    extends = list(registry._model_extensions.get(target_name, []))
+    extends: list[str] = []
+    for model_name in registry._model_extensions.get(target_name, []):
+        cls = registry._models.get(model_name)
+        if cls is None:
+            continue
+        # Reloading models can re-register owned ``_name`` models here;
+        # only block uninstall when this module extends another module's table.
+        if (
+            registry._model_module.get(model_name) == target_name
+            and getattr(cls, "_name", None) == model_name
+        ):
+            continue
+        extends.append(model_name)
     if extends:
         blockers.append(
             f"Extends models via _inherit: {', '.join(sorted(extends))}. "
