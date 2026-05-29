@@ -1030,11 +1030,18 @@
         }
         document.addEventListener('DOMContentLoaded', () => pvInjectCsrfFields());
         document.body.addEventListener('htmx:afterSwap', e => {
-            pvInjectCsrfFields(e.target);
-            // Re-init Alpine on HTMX fragments (dialog bodies, chatter, kanban, …).
-            const tgt = e.detail.target;
-            if (tgt && window.Alpine && typeof window.Alpine.initTree === 'function') {
-                window.Alpine.initTree(tgt);
+            pvInjectCsrfFields(e.detail.elt || e.detail.target);
+            // Re-init Alpine on swapped fragments. Prefer `elt` (new DOM); for
+            // innerHTML swaps also walk `#pv-chatter-root` when the shell kept
+            // its outer x-data wrapper.
+            const elt = e.detail.elt || e.detail.target;
+            if (elt && window.Alpine && typeof window.Alpine.initTree === 'function') {
+                window.Alpine.initTree(elt);
+            }
+            const chatter = document.getElementById('pv-chatter-root');
+            if (chatter && chatter !== elt && window.Alpine
+                && typeof window.Alpine.initTree === 'function') {
+                window.Alpine.initTree(chatter);
             }
         });
 
@@ -1065,7 +1072,8 @@
             }
         }
         document.addEventListener('DOMContentLoaded', () => pvInitO2mGrids());
-        document.body.addEventListener('htmx:afterSwap', e => pvInitO2mGrids(e.detail.target));
+        document.body.addEventListener('htmx:afterSwap', e =>
+            pvInitO2mGrids(e.detail.elt || e.detail.target));
 
         // HTMX fires `htmx:confirm` before it would call window.confirm.
         // We intercept every request that carries an hx-confirm message,
@@ -1344,12 +1352,15 @@
             cursor: 0,
             /** When true, show full option list (re-open after a selection). */
             listAll: false,
+            /** Stable array for x-for — a reactive getter here duplicates <li> nodes. */
+            visibleOptions: [],
 
             modelsUrl: cfg.modelsUrl || null,
             modelsLoading: false,
 
             init() {
                 this.syncQueryFromValue();
+                this.refreshVisibleOptions();
                 if (this.modelsUrl) {
                     this.loadModelsFromApi();
                 }
@@ -1375,17 +1386,30 @@
                 }
             },
 
-            get filtered() {
+            refreshVisibleOptions() {
                 const opts = this.options || [];
-                if (this.listAll || !this.open) return opts.slice(0, 200);
+                if (!this.open) {
+                    this.visibleOptions = [];
+                    return;
+                }
+                if (this.listAll) {
+                    this.visibleOptions = opts.slice(0, 200);
+                    return;
+                }
                 const q = this.query.trim().toLowerCase();
-                if (!q) return opts.slice(0, 200);
-                const selected = this.options.find(
+                if (!q) {
+                    this.visibleOptions = opts.slice(0, 200);
+                    return;
+                }
+                const selected = opts.find(
                     o => String(o.value) === String(this.value)
                 );
                 const selLabel = (selected?.label || '').toLowerCase();
-                if (selected && q === selLabel) return opts.slice(0, 200);
-                return opts.filter(o => {
+                if (selected && q === selLabel) {
+                    this.visibleOptions = opts.slice(0, 200);
+                    return;
+                }
+                this.visibleOptions = opts.filter(o => {
                     const hay = (
                         o.searchText ||
                         `${o.label || ''} ${o.value ?? ''}`
@@ -1424,6 +1448,7 @@
             setOptions(opts) {
                 this.options = Array.isArray(opts) ? opts.slice() : [];
                 if (!this.open) this.syncQueryFromValue();
+                this.refreshVisibleOptions();
             },
 
             dropdownStyle() {
@@ -1458,12 +1483,14 @@
                 this.open = true;
                 this.listAll = true;
                 this.cursor = 0;
+                this.refreshVisibleOptions();
             },
 
             onInput() {
                 if (this.readonly) return;
                 this.listAll = false;
                 this.open = true;
+                this.refreshVisibleOptions();
                 const exact = this.options.find(
                     o => o && (o.label || '').toLowerCase() === this.query.trim().toLowerCase()
                 );
@@ -1478,19 +1505,20 @@
                 this.open = false;
                 this.listAll = false;
                 this.syncQueryFromValue();
+                this.refreshVisibleOptions();
             },
 
             moveCursor(delta) {
                 if (this.readonly) return;
-                if (!this.open) { this.open = true; return; }
-                const max = this.filtered.length - 1;
+                if (!this.open) { this.open = true; this.refreshVisibleOptions(); return; }
+                const max = this.visibleOptions.length - 1;
                 if (max < 0) return;
                 this.cursor = Math.max(0, Math.min(max, this.cursor + delta));
             },
 
             onEnter() {
                 if (!this.open || this.readonly) return;
-                const item = this.filtered[this.cursor];
+                const item = this.visibleOptions[this.cursor];
                 if (item) this.pick(item);
             },
 
@@ -1501,6 +1529,7 @@
                 this.open = false;
                 this.listAll = false;
                 if (this.hint) this.hint = String(item.value);
+                this.refreshVisibleOptions();
                 this.$dispatch('combo-change', { value: this.value, label: this.label });
             },
 
@@ -1512,6 +1541,7 @@
                 this.open = false;
                 this.listAll = false;
                 if (this.hint) this.hint = '';
+                this.refreshVisibleOptions();
                 this.$dispatch('combo-change', { value: '', label: '' });
                 this.$nextTick(() => this.$refs.input?.focus());
             },

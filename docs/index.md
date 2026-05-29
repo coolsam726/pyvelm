@@ -8,13 +8,13 @@ dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
 bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on
 PostgreSQL (psycopg 3), FastAPI, and Jinja2.
 
-**Latest release:** [v0.24.0](releases/v0.24.0.md) (2026-05-29) — module
-**`WEB_ROUTES`** for custom HTTP endpoints; [Custom HTTP routes](modules.md#custom-http-routes).
-See [releases](releases/v0.24.0.md) and the
+**Latest release:** [v0.24.1](releases/v0.24.1.md) (2026-05-29) — combo/chatter
+UI fixes and clearer menu parent picker.
+See [releases](releases/v0.24.1.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.24.0
+pip install pyvelm==0.24.1
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
@@ -61,6 +61,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.24.1](releases/v0.24.1.md) | **Combo/chatter** UI fixes; menu parent **`display_name`** for cross-module picks |
 | [v0.24.0](releases/v0.24.0.md) | Module **`WEB_ROUTES`** — custom FastAPI routes from the manifest |
 | [v0.23.0](releases/v0.23.0.md) | **Odoo-style domains** — prefix `&` / `\|` / `!`; [search domain docs](models.md#search-domains) |
 | [v0.22.1](releases/v0.22.1.md) | Report Builder **join dedup**; **SYNC_HOOK** migration docs; CI fixes; **GitHub Sponsors** |

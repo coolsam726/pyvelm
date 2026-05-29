@@ -69,9 +69,15 @@ For the design rationale and the deferred-items rationale, see
 - Environment is first-class and threads through every recordset. ACL,
   multi-company, context all flow through it (Stage 5 wires the ACL part).
 - Sync ORM. Async only at the FastAPI/HTTP boundary later.
-- PostgreSQL from the start (psycopg 3, sync). Raw SQL by string concat
-  for now; SQLAlchemy Core (not ORM) still on the table when migration
-  auto-diff becomes interesting.
+- **Database (current vs planned).** **Today:** PostgreSQL only, via
+  psycopg 3 (sync) and hand-built SQL strings (`%s` binds, `SERIAL`,
+  `ILIKE`, `information_schema`, `DROP SCHEMA`, etc.). **Long-term:**
+  support the major server databases **and** SQLite through a **SQLAlchemy
+  Core dialect layer** (not SQLAlchemy ORM). See
+  [Multi-database support (planned)](#multi-database-support-planned).
+- PostgreSQL remains the **reference** and **production-default** backend
+  until the dialect layer is complete; new features should not add
+  Postgres-only assumptions without a documented escape hatch.
 - **UI stack: Tailwind v4 + Flowbite (local build) + HTMX + Alpine.js.**
   Major deviation from Odoo's Bootstrap. `npm run build` compiles
   `pyvelm/static/dist/pyvelm.css` (checked in for clone-and-run). Templates
@@ -102,7 +108,9 @@ For the design rationale and the deferred-items rationale, see
         additive schema via `_setup_table` + `db_autogen` on install/sync;
         `pyvelm db diff` / `pyvelm db autogen` CLI.
      ⏭ Still out of scope: `.json`/`.yaml` data files, down-migrations,
-        full SQLAlchemy-Core auto-diff engine, cache restore on rollback.
+        cache restore on rollback.
+     ⏭ **Multi-database dialect layer** — planned; see
+        [Multi-database support (planned)](#multi-database-support-planned).
 4. ✅ Views (list/form/kanban) as data + generic UI endpoints. See
      CONTEXT history for the Slice A..B.6 sub-stages.
      ✅ Slice A: `ir.ui.view` records, `VIEWS` manifest key with
@@ -291,16 +299,133 @@ See [docs/releases/v0.11.0.md](docs/releases/v0.11.0.md). Key paths:
 **Post-release polish ideas:** shallow variable API, subject-line insert UX,
 example `send_mail` in a demo module.
 
+## Multi-database support (planned)
+
+**Status:** planning / not started. **Decision date:** 2026-05-29.
+
+### Goal
+
+Ship pyvelm as a framework that can run against **PostgreSQL, SQLite, MySQL,
+MariaDB, and Oracle** (and potentially others), without maintaining parallel
+copies of DDL/DML/domain SQL in every subsystem. This is a **long-term
+product decision**, not limited to demo or local-dev convenience.
+
+**PostgreSQL stays first-class:** production docs, bundled migrations, Vercel/Supabase
+examples, and performance tuning target Postgres until other backends pass the
+same install/upgrade/smoke bar.
+
+### Approach: SQLAlchemy Core (not ORM)
+
+Adopt **[SQLAlchemy Core](https://docs.sqlalchemy.org/en/latest/core/)** as the
+**SQL compilation and introspection boundary** under the existing pyvelm stack:
+
+| Keep (unchanged conceptually) | Move behind dialect / Core |
+|------------------------------|----------------------------|
+| `BaseModel`, recordsets, `env.cache` | `CREATE TABLE` / `ALTER` / `DROP` in `model.py` |
+| Declarative `Field` types | `INSERT` / `UPDATE` / `DELETE` / `SELECT` in `model.py` |
+| Domain language (`&` `\|` `!`, paths, `EXISTS`) | `ILIKE` / `RETURNING` / placeholder style |
+| Module loader, hooks, views, ACL | `information_schema` queries in `db_autogen.py` |
+| Hand-written per-module migrations (Postgres DDL today) | `db nuke` / schema reset (`DROP SCHEMA` vs SQLite file) |
+| `Environment`, transactions, savepoints | Driver: psycopg today → engine per DSN |
+
+**Do not** adopt SQLAlchemy ORM — it would duplicate the registry/model metaclass.
+Core gives **expressions + dialects + Inspector**, not a second object mapper.
+
+`CONTEXT.md` previously described Core as optional “when migration auto-diff
+becomes interesting”; that scope is now **explicitly expanded** to all SQL
+generation and catalog introspection needed for portable installs.
+
+### Target backends (initial set)
+
+| Backend | Role | Notes |
+|---------|------|--------|
+| **PostgreSQL** | Reference + production default | Current implementation; bundled migrations written for Postgres. |
+| **SQLite** | Dev, CI, embedded single-process | No multi-writer production; useful for fast tests and offline demos. |
+| **MySQL / MariaDB** | Common OSS deployments | Shared dialect family in SQLAlchemy; verify MariaDB-specific edge cases. |
+| **Oracle** | Enterprise installs | Highest dialect/portability cost; likely last. |
+
+**DSN / config:** continue `PYVELM_DSN` (or equivalent) with documented URL forms
+per backend; connection pooling remains sync (async only at HTTP boundary).
+
+### Layers to port (inventory for planning)
+
+1. **Connection & pool** — `examples/serve.py`, `web.create_app`, `cli.py`, cron:
+   replace direct `psycopg.connect` / `psycopg_pool` with `sqlalchemy.create_engine`
+   (or a thin wrapper) while preserving `Environment.conn` semantics.
+2. **DDL** — `_setup_table`, M2M junction tables, FK setup (`model.py`); map each
+   `Field.sql_type` / `column_ddl()` to Core `Column` types per dialect.
+3. **DML** — `create` / `write` / `unlink` / `search` / `read`; compile to Core
+   `insert` / `update` / `delete` / `select` with dialect-correct `RETURNING`.
+4. **Domain compiler** (`domain.py`) — emit Core boolean expressions (`ilike`,
+   `in_`, `exists`) instead of `ILIKE %s` strings; keep path/join logic in pyvelm.
+5. **Schema diff** (`db_autogen.py`) — `Inspector` instead of Postgres-only
+   `information_schema`; dialect-specific type normalization (replace `_PG_TYPE_NORMALIZE`).
+6. **CLI** — `db nuke`, `db migrate`, status: schema reset strategy per backend.
+7. **Migrations** — bundled `migrations/*.py` remain **Postgres-authored** for the
+   foreseeable future; other backends rely on **model-driven install +
+   `apply_schema_diff`** until dual-dialect migration authoring exists (or
+   optional Alembic — separate decision).
+
+### Phased rollout (draft — refine in follow-up planning)
+
+| Phase | Deliverable | Postgres | SQLite | MySQL/MariaDB | Oracle |
+|-------|-------------|----------|--------|---------------|--------|
+| **0** | Design doc + `Database`/`Dialect` protocol in code | — | — | — | — |
+| **1** | Engine + pool; DML for CRUD/search on one model | ✅ | opt | — | — |
+| **2** | DDL + `load_and_install` / `apply_schema_diff` | ✅ | ✅ | — | — |
+| **3** | Domain compiler on Core expressions | ✅ | ✅ | — | — |
+| **4** | MySQL/MariaDB pass + CI matrix | ✅ | ✅ | ✅ | — |
+| **5** | Oracle pass + enterprise docs | ✅ | ✅ | ✅ | ✅ |
+
+**Exit criteria per backend:** `examples/basic.py` (or equivalent smoke), module
+install/upgrade, HTTP smoke subset, and documented deployment constraints (e.g.
+SQLite: single process only).
+
+### Non-goals and constraints (document early)
+
+- **SQLite in multi-worker production** — not supported; file locking and single
+  writer are fundamental limits, not framework bugs.
+- **Serverless ephemeral SQLite** (e.g. Vercel function local disk) — not a target;
+  use managed Postgres/MySQL.
+- **Automatic translation of existing Postgres migration files** — not planned;
+  apps on non-Postgres backends should expect **greenfield install + additive
+  autogen**, not replay of every historical `0_N_to_0_M.py` script.
+- **Feature parity for every Postgres-specific SQL extension** — use lowest common
+  denominator unless gated by dialect capability flags.
+- **Async SQLAlchemy** — out of scope until HTTP/async story is defined; Core
+  sync engine matches current sync ORM.
+
+### Open planning questions (continue in next session)
+
+1. Add `sqlalchemy` to core dependencies vs optional `[sql]` extra during transition?
+2. Single `Metadata` object on `Registry` vs per-model `Table` registration timing?
+3. How do hand-written migrations declare `supported_backends = ("postgresql",)`?
+4. Oracle: identity/sequence strategy for `id` and superuser seed (uid=1 convention)?
+5. CI matrix size: service containers per DB vs nightly only for Oracle?
+6. Whether to adopt **Alembic** later for app-authored migrations, or stay with
+   pyvelm migration modules + autogen only.
+
+### Related docs / code (starting points)
+
+- Architecture rationale: [docs/architecture.md](docs/architecture.md) (still
+  Postgres-centric until updated).
+- Migrations today: [docs/migrations.md](docs/migrations.md).
+- Hot spots: `pyvelm/model.py`, `pyvelm/domain.py`, `pyvelm/db_autogen.py`,
+  `pyvelm/env.py`, `pyvelm/cli.py`, `pyvelm/fields.py` (`column_ddl`, `sql_type`).
+
+---
+
 ## Deliberately deferred (will bite us, fix when they do)
 
 | Gap | Status |
 |-----|--------|
+| Multi-database dialect layer (SQLAlchemy Core) | **Planned** — see [Multi-database support (planned)](#multi-database-support-planned). |
 | `env.cache` LRU / eviction | Still open — one env per request, working set usually bounded. |
 | Cache restore on `env.transaction()` rollback | Still open — DB rolls back; session cache is not snapshotted. |
 | M2M command tuples `[(0,_,vals), (4,id), …]` | Still open — Many2many write is **replace-only** (`fields.py`). |
 | Stored compute backfill on new stored fields | Still open — hand-written migration or manual recompute when needed. |
 | Universal CRUD in one transaction | Partial — `env.transaction()` + savepoints used by `loader.install` and key `/web` mutations; ad-hoc ORM calls outside a transaction still autocommit per statement. |
-| SQL string-built queries | By design — domain values use parameterized binds; table/column names from registry metadata. |
+| SQL string-built queries | **Transitional** — parameterized binds today; targeted for SQLAlchemy Core compilation ([Multi-database support (planned)](#multi-database-support-planned)). |
 | i18n / translations | Still open — no gettext layer. |
 | Down-migrations / formal rollback | Still open — one-way migrations only. |
 | Shared login rate limit across gunicorn workers | Still open — per-worker window; proxy-side limiter recommended ([docs/deployment.md](docs/deployment.md)). |

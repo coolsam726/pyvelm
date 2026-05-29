@@ -33,11 +33,11 @@
 <div x-show="open" x-cloak x-transition.opacity.duration.100ms
      :style="dropdownStyle()"
      class="bg-neutral-primary border border-default rounded-md shadow-lg text-sm">
-    <template x-if="filtered.length === 0">
+    <template x-if="visibleOptions.length === 0">
         <div class="px-3 py-2 text-xs text-body-subtle">No matches.</div>
     </template>
-    <ul x-show="filtered.length > 0" role="listbox">
-        <template x-for="(item, i) in filtered" :key="'pv-' + uid + '-' + i">
+    <ul x-show="visibleOptions.length > 0" role="listbox">
+        <template x-for="item in visibleOptions" :key="'pv-' + uid + '-' + item.value">
             <li role="option"
                 @click="pick(item)"
                 @mousemove="cursor = i"

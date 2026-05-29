@@ -74,7 +74,7 @@ class ChatterWriteTests(unittest.TestCase):
                 env, "test.chatter.doc", doc.id, "Hello from test"
             )
             html = render_chatter_panel(env, "test.chatter.doc", doc.id)
-            self.assertIn("pv-chatter-root", html)
+            self.assertNotIn("pv-chatter-root", html)
             self.assertIn("Hello from test", html)
             self.assertIn("Activity", html)
             self.assertIn("Log note", html)

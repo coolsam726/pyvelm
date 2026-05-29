@@ -19,6 +19,18 @@ class Menu(BaseModel):
     _name = "ir.ui.menu"
 
     module = Char(required=True)
+
+    def _compute_display_name(self) -> None:
+        """Human label plus technical key so cross-module parents are searchable."""
+        for r in self:
+            if r.label and r.module and r.name:
+                r.display_name = f"{r.label} ({r.module}.{r.name})"
+            elif r.label:
+                r.display_name = r.label
+            elif r.name:
+                r.display_name = r.name
+            else:
+                r.display_name = f"ir.ui.menu #{r.id}"
     name = Char(required=True)
     label = Char(required=True)
     parent_id = Many2one("ir.ui.menu", ondelete="CASCADE")

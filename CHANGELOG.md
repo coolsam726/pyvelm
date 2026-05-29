@@ -7,6 +7,23 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.24.1] — 2026-05-29
+
+### Fixed
+
+- **Selection combos** — options no longer render three times; Alpine `pvCombo`
+  uses a stable `visibleOptions` array instead of a reactive getter in `x-for`.
+- **Record chatter** — filter/post HTMX swaps target `#pv-chatter-inner` so the
+  outer `pvChatter` Alpine scope survives; `htmx:afterSwap` re-inits via
+  `e.detail.elt`; email fields use `x-show` instead of `x-if`.
+- **`ir.ui.menu` parent picker** — `display_name` shows `Label (module.name)` so
+  cross-module parents are easy to find in the technical menu editor.
+
+### Changed
+
+- **CONTEXT.md** — documents the planned SQLAlchemy Core multi-database layer
+  (PostgreSQL reference today; SQLite/MySQL/MariaDB/Oracle long-term).
+
 ## [0.24.0] — 2026-05-29
 
 ### Added

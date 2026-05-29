@@ -3346,7 +3346,7 @@ def render_chatter_panel(
         return ""
     if error:
         ctx = {**ctx, "error": error}
-    return _env.get_template("_chatter_panel.html").render(chatter_context=ctx)
+    return _env.get_template("_chatter_panel_inner.html").render(chatter_context=ctx)
 
 
 # ---- kanban view rendering ----
