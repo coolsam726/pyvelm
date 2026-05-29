@@ -592,6 +592,7 @@ class Manifest(_ManifestRequired, total=False):
     MIGRATIONS_PACKAGE: str
     INSTALL_HOOK: str            # dotted reference, e.g. "pkg.mod:fn"
     SYNC_HOOK: str               # runs on Apps Sync (installed, same version)
+    WEB_ROUTES: str              # dotted ``register_routes(app)`` hook
     COMMANDS: list[str]         # dotted Command classes, e.g. "pkg.cmd:MyCommand"
     # Apps catalog metadata — purely informational, drives /web/apps.
     DISPLAY_NAME: str            # human label; NAME is the technical id

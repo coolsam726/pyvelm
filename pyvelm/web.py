@@ -256,6 +256,7 @@ def create_app(
     app.state.pyvelm_env = env_mode
     app.state.auth_cookie_options = auth_cookie
     app.state.registry = registry
+    app.state.pool = pool
 
     _REQUIRED_MODELS = ("res.users", "ir.ui.view")
     missing = [m for m in _REQUIRED_MODELS if m not in registry]
@@ -4588,5 +4589,9 @@ def create_app(
         with env.transaction():
             att.unlink()
         return Response(status_code=204)
+
+    from .loader import register_web_routes
+
+    register_web_routes(app, app.state.module_roots)
 
     return app

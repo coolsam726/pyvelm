@@ -1,7 +1,4 @@
-"""Custom capture UI routes for the feedback_signals demo.
-
-Registered from ``examples/serve.py`` so the core framework stays lean.
-"""
+"""Custom capture UI routes for the feedback_signals demo."""
 from __future__ import annotations
 
 import base64

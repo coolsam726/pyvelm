@@ -66,10 +66,6 @@ def _build_app(*, runtime_env: str | None = None):
     app = create_app(
         reg, pool, module_roots=MODULE_ROOTS, runtime_env=env_mode,
     )
-    app.state.pool = pool
-    from feedback_signals.web import register_routes
-
-    register_routes(app)
     return app
 
 

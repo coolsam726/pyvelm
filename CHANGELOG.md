@@ -7,6 +7,16 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.24.0] — 2026-05-29
+
+### Added
+
+- **Module `WEB_ROUTES`** — manifest hook (`WEB_ROUTES = "pkg.web:register_routes"`)
+  so modules mount custom FastAPI routes without editing `serve.py`.
+  `create_app()` calls registrars in `DEPENDS` order; sets `app.state.pool`.
+- **Docs** — [Modules → Custom HTTP routes](docs/modules.md#custom-http-routes)
+  (request scope, CSRF); `feedback_signals` example uses the manifest hook.
+
 ## [0.23.0] — 2026-05-28
 
 ### Added

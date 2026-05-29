@@ -15,3 +15,4 @@ DATA: list[str] = [
 ]
 INSTALL_HOOK: str = "feedback_signals.hooks:install"
 SYNC_HOOK: str = "feedback_signals.hooks:sync"
+WEB_ROUTES: str = "feedback_signals.web:register_routes"

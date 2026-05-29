@@ -53,6 +53,10 @@ declarative-data sync; `INSTALL_HOOK` is a `pkg.mod:fn` reference
 to a function called once on first install (it gets the
 `Environment`).
 
+Optional **`WEB_ROUTES`** registers module-owned FastAPI endpoints when
+`create_app()` starts — no edits to `serve.py`. See
+[Custom HTTP routes](#custom-http-routes) below.
+
 `pyvelm.types.Manifest` is a TypedDict that documents every
 recognised key. Annotating each global with its declared type lets
 your IDE catch typos like `DEPNEDS` at edit time. The loader
@@ -207,6 +211,47 @@ The framework upserts these into the `ir.ui.menu` table on every
 install pass (parents before children), so re-declaring an entry
 overwrites the previous one. After changing menus in a running app, use
 **Apps → Sync** on that module.
+
+## Custom HTTP routes
+
+Declarative **views and menus** cover list/form/kanban pages under
+`/web/views/…`. For bespoke pages (public forms, webhooks, custom dashboards),
+declare **`WEB_ROUTES`** in the manifest:
+
+```python
+WEB_ROUTES: str = "mymodule.web:register_routes"
+```
+
+```python
+# mymodule/web.py
+def register_routes(app) -> None:
+    from fastapi import Request
+    from fastapi.responses import HTMLResponse
+
+    registry = app.state.registry
+    pool = app.state.pool
+
+    @app.get("/web/mymodule/hello", response_class=HTMLResponse)
+    def hello():
+        return "<p>Hello</p>"
+```
+
+`create_app()` discovers modules from **`module_roots`**, walks them in
+`DEPENDS` order, and calls each registrar after core routes are mounted.
+You do **not** wire module routes manually in `serve.py`.
+
+**Reads as:** same discovery roots as install — if the module is on disk
+under your roots and declares `WEB_ROUTES`, its URLs are live on boot.
+
+### Request scope and CSRF
+
+Routes that use the ORM should build an `Environment` per request and call
+**`pyvelm.request_env.apply_request_scope`** so session uid, company
+cookie, and record rules match the admin UI. Full example:
+`examples/modules/feedback_signals/web.py`.
+
+Browser POST/PUT/DELETE must satisfy the same CSRF rules as core routes
+(`pyvelm_csrf` cookie + `X-CSRF-Token` or `_csrf` form field).
 
 ## Loading a module
 

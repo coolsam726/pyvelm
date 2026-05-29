@@ -12,6 +12,7 @@ Optionally:
     MODELS_PACKAGE = "myapp.partners.models"   # defaults to <pkg>.models
     INSTALL_HOOK = "myapp.partners.hooks:install"
     SYNC_HOOK = "myapp.partners.hooks:sync"   # runs on Apps Sync (re-install path)
+    WEB_ROUTES = "myapp.partners.web:register_routes"  # optional FastAPI routes
     MIGRATIONS_PACKAGE = "myapp.partners.migrations"  # defaults to <pkg>.migrations
 
 The loader:
@@ -57,6 +58,7 @@ class ModuleSpec:
     migrations_package: str | None
     install_hook: Callable | None = None
     sync_hook: Callable | None = None
+    web_routes: str | None = None
     package_path: Path | None = None
     data: list[str] = dc_field(default_factory=list)
     # Optional human-facing manifest fields. Drive the Apps catalog UI;
@@ -129,6 +131,9 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
     install_hook = _import_attr(install_dotted) if install_dotted else None
     sync_dotted = getattr(mod, "SYNC_HOOK", None)
     sync_hook = _import_attr(sync_dotted) if sync_dotted else None
+    web_routes = getattr(mod, "WEB_ROUTES", None)
+    if web_routes is not None:
+        web_routes = str(web_routes).strip() or None
     data = list(getattr(mod, "DATA", []))
     command_refs = list(getattr(mod, "COMMANDS", []))
 
@@ -141,6 +146,7 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
         migrations_package=migrations_pkg,
         install_hook=install_hook,
         sync_hook=sync_hook,
+        web_routes=web_routes,
         package_path=pkg_path,
         data=data,
         display_name=module_display_name(
@@ -765,6 +771,24 @@ def load_and_install(roots: list[Path | str], env: Environment) -> list[ModuleSp
         _load_models(spec, env.registry)
     install(ordered, env)
     return ordered
+
+
+def register_web_routes(app, roots: list[Path | str]) -> None:
+    """Mount each discovered module's ``WEB_ROUTES`` registrar on *app*.
+
+    Modules declare ``WEB_ROUTES = "pkg.web:register_routes"`` in
+    ``__pyvelm__.py``. The callable receives the FastAPI app (with
+    ``app.state.registry`` and ``app.state.pool`` already set) and should
+    attach routes, static mounts, or routers. Registrars run in dependency
+    order after core ``create_app`` routes are registered.
+    """
+    specs = discover(roots)
+    ordered = resolve_order(specs)
+    for spec in ordered:
+        if not spec.web_routes:
+            continue
+        registrar = _import_attr(spec.web_routes)
+        registrar(app)
 
 
 # ---------------------------------------------------------------------------

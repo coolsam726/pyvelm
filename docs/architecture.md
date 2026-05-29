@@ -119,7 +119,8 @@ by a loaded `Registry` and a psycopg connection pool. Each request
 checks out a connection, wraps it in a fresh `Environment`, runs the
 handler synchronously, and returns the connection to the pool. The
 async wrapping happens entirely at FastAPI's level; the ORM stays
-sync.
+sync. Modules may add routes via manifest **`WEB_ROUTES`** (see
+[Modules → Custom HTTP routes](modules.md#custom-http-routes)).
 
 JSON serialization is one shape: Many2one as `[id, display_value]`,
 collections as id lists, scalars pass through. `display_value` reads
