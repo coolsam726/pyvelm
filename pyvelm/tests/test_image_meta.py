@@ -85,6 +85,136 @@ class ImageMetaTests(unittest.TestCase):
     def test_empty_bytes_returns_none(self):
         self.assertIsNone(read_image_dimensions(b"", "image/png"))
 
+    def test_png_bad_ihdr(self):
+        bad = bytearray(_make_png(10, 10))
+        bad[12:16] = b"XXXX"
+        self.assertIsNone(read_image_dimensions(bytes(bad), "image/png"))
+
+    def test_png_zero_dimensions(self):
+        sig = b"\x89PNG\r\n\x1a\n"
+        ihdr = b"IHDR" + struct.pack(">II", 0, 10) + b"\x08\x02\x00\x00\x00"
+        data = sig + struct.pack(">I", 13) + ihdr + b"\x00\x00\x00\x00"
+        self.assertIsNone(read_image_dimensions(data, "image/png"))
+
+    def test_jpeg_invalid_marker(self):
+        self.assertIsNone(read_image_dimensions(b"\xff\xd8\xff\xee", "image/jpeg"))
+
+    def test_webp_vp8_chunk(self):
+        # Minimal VP8 lossy chunk with start code and dimensions.
+        vp8 = (
+            b"RIFF"
+            + struct.pack("<I", 20)
+            + b"WEBP"
+            + b"VP8 "
+            + struct.pack("<I", 10)
+            + b"\x00\x00\x00"
+            + b"\x9d\x01\x2a"
+            + struct.pack("<HH", 64, 48)
+        )
+        self.assertEqual(read_image_dimensions(vp8, "image/webp"), (64, 48))
+
+    def test_webp_vp8l_chunk(self):
+        # VP8L: signature byte 0x2f + packed 32-bit size field (needs len >= 30).
+        payload = bytes([0x2F, 0x3F, 0x00, 0x00, 0x00]) + b"\x00" * 5
+        chunk = b"VP8L" + struct.pack("<I", len(payload)) + payload
+        riff = b"RIFF" + struct.pack("<I", 4 + len(chunk)) + b"WEBP" + chunk
+        dims = read_image_dimensions(riff, "image/webp")
+        self.assertIsNotNone(dims)
+        self.assertGreater(dims[0], 0)
+        self.assertGreater(dims[1], 0)
+
+    def test_webp_unknown_chunk(self):
+        riff = b"RIFF" + struct.pack("<I", 4) + b"WEBP" + b"XXXX" + struct.pack("<I", 0)
+        self.assertIsNone(read_image_dimensions(riff, "image/webp"))
+
+    def test_parse_exception_returns_none(self):
+        with unittest.mock.patch(
+            "pyvelm.image_meta._png", side_effect=RuntimeError("boom")
+        ):
+            self.assertIsNone(read_image_dimensions(_make_png(1, 1), "image/png"))
+
+    def test_gif_zero_dimensions(self):
+        data = b"GIF89a" + struct.pack("<HH", 0, 10) + b"\x00"
+        self.assertIsNone(read_image_dimensions(data, "image/gif"))
+
+    def test_jpeg_no_sof_marker(self):
+        # SOI + APP0 only, no SOF — parser walks to end.
+        data = _make_jpeg(10, 10)[:30]
+        self.assertIsNone(read_image_dimensions(data, "image/jpeg"))
+
+    def test_webp_vp8_bad_start_code(self):
+        riff = (
+            b"RIFF"
+            + struct.pack("<I", 20)
+            + b"WEBP"
+            + b"VP8 "
+            + struct.pack("<I", 10)
+            + b"\x00\x00\x00"
+            + b"\x00\x00\x00"
+            + struct.pack("<HH", 64, 48)
+        )
+        self.assertIsNone(read_image_dimensions(riff, "image/webp"))
+
+    def test_webp_vp8x_truncated(self):
+        self.assertIsNone(read_image_dimensions(_make_webp_vp8x(10, 10)[:20], "image/webp"))
+
+    def test_webp_vp8l_bad_signature(self):
+        payload = bytes([0x00, 0x3F, 0x00, 0x00, 0x00]) + b"\x00" * 5
+        chunk = b"VP8L" + struct.pack("<I", len(payload)) + payload
+        riff = b"RIFF" + struct.pack("<I", 4 + len(chunk)) + b"WEBP" + chunk
+        self.assertIsNone(read_image_dimensions(riff, "image/webp"))
+
+    def test_jpeg_truncated_segment(self):
+        data = b"\xff\xd8\xff\xc0" + b"\x00\x01"
+        self.assertIsNone(read_image_dimensions(data, "image/jpeg"))
+
+    def test_jpeg_invalid_non_ff_byte(self):
+        data = b"\xff\xd8\x00\xff\xc0" + struct.pack(">H", 11) + b"\x08" + struct.pack(">HH", 10, 10) + b"\x03"
+        self.assertIsNone(read_image_dimensions(data, "image/jpeg"))
+
+    def test_jpeg_sof_zero_height(self):
+        body = struct.pack(">BHHB", 8, 0, 10, 1) + b"\x01"
+        sof0 = b"\xff\xc0" + struct.pack(">H", 2 + len(body)) + body
+        self.assertIsNone(read_image_dimensions(b"\xff\xd8" + sof0, "image/jpeg"))
+
+    def test_jpeg_too_short_header(self):
+        self.assertIsNone(read_image_dimensions(b"\xff\xd8", "image/jpeg"))
+
+    def test_jpeg_marker_past_eof(self):
+        data = b"\xff\xd8\xff"
+        self.assertIsNone(read_image_dimensions(data, "image/jpeg"))
+
+    def test_jpeg_sof_segment_too_short(self):
+        sof0 = b"\xff\xc0" + struct.pack(">H", 6) + b"\x08\x00\x0a\x00"
+        self.assertIsNone(read_image_dimensions(b"\xff\xd8" + sof0, "image/jpeg"))
+
+    def test_jpeg_no_frame_before_eof(self):
+        app0 = b"\xff\xe0" + struct.pack(">H", 2)
+        self.assertIsNone(read_image_dimensions(b"\xff\xd8" + app0, "image/jpeg"))
+
+    def test_gif_bad_magic(self):
+        self.assertIsNone(read_image_dimensions(b"GIF00a" + struct.pack("<HH", 1, 1), "image/gif"))
+
+    def test_webp_vp8_chunk_too_short(self):
+        riff = b"RIFF" + struct.pack("<I", 12) + b"WEBPVP8 " + struct.pack("<I", 0)
+        self.assertIsNone(read_image_dimensions(riff, "image/webp"))
+
+    def test_webp_vp8x_chunk_too_short(self):
+        riff = b"RIFF" + struct.pack("<I", 12) + b"WEBPVP8X" + struct.pack("<I", 0)
+        self.assertIsNone(read_image_dimensions(riff, "image/webp"))
+
+    def test_jpeg_rst_then_sof(self):
+        sof_body = struct.pack(">BHHB", 8, 12, 34, 1) + b"\x01"
+        sof0 = b"\xff\xc0" + struct.pack(">H", 2 + len(sof_body)) + sof_body
+        data = b"\xff\xd8\xff\xd0" + sof0
+        self.assertEqual(read_image_dimensions(data, "image/jpeg"), (34, 12))
+
+    def test_jpeg_eof_at_marker(self):
+        self.assertIsNone(read_image_dimensions(b"\xff\xd8\xff", "image/jpeg"))
+
+    def test_webp_too_short(self):
+        self.assertIsNone(read_image_dimensions(b"RIFF\x00\x00WEBP", "image/webp"))
+
 
 if __name__ == "__main__":
     unittest.main()
