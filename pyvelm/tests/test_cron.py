@@ -62,10 +62,24 @@ def _cron_env(jobs):
     cron_model.search.return_value = jobs
     server_model = MagicMock()
     server_model.browse.side_effect = _browse
-    env.__getitem__ = lambda _s, key: {
-        "ir.cron": cron_model,
-        "ir.actions.server": server_model,
-    }[key]
+    target_models: dict[str, MagicMock] = {}
+
+    def _model(name: str) -> MagicMock:
+        if name not in target_models:
+            rs = MagicMock()
+            m = MagicMock()
+            m.search.return_value = rs
+            target_models[name] = m
+        return target_models[name]
+
+    def _getitem(_s, key: str):
+        if key == "ir.cron":
+            return cron_model
+        if key == "ir.actions.server":
+            return server_model
+        return _model(key)
+
+    env.__getitem__ = _getitem
     return env, actions
 
 
@@ -195,10 +209,16 @@ class CronRunNowUnitTests(unittest.TestCase):
         action.name = "Act"
         action.model = "test.model"
         action.target_model_available.return_value = True
-        env.__getitem__ = lambda _s, k: MagicMock(browse=lambda _i: action)
+        target = MagicMock()
+        target.search.return_value = MagicMock()
+        env.__getitem__ = lambda _s, k: (
+            MagicMock(browse=lambda _i: action)
+            if k == "ir.actions.server"
+            else target
+        )
         job.env = env
         CronJob.run_now(job)
-        action.run.assert_called_once()
+        action.run.assert_called_once_with(target.search.return_value)
         job.write.assert_called()
 
     def test_run_now_missing_target_model_raises(self):

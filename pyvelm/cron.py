@@ -109,7 +109,7 @@ class CronJob(BaseModel):
         env._acl_bypass = True
         try:
             try:
-                action.run()
+                action.run(env[action.model].search([]))
             finally:
                 now = datetime.utcnow()
                 updates: dict = {"lastcall": now}
@@ -171,7 +171,7 @@ class CronJob(BaseModel):
                         job.write(updates)
                     continue
                 try:
-                    action.run()
+                    action.run(env[action.model].search([]))
                     executed.append(job.name)
                 except Exception as exc:  # noqa: BLE001
                     import sys
