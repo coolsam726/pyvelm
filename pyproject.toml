@@ -83,6 +83,17 @@ pyvelm = "pyvelm.cli:main"
 # without edits.
 pyvelm-cron = "pyvelm.cli:cron_main"
 
+# Vercel runs ``uv sync`` from pyproject.toml (not requirements.txt when both
+# exist). ``default-groups`` installs geo deps for the bundled ``geo_data`` module.
+[dependency-groups]
+geo = [
+    "pycountry>=24.6",
+    "geonamescache>=2.0",
+]
+
+[tool.uv]
+default-groups = ["geo"]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

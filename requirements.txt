@@ -1,0 +1,4 @@
+# Vercel / pip: install this project with the geo extra (geo_data module).
+# Note: when pyproject.toml is present, Vercel uses uv + pyproject.toml instead
+# of this file — geo is installed via [dependency-groups] + [tool.uv] there.
+.[geo]

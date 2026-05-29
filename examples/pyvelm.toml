@@ -1,0 +1,3 @@
+# Demo app module roots (used by `pyvelm db migrate` / `pyvelm db nuke` from repo root).
+# The Vercel demo also loads `examples/modules_demo` via PYVELM_MODULE_ROOTS in vercel.json.
+modules_root = "examples/modules"

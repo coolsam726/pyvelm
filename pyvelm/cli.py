@@ -765,17 +765,19 @@ def _confirm_nuke(*, dsn: str, schema: str, yes: bool) -> None:
 def _run_db_nuke(args: argparse.Namespace) -> None:
     """DROP the schema and re-run every module install from scratch.
 
-    Refuses to run in production. The user types ``nuke`` to confirm
-    (or passes ``--yes``). Used to reset a development database to
-    "freshly-installed every module" without manual table-by-table
+    Refuses to run in production unless ``PYVELM_ALLOW_DB_NUKE=1`` is set
+    (demo/staging deploy pipelines only). The user types ``nuke`` to
+    confirm (or passes ``--yes``). Used to reset a development database
+    to "freshly-installed every module" without manual table-by-table
     cleanup. Mirrors Laravel's ``migrate:fresh`` semantics.
     """
     from .runtime import is_production, get_runtime_env
 
-    if is_production():
+    if is_production() and not os.environ.get("PYVELM_ALLOW_DB_NUKE"):
         sys.exit(
             "pyvelm db nuke is disabled in production "
-            "(PYVELM_ENV=production). Aborting."
+            "(PYVELM_ENV=production). Set PYVELM_ALLOW_DB_NUKE=1 only for "
+            "trusted demo/staging reset pipelines, or use development."
         )
 
     dsn = _require_dsn()

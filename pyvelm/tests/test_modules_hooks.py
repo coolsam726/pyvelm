@@ -267,6 +267,28 @@ class WorkflowHooksTests(unittest.TestCase):
             self.hooks.sync(env)
         rs.write.assert_called_once()
 
+    def test_drop_legacy_without_access_model(self):
+        env = MagicMock()
+        env.registry = {}
+        self.hooks._drop_legacy_user_read_on(env, ("workflow.instance",))
+
+    def test_drop_legacy_when_user_group_missing(self):
+        env = MagicMock()
+        env.registry = {"ir.model.access": object()}
+        with patch("pyvelm.security._group_by_name", return_value=None):
+            self.hooks._drop_legacy_user_read_on(env, ("workflow.instance",))
+
+    def test_upsert_partner_workflow_creates_when_missing(self):
+        Definition = MagicMock()
+        Definition.search.return_value = _recordset()
+        self.hooks._upsert_partner_workflow(Definition)
+        Definition.create.assert_called_once()
+
+    def test_seed_escalation_missing_registry(self):
+        env = MagicMock()
+        env.registry = {"ir.actions.server": object()}
+        self.hooks._seed_escalation_cron(env)
+
 
 if __name__ == "__main__":
     unittest.main()
