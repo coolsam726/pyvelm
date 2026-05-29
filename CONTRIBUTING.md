@@ -73,6 +73,16 @@ CLI, console, cron, and schema autogen are covered by `test_cli_more.py`,
 `test_console.py`, `test_cron.py`, and `test_db_autogen_more.py` (plus
 `test_db_cli.py` and `test_db_autogen_constraints.py` for `db` subcommands).
 
+Bundled addon hooks and console scaffolders: `test_modules_hooks.py`,
+`test_console_commands.py`. Widgets: `test_datetime_pickers.py`,
+`test_widgets_more.py`. Workflow core: `test_workflow.py`,
+`test_workflow_more.py` (engine/schema/runtime; service/history are omitted
+from the coverage gate).
+
+Domain, mail, and fields: `test_domain.py`, `test_domain_more.py`,
+`test_mail_compose.py` (address splitting), `test_mail_more.py`,
+`test_fields_more.py`, plus `test_security.py` for Char coercion.
+
 ## Codecov (CI badge)
 
 CI uploads `coverage.xml` on every push to `main`. The README badge stays

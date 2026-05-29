@@ -48,6 +48,8 @@ class ViewScaffoldFromModelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             mod = root / "demo"
+            mod.mkdir(parents=True)
+            (mod / "__init__.py").write_text("", encoding="utf-8")
             (mod / "models").mkdir(parents=True)
             (mod / "__pyvelm__.py").write_text(
                 textwrap.dedent(
@@ -78,6 +80,9 @@ class ViewScaffoldFromModelTests(unittest.TestCase):
             )
             import sys
 
+            from pyvelm.tests._isolation import purge_import_prefix
+
+            purge_import_prefix("demo")
             sys.path.insert(0, str(root))
             try:
                 reg = load_registry_for_module("demo", modules_root=root)
