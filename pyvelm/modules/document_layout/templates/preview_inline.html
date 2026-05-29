@@ -1,0 +1,325 @@
+{# Scoped, inline document preview (no <html>/<body>, no iframe). All rules are
+   namespaced under `.pvdoc` so they don't leak into the surrounding dialog/page.
+   The outer `.pvdoc-sheet` is fixed to the selected paper size (mirrors the
+   full-page preview in external_layout.html). #}
+{% set accent = company.accent or '#1f2937' %}
+{% set secondary = company.secondary or accent %}
+{% set layout = company.layout or 'light' %}
+{% set sheet_pad = '0' if layout in ('split', 'folder') else '16mm 12mm' %}
+{# Print-friendly ink — keep in sync with external_layout.html #}
+{% set ink = '#1a1a1a' %}
+{% set ink_muted = '#374151' %}
+{% set ink_faint = '#4b5563' %}
+{{ company.font_face_css }}
+<style>
+  .pvdoc-sheet-outer { display:flex; justify-content:center; width:100%; }
+  .pvdoc-sheet {
+    position: relative;
+    width: {{ company.paper_width }};
+    height: {{ company.paper_height }};
+    box-sizing: border-box;
+    padding: {{ sheet_pad }};
+    overflow: auto;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0,0,0,.25);
+    flex-shrink: 0;
+  }
+  .pvdoc-sheet .pvdoc { height: 100%; min-height: 100%; }
+  .pvdoc .doc-frame {
+    position: relative;
+    width: 100%;
+    min-height: 100%;
+    padding-bottom: 40px;
+  }
+  .pvdoc .doc-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    padding-top: 8px;
+    border-top: 1px solid #d1d5db;
+    color: {{ ink_faint }};
+    font-size: 10px;
+    text-align: center;
+  }
+  .pvdoc .doc-frame-split { padding-bottom: 0; }
+  .pvdoc table.doc-split-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .pvdoc .split-aside { width: 34%; background: {{ accent }}; vertical-align: top; padding: 0; }
+  .pvdoc .split-aside-inner {
+    position: relative;
+    min-height: {{ company.paper_height }};
+    padding: 18px 14px 32px;
+  }
+  .pvdoc .split-footer {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 18px;
+    font-size: 8px;
+    color: rgba(255,255,255,.4);
+  }
+  .pvdoc .split-main { vertical-align: top; padding: 18px 16px; }
+
+  /* ---- folder (Odoo 19) ---- */
+  .pvdoc.layout-folder .folder-header {
+    position: relative;
+    width: 100%;
+    height: 174px;
+    margin-bottom: 10px;
+  }
+  .pvdoc.layout-folder .folder-shape-bg {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 174px;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .pvdoc.layout-folder .folder-band-svg { display: block; width: 100%; height: 174px; }
+  .pvdoc.layout-folder .folder-company-info {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 2;
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .pvdoc.layout-folder .folder-co-left {
+    width: 50%;
+    vertical-align: top;
+    padding: 12px 10px 54px 12mm;
+  }
+  .pvdoc.layout-folder .folder-co-right {
+    width: 50%;
+    vertical-align: top;
+    text-align: right;
+    padding: 12px 12mm 54px 10px;
+  }
+  .pvdoc.layout-folder .folder-tab-row {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 1;
+    width: 100%;
+    height: 48px;
+    border-collapse: collapse;
+  }
+  .pvdoc.layout-folder .folder-tab-fill { height: 48px; vertical-align: bottom; }
+  .pvdoc.layout-folder .folder-tab-angle {
+    width: 80px;
+    padding: 0;
+    vertical-align: bottom;
+    line-height: 0;
+  }
+  .pvdoc.layout-folder .folder-tab-angle svg { display: block; margin-left: -1px; }
+  .pvdoc.layout-folder .folder-tab-title {
+    vertical-align: middle;
+    padding: 0 12mm 0 4px;
+    white-space: nowrap;
+    background: #ffffff;
+  }
+  .pvdoc.layout-folder .folder-doc-title { margin: 0; font-size: 20px; font-weight: 700; color: {{ ink }}; line-height: 1.2; }
+  .pvdoc.layout-folder .folder-logo { max-height: 48px; max-width: 150px; display: block; margin-bottom: 5px; }
+  .pvdoc.layout-folder .folder-tagline { font-weight: 700; font-size: 11px; color: {{ ink }}; }
+  .pvdoc.layout-folder .folder-addr-list { list-style: none; margin: 0; padding: 0;
+                                            color: {{ ink_muted }}; line-height: 1.5; font-size: 10px; }
+  .pvdoc.layout-folder .folder-addr-list li { margin: 0; }
+  .pvdoc.layout-folder table.lines tbody tr:nth-child(even) td { background: #f9fafb; }
+  .pvdoc.layout-folder main .doc-title,
+  .pvdoc.layout-folder main .doc-title-bar { display: none; }
+  .pvdoc.layout-folder .doc-footer { border-top-color: {{ secondary }}; text-align: left; }
+  .pvdoc.layout-folder .folder-footer-table { width: 100%; border-collapse: collapse; }
+  .pvdoc.layout-folder .folder-footer-table td { vertical-align: top; padding: 0; border: none; }
+  .pvdoc.layout-folder .folder-body { padding: 0 12mm 12mm; box-sizing: border-box; }
+
+  .pvdoc { font-family: {% if company.font %}'{{ company.font }}', {% endif %}'DejaVu Sans', Helvetica, Arial, sans-serif;
+           color:{{ ink }}; font-size:12px; background:transparent; padding:0;
+           box-shadow:none; overflow:visible; }
+  .pvdoc a { color:{{ accent }}; text-decoration:none; }
+  .pvdoc table.doc-header { width:100%; border-collapse:collapse; margin-bottom:18px; }
+  .pvdoc table.doc-header td { vertical-align:top; padding-bottom:12px; }
+  .pvdoc .co-name { font-size:18px; font-weight:700; color:{{ accent }}; }
+  .pvdoc .co-addr { color:{{ ink_muted }}; line-height:1.5; margin-top:4px; }
+  .pvdoc img.logo { max-height:56px; max-width:220px; }
+  .pvdoc table.lines { width:100%; border-collapse:collapse; margin:12px 0; }
+  .pvdoc table.lines th { text-align:left; font-size:11px; text-transform:uppercase;
+      letter-spacing:.03em; color:{{ ink_muted }}; padding:6px 8px; border-bottom:2px solid {{ accent }}; }
+  .pvdoc table.lines td { padding:6px 8px; border-bottom:1px solid #d1d5db; color:{{ ink }}; }
+  .pvdoc table.lines td.num, .pvdoc table.lines th.num { text-align:right; }
+  .pvdoc .totals { width:280px; margin-left:auto; margin-top:8px; }
+  .pvdoc .totals td { padding:4px 8px; color:{{ ink }}; }
+  .pvdoc .totals td.num { text-align:right; }
+  .pvdoc .totals tr.grand td { font-weight:700; border-top:2px solid {{ accent }}; font-size:14px; color:{{ ink }}; }
+  .pvdoc .muted { color:{{ ink_muted }}; }
+  .pvdoc .doc-number { font-weight:800; color:{{ ink }}; font-size:13px; margin-top:2px; }
+  .pvdoc .doc-title { font-size:22px; font-weight:700; margin:0 0 2px; color:{{ secondary }}; }
+  .pvdoc .pill { display:inline-block; padding:2px 10px; border-radius:999px;
+      font-size:11px; font-weight:600; }
+
+  /* ---- boxed ---- */
+  .pvdoc.layout-boxed td.hdr-co { border:1px solid #e5e7eb; border-radius:8px; padding:14px; }
+
+  /* ---- bold ---- */
+  .pvdoc.layout-bold td.hdr-co { background:{{ accent }}; padding:16px; border-radius:6px; }
+  .pvdoc.layout-bold .co-name { color:#fff; }
+  .pvdoc.layout-bold .co-addr { color:#e5e7eb; }
+
+  /* ---- striped ---- */
+  .pvdoc.layout-striped table.doc-header { border-bottom:3px double {{ accent }}; }
+  .pvdoc.layout-striped table.lines tbody tr:nth-child(even) td { background:#f9fafb; }
+
+  /* ---- editorial ---- */
+  .pvdoc.layout-editorial .co-name { font-size:9px; font-weight:700; text-transform:uppercase;
+                                      letter-spacing:.14em; color:{{ ink_muted }}; }
+  .pvdoc.layout-editorial .co-addr { display:none; }
+  .pvdoc.layout-editorial img.logo { max-height:36px; }
+  .pvdoc.layout-editorial .doc-title { font-size:36px; font-weight:900; letter-spacing:-.025em;
+                                        color:{{ ink }}; line-height:1.0; margin:0; }
+  .pvdoc.layout-editorial .doc-title-bar { width:44px; height:4px; background:{{ accent }};
+                                            margin:6px 0 16px; }
+  .pvdoc.layout-editorial table.lines th { border-bottom:1px solid {{ ink }}; color:{{ ink }};
+                                            font-size:9px; letter-spacing:.05em; }
+  .pvdoc.layout-editorial .doc-footer { border-top:none; text-align:left; }
+
+  /* ---- dark ---- */
+  .pvdoc.layout-dark .pvdoc-dark-band { background:#111827; margin:-16mm -12mm 20px;
+                                         padding:14px 12mm; }
+  .pvdoc.layout-dark .dark-band-name { font-size:9px; font-weight:700; text-transform:uppercase;
+                                        letter-spacing:.14em; color:rgba(255,255,255,.55); }
+  .pvdoc.layout-dark .dark-band-title { font-size:24px; font-weight:900; color:#ffffff;
+                                         letter-spacing:-.02em; line-height:1.1; margin-top:3px; }
+  .pvdoc.layout-dark table.lines th { background:#111827; color:#ffffff; border-bottom:none; padding:8px; }
+  .pvdoc.layout-dark table.lines tbody tr:nth-child(odd) td { background:#f9fafb; }
+  .pvdoc.layout-dark .totals tr.grand td { border-top:2px solid {{ accent }}; color:{{ accent }}; }
+</style>
+
+<div class="pvdoc-sheet-outer">
+  <div class="pvdoc-sheet layout-{{ layout }}">
+
+{# ---- SPLIT: two-column sidebar (matches external_layout.html) ---- #}
+{% if layout == 'split' %}
+<div class="pvdoc layout-split">
+  <div class="doc-frame doc-frame-split">
+    <table class="doc-split-table">
+      <tr>
+        <td class="split-aside">
+          <div class="split-aside-inner">
+            {% if company.logo_url %}
+              <img src="{{ company.logo_url }}" alt="logo"
+                   style="max-height:40px; max-width:120px; display:block; margin-bottom:14px;"/>
+            {% else %}
+              <div style="font-size:12px; font-weight:900; color:#fff; text-transform:uppercase;
+                          letter-spacing:.05em; margin-bottom:14px;">{{ company.name }}</div>
+            {% endif %}
+            <div style="font-size:18px; font-weight:900; color:#fff; text-transform:uppercase;
+                        letter-spacing:-.01em; margin-bottom:16px;">INVOICE</div>
+            <div style="font-size:8px; color:rgba(255,255,255,.55); text-transform:uppercase;
+                        letter-spacing:.1em; font-weight:700; margin-bottom:3px;">FROM</div>
+            <div style="font-weight:700; color:#fff; font-size:11px; margin-bottom:2px;">{{ company.name }}</div>
+            <div style="color:rgba(255,255,255,.75); font-size:10px; line-height:1.6;">
+              {% for line in company.address_lines %}{{ line }}<br/>{% endfor %}
+            </div>
+            {% if company.copyright %}
+              <div class="split-footer">{{ company.copyright }}</div>
+            {% endif %}
+          </div>
+        </td>
+        <td class="split-main">
+          <main>{{ body }}</main>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+{# ---- FOLDER: Odoo 19 tab header ---- #}
+{% elif layout == 'folder' %}
+<div class="pvdoc layout-folder">
+  <div class="doc-frame">
+    {% include '_folder_header.html' %}
+    <div class="folder-body">
+      <main>{{ body }}</main>
+    </div>
+    {% if company.copyright %}
+      <div class="doc-footer">
+        <table class="folder-footer-table">
+          <tr><td>{{ company.copyright }}</td></tr>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ---- DARK: dark band at sheet top ---- #}
+{% elif layout == 'dark' %}
+<div class="pvdoc layout-dark">
+  <div class="doc-frame">
+    <div class="pvdoc-dark-band">
+      <table style="width:100%; border-collapse:collapse;">
+        <tr>
+          <td>
+            <div class="dark-band-name">{{ company.name }}</div>
+            <div class="dark-band-title">INVOICE</div>
+          </td>
+          <td style="text-align:right; vertical-align:middle; width:140px;">
+            {% if company.logo_url %}
+              <img src="{{ company.logo_url }}" alt="logo"
+                   style="max-height:34px; max-width:110px; filter:brightness(0) invert(1);"/>
+            {% endif %}
+          </td>
+        </tr>
+      </table>
+    </div>
+    <main>{{ body }}</main>
+    {% if company.copyright %}
+      <div class="doc-footer">{{ company.copyright }}</div>
+    {% endif %}
+  </div>
+</div>
+
+{# ---- EDITORIAL: minimal breadcrumb header ---- #}
+{% elif layout == 'editorial' %}
+<div class="pvdoc layout-editorial">
+  <div class="doc-frame">
+    <table class="doc-header" style="margin-bottom:0;">
+      <tr>
+        <td class="hdr-co" style="border:none; padding-bottom:6px;">
+          <div class="co-name">{{ company.name }}</div>
+        </td>
+        <td style="text-align:right; width:120px; padding-bottom:6px;">
+          {% if company.logo_url %}<img class="logo" src="{{ company.logo_url }}" alt="logo"/>{% endif %}
+        </td>
+      </tr>
+    </table>
+    <div style="height:1px; background:#e5e7eb; margin-bottom:14px;"></div>
+    <main>{{ body }}</main>
+    {% if company.copyright %}
+      <div class="doc-footer">{{ company.copyright }}</div>
+    {% endif %}
+  </div>
+</div>
+
+{# ---- LIGHT / BOXED / BOLD / STRIPED: standard header ---- #}
+{% else %}
+<div class="pvdoc layout-{{ layout }}">
+  <div class="doc-frame">
+    <table class="doc-header">
+      <tr>
+        <td class="hdr-co">
+          <div class="co-name">{{ company.name }}</div>
+          <div class="co-addr">{% for line in company.address_lines %}{{ line }}<br/>{% endfor %}</div>
+        </td>
+        <td style="text-align:right; width:180px;">
+          {% if company.logo_url %}<img class="logo" src="{{ company.logo_url }}" alt="logo"/>{% endif %}
+        </td>
+      </tr>
+    </table>
+    <main>{{ body }}</main>
+    {% if company.copyright %}
+      <div class="doc-footer">{{ company.copyright }}</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+  </div>
+</div>

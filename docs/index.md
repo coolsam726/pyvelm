@@ -8,13 +8,13 @@ dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
 bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on
 PostgreSQL (psycopg 3), FastAPI, and Jinja2.
 
-**Latest release:** [v0.24.1](releases/v0.24.1.md) (2026-05-29) — combo/chatter
-UI fixes and clearer menu parent picker.
-See [releases](releases/v0.24.1.md) and the
+**Latest release:** [v0.25.0](releases/v0.25.0.md) (2026-05-29) — document
+layouts & PDF printing, per-company navigation layout.
+See [releases](releases/v0.25.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.24.1
+pip install pyvelm==0.25.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
@@ -61,6 +61,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.25.0](releases/v0.25.0.md) | **[Document layouts](document-layout.md)** + PDF routes; **per-company [navigation layout](navigation.md#per-company-override)** (base 0.31) |
 | [v0.24.1](releases/v0.24.1.md) | **Combo/chatter** UI fixes; menu parent **`display_name`** for cross-module picks |
 | [v0.24.0](releases/v0.24.0.md) | Module **`WEB_ROUTES`** — custom FastAPI routes from the manifest |
 | [v0.23.0](releases/v0.23.0.md) | **Odoo-style domains** — prefix `&` / `\|` / `!`; [search domain docs](models.md#search-domains) |
@@ -123,7 +124,9 @@ If you're new, read these in order:
 Then as you need them:
 
 - **[Navigation](navigation.md)** — shell menu layouts (`apps` vs
-  `sidebar`), depth, `PYVELM_MENU_LAYOUT`.
+  `sidebar`), per-company override, depth, `PYVELM_MENU_LAYOUT`.
+- **[Document layouts](document-layout.md)** — company PDF header/footer,
+  layout designer, `register_document`, print routes.
 - **[Security](security.md)** — groups, ACL, record rules,
   multi-company scoping, the login flow.
 - **[Deployment](deployment.md)** — Docker, gunicorn, the

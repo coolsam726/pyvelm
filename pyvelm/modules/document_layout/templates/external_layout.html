@@ -1,0 +1,368 @@
+{# Wraps a document body with the company header/footer. NOTE: rendered by
+   wkhtmltopdf (old Qt WebKit) — avoid CSS custom properties (var()) and
+   display:flex; the accent colour is injected by Jinja and layout uses tables. #}
+{% set accent = company.accent or '#1f2937' %}
+{% set secondary = company.secondary or accent %}
+{% set layout = company.layout or 'light' %}
+{# Print-friendly ink — slightly darker than Tailwind gray-500/900 defaults. #}
+{% set ink = '#1a1a1a' %}
+{% set ink_muted = '#374151' %}
+{% set ink_faint = '#4b5563' %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>{{ title }}</title>
+{# Chosen Google font embedded as TTF @font-face data URIs (works in wkhtmltopdf). #}
+{{ company.font_face_css }}
+<style>
+  * { box-sizing: border-box; }
+  /* The Google font (if any) is named first; then installed 'DejaVu Sans'
+     (wkhtmltopdf has no Helvetica/Arial), then Helvetica/Arial for browsers. */
+  body { font-family: {% if company.font %}'{{ company.font }}', {% endif %}'DejaVu Sans', Helvetica, Arial, sans-serif;
+         color: {{ ink }}; font-size: 12px; margin: 0; }
+  a { color: {{ accent }}; text-decoration: none; }
+
+  /* Page frame — min-height fills the sheet/page; footer pinned with absolute. */
+  .doc-frame {
+    position: relative;
+    width: 100%;
+    padding-bottom: 40px;
+    {% if not preview %}
+    min-height: {{ company.paper_content_min }};
+    {% endif %}
+  }
+  .doc-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    padding-top: 8px;
+    border-top: 1px solid #d1d5db;
+    color: {{ ink_faint }};
+    font-size: 10px;
+    text-align: center;
+  }
+
+  /* Standard header (table layout — flex is unreliable in wkhtmltopdf) */
+  table.doc-header { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+  table.doc-header td { vertical-align: top; padding-bottom: 12px; }
+  .co-name { font-size: 18px; font-weight: 700; color: {{ accent }}; }
+  .co-addr { color: {{ ink_muted }}; line-height: 1.5; margin-top: 4px; }
+  img.logo { max-height: 56px; max-width: 220px; }
+
+  /* Body tables */
+  table.lines { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  table.lines th { text-align: left; font-size: 11px; text-transform: uppercase;
+                   letter-spacing: .03em; color: {{ ink_muted }}; padding: 6px 8px;
+                   border-bottom: 2px solid {{ accent }}; }
+  table.lines td { padding: 6px 8px; border-bottom: 1px solid #d1d5db; color: {{ ink }}; }
+  table.lines td.num, table.lines th.num { text-align: right; }
+  .totals { width: 280px; margin-left: auto; margin-top: 8px; }
+  .totals td { padding: 4px 8px; color: {{ ink }}; }
+  .totals td.num { text-align: right; }
+  .totals tr.grand td { font-weight: 700; border-top: 2px solid {{ accent }};
+                        font-size: 14px; color: {{ ink }}; }
+  .muted { color: {{ ink_muted }}; }
+  .doc-number { font-weight: 800; color: {{ ink }}; font-size: 14px; margin-top: 2px; }
+  .doc-title { font-size: 22px; font-weight: 700; margin: 0 0 2px; color: {{ secondary }}; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px;
+          font-size: 11px; font-weight: 600; }
+
+  /* ---- Variant: light (default — no extra rules needed) ---- */
+
+  /* ---- Variant: boxed ---- */
+  .layout-boxed td.hdr-co { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; }
+
+  /* ---- Variant: bold ---- */
+  .layout-bold td.hdr-co { background: {{ accent }}; padding: 16px; border-radius: 6px; }
+  .layout-bold .co-name { color: #ffffff; }
+  .layout-bold .co-addr { color: #e5e7eb; }
+
+  /* ---- Variant: striped ---- */
+  .layout-striped table.doc-header { border-bottom: 3px double {{ accent }}; }
+  .layout-striped table.lines tbody tr:nth-child(even) td { background: #f9fafb; }
+
+  /* ---- Variant: editorial ---- */
+  .layout-editorial .co-name { font-size: 9px; font-weight: 700; text-transform: uppercase;
+                                letter-spacing: .14em; color: {{ ink_muted }}; }
+  .layout-editorial .co-addr { display: none; }
+  .layout-editorial img.logo { max-height: 36px; }
+  .layout-editorial .doc-title { font-size: 46px; font-weight: 900; letter-spacing: -.025em;
+                                  color: {{ ink }}; line-height: 1.0; margin: 0; }
+  .layout-editorial .doc-title-bar { width: 52px; height: 5px; background: {{ accent }};
+                                      margin: 8px 0 20px; }
+  .layout-editorial table.lines th { border-bottom: 1px solid {{ ink }}; color: {{ ink }};
+                                      font-size: 9px; letter-spacing: .05em; }
+  .layout-editorial .doc-footer { border-top: none; text-align: left; }
+
+  /* ---- Variant: folder (Odoo 19 external_layout_folder) ---- */
+  .layout-folder .folder-header {
+    position: relative;
+    width: 100%;
+    height: 174px;
+    margin-bottom: 12px;
+  }
+  .layout-folder .folder-shape-bg {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 174px;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .layout-folder .folder-band-svg { display: block; width: 100%; height: 174px; }
+  .layout-folder .folder-company-info {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 2;
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .layout-folder .folder-co-left {
+    width: 50%;
+    vertical-align: top;
+    padding: 14px 12px 54px 0;
+  }
+  .layout-folder .folder-co-right {
+    width: 50%;
+    vertical-align: top;
+    text-align: right;
+    padding: 14px 0 54px 12px;
+  }
+  .layout-folder .folder-tab-row {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 1;
+    width: 100%;
+    height: 48px;
+    border-collapse: collapse;
+  }
+  .layout-folder .folder-tab-fill { height: 48px; vertical-align: bottom; }
+  .layout-folder .folder-tab-angle {
+    width: 80px;
+    padding: 0;
+    vertical-align: bottom;
+    line-height: 0;
+  }
+  .layout-folder .folder-tab-angle svg { display: block; margin-left: -1px; }
+  .layout-folder .folder-tab-title {
+    vertical-align: middle;
+    padding: 0 0 0 4px;
+    white-space: nowrap;
+    background: #ffffff;
+  }
+  .layout-folder .folder-doc-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: {{ ink }};
+    line-height: 1.2;
+  }
+  .layout-folder .folder-logo { max-height: 56px; max-width: 180px; display: block; margin-bottom: 6px; }
+  .layout-folder .folder-tagline { font-weight: 700; font-size: 12px; color: {{ ink }}; }
+  .layout-folder .folder-addr-list {
+    list-style: none; margin: 0; padding: 0;
+    color: {{ ink_muted }}; line-height: 1.55; font-size: 11px;
+  }
+  .layout-folder .folder-addr-list li { margin: 0; }
+  .layout-folder table.lines tbody tr:nth-child(even) td { background: #f9fafb; }
+  .layout-folder main .doc-title,
+  .layout-folder main .doc-title-bar { display: none; }
+  .layout-folder .doc-footer { border-top-color: {{ secondary }}; text-align: left; }
+  .layout-folder .folder-footer-table { width: 100%; border-collapse: collapse; }
+  .layout-folder .folder-footer-table td { vertical-align: top; padding: 0; border: none; }
+  .layout-folder .folder-footer-right { text-align: right; color: {{ ink_faint }}; white-space: nowrap; }
+
+  /* ---- Variant: dark ---- */
+  .layout-dark .dark-band-name { font-size: 9px; font-weight: 700; text-transform: uppercase;
+                                  letter-spacing: .14em; color: rgba(255,255,255,.55); }
+  .layout-dark .dark-band-title { font-size: 30px; font-weight: 900; color: #ffffff;
+                                   letter-spacing: -.02em; line-height: 1.1; margin-top: 4px; }
+  .layout-dark table.lines th { background: #111827; color: #ffffff; border-bottom: none;
+                                 padding: 8px; }
+  .layout-dark table.lines tbody tr:nth-child(odd) td { background: #f9fafb; }
+  .layout-dark .totals tr.grand td { border-top: 2px solid {{ accent }}; color: {{ accent }}; }
+
+  /* ---- Variant: split — full-height sidebar column ---- */
+  .doc-frame-split { padding-bottom: 0; min-height: {{ company.paper_content_min }}; }
+  table.doc-split-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .split-aside { width: 34%; background: {{ accent }}; vertical-align: top; padding: 0; }
+  .split-aside-inner {
+    position: relative;
+    min-height: {{ company.paper_content_min }};
+    padding: 24px 18px 36px;
+  }
+  .split-footer {
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    bottom: 24px;
+    font-size: 9px;
+    color: rgba(255,255,255,.4);
+  }
+  .split-main { vertical-align: top; padding: 24px 20px; }
+
+  {% if preview %}
+  /* Preview-only: one paper sheet at exact size; scroll inside if content overflows. */
+  body { background: #525659; padding: 24px 0; margin: 0; }
+  .sheet {
+    position: relative;
+    background: #ffffff;
+    width: {{ company.paper_width }};
+    height: {{ company.paper_height }};
+    margin: 0 auto;
+    padding: {{ '0' if layout in ('split', 'folder') else '16mm 12mm' }};
+    box-shadow: 0 2px 12px rgba(0,0,0,.4);
+    box-sizing: border-box;
+    overflow: auto;
+  }
+  .sheet > .doc-frame { min-height: 100%; }
+  .doc-frame-split { min-height: 100%; }
+  .doc-frame-split .split-aside-inner { min-height: {{ company.paper_height }}; }
+  .layout-folder .folder-body { padding: 0 12mm 16mm; box-sizing: border-box; }
+  .layout-folder .folder-co-left { padding-left: 12mm; }
+  .layout-folder .folder-co-right { padding-right: 12mm; }
+  .layout-folder .folder-tab-title { padding-right: 12mm; }
+  {% endif %}
+</style>
+</head>
+<body class="layout-{{ layout }}">
+  {% if preview %}<div class="sheet">{% endif %}
+
+  {# ============================================================
+     SPLIT layout — two-column table; left sidebar = company info,
+     right column = document body. No standard doc-header used.
+     ============================================================ #}
+  {% if layout == 'split' %}
+
+  <div class="doc-frame doc-frame-split">
+    <table class="doc-split-table">
+      <tr>
+        <td class="split-aside">
+          <div class="split-aside-inner">
+            {% if company.logo_url %}
+              <img src="{{ company.logo_url }}" alt="logo"
+                   style="max-height:52px; max-width:150px; display:block; margin-bottom:18px;"/>
+            {% else %}
+              <div style="font-size:14px; font-weight:900; color:#fff; text-transform:uppercase;
+                          letter-spacing:.05em; margin-bottom:18px;">{{ company.name }}</div>
+            {% endif %}
+            <div style="font-size:24px; font-weight:900; color:#fff; text-transform:uppercase;
+                        letter-spacing:-.01em; margin-bottom:20px;">INVOICE</div>
+            <div style="font-size:9px; color:rgba(255,255,255,.55); text-transform:uppercase;
+                        letter-spacing:.1em; font-weight:700; margin-bottom:4px;">FROM</div>
+            <div style="font-weight:700; color:#fff; font-size:12px; margin-bottom:3px;">{{ company.name }}</div>
+            <div style="color:rgba(255,255,255,.75); font-size:11px; line-height:1.65;">
+              {% for line in company.address_lines %}{{ line }}<br/>{% endfor %}
+            </div>
+            {% if company.copyright %}
+              <div class="split-footer">{{ company.copyright }}</div>
+            {% endif %}
+          </div>
+        </td>
+        <td class="split-main">
+          <main>{{ body }}</main>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  {# ============================================================
+     FOLDER layout — Odoo 19 tab header + tinted band
+     ============================================================ #}
+  {% elif layout == 'folder' %}
+
+  <div class="doc-frame">
+    {% include '_folder_header.html' %}
+    <div class="folder-body">
+      <main>{{ body }}</main>
+    </div>
+    {% if company.copyright %}
+      <div class="doc-footer">
+        <table class="folder-footer-table">
+          <tr>
+            <td>{{ company.copyright }}</td>
+            <td class="folder-footer-right"></td>
+          </tr>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ============================================================
+     DARK layout — full-width dark band replaces standard header.
+     ============================================================ #}
+  {% elif layout == 'dark' %}
+
+  <div class="doc-frame">
+    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+      <tr>
+        <td style="background:#111827; padding:16px 20px; vertical-align:top;">
+          <div class="dark-band-name">{{ company.name }}</div>
+          <div class="dark-band-title">INVOICE</div>
+        </td>
+        <td style="background:#111827; padding:16px 20px; text-align:right;
+                   vertical-align:middle; width:220px;">
+          {% if company.logo_url %}
+            <img src="{{ company.logo_url }}" alt="logo"
+                 style="max-height:44px; max-width:150px; filter:brightness(0) invert(1);"/>
+          {% endif %}
+        </td>
+      </tr>
+    </table>
+    <main>{{ body }}</main>
+    {% if company.copyright %}
+      <div class="doc-footer">{{ company.copyright }}</div>
+    {% endif %}
+  </div>
+
+  {# ============================================================
+     All other layouts: light / boxed / bold / striped / editorial
+     ============================================================ #}
+  {% else %}
+
+  <div class="doc-frame">
+    {% if layout == 'editorial' %}
+      <table class="doc-header" style="margin-bottom:0;">
+        <tr>
+          <td class="hdr-co" style="border:none; padding-bottom:8px;">
+            <div class="co-name">{{ company.name }}</div>
+          </td>
+          <td style="text-align:right; width:180px; padding-bottom:8px;">
+            {% if company.logo_url %}
+              <img class="logo" src="{{ company.logo_url }}" alt="logo"/>
+            {% endif %}
+          </td>
+        </tr>
+      </table>
+      <div style="height:1px; background:#e5e7eb; margin-bottom:20px;"></div>
+    {% else %}
+      <table class="doc-header">
+        <tr>
+          <td class="hdr-co">
+            <div class="co-name">{{ company.name }}</div>
+            <div class="co-addr">
+              {% for line in company.address_lines %}{{ line }}<br/>{% endfor %}
+            </div>
+          </td>
+          <td style="text-align:right; width:240px;">
+            {% if company.logo_url %}
+              <img class="logo" src="{{ company.logo_url }}" alt="logo"/>
+            {% endif %}
+          </td>
+        </tr>
+      </table>
+    {% endif %}
+    <main>{{ body }}</main>
+    {% if company.copyright %}
+      <div class="doc-footer">{{ company.copyright }}</div>
+    {% endif %}
+  </div>
+
+  {% endif %}{# end layout switch #}
+
+  {% if preview %}</div>{% endif %}
+</body>
+</html>

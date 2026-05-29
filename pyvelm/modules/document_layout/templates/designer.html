@@ -1,0 +1,138 @@
+{# Designer FRAGMENT — loaded into PvDialog (the framework's draggable dialog)
+   by the 'Design layout' button. Plain side-by-side: controls left, live HTML
+   preview right (no iframe). HTMX executes the script on swap; the IIFE keeps
+   re-opening the dialog from clashing. #}
+<div class="pv-ld" style="display:flex; min-height:62vh; max-height:78vh; width:100%;">
+  <style>
+    /* Widen the (otherwise 720px) PvDialog card only when it hosts the designer. */
+    .pv-fdialog-card:has(.pv-ld) { width: min(96vw, 1120px) !important; max-width: 1120px !important; }
+    .pv-ld label { display:block; font-size:12px; font-weight:600; color:#374151; margin:12px 0 4px; }
+    .pv-ld label:first-of-type { margin-top:0; }
+    .pv-ld select, .pv-ld input[type=text] { width:100%; padding:7px 9px;
+        border:1px solid #d1d5db; border-radius:6px; font-size:13px; }
+    .pv-ld input[type=color] { width:44px; height:32px; padding:0; border:1px solid #d1d5db;
+        border-radius:6px; background:none; }
+    .pv-ld .row { display:flex; align-items:center; gap:8px; }
+    .pv-ld .panel { width:220px; flex:0 0 220px; padding:14px; border-right:1px solid #e5e7eb;
+        overflow:auto; }
+    .pv-ld .preview { flex:1; background:#525659; padding:14px; overflow:auto;
+        display:flex; justify-content:center; align-items:flex-start; }
+    .pv-ld .actions { margin-top:18px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .pv-ld button.save { background:#111827; color:#fff; border:0; padding:8px 14px;
+        border-radius:6px; font-weight:600; cursor:pointer; font-size:13px; }
+    .pv-ld .status { font-size:12px; color:#059669; }
+  </style>
+
+  <div class="panel">
+    <label for="pvld-layout">Layout style</label>
+    <select id="pvld-layout">
+      {% for v, label in layout_choices %}
+      <option value="{{ v }}" {{ 'selected' if values.document_layout==v else '' }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="pvld-paper">Paper format</label>
+    <select id="pvld-paper">
+      {% for v in ['A4','Letter'] %}
+      <option value="{{ v }}" {{ 'selected' if values.paper_format==v else '' }}>{{ v }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="pvld-font">Google font</label>
+    <select id="pvld-font">
+      {% for val, lbl in google_fonts %}
+      <option value="{{ val }}" {{ 'selected' if values.google_font==val else '' }}>{{ lbl }}</option>
+      {% endfor %}
+    </select>
+
+    <label>Primary color</label>
+    <div class="row">
+      <input type="color" id="pvld-color" value="{{ values.primary_color }}"/>
+      <input type="text" id="pvld-color-hex" value="{{ values.primary_color }}" style="flex:1;"/>
+    </div>
+
+    <label>Secondary color</label>
+    <div class="row">
+      <input type="color" id="pvld-secondary" value="{{ values.secondary_color }}"/>
+      <input type="text" id="pvld-secondary-hex" value="{{ values.secondary_color }}" style="flex:1;"/>
+    </div>
+
+    <label>Logo</label>
+    <div id="pvld-logo-wrap">{{ logo_widget | safe }}</div>
+
+    <div class="actions">
+      <button type="button" class="save" id="pvld-save">Save</button>
+      <span class="status" id="pvld-status"></span>
+    </div>
+  </div>
+
+  <div class="preview" id="pvld-preview">{{ initial_preview | safe }}</div>
+</div>
+
+<script>
+(function () {
+  const CID = {{ company_id }};
+  const CSRF = {{ csrf_token | tojson }};
+  const root = document.querySelector('.pv-ld');
+  if (!root) return;
+  const $ = (id) => document.getElementById(id);
+  const preview = $('pvld-preview');
+  // PvDialog defaults "Open full page" to the fragment URL — point at the shell page.
+  const card = root.closest('.pv-fdialog-card');
+  if (card) {
+    const fullLink = card.querySelector('.pv-fdialog-title a[href]');
+    if (fullLink) fullLink.href = '/web/report/layout/designer?company_id=' + CID;
+  }
+  // Logo comes from the embedded file_url picker widget's URL input.
+  const logoInput = root.querySelector('.pv-file-url input[type=url]');
+  const logoVal = () => (logoInput ? logoInput.value : '');
+  let timer = null;
+
+  function refresh() {
+    const params = new URLSearchParams({
+      company_id: CID,
+      layout: $('pvld-layout').value,
+      paper: $('pvld-paper').value,
+      color: $('pvld-color-hex').value,
+      secondary: $('pvld-secondary-hex').value,
+      font: $('pvld-font').value,
+      logo: logoVal(),
+    });
+    fetch('/report/layout/preview-live?' + params.toString())
+      .then(r => r.text()).then(html => { preview.innerHTML = html; });
+  }
+  const debounced = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
+  if (logoInput) logoInput.addEventListener('input', debounced);
+
+  function syncColor(picker, hex) {
+    $(picker).addEventListener('input', () => { $(hex).value = $(picker).value; debounced(); });
+    $(hex).addEventListener('input', () => {
+      if (/^#[0-9a-fA-F]{6}$/.test($(hex).value)) $(picker).value = $(hex).value;
+      debounced();
+    });
+  }
+  syncColor('pvld-color', 'pvld-color-hex');
+  syncColor('pvld-secondary', 'pvld-secondary-hex');
+  ['pvld-layout', 'pvld-paper', 'pvld-font']
+    .forEach(id => $(id).addEventListener('input', debounced));
+
+  $('pvld-save').addEventListener('click', () => {
+    $('pvld-status').textContent = '';
+    fetch('/report/layout/designer/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+      body: JSON.stringify({
+        company_id: CID,
+        document_layout: $('pvld-layout').value,
+        paper_format: $('pvld-paper').value,
+        primary_color: $('pvld-color-hex').value,
+        secondary_color: $('pvld-secondary-hex').value,
+        google_font: $('pvld-font').value,
+        logo_url: logoVal(),
+      }),
+    }).then(r => r.ok ? r.json() : Promise.reject(r))
+      .then(() => { $('pvld-status').textContent = 'Saved ✓'; })
+      .catch(() => { const s = $('pvld-status'); s.textContent = 'Save failed'; s.style.color = '#dc2626'; });
+  });
+})();
+</script>

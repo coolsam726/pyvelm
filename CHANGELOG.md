@@ -7,6 +7,29 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.25.0] — 2026-05-29
+
+### Added
+
+- **`document_layout` module** — configurable company document layout
+  (logo, address, colours, paper format, layout variants) and a registry +
+  print routes (`/report/pdf/…`, `/report/html/…`) for branded PDFs via
+  wkhtmltopdf. Business modules register documents with
+  `document_layout.api.register_document`. Docs: [document-layout.md](docs/document-layout.md).
+- **Per-company navigation layout** — `res.company.menu_layout` (base
+  **0.31.0**); `base.web` middleware sets a per-request ContextVar;
+  `pyvelm.menu.menu_layout()` resolves company → env var → `apps`. Field
+  on the standard company form under **Branding & white-label**. Docs:
+  [navigation.md](docs/navigation.md#per-company-override),
+  [branding.md](docs/branding.md).
+
+### Changed
+
+- **Coverage gate** raised to **90%** with an updated omit list for ORM
+  runtime, builders, and module `web.py` registrars.
+- **`document_layout` menu** — **Layout & Print** lives under **Settings →
+  Organization** (no root-level Document Layout app).
+
 ## [0.24.1] — 2026-05-29
 
 ### Fixed

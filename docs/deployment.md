@@ -215,6 +215,15 @@ Admins can change anyone else's password via the existing
 Session tokens stay valid until the cookie expires — rotating them
 on password change is on the list.
 
+## Optional server tools
+
+| Tool | Used by | Install |
+|------|---------|---------|
+| **wkhtmltopdf** | [`document_layout`](document-layout.md) PDF routes (`/report/pdf/…`) | `apt-get install wkhtmltopdf` (Debian/Ubuntu) or equivalent |
+
+HTML preview routes work without wkhtmltopdf; only PDF download returns **503**
+when the binary is missing.
+
 ## Open work
 
 A few rough edges worth flagging:

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from pyvelm import BaseModel, Boolean, Char, Many2one
 
+from ..constants import MENU_LAYOUT_CHOICES
+
 
 class Company(BaseModel):
     _name = "res.company"
@@ -44,3 +46,8 @@ class Company(BaseModel):
     support_email = Char(string="Support email")
     support_url = Char(string="Support URL")
     show_powered_by = Boolean(default=True, string="Show powered by pyvelm")
+    menu_layout = Char(
+        default="",
+        string="Navigation Layout",
+        choices=MENU_LAYOUT_CHOICES,
+    )

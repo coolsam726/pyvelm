@@ -139,6 +139,7 @@ def sync(env):
     _seed_res_users_self_read(env)
     _seed_res_groups_read_access(env)
     classify_chrome_attachments_public(env)
+    _seed_menu_layout_defaults(env)
     # Do not call assign_user_group_to_active_users here — it ran on
     # upgrade via migration 0_23→0_24 and must not re-add **User** on
     # every dev reload (serve.py runs load_and_install) after an admin
@@ -178,6 +179,17 @@ def classify_chrome_attachments_public(env) -> None:
     rows = Attachment.search([("id", "in", list(ids)), ("public", "=", False)])
     for att in rows:
         att.write({"public": True})
+
+
+def _seed_menu_layout_defaults(env) -> None:
+    """Ensure ``menu_layout`` is non-null on every company (empty = env default)."""
+    if "res.company" not in env.registry:
+        return
+    for company in env["res.company"].search([]):
+        if not hasattr(company, "menu_layout"):
+            continue
+        if company.menu_layout is None:
+            company.write({"menu_layout": ""})
 
 
 def _purge_smoke_test_cron(env) -> None:

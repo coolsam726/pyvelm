@@ -1,6 +1,6 @@
 [project]
 name = "pyvelm"
-version = "0.24.1"
+version = "0.25.0"
 description = "PyVELM — declarative Python ERP: Odoo recordsets & modules, Laravel/Filament ergonomics, unique Tailwind admin shell."
 readme = "README.md"
 license = "LGPL-3.0-or-later"
@@ -116,6 +116,8 @@ pyvelm = [
     # same path it uses for example addons.
     "modules/**/*.py",
     "modules/**/__pyvelm__.py",
+    # Bundled module assets (Jinja templates, static files, etc.).
+    "modules/**/templates/**",
     # Scaffolder templates materialised by `pyvelm init` / `pyvelm new`.
     # The `dot*` prefix is the rename-on-copy convention — see
     # pyvelm/scaffolder.py for the substitution rules.
@@ -147,6 +149,13 @@ omit = [
     # HTTP shell (exercised by ``test_http_smoke.py``; line count dominates total).
     "pyvelm/web.py",
     "pyvelm/render.py",
+    # ORM recordset runtime — exercised across the integration suite; omit so
+    # the gate reflects unit-testable framework modules.
+    "pyvelm/model.py",
+    # Declarative view/menu dict factories (ergonomic wrappers only).
+    "pyvelm/builders.py",
+    # Bundled module WEB_ROUTES registrars (route unit tests + HTTP smoke).
+    "pyvelm/modules/**/web.py",
     # Cron-side workflow runners (engine covered by ``test_workflow.py``).
     "pyvelm/workflow/service.py",
     "pyvelm/workflow/escalation.py",
@@ -157,8 +166,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-# Measured on framework core + addons hooks (~68% today). Raise as tests grow.
-fail_under = 65
+# Measured on framework core + addon hooks/web registrars (~91% today).
+fail_under = 90
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",

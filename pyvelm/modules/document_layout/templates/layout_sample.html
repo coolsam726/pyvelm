@@ -1,0 +1,85 @@
+{# Sample document body for previewing a layout during design (dummy data).
+   Reuses the CSS classes defined in external_layout.html / preview_inline.html.
+   Classes doc-title and doc-title-bar are styled differently by each layout variant. #}
+
+{# Large document title — editorial layout makes this 44px/900wt; others use 22px. #}
+<p class="doc-title">Sample Invoice</p>
+<div class="doc-title-bar"></div>
+
+<table style="width:100%; border-collapse:collapse; margin-bottom:16px;">
+  <tr>
+    <td style="vertical-align:top; padding-right:24px;">
+      <div style="font-size:9px; text-transform:uppercase; letter-spacing:.1em;" class="muted">Invoice No.</div>
+      <div class="doc-number">INV/2026/00001</div>
+    </td>
+    <td style="vertical-align:top; padding-right:24px;">
+      <div style="font-size:9px; text-transform:uppercase; letter-spacing:.1em;" class="muted">Issue Date</div>
+      <div style="font-weight:700; margin-top:2px;">2026-01-31</div>
+    </td>
+    <td style="vertical-align:top; padding-right:24px;">
+      <div style="font-size:9px; text-transform:uppercase; letter-spacing:.1em;" class="muted">Due Date</div>
+      <div style="font-weight:700; margin-top:2px;">2026-03-02</div>
+    </td>
+    <td style="vertical-align:top;">
+      <div style="font-size:9px; text-transform:uppercase; letter-spacing:.1em;" class="muted">Status</div>
+      <div style="font-weight:700; margin-top:2px;">Unpaid</div>
+    </td>
+  </tr>
+</table>
+
+<table style="width:100%; border-collapse:collapse; margin-bottom:16px;">
+  <tr>
+    <td style="vertical-align:top; padding-right:24px; width:50%;">
+      <div style="font-size:9px; text-transform:uppercase; letter-spacing:.1em;" class="muted">Billed To</div>
+      <div style="font-weight:700; margin-top:4px;">Sample Customer Ltd</div>
+      <div class="muted">42 Example Avenue</div>
+      <div class="muted">00100 Sampleton</div>
+    </td>
+    <td style="vertical-align:top; width:50%;">
+      <div style="font-size:9px; text-transform:uppercase; letter-spacing:.1em;" class="muted">Bill From</div>
+      <div style="font-weight:700; margin-top:4px;">Your Company Name</div>
+      <div class="muted">billing@yourcompany.com</div>
+    </td>
+  </tr>
+</table>
+
+<table class="lines">
+  <thead>
+    <tr>
+      <th>Description</th>
+      <th class="num">Qty</th>
+      <th class="num">Unit Price</th>
+      <th>Taxes</th>
+      <th class="num">Subtotal</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Consulting services</td>
+      <td class="num">10.00</td>
+      <td class="num">120.00</td>
+      <td class="muted">VAT 16%</td>
+      <td class="num">1,200.00</td>
+    </tr>
+    <tr>
+      <td>Office Chair</td>
+      <td class="num">4.00</td>
+      <td class="num">85.00</td>
+      <td class="muted">VAT 16%</td>
+      <td class="num">340.00</td>
+    </tr>
+    <tr>
+      <td>Delivery</td>
+      <td class="num">1.00</td>
+      <td class="num">25.00</td>
+      <td class="muted">—</td>
+      <td class="num">25.00</td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="totals">
+  <tr><td class="muted">Untaxed</td><td class="num">1,565.00</td></tr>
+  <tr><td class="muted">VAT 16%</td><td class="num">250.40</td></tr>
+  <tr class="grand"><td>Total</td><td class="num">1,815.40</td></tr>
+</table>

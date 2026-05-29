@@ -2,7 +2,8 @@
 
 The signed-in web UI (`layouts/main.html`) builds navigation from
 `ir.ui.menu` rows contributed by each module's `MENUS` list. The same
-tree powers two **layout modes**; switch with `PYVELM_MENU_LAYOUT`.
+tree powers two **layout modes**; switch globally with `PYVELM_MENU_LAYOUT`
+or per company on `res.company.menu_layout` (see below).
 
 ## Layout modes
 
@@ -21,6 +22,36 @@ PYVELM_MENU_LAYOUT=sidebar
 
 Restart the app process after changing the variable. Invalid values fall
 back to `apps`.
+
+### Per-company override
+
+Each `res.company` record has an optional **Navigation Layout** field
+(`menu_layout`). When set to `apps` or `sidebar`, users in that company
+see that layout for every signed-in request. When left empty (**Default
+(env var)**), the global `PYVELM_MENU_LAYOUT` value applies.
+
+Configure on each company under **Settings → Organization → Companies**
+(open a company → **Branding & white-label** → **Navigation Layout**).
+Resolution order:
+
+1. Per-request override from the active company's `menu_layout` (when non-empty)
+2. Global `PYVELM_MENU_LAYOUT` environment variable
+3. Hard default: `apps`
+
+The active company's layout is resolved in **`base.web`** middleware on each
+authenticated request (session cookie + company cookie) and stored in a
+`ContextVar` until the response completes. Custom code or tests can set it
+directly:
+
+```python
+from pyvelm.menu import menu_layout, reset_request_menu_layout, set_request_menu_layout
+
+token = set_request_menu_layout("sidebar")
+try:
+    assert menu_layout() == "sidebar"
+finally:
+    reset_request_menu_layout(token)
+```
 
 > **Note:** `PYVELM_MENU_LAYOUT=odoo` is still accepted as an alias for
 > `apps` for older deployments; prefer `apps` in new configuration.

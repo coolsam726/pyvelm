@@ -1,0 +1,57 @@
+{# Odoo 19 external_layout_folder — company info inside tinted strip; tab + title at bottom. #}
+{% set folder_tint = company.folder_tint or '#f3f4f6' %}
+{% set doc_title = title|default('Invoice') %}
+<div class="folder-header-wrap">
+  <div class="folder-header">
+    {# Background tint band (full strip height) #}
+    <div class="folder-shape-bg">
+      <svg class="folder-band-svg" width="100%" height="174" preserveAspectRatio="none"
+           xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="174" fill="{{ folder_tint }}"/>
+      </svg>
+    </div>
+
+    {# Logo + tagline (left) and address (right) — overlaid on top of the strip #}
+    <table class="folder-company-info" cellpadding="0" cellspacing="0">
+      <tr>
+        <td class="folder-co-left">
+          {% if company.logo_url %}
+            <img class="folder-logo" src="{{ company.logo_url }}" alt="logo"/>
+          {% endif %}
+          {% if company.name %}
+            <div class="folder-tagline">{{ company.name }}</div>
+          {% endif %}
+        </td>
+        <td class="folder-co-right">
+          <ul class="folder-addr-list">
+            {% for line in company.address_lines %}
+              {% if not line.startswith('VAT:') %}
+                <li>{{ line }}</li>
+              {% endif %}
+            {% endfor %}
+            {% if company.vat %}
+              <li>Tax ID: {{ company.vat }}</li>
+            {% endif %}
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    {# Folder tab row — tint continuation + angle + document title (Odoo adaptive shape) #}
+    <table class="folder-tab-row" cellpadding="0" cellspacing="0">
+      <tr>
+        <td class="folder-tab-fill" style="background:{{ folder_tint }};"></td>
+        <td class="folder-tab-angle">
+          <svg width="80" height="48" viewBox="0 0 80 48" fill="none"
+               xmlns="http://www.w3.org/2000/svg">
+            <path d="M5.70364 48H0V0.00100806H73.5404L80 0C74.2028 0.665869 68.7417 3.06684 64.332 6.88852L25.3513 40.6709C19.8969 45.3979 12.9212 48 5.70364 48Z"
+                  fill="{{ folder_tint }}"/>
+          </svg>
+        </td>
+        <td class="folder-tab-title">
+          <h2 class="folder-doc-title">{{ doc_title }}</h2>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>

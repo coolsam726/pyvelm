@@ -17,6 +17,7 @@ Customize how the UI looks for each company (or globally via environment variabl
 | **Copyright** | Footer legal line |
 | **Support email / URL** | Footer links |
 | **Show powered by pyvelm** | Hide the small “Powered by pyvelm” line when off |
+| **Navigation layout** | Shell chrome: `apps` (sidebar icons + top bar) or `sidebar` (3-level tree). Empty = use global `PYVELM_MENU_LAYOUT`. See [Navigation](navigation.md#per-company-override). |
 
 Branding follows the **active company** cookie (`pyvelm_company`), same as theme accent.
 
@@ -37,6 +38,9 @@ PYVELM_SHOW_POWERED_BY=0
 ```
 
 Requires **base module 0.21.0+** (run **Apps → base → Sync** after upgrade).
+
+Per-company **navigation layout** (`menu_layout`) requires **base 0.31.0+**;
+middleware is registered automatically via `base.web:register_routes`.
 
 ## API
 

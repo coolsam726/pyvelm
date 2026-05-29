@@ -171,6 +171,7 @@ VIEWS: list[View] = [
                     "support_email",
                     "support_url",
                     field("show_powered_by", widget="toggle"),
+                    "menu_layout",
                 ],
             ),
         ],

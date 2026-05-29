@@ -1,5 +1,5 @@
 NAME: str = "base"
-VERSION: tuple[int, ...] = (0, 30, 0)
+VERSION: tuple[int, ...] = (0, 31, 0)
 SUMMARY: str = "Core models and framework primitives."
 CATEGORY: str = "System"
 AUTHOR: str = "pyvelm"
@@ -13,3 +13,4 @@ DATA: list[str] = [
 # base/hooks.py.
 INSTALL_HOOK: str = "base.hooks:install"
 SYNC_HOOK: str = "base.hooks:sync"
+WEB_ROUTES: str = "base.web:register_routes"

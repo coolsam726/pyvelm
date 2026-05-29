@@ -14,6 +14,7 @@ User guide: ``docs/navigation.md``.
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar, Token
 from typing import Any, Literal
 
 MenuLayout = Literal["sidebar", "apps"]
@@ -24,14 +25,44 @@ _VALID_LAYOUTS = frozenset({MENU_LAYOUT_SIDEBAR, MENU_LAYOUT_APPS})
 # Deprecated env value; still accepted so older deployments keep working.
 _LAYOUT_ALIASES = {"odoo": MENU_LAYOUT_APPS}
 
+request_menu_layout: ContextVar[str | None] = ContextVar(
+    "pyvelm.menu.request_menu_layout", default=None
+)
+
+
+def normalize_menu_layout_slug(raw: str | None) -> str | None:
+    """Return a validated layout slug, or ``None`` when *raw* is empty/unknown."""
+    if not raw or not str(raw).strip():
+        return None
+    slug = str(raw).strip().lower()
+    slug = _LAYOUT_ALIASES.get(slug, slug)
+    if slug in _VALID_LAYOUTS:
+        return slug  # type: ignore[return-value]
+    return None
+
+
+def resolve_menu_layout(*, context_value: str | None = None) -> MenuLayout:
+    """Resolve layout: per-request override → env var → ``apps``."""
+    slug = normalize_menu_layout_slug(context_value)
+    if slug:
+        return slug  # type: ignore[return-value]
+    slug = normalize_menu_layout_slug(os.environ.get("PYVELM_MENU_LAYOUT"))
+    if slug:
+        return slug  # type: ignore[return-value]
+    return MENU_LAYOUT_APPS
+
+
+def set_request_menu_layout(layout: str | None) -> Token:
+    return request_menu_layout.set(layout)
+
+
+def reset_request_menu_layout(token: Token) -> None:
+    request_menu_layout.reset(token)
+
 
 def menu_layout() -> MenuLayout:
-    """Resolved shell navigation layout (env: ``PYVELM_MENU_LAYOUT``)."""
-    raw = (os.environ.get("PYVELM_MENU_LAYOUT") or MENU_LAYOUT_APPS).strip().lower()
-    raw = _LAYOUT_ALIASES.get(raw, raw)
-    if raw in _VALID_LAYOUTS:
-        return raw  # type: ignore[return-value]
-    return MENU_LAYOUT_APPS
+    """Resolved shell navigation layout (request override → env var → apps)."""
+    return resolve_menu_layout(context_value=request_menu_layout.get())
 
 
 def menu_target_model(env, href: str | None) -> str | None:

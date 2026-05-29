@@ -97,6 +97,8 @@ nav:
       - Workflows: workflow.md
       - Email composer: mail-compose.md
       - File library: file-manager.md
+      - Document layouts & PDF: document-layout.md
+      - Shell navigation: navigation.md
       - Geo data: geo-data.md
       - White-label branding: branding.md
       - Security: security.md

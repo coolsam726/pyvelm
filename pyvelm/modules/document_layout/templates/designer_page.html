@@ -1,0 +1,151 @@
+{% extends "layouts/main.html" %}
+{% block title %}{{ page_title }} — pyvelm{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block page_actions %}
+<span id="pvld-status" class="text-sm text-fg-success"></span>
+<button type="button" id="pvld-save"
+        class="px-4 py-2 text-sm font-medium text-white rounded-md bg-fg-brand hover:opacity-90">
+  Save layout
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-row min-h-[calc(100vh-14rem)] -mx-4 md:-mx-6 -my-5 border-y border-default overflow-hidden bg-neutral-primary">
+  <aside id="pvld-form" class="w-72 xl:w-80 shrink-0 border-r border-default p-5 space-y-4 overflow-y-auto">
+    <div>
+      <h2 class="text-sm font-semibold text-heading">Layout options</h2>
+      <p class="text-xs text-body-subtle mt-1">Changes preview live; save when ready.</p>
+    </div>
+
+    <label class="block">
+      <span class="text-sm font-medium text-heading mb-1 block">Layout style</span>
+      <select id="pvld-layout"
+              class="w-full text-sm rounded-md border border-default bg-neutral-primary px-3 py-2
+                     focus:outline-none focus:ring-2 focus:ring-fg-brand">
+        {% for v, label in layout_choices %}
+        <option value="{{ v }}" {{ 'selected' if values.document_layout == v else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="block">
+      <span class="text-sm font-medium text-heading mb-1 block">Paper format</span>
+      <select id="pvld-paper"
+              class="w-full text-sm rounded-md border border-default bg-neutral-primary px-3 py-2
+                     focus:outline-none focus:ring-2 focus:ring-fg-brand">
+        {% for v in ['A4', 'Letter'] %}
+        <option value="{{ v }}" {{ 'selected' if values.paper_format == v else '' }}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="block">
+      <span class="text-sm font-medium text-heading mb-1 block">Google font</span>
+      <select id="pvld-font"
+              class="w-full text-sm rounded-md border border-default bg-neutral-primary px-3 py-2
+                     focus:outline-none focus:ring-2 focus:ring-fg-brand">
+        {% for val, lbl in google_fonts %}
+        <option value="{{ val }}" {{ 'selected' if values.google_font == val else '' }}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <div>
+      <span class="text-sm font-medium text-heading mb-1 block">Primary colour</span>
+      {{ primary_color_widget | safe }}
+    </div>
+
+    <div>
+      <span class="text-sm font-medium text-heading mb-1 block">Secondary colour</span>
+      {{ secondary_color_widget | safe }}
+    </div>
+
+    <div>
+      <span class="text-sm font-medium text-heading mb-1 block">Logo</span>
+      {{ logo_widget | safe }}
+    </div>
+  </aside>
+
+  <main id="pvld-preview" class="flex-1 min-w-0 min-h-0 bg-[#525659] p-5 overflow-auto flex justify-center items-start">
+    {{ initial_preview | safe }}
+  </main>
+</div>
+
+<script>
+(function () {
+  const CID = {{ company_id }};
+  const form = document.getElementById('pvld-form');
+  const preview = document.getElementById('pvld-preview');
+  const statusEl = document.getElementById('pvld-status');
+  if (!form || !preview) return;
+
+  const $ = (id) => document.getElementById(id);
+  let timer = null;
+
+  function csrf() {
+    return window.pvCsrf ? window.pvCsrf() : '';
+  }
+
+  function fieldVal(name) {
+    const el = form.querySelector('[name="' + name + '"]');
+    return el ? el.value : '';
+  }
+
+  function logoVal() {
+    const wrap = form.querySelector('.pv-file-url');
+    if (!wrap) return '';
+    const hidden = wrap.querySelector('input[type=hidden]');
+    const url = wrap.querySelector('input[type=url]');
+    return (hidden && hidden.value) || (url && url.value) || '';
+  }
+
+  function refresh() {
+    const params = new URLSearchParams({
+      company_id: CID,
+      layout: $('pvld-layout').value,
+      paper: $('pvld-paper').value,
+      color: fieldVal('primary_color'),
+      secondary: fieldVal('secondary_color'),
+      font: $('pvld-font').value,
+      logo: logoVal(),
+    });
+    fetch('/report/layout/preview-live?' + params.toString())
+      .then(r => r.text())
+      .then(html => { preview.innerHTML = html; });
+  }
+
+  const debounced = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
+
+  form.addEventListener('input', debounced);
+  form.addEventListener('change', debounced);
+  ['pvld-layout', 'pvld-paper', 'pvld-font'].forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener('input', debounced);
+  });
+
+  $('pvld-save').addEventListener('click', () => {
+    statusEl.textContent = '';
+    statusEl.className = 'text-sm text-fg-success';
+    fetch('/report/layout/designer/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
+      body: JSON.stringify({
+        company_id: CID,
+        document_layout: $('pvld-layout').value,
+        paper_format: $('pvld-paper').value,
+        primary_color: fieldVal('primary_color'),
+        secondary_color: fieldVal('secondary_color'),
+        google_font: $('pvld-font').value,
+        logo_url: logoVal(),
+      }),
+    }).then(r => r.ok ? r.json() : Promise.reject(r))
+      .then(() => { statusEl.textContent = 'Saved'; })
+      .catch(() => {
+        statusEl.textContent = 'Save failed';
+        statusEl.className = 'text-sm text-fg-danger';
+      });
+  });
+})();
+</script>
+{% endblock %}
