@@ -31,6 +31,26 @@ mkdocs serve          # http://localhost:8000 with live reload
 mkdocs build --strict # what CI runs
 ```
 
+## Codecov (CI badge)
+
+CI uploads `coverage.xml` on every push to `main`. The README badge stays
+**unknown** until Codecov receives at least one successful upload.
+
+One-time setup (repo maintainer):
+
+1. Install the [Codecov GitHub app](https://github.com/apps/codecov) and
+   add the **coolsam726/pyvelm** repository at [app.codecov.io](https://app.codecov.io).
+2. Open the repo on Codecov → **Settings** → copy the **Repository upload token**.
+3. On GitHub: **Settings → Secrets and variables → Actions** → create
+   **`CODECOV_TOKEN`** with that value.
+4. Re-run the latest **ci** workflow (or push a commit).
+
+CI logs previously showed `Token required - not valid tokenless upload` because
+v5 of the action requires an upload token for protected-branch pushes on most
+orgs. After the secret is set, the badge at
+`https://codecov.io/gh/coolsam726/pyvelm` should show a percentage on the next
+green run.
+
 ## Cutting a release
 
 pyvelm versions itself via three places that must agree:

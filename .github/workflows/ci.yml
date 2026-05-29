@@ -60,4 +60,6 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
-          fail_ci_if_error: false
+          slug: coolsam726/pyvelm
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
