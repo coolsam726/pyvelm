@@ -60,7 +60,18 @@ Local coverage report:
 
 ```bash
 pytest --cov=pyvelm --cov-report=term-missing
+pytest pyvelm/tests/test_reports*.py --cov=pyvelm/reports --cov-report=term-missing
 ```
+
+The reports package has dedicated unit tests (`test_reports.py`,
+`test_reports_more.py`) plus DB integration (`test_reports_integration.py`).
+
+`pyvelm.actions` (`ir.actions.server`) is covered by `pyvelm/tests/test_actions.py`
+(requires `PYVELM_DSN` for integration cases).
+
+CLI, console, cron, and schema autogen are covered by `test_cli_more.py`,
+`test_console.py`, `test_cron.py`, and `test_db_autogen_more.py` (plus
+`test_db_cli.py` and `test_db_autogen_constraints.py` for `db` subcommands).
 
 ## Codecov (CI badge)
 
