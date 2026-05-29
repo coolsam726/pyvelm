@@ -5,7 +5,7 @@ import os
 import unittest
 
 from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Many2many, Registry, loader
-from pyvelm.domain import domain_to_sql
+from pyvelm.domain import domain_to_sql, normalize_domain
 
 DSN = os.environ.get("PYVELM_DSN")
 
@@ -130,6 +130,66 @@ class DomainCompileTests(unittest.TestCase):
             reg,
         )
         self.assertIn("EXISTS", where)
+        self.assertIn(" OR ", where)
+        self.assertEqual(len(params), 2)
+
+    def test_polish_or_two_leaves(self):
+        reg, Partner = _mini_registry()
+        where, params, _joins = domain_to_sql(
+            ["|", ("name", "ilike", "%a%"), ("name", "ilike", "%b%")],
+            Partner,
+            reg,
+        )
+        self.assertIn(" OR ", where)
+        self.assertEqual(params, ["%a%", "%b%"])
+
+    def test_polish_and_or_nested(self):
+        reg, Partner = _mini_registry()
+        where, params, _joins = domain_to_sql(
+            [
+                "&",
+                ("name", "!=", None),
+                "|",
+                ("name", "ilike", "%vip%"),
+                ("tag_ids.name", "ilike", "%vip%"),
+            ],
+            Partner,
+            reg,
+        )
+        self.assertIn(" AND ", where)
+        self.assertIn(" OR ", where)
+        self.assertIn("EXISTS", where)
+        self.assertEqual(len(params), 2)
+
+    def test_polish_not(self):
+        reg, Partner = _mini_registry()
+        where, params, _joins = domain_to_sql(
+            ["!", ("name", "=", "blocked")],
+            Partner,
+            reg,
+        )
+        self.assertIn("NOT (", where)
+        self.assertEqual(params, ["blocked"])
+
+    def test_implicit_and_flat_leaves(self):
+        reg, Partner = _mini_registry()
+        where, params, _joins = domain_to_sql(
+            [("name", "ilike", "%a%"), ("name", "ilike", "%b%")],
+            Partner,
+            reg,
+        )
+        self.assertIn(" AND ", where)
+        self.assertEqual(params, ["%a%", "%b%"])
+
+    def test_normalize_domain_implicit_and(self):
+        norm = normalize_domain([("a", "=", 1), ("b", "=", 2)])
+        self.assertEqual(norm, ["&", ("a", "=", 1), ("b", "=", 2)])
+
+    def test_mime_style_or_expansion(self):
+        """Same shape as web._accept_mime_domain — prefix | operators."""
+        reg, Partner = _mini_registry()
+        domain = ["|", ("name", "ilike", "image/%"), ("name", "ilike", "application/%")]
+        where, params, _ = domain_to_sql(domain, Partner, reg)
         self.assertIn(" OR ", where)
         self.assertEqual(len(params), 2)
 

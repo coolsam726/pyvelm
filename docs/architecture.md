@@ -215,7 +215,14 @@ leaves into a `WHERE` clause. Three notable behaviors:
   a recordset as its value; the compiler coerces it to the id.
 
 Operators supported: `=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`,
-`like`, `ilike`. AND-only — no polish notation yet.
+`like`, `ilike`. Top-level leaves without operators are **AND**ed
+(``normalize_domain`` makes this explicit).
+
+**Prefix operators** (Odoo-compatible): ``&`` (AND), ``|`` (OR), ``!`` (NOT).
+Example: ``['&', ('state', '=', 'posted'), '|', ('name', 'ilike', 'a'), ('ref', 'ilike', 'a')]``.
+
+The legacy ``("__or__", "=", [sub_leaves…])`` leaf is expanded to ``|`` groups
+before compilation. See [Declaring models → Search domains](models.md#search-domains).
 
 **Path traversal in domains.** A dotted attr (`country_id.region_id.name`)
 is parsed against the model into a `Path`. Two emission strategies:
@@ -366,7 +373,7 @@ visible.
 | Gap | Why deferred |
 |-----|---|
 | LRU / eviction on `env.cache` | Single env per request, ids are bounded by the working set. Premature optimization until proven a problem. |
-| Universal-quantifier edge cases | Vacuous truth when a partner has no tags; `like`/`ilike` with `all` use `NOT ILIKE` failure rows. Polish `|`, `&`, `!` on domains still deferred. |
+| Universal-quantifier edge cases | Vacuous truth when a partner has no tags; `like`/`ilike` with `all` use `NOT ILIKE` failure rows. |
 | O2m/M2m caching (full dep graph) | Tuple cache + invalidation on inverse FK / M2M writes, comodel unlink, and symmetric M2M fields sharing a junction table. Remaining gap: raw SQL junction edits. |
 | M2M command tuples | Replace-only writes work for everything in the example; `[(0,_,vals), (4,id)]` are an API ergonomics layer, not a capability layer. |
 | Transaction boundaries beyond autocommit | Adds a real unit-of-work concept. Right when multi-statement consistency matters, not before. |

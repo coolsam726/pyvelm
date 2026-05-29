@@ -105,14 +105,14 @@ def validate_definition(defn: dict[str, Any], registry) -> None:
     filters = defn.get("filters") or []
     if not isinstance(filters, list):
         raise ReportDefinitionError("'filters' must be a list")
-    for leaf in filters:
-        _validate_domain_leaf(root_cls, leaf, registry, param_mode=False)
+    if filters:
+        _validate_domain_expr(root_cls, filters, registry, param_mode=False)
 
     param_filters = defn.get("parameter_filters") or []
     if not isinstance(param_filters, list):
         raise ReportDefinitionError("'parameter_filters' must be a list")
-    for leaf in param_filters:
-        _validate_domain_leaf(root_cls, leaf, registry, param_mode=True)
+    if param_filters:
+        _validate_domain_expr(root_cls, param_filters, registry, param_mode=True)
 
     parameters = defn.get("parameters") or []
     if not isinstance(parameters, list):
@@ -133,8 +133,8 @@ def validate_definition(defn: dict[str, Any], registry) -> None:
                 f"parameters[{i}].type {ptype!r} invalid"
             )
 
-    for leaf in param_filters:
-        _check_param_refs(leaf, param_names)
+    if param_filters:
+        _check_param_refs(param_filters, param_names)
 
     order = defn.get("order") or []
     if not isinstance(order, list):
@@ -286,11 +286,18 @@ def _validate_measure_spec(root_cls, spec: str, registry) -> None:
         raise ReportDefinitionError(f"Cannot measure non-stored field {fname!r}")
 
 
+def _validate_domain_expr(root_cls, domain, registry, *, param_mode: bool) -> None:
+    from ..domain import iter_domain_leaves, normalize_domain, expand_or_groups
+
+    try:
+        normalize_domain(expand_or_groups(list(domain)))
+    except ValueError as exc:
+        raise ReportDefinitionError(str(exc)) from exc
+    for leaf in iter_domain_leaves(domain):
+        _validate_domain_leaf(root_cls, leaf, registry, param_mode=param_mode)
+
+
 def _validate_domain_leaf(root_cls, leaf, registry, *, param_mode: bool) -> None:
-    if isinstance(leaf, (list, tuple)) and len(leaf) == 3 and leaf[0] == "__or__":
-        for sub in leaf[2] or []:
-            _validate_domain_leaf(root_cls, sub, registry, param_mode=param_mode)
-        return
     if not isinstance(leaf, (list, tuple)) or len(leaf) not in (3, 4):
         raise ReportDefinitionError(f"Invalid domain leaf: {leaf!r}")
     attr, op, value = leaf[0], leaf[1], leaf[2]
@@ -308,11 +315,14 @@ def _validate_domain_leaf(root_cls, leaf, registry, *, param_mode: bool) -> None
     parse_path(root_cls, attr, registry)
 
 
-def _check_param_refs(leaf, param_names: set[str]) -> None:
-    if isinstance(leaf, (list, tuple)) and len(leaf) == 3 and leaf[0] == "__or__":
-        for sub in leaf[2] or []:
-            _check_param_refs(sub, param_names)
-        return
+def _check_param_refs(domain, param_names: set[str]) -> None:
+    from ..domain import iter_domain_leaves
+
+    for leaf in iter_domain_leaves(domain):
+        _check_param_refs_leaf(leaf, param_names)
+
+
+def _check_param_refs_leaf(leaf, param_names: set[str]) -> None:
     if len(leaf) >= 3 and isinstance(leaf[2], dict) and "param" in leaf[2]:
         pname = leaf[2]["param"]
         if pname not in param_names:

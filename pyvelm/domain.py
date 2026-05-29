@@ -1,33 +1,33 @@
 """Domain → SQL compiler.
 
-A domain is `[(attr, op, value), ...]`, implicitly AND-ed. Attrs may be
-dotted (`country_id.code`, `tag_ids.name`); the path is parsed against the
-model. Pure Many2one chains compile to memoized `LEFT JOIN`s. Paths with at
-least one One2many or Many2many hop compile to per-leaf `EXISTS` subqueries
-(existential semantics on collections).
+A domain is a list of leaves and/or Odoo-style **prefix operators** ``&``,
+``|``, ``!``. Adjacent leaves without operators are implicitly **AND**ed
+(see ``normalize_domain``). The legacy ``("__or__", "=", [sub_leaves…])``
+leaf is accepted and expanded to ``|`` groups before compilation.
+
+Attrs may be dotted (``country_id.code``, ``tag_ids.name``); paths compile
+to memoized ``LEFT JOIN``s (pure Many2one chains) or per-leaf ``EXISTS``
+subqueries (One2many / Many2many hops).
 
 Public surface:
     domain_to_sql(domain, model_cls) -> (where, params, joins)
+    normalize_domain(domain) -> list
+    iter_domain_leaves(domain) -> iterator of leaf tuples
 
-`where` is the SQL after `WHERE` (defaults to `TRUE`).
-`joins` is the `LEFT JOIN ...` text to splice between the base table and
-`WHERE` (empty when no traversal is used).
-`params` are the bind values, in order.
+Operators on leaves: ``=``, ``!=``, ``<``, ``<=``, ``>``, ``>=``, ``in``,
+``not in``, ``like``, ``ilike``. Empty ``in`` / ``not in`` short-circuit.
 
-Operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `like`, `ilike`.
-Empty `in`/`not in` short-circuit to `FALSE`/`TRUE`.
-
-Collection paths (O2m/M2m) accept an optional fourth element — a dict with
-``{"all": True}`` — for universal quantification: every member must satisfy
-the condition (implemented as ``NOT EXISTS`` over members that fail it).
+Collection paths accept an optional fourth element — ``{"all": True}`` —
+for universal quantification (``NOT EXISTS`` over members that fail).
 """
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 from .paths import M2mHop, M2oHop, O2mHop, parse_path
 
 _SIMPLE_OPS = {"=", "!=", "<", "<=", ">", ">="}
+_POLISH_OPS = frozenset({"&", "|", "!"})
 # For {"all": True} on collection paths: emit NOT EXISTS(member fails op).
 _ALL_FAIL_OPS = {
     "=": "!=",
@@ -39,6 +39,104 @@ _ALL_FAIL_OPS = {
     "in": "not in",
     "not in": "in",
 }
+
+
+def is_domain_leaf(token: Any) -> bool:
+    """True when *token* is a ``(field, op, value[, opts])`` leaf."""
+    if not isinstance(token, (list, tuple)) or len(token) not in (3, 4):
+        return False
+    if not isinstance(token[0], str):
+        return False
+    return token[0] not in _POLISH_OPS
+
+
+def expand_or_groups(domain: list) -> list:
+    """Expand legacy ``("__or__", …)`` leaves into ``|`` prefix groups."""
+    out: list = []
+    for item in domain:
+        if (
+            isinstance(item, (list, tuple))
+            and len(item) == 3
+            and item[0] == "__or__"
+        ):
+            subs = list(item[2] or [])
+            if not subs:
+                continue
+            if len(subs) == 1:
+                out.append(subs[0])
+            else:
+                out.extend(["|"] * (len(subs) - 1))
+                out.extend(subs)
+        else:
+            out.append(item)
+    return out
+
+
+def normalize_domain(domain: list) -> list:
+    """Make implicit AND explicit (Odoo ``normalize_domain`` semantics)."""
+    if not domain:
+        return []
+    result: list = []
+    expected = 1
+    op_arity = {"!": 1, "&": 2, "|": 2}
+    for token in domain:
+        if expected == 0:
+            result.insert(0, "&")
+            expected = 1
+        if is_domain_leaf(token):
+            result.append(tuple(token))
+            expected -= 1
+        elif token in op_arity:
+            result.append(token)
+            expected += op_arity[token] - 1
+        else:
+            raise ValueError(f"Invalid domain token {token!r}")
+    if expected:
+        raise ValueError(f"Invalid domain {domain!r}")
+    return result
+
+
+def _parse_polish(domain: list, pos: int = 0):
+    """Parse normalized prefix domain into an expression tree."""
+    if pos >= len(domain):
+        raise ValueError("Unexpected end of domain")
+    tok = domain[pos]
+    if tok == "!":
+        child, pos = _parse_polish(domain, pos + 1)
+        return ("!", child), pos
+    if tok == "&":
+        left, pos = _parse_polish(domain, pos + 1)
+        right, pos = _parse_polish(domain, pos)
+        return ("&", left, right), pos
+    if tok == "|":
+        left, pos = _parse_polish(domain, pos + 1)
+        right, pos = _parse_polish(domain, pos)
+        return ("|", left, right), pos
+    if is_domain_leaf(tok):
+        return ("leaf", tok), pos + 1
+    raise ValueError(f"Invalid domain token {tok!r} at position {pos}")
+
+
+def iter_domain_leaves(domain: Iterable) -> Iterator[tuple]:
+    """Yield every leaf tuple in *domain* (after normalize / ``__or__`` expand)."""
+    if not domain:
+        return
+    norm = normalize_domain(expand_or_groups(list(domain)))
+    tree, end = _parse_polish(norm, 0)
+    if end != len(norm):
+        raise ValueError("Trailing tokens in domain")
+
+    def _walk(node):
+        kind = node[0]
+        if kind == "leaf":
+            yield node[1]
+        elif kind == "!":
+            yield from _walk(node[1])
+        else:
+            yield from _walk(node[1])
+            yield from _walk(node[2])
+
+    yield from _walk(tree)
 
 
 def _parse_leaf(leaf) -> tuple[str, str, Any, bool]:
@@ -94,8 +192,12 @@ def domain_to_sql(
     if not domain:
         return "TRUE", [], ""
 
+    domain_norm = normalize_domain(expand_or_groups(list(domain)))
+    tree, end = _parse_polish(domain_norm, 0)
+    if end != len(domain_norm):
+        raise ValueError("Trailing tokens in domain")
+
     base_alias = f'"{model_cls._table}"'
-    clauses: list[str] = []
     params: list[Any] = []
     shared_joins = joins is not None
     if joins is None:
@@ -146,13 +248,7 @@ def domain_to_sql(
         return leaf_field
 
     def _emit_exists(path, op: str, value, *, universal: bool = False):
-        """Emit `EXISTS (...)` for a path containing at least one O2m/M2m
-        hop. Each call generates a fresh subquery — consecutive collection
-        leaves can match different members, which is the intuitive read.
-
-        With ``universal=True``, emit ``NOT EXISTS`` over members that
-        *fail* the condition (every member must satisfy ``op``/``value``).
-        """
+        """Emit ``EXISTS (…)`` for a path containing at least one O2m/M2m hop."""
         if universal and op not in _ALL_FAIL_OPS and op not in ("like", "ilike"):
             raise ValueError(
                 f"Operator {op!r} does not support {{'all': True}} on collection paths"
@@ -166,7 +262,6 @@ def domain_to_sql(
         inner_clauses: list[str] = []
         inner_params: list[Any] = []
         prev_alias: str | None = None
-        prev_is_id_side: bool = False  # whether prev_alias.id is the "row id"
 
         for i, hop in enumerate(path.hops):
             if isinstance(hop, O2mHop):
@@ -185,7 +280,6 @@ def domain_to_sql(
                         f'{alias}."{inverse_col}" = {prev_alias}."id"'
                     )
                 prev_alias = alias
-                prev_is_id_side = True
             elif isinstance(hop, M2mHop):
                 j_alias = f"_e{suffix}_{i}j"
                 t_alias = f"_e{suffix}_{i}t"
@@ -206,15 +300,10 @@ def domain_to_sql(
                     f'{t_alias}."id" = {j_alias}."{hop.col2}"'
                 )
                 prev_alias = t_alias
-                prev_is_id_side = True
             elif isinstance(hop, M2oHop):
                 tgt = registry[hop.target_model]
                 alias = f"_e{suffix}_{i}"
                 if i == 0:
-                    # Forward M2o without a prior collection step would
-                    # normally use LEFT JOIN; if we got here, EXISTS was
-                    # forced by a later collection hop. Anchor by the FK
-                    # column on the outer base.
                     froms.append(f'"{tgt._table}" {alias}')
                     inner_clauses.append(
                         f'{alias}."id" = {base_alias}."{hop.field.column}"'
@@ -226,15 +315,12 @@ def domain_to_sql(
                         f'{alias}."id" = {prev_alias}."{hop.field.column}"'
                     )
                 prev_alias = alias
-                prev_is_id_side = True
 
         assert prev_alias is not None
         leaf_field = _resolve_leaf_field(path)
         leaf_col = leaf_field.column if leaf_field is not None else "id"
         leaf_ref = f'{prev_alias}."{leaf_col}"'
 
-        # Build the leaf condition using the same operator dispatch as the
-        # outer compiler, but writing directly into inner_clauses/params.
         if leaf_op in _SIMPLE_OPS:
             v = _coerce(leaf_field, value)
             if v is None and leaf_op == "=":
@@ -283,12 +369,10 @@ def domain_to_sql(
         return exists_sql, inner_params
 
     def _leaf_ref(attr: str):
-        """Return (qualified_column_sql, field_or_None) for `attr`. Parses
-        paths and emits joins as a side effect."""
+        """Return (qualified_column_sql, field_or_None) for ``attr``."""
         if "." not in attr:
             col, field = _resolve_simple(model_cls, attr)
             return f'{base_alias}."{col}"', field
-        # Path attr: parse, emit joins, qualify the leaf column.
         path = parse_path(model_cls, attr, registry)
         leaf_alias = _emit_chain(path.hops)
         leaf_cls = registry[path.leaf_model]
@@ -302,51 +386,10 @@ def domain_to_sql(
             )
         return f'{leaf_alias}."{leaf_field.column}"', leaf_field
 
-    for leaf in domain:
+    def _compile_leaf(leaf) -> tuple[str, list[Any]]:
         attr, op, value, universal = _parse_leaf(leaf)
+        leaf_params: list[Any] = []
 
-        # Special __or__ operator: value is a list of (attr, op, val) leaves
-        # that should be OR-ed together. Useful for multi-field text search.
-        if attr == "__or__":
-            sub_clauses: list[str] = []
-            for sub_leaf in value or []:
-                s_attr, s_op, s_val, s_all = _parse_leaf(sub_leaf)
-                if s_all and "." not in s_attr:
-                    raise ValueError(
-                        f"{{'all': True}} only applies to collection paths, got {s_attr!r}"
-                    )
-                if "." in s_attr:
-                    path = parse_path(model_cls, s_attr, registry)
-                    if not path.is_m2o_only():
-                        s_clause, s_ps = _emit_exists(
-                            path, s_op, s_val, universal=s_all
-                        )
-                        sub_clauses.append(s_clause)
-                        params.extend(s_ps)
-                        continue
-                s_col, s_field = _leaf_ref(s_attr)
-                if s_op == "ilike":
-                    sub_clauses.append(f"{s_col} ILIKE %s")
-                    params.append(s_val)
-                elif s_op == "like":
-                    sub_clauses.append(f"{s_col} LIKE %s")
-                    params.append(s_val)
-                elif s_op in _SIMPLE_OPS:
-                    v = _coerce(s_field, s_val)
-                    if v is None and s_op == "=":
-                        sub_clauses.append(f"{s_col} IS NULL")
-                    elif v is None and s_op == "!=":
-                        sub_clauses.append(f"{s_col} IS NOT NULL")
-                    else:
-                        sub_clauses.append(f"{s_col} {s_op} %s")
-                        params.append(v)
-            if sub_clauses:
-                clauses.append("(" + " OR ".join(sub_clauses) + ")")
-            continue
-
-        # Paths containing any O2m/M2m hop go through an EXISTS subquery.
-        # Pure-M2o paths stay in the LEFT JOIN path so multiple leaves
-        # on the same chain share a single join.
         if universal and "." not in attr:
             raise ValueError(
                 f"{{'all': True}} only applies to collection paths, got {attr!r}"
@@ -355,48 +398,57 @@ def domain_to_sql(
             path = parse_path(model_cls, attr, registry)
             if not path.is_m2o_only():
                 clause, ps = _emit_exists(path, op, value, universal=universal)
-                clauses.append(clause)
-                params.extend(ps)
-                continue
+                return clause, ps
 
         col_sql, field = _leaf_ref(attr)
-
 
         if op in _SIMPLE_OPS:
             v = _coerce(field, value)
             if v is None and op == "=":
-                clauses.append(f"{col_sql} IS NULL")
-            elif v is None and op == "!=":
-                clauses.append(f"{col_sql} IS NOT NULL")
-            else:
-                clauses.append(f"{col_sql} {op} %s")
-                params.append(v)
-        elif op == "in":
+                return f"{col_sql} IS NULL", leaf_params
+            if v is None and op == "!=":
+                return f"{col_sql} IS NOT NULL", leaf_params
+            leaf_params.append(v)
+            return f"{col_sql} {op} %s", leaf_params
+        if op == "in":
             values = [_coerce(field, v) for v in value]
             if not values:
-                clauses.append("FALSE")
-            else:
-                placeholders = ",".join(["%s"] * len(values))
-                clauses.append(f"{col_sql} IN ({placeholders})")
-                params.extend(values)
-        elif op == "not in":
+                return "FALSE", leaf_params
+            placeholders = ",".join(["%s"] * len(values))
+            leaf_params.extend(values)
+            return f"{col_sql} IN ({placeholders})", leaf_params
+        if op == "not in":
             values = [_coerce(field, v) for v in value]
             if not values:
-                clauses.append("TRUE")
-            else:
-                placeholders = ",".join(["%s"] * len(values))
-                clauses.append(f"{col_sql} NOT IN ({placeholders})")
-                params.extend(values)
-        elif op == "like":
-            clauses.append(f"{col_sql} LIKE %s")
-            params.append(value)
-        elif op == "ilike":
-            clauses.append(f"{col_sql} ILIKE %s")
-            params.append(value)
-        else:
-            raise ValueError(f"Unknown operator: {op!r}")
+                return "TRUE", leaf_params
+            placeholders = ",".join(["%s"] * len(values))
+            leaf_params.extend(values)
+            return f"{col_sql} NOT IN ({placeholders})", leaf_params
+        if op == "like":
+            leaf_params.append(value)
+            return f"{col_sql} LIKE %s", leaf_params
+        if op == "ilike":
+            leaf_params.append(value)
+            return f"{col_sql} ILIKE %s", leaf_params
+        raise ValueError(f"Unknown operator: {op!r}")
 
-    where = " AND ".join(clauses) if clauses else "TRUE"
+    def _compile_tree(node) -> tuple[str, list[Any]]:
+        kind = node[0]
+        if kind == "leaf":
+            clause, leaf_params = _compile_leaf(node[1])
+            params.extend(leaf_params)
+            return clause, leaf_params
+        if kind == "!":
+            clause, leaf_params = _compile_tree(node[1])
+            return f"NOT ({clause})", leaf_params
+        if kind in ("&", "|"):
+            left_clause, _ = _compile_tree(node[1])
+            right_clause, _ = _compile_tree(node[2])
+            joiner = " AND " if kind == "&" else " OR "
+            return f"({left_clause}{joiner}{right_clause})", []
+        raise ValueError(f"Unknown domain node {kind!r}")
+
+    where, _ = _compile_tree(tree)
     if shared_joins:
         return where, params, ""
     joins_sql = (" " + " ".join(joins)) if joins else ""

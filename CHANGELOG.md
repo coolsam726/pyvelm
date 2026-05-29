@@ -7,6 +7,21 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.23.0] — 2026-05-28
+
+### Added
+
+- **Odoo-style domain operators** — prefix `&`, `|`, and `!` in search domains,
+  record rules, and Report Builder filters (`normalize_domain` + tree compile).
+  Implicit AND for adjacent leaves; legacy `("__or__", …)` still expands to `|`.
+- **Docs** — [models.md](docs/models.md) search-domain section with operator
+  table and **Reads as** interpretations for each example.
+
+### Fixed
+
+- **File picker MIME filter** — `_accept_mime_domain` `|` domains now compile
+  (previously only emitted Odoo syntax without compiler support).
+
 ## [0.22.1] — 2026-05-28
 
 ### Added

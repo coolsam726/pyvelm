@@ -108,7 +108,73 @@ env["res.partner"].search([
 ])
 ```
 
-The compiler LEFT JOINs the necessary tables — no per-record query.
+**Reads as:** partners whose country’s region’s name is `"Europe"` (two LEFT JOINs,
+one query).
+
+### Search domains
+
+Domains are a list of `(field, operator, value)` **leaves**, combined with
+**implicit AND** when no operators are present. **Odoo-style prefix operators**
+are supported:
+
+| Operator | Meaning |
+|----------|---------|
+| `&` | AND (binary) |
+| `\|` | OR (binary) |
+| `!` | NOT (unary) |
+
+Operators appear **before** their operands (prefix / Polish notation). Read
+`| A B` as “A **or** B”, `& A B` as “A **and** B”, `! A` as “**not** A”. When
+several leaves sit next to each other with no operator, they are **and**ed
+together.
+
+Example — posted invoices whose **name or ref** matches the search term:
+
+```python
+env["account.move"].search([
+    ("state", "=", "posted"),
+    "|",
+    ("name", "ilike", term),
+    ("ref", "ilike", term),
+])
+```
+
+**Reads as:** `state = 'posted' AND (name ILIKE term OR ref ILIKE term)`.
+
+The first leaf stands alone; the `|` takes the next two leaves as its OR group;
+implicit AND combines that group with `state`.
+
+Nested booleans:
+
+```python
+[
+    "&",
+    ("company_id", "=", company.id),
+    "|",
+    ("name", "ilike", term),
+    ("partner_id.name", "ilike", term),
+]
+```
+
+**Reads as:** `company_id = company.id AND (name ILIKE term OR partner_id.name ILIKE term)`.
+
+Here the leading `&` explicitly joins two operands: (1) the company leaf and
+(2) the `|`-group built from the name and partner-name leaves. The dotted path
+`partner_id.name` is compiled via a LEFT JOIN — same as in a flat AND domain.
+
+Negation:
+
+```python
+Partner.search(["!", ("active", "=", False)])
+```
+
+**Reads as:** `NOT (active = False)` — i.e. partners that are **not** explicitly
+inactive (including rows where `active` is NULL, depending on your data).
+
+The legacy **`("__or__", "=", [sub_leaves…])`** leaf still works (list search
+and Vellum `.where_any()` emit it); the compiler expands it to `|` groups.
+For example, `("__or__", "=", [("name", "ilike", t), ("code", "ilike", t)])`
+is the same as `"|", ("name", "ilike", t), ("code", "ilike", t)`.
 
 ### One2many
 

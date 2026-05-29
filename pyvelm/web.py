@@ -3333,7 +3333,7 @@ def create_app(
         """Translate an HTML ``accept`` token list into mimetype clauses.
 
         ``"image/*,application/pdf"`` → an OR-joined domain fragment
-        (prefix-polish notation) suitable for ``Model.search``.
+        suitable for ``Model.search`` (Odoo-style ``|`` operators).
         """
         if not accept:
             return []

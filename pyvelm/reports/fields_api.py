@@ -301,11 +301,14 @@ def models_in_definition(defn: dict, registry) -> set[str]:
             if isinstance(f, Many2one):
                 models.add(f.comodel_name)
 
-    def walk_domain(leaves):
+    from ..domain import iter_domain_leaves
+
+    for domain_key in ("filters", "parameter_filters"):
+        try:
+            leaves = iter_domain_leaves(defn.get(domain_key) or [])
+        except ValueError:
+            continue
         for leaf in leaves:
-            if isinstance(leaf, (list, tuple)) and len(leaf) == 3 and leaf[0] == "__or__":
-                walk_domain(leaf[2] or [])
-                continue
             if not isinstance(leaf, (list, tuple)) or len(leaf) < 3:
                 continue
             attr = leaf[0]
@@ -315,8 +318,6 @@ def models_in_definition(defn: dict, registry) -> set[str]:
                 for hop in path.hops:
                     models.add(hop.target_model)
 
-    walk_domain(defn.get("filters") or [])
-    walk_domain(defn.get("parameter_filters") or [])
     return models
 
 
