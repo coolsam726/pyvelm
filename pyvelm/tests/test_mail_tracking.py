@@ -5,7 +5,7 @@ import unittest
 
 from pyvelm import BaseModel, Char, Environment, Registry
 from pyvelm import mail_tracking
-from pyvelm.tests._mail import register_mail_message
+from pyvelm.tests._mail import register_mail_message, seed_author
 from pyvelm.tests.support.db import DatabaseTestCase
 
 
@@ -94,6 +94,7 @@ class TrackingWriteTests(DatabaseTestCase):
         reg.init_db(self.conn)
         self.conn.commit()
         env = Environment(self.conn, reg, uid=1)
+        seed_author(env)
         doc = env["test.track.doc"].create(
             {"name": "Alpha", "note": "quiet"}
         )

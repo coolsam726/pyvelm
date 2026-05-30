@@ -5,7 +5,7 @@ import unittest
 
 from pyvelm import BaseModel, Char, Environment, Registry
 from pyvelm import mail_chatter
-from pyvelm.tests._mail import register_mail_message
+from pyvelm.tests._mail import register_mail_message, seed_author
 from pyvelm.tests.support.db import DatabaseTestCase
 
 
@@ -64,6 +64,7 @@ class ChatterWriteTests(DatabaseTestCase):
         self.conn.commit()
         env = Environment(self.conn, reg, uid=1)
         env._acl_bypass = True
+        seed_author(env)
         doc = env["test.chatter.doc"].create({"name": "A"})
         mail_chatter.post_chatter_message(
             env, "test.chatter.doc", doc.id, "Hello from test"
@@ -90,6 +91,7 @@ class ChatterWriteTests(DatabaseTestCase):
         self.conn.commit()
         env = Environment(self.conn, reg, uid=1)
         env._acl_bypass = True
+        seed_author(env)
         doc = env["test.chatter.filter"].create({"name": "X"})
         Message = env["mail.message"]
         Message.create({
@@ -126,6 +128,7 @@ class ChatterWriteTests(DatabaseTestCase):
         self.conn.commit()
         env = Environment(self.conn, reg, uid=1)
         env._acl_bypass = True
+        seed_author(env)
         doc = env["test.chatter.email"].create({"name": "E"})
         mail_chatter.post_chatter_message(
             env,

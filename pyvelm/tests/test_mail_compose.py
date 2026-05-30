@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 from pyvelm.tests.support.db import DatabaseTestCase
 from pyvelm import BaseModel, Char, Environment, Registry
-from pyvelm.tests._mail import register_mail_message
+from pyvelm.tests._mail import register_mail_message, seed_author
 
 
 def _import_split_addresses():
@@ -71,10 +71,10 @@ class MailMessageCcBccTests(DatabaseTestCase):
         super().setUpClass()
 
     def test_dispatch_forwards_cc_bcc_reply_to(self):
-        from pyvelm.mail import MailThread
-
         reg = Registry()
         with reg.activate():
+            from pyvelm.mail import MailThread
+
             register_mail_message(reg)
 
             class Partner(MailThread, BaseModel):
@@ -82,10 +82,11 @@ class MailMessageCcBccTests(DatabaseTestCase):
                 name = Char(default="Demo")
                 email = Char()
 
-        reg.init_db(conn)
+        reg.init_db(self.conn)
         self.conn.commit()
         env = Environment(self.conn, reg, uid=1)
         env._acl_bypass = True
+        seed_author(env)
         partner = env["test.compose.partner"].create(
             {"name": "Acme", "email": "ops@acme.example"}
         )
@@ -163,10 +164,11 @@ class MailComposeTests(DatabaseTestCase):
 
     def test_launch_autofills_to_from_email_field(self):
         reg = self._registry()
-        reg.init_db(conn)
+        reg.init_db(self.conn)
         self.conn.commit()
         env = Environment(self.conn, reg, uid=1)
         env._acl_bypass = True
+        seed_author(env)
         partner = env["test.compose.partner2"].create(
             {"name": "Acme", "email": "billing@acme.example"}
         )
@@ -180,10 +182,11 @@ class MailComposeTests(DatabaseTestCase):
         self.assertEqual(composer.state, "draft")
     def test_launch_with_template_renders_subject_and_body(self):
         reg = self._registry()
-        reg.init_db(conn)
+        reg.init_db(self.conn)
         self.conn.commit()
         env = Environment(self.conn, reg, uid=1)
         env._acl_bypass = True
+        seed_author(env)
         partner = env["test.compose.partner2"].create(
             {"name": "Acme", "email": "billing@acme.example"}
         )
@@ -207,10 +210,11 @@ class MailComposeTests(DatabaseTestCase):
         self.assertIn("Hi Acme", composer.body_html or "")
     def test_action_send_queues_outgoing_message(self):
         reg = self._registry()
-        reg.init_db(conn)
+        reg.init_db(self.conn)
         self.conn.commit()
         env = Environment(self.conn, reg, uid=1)
         env._acl_bypass = True
+        seed_author(env)
         partner = env["test.compose.partner2"].create(
             {"name": "Acme", "email": "billing@acme.example"}
         )
@@ -241,10 +245,11 @@ class MailComposeTests(DatabaseTestCase):
         self.assertEqual(msg.state, "outgoing")
     def test_action_save_as_template_creates_template(self):
         reg = self._registry()
-        reg.init_db(conn)
+        reg.init_db(self.conn)
         self.conn.commit()
         env = Environment(self.conn, reg, uid=1)
         env._acl_bypass = True
+        seed_author(env)
         partner = env["test.compose.partner2"].create(
             {"name": "Acme", "email": "billing@acme.example"}
         )

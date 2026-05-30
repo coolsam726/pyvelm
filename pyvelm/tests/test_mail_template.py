@@ -10,7 +10,7 @@ from pyvelm.mail_template_render import (
     build_mail_template_context,
     render_mail_template_string,
 )
-from pyvelm.tests._mail import register_mail_template
+from pyvelm.tests._mail import register_mail_template, seed_author
 from pyvelm.tests.support.db import DatabaseTestCase
 
 
@@ -80,6 +80,7 @@ class MailTemplateSendTests(DatabaseTestCase):
         self.conn.commit()
         env = Environment(self.conn, reg, uid=1)
         env._acl_bypass = True
+        seed_author(env)
         partner = env["test.mail.tpl.partner"].create(
             {"name": "Acme Corp", "email": "billing@acme.example"}
         )
