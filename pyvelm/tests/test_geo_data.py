@@ -63,5 +63,25 @@ class GeoPackageAvailabilityTests(unittest.TestCase):
         self.assertIn("pyvelm[geo]", str(ctx.exception))
 
 
+class GeoInstallHookTests(unittest.TestCase):
+    def test_install_grants_acl_only(self):
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        from pyvelm import BUILTIN_MODULE_ROOTS
+
+        root = str(BUILTIN_MODULE_ROOTS[0])
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        from geo_data import hooks as geo_hooks  # noqa: E402
+
+        env = MagicMock()
+        with patch.object(geo_hooks, "_grant_acl") as grant:
+            with patch.object(geo_hooks, "seed_reference_data") as seed:
+                geo_hooks.install(env)
+        grant.assert_called_once_with(env)
+        seed.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

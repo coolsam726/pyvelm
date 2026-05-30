@@ -336,6 +336,7 @@ def list_view(
     form_view: str | None = None,
     record_href: str | None = None,
     create_href: str | None = None,
+    page_actions: list[dict] | None = None,
     sequence: str | None = None,
     domain: list | None = None,
     priority: int = 16,
@@ -350,6 +351,7 @@ def list_view(
         form_view:  Name of a form view to link each row to.
         record_href: Optional URL for row navigation; ``{id}`` is replaced.
         create_href: Optional URL for the New button (bypasses form create).
+        page_actions: Optional toolbar buttons (label, url, method, confirm, perm).
         sequence:   Field name of an integer field enabling drag-reorder.
         domain:     Static domain ANDed with search / filter chips on the list.
         priority:   Inheritance chain priority (default 16).
@@ -370,6 +372,8 @@ def list_view(
         arch["record_href"] = record_href
     if create_href is not None:
         arch["create_href"] = create_href
+    if page_actions:
+        arch["page_actions"] = list(page_actions)
     if sequence is not None:
         arch["sequence"] = sequence
     if domain is not None:

@@ -1,8 +1,8 @@
 NAME: str = "geo_data"
-VERSION: tuple[int, ...] = (0, 1, 3)
+VERSION: tuple[int, ...] = (0, 2, 0)
 SUMMARY: str = (
-    "Continents, countries, states/provinces, and cities — seeded from "
-    "pycountry + geonamescache."
+    "Continents, countries, states/provinces, and cities — seed on demand "
+    "from pycountry + geonamescache (pip install pyvelm[geo])."
 )
 CATEGORY: str = "Localization"
 AUTHOR: str = "pyvelm"
@@ -12,3 +12,4 @@ DATA: list[str] = [
     "views/menu.py",
 ]
 INSTALL_HOOK: str = "geo_data.hooks:install"
+WEB_ROUTES: str = "geo_data.web:register_routes"

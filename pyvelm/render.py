@@ -4851,6 +4851,15 @@ def render_list_page(
     form_view_name = arch.get("form_view") or _find_form_view(view, env)
     record_href = arch.get("record_href")
     create_href = arch.get("create_href")
+    page_actions = _resolve_header_actions(
+        arch.get("page_actions", []),
+        env,
+        model=view.model,
+        module=view.module,
+        name=view.name,
+        record_id=0,
+        record=None,
+    )
 
     model_cls = env.registry[view.model]
     Model = env[view.model]
@@ -4934,6 +4943,7 @@ def render_list_page(
         form_view_name=form_view_name,
         record_href=record_href,
         create_href=create_href,
+        page_actions=page_actions,
         list_nav_query=list_nav_query,
         page_title=page_title,
         # No record-count subtitle on list views — the pager footer

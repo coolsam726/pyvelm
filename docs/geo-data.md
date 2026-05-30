@@ -16,11 +16,14 @@ pip install pyvelm[geo]
 ```
 
 Then install the module from **Apps**, or include it in your
-`loader.load_and_install(...)` call. The install hook reads
-`geonamescache` + `pycountry` and seeds all four models in one
-transaction.
+`loader.load_and_install(...)` call. Install creates the tables and ACLs
+only — tables start **empty**.
 
-The hook is **idempotent**: existing rows are matched on their
+To load reference data, open **Settings → Geography → Countries** and
+click **Seed geography data** (requires `pyvelm[geo]` and superuser).
+The seed reads `geonamescache` + `pycountry` in one transaction.
+
+The seed is **idempotent**: existing rows are matched on their
 natural keys (continent `code`, country `code`, state `code`, city
 `geoname_id`) and only the missing ones are inserted. Existing
 country rows are patched with any extra fields the seeder knows

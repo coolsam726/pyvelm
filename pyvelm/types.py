@@ -147,6 +147,7 @@ class ArchList(_ArchListRequired, total=False):
     - ``form_view`` — ``"<name>"`` of a form view to link each row to.
     - ``record_href`` — URL pattern for row clicks; ``{id}`` is substituted.
     - ``create_href`` — URL for the list's New button (full navigation).
+    - ``page_actions`` — toolbar buttons (same shape as form ``header_actions``).
     - ``sequence``  — name of an integer field; when set the renderer
                       adds a drag handle and forces sort by that field.
     - ``domain``    — static domain ANDed with toolbar search / filter chips
@@ -157,6 +158,7 @@ class ArchList(_ArchListRequired, total=False):
     form_view: str
     record_href: str
     create_href: str
+    page_actions: list[ArchHeaderAction]
     sequence: str
     domain: list
 
