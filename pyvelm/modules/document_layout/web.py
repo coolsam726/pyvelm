@@ -24,15 +24,9 @@ def register_routes(app) -> None:
     pool = app.state.pool
 
     def _resolve_session(env, token):
-        if not token or "res.users" not in env.registry:
-            return None
-        env._acl_bypass = True
-        try:
-            users = env["res.users"].search(
-                [("session_token", "=", token), ("active", "=", True)], limit=1)
-            return users.id if users else None
-        finally:
-            env._acl_bypass = False
+        from pyvelm.session_auth import resolve_session_uid
+
+        return resolve_session_uid(env, token)
 
     def _resolve_basic(env, header_value):
         if not header_value or not header_value.lower().startswith("basic "):

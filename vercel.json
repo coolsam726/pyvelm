@@ -4,6 +4,7 @@
   "env": {
     "PYVELM_ENV": "production",
     "PYVELM_DSN": "sqlite:///var/vercel-demo.db",
+    "PYVELM_STATELESS_SESSIONS": "1",
     "PYVELM_MODULE_ROOTS": "examples/modules:examples/modules_demo",
     "PYVELM_MAIL_BACKEND": "disabled"
   }

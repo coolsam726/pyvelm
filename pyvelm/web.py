@@ -255,6 +255,9 @@ def create_app(
     env_mode = get_runtime_env(runtime_env)
     dev = is_development(env_mode)
     auth_cookie = cookie_options(env=env_mode)
+    from pyvelm.session_auth import SESSION_COOKIE_MAX_AGE
+
+    session_cookie = {**auth_cookie, "max_age": SESSION_COOKIE_MAX_AGE}
 
     app = FastAPI(
         title="pyvelm",
@@ -265,6 +268,7 @@ def create_app(
     app.state.module_roots = list(module_roots or [])
     app.state.pyvelm_env = env_mode
     app.state.auth_cookie_options = auth_cookie
+    app.state.session_cookie_options = session_cookie
     app.state.registry = registry
     app.state.database = database
     app.state.pool = pool
@@ -581,17 +585,9 @@ def create_app(
 
     def _resolve_user_from_session(env: Environment, token: str | None) -> int | None:
         """Return uid for a valid session token, or None."""
-        if not token or "res.users" not in env.registry:
-            return None
-        # sudo: the request is still anonymous here, so look the user up
-        # without ACL (leaves the request env enforced).
-        users = env.sudo()["res.users"].search(
-            [("session_token", "=", token), ("active", "=", True)], limit=1
-        )
-        if not users:
-            return None
-        users.ensure_one()
-        return users.id
+        from pyvelm.session_auth import resolve_session_uid
+
+        return resolve_session_uid(env, token)
 
     def _resolve_user_from_basic(
         env: Environment, header_value: str | None
@@ -4192,8 +4188,11 @@ def create_app(
         # Invalidate any active sessions the affected user has — a
         # password reset should kick them out so they re-authenticate
         # with the new credential. Same convention as Odoo.
-        with env.transaction():
-            user.sudo().write({"session_token": None})
+        from pyvelm.session_auth import uses_stateless_sessions
+
+        if not uses_stateless_sessions():
+            with env.transaction():
+                user.sudo().write({"session_token": None})
 
         return HTMLResponse(
             render_admin_password_reset_page(
@@ -4327,12 +4326,19 @@ def create_app(
         # next request. The current session stays alive — we mint a
         # fresh token, persist it in the same atomic write, and refresh
         # the cookie on the response below.
-        new_token = secrets.token_hex(32)
-        with env.transaction():
-            env.sudo()["res.users"].browse(env.uid).write({
-                "password": new,
-                "session_token": new_token,
-            })
+        from pyvelm.session_auth import establish_session, uses_stateless_sessions
+
+        if uses_stateless_sessions():
+            with env.transaction():
+                env.sudo()["res.users"].browse(env.uid).write({"password": new})
+            new_token = establish_session(env, env.uid)
+        else:
+            new_token = secrets.token_hex(32)
+            with env.transaction():
+                env.sudo()["res.users"].browse(env.uid).write({
+                    "password": new,
+                    "session_token": new_token,
+                })
         response = HTMLResponse(
             render_password_page(
                 env,
@@ -4340,7 +4346,7 @@ def create_app(
                 success=True,
             )
         )
-        response.set_cookie(_SESSION_COOKIE, new_token, **auth_cookie)
+        response.set_cookie(_SESSION_COOKIE, new_token, **session_cookie)
         return response
 
     # ---- login / logout ----
@@ -4488,9 +4494,9 @@ def create_app(
                     status_code=401,
                 )
             uid = users.id
-            token = secrets.token_hex(32)
-            with senv.transaction():
-                users.write({"session_token": token})
+            from pyvelm.session_auth import establish_session
+
+            token = establish_session(senv, uid)
             # Capture the user's home company so we can pre-set the
             # company-scope cookie below. Reads through sudo so a user
             # without explicit access to res.users on their own row
@@ -4499,7 +4505,7 @@ def create_app(
             home_company_id = home_company.id if home_company else None
 
         response = RedirectResponse(next_url, status_code=303)
-        response.set_cookie(_SESSION_COOKIE, token, **auth_cookie)
+        response.set_cookie(_SESSION_COOKIE, token, **session_cookie)
         # Default the active company to the user's home company. Without
         # this, a freshly-logged-in user lands on /web/admin with no
         # scope selected and the multi-company filter is invisible until
@@ -4517,19 +4523,15 @@ def create_app(
 
     @app.post("/logout")
     def logout(request: Request):
+        from pyvelm.session_auth import revoke_session
+
         token = request.cookies.get(_SESSION_COOKIE)
         if token:
             with _active_pool(request).connection() as conn:
-                # sudo: revoke the token for an as-yet-unidentified session.
                 env = Environment(
                     conn, registry=_active_registry(request), uid=None,
-                ).sudo()
-                users = env["res.users"].search(
-                    [("session_token", "=", token)], limit=1
                 )
-                if users:
-                    with env.transaction():
-                        users.write({"session_token": None})
+                revoke_session(env, token)
         response = RedirectResponse("/login", status_code=303)
         response.delete_cookie(_SESSION_COOKIE, path="/")
         response.delete_cookie(_COMPANY_COOKIE, path="/")

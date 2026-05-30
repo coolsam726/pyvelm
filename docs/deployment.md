@@ -77,6 +77,26 @@ reverse proxy:
   the reverse proxy in front, serving `pyvelm/static/dist/`
   directly.
 
+## Vercel (serverless)
+
+The repo ships a [`vercel.json`](../vercel.json) demo that builds a bundled
+SQLite database and runs `examples.serve:app` as a Python function.
+
+**Sessions:** each serverless invocation may get its own writable SQLite copy
+under `/tmp`. A login that stores `session_token` in the database is therefore
+invisible to the next request on a different instance — which looks like
+“every navigation sends me back to sign in”. When `VERCEL` is set (or on Lambda),
+pyvelm uses **HMAC-signed session cookies** instead: the cookie carries `uid` and
+expiry; no shared writable store is required.
+
+Set **`PYVELM_SECRET_KEY`** in the Vercel project env for a stable signing key
+(across redeploys and preview URLs). If omitted, a per-deployment fallback is
+derived from `VERCEL_URL`.
+
+For production, prefer **Supabase/Postgres** (`PYVELM_DSN=postgresql://…`) so
+data and DB-backed sessions persist across instances. See comments in
+`.env.example`.
+
 ## The cron worker
 
 `pyvelm cron` is the background runner. It boots the registry once,
