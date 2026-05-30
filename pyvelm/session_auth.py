@@ -124,12 +124,13 @@ def verify_session_cookie(token: str, *, now: float | None = None) -> int | None
 def _verify_user_active(env: "Environment", uid: int) -> int | None:
     if "res.users" not in env.registry:
         return None
-    user = env.sudo()["res.users"].browse(uid)
-    if not user.exists():
+    users = env.sudo()["res.users"].search(
+        [("id", "=", uid), ("active", "=", True)], limit=1
+    )
+    if not users:
         return None
-    if not user.active:
-        return None
-    return uid
+    users.ensure_one()
+    return users.id
 
 
 def resolve_session_uid(env: "Environment", token: str | None) -> int | None:
