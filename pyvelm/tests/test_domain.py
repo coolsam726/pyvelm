@@ -2,15 +2,10 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
-from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Many2many, Registry
+from pyvelm import BaseModel, Char, Environment, Many2many, Many2one, Registry
 from pyvelm.domain import domain_to_sql, normalize_domain
-from pyvelm.render import install_module_action
-from pyvelm.tests.support.db import DatabaseTestCase, install_modules, reset_database
-
-_EXAMPLE_ROOT = Path(__file__).resolve().parents[2] / "examples" / "modules"
-_MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [_EXAMPLE_ROOT]
+from pyvelm.tests.support.db import DatabaseTestCase
 
 
 def _mini_registry():
@@ -27,6 +22,30 @@ def _mini_registry():
             tag_ids = Many2many("test.tag")
 
     return reg, Partner
+
+
+def _cache_test_registry() -> Registry:
+    reg = Registry()
+    with reg.activate():
+
+        class Country(BaseModel):
+            _name = "test.cache.country"
+            name = Char()
+            code = Char()
+
+        class Partner(BaseModel):
+            _name = "test.cache.partner"
+            name = Char()
+            code = Char()
+            country_id = Many2one("test.cache.country", ondelete="SET NULL")
+            tag_ids = Many2many("test.cache.tag")
+
+        class Tag(BaseModel):
+            _name = "test.cache.tag"
+            name = Char()
+            partner_ids = Many2many("test.cache.partner")
+
+    return reg
 
 
 class DomainCompileTests(unittest.TestCase):
@@ -193,19 +212,17 @@ class DomainCompileTests(unittest.TestCase):
 
 
 class DomainCacheIntegrationTests(DatabaseTestCase):
-    """Cache invalidation tests with bootstrap + partners only."""
+    """Cache invalidation against minimal models (no module install)."""
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        reset_database(cls.dsn)
-        cls.reg = Registry()
+        cls.reg = _cache_test_registry()
+        cls.reg.init_db(cls.conn)
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        install_modules(cls.env, _MODULE_ROOTS)
-        install_module_action(cls.env, list(_MODULE_ROOTS), "partners")
-        cls.Partner = cls.env["res.partner"]
-        cls.Country = cls.env["res.country"]
-        cls.Tag = cls.env["res.tag"]
+        cls.Partner = cls.env["test.cache.partner"]
+        cls.Country = cls.env["test.cache.country"]
+        cls.Tag = cls.env["test.cache.tag"]
 
     def test_comodel_unlink_clears_many2one_cache(self):
         country = self.Country.create({"name": "CacheUnlink", "code": "CU"})
