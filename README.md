@@ -6,6 +6,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/pyvelm)](https://pypi.org/project/pyvelm/)
 [![Downloads](https://img.shields.io/pepy/dt/pyvelm?label=downloads)](https://pepy.tech/project/pyvelm)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-2563eb)](https://coolsam726.github.io/pyvelm/)
+[![Live demo](https://img.shields.io/badge/demo-pyvelm.vercel.app-7c3aed)](https://pyvelm.vercel.app/)
 [![Changelog](https://img.shields.io/badge/changelog-CHANGELOG-64748b)](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://github.com/coolsam726/pyvelm/blob/main/LICENSE)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/coolsam726?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/coolsam726)
@@ -19,6 +20,8 @@ and a bespoke **Tailwind v4 + HTMX** interface—its own layout, widgets, and lo
 feel—not Odoo's web client or Filament's Blade stack.
 
 **Full documentation:** [coolsam726.github.io/pyvelm](https://coolsam726.github.io/pyvelm/)
+
+**Live demo:** [pyvelm.vercel.app](https://pyvelm.vercel.app/) — click **Sign in**, then use **Login** `admin` / **Password** `admin`. Partners, CRM, workflows, and the Vellum demo are pre-seeded.
 
 The framework is **PyVELM**; the [PyPI](https://pypi.org/project/pyvelm/) package
 and CLI stay `pyvelm` (lowercase).
