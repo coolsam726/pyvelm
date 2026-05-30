@@ -1,6 +1,7 @@
 """Tests for pyvelm.database (v1 portability layer)."""
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,14 +10,17 @@ from unittest import mock
 from pyvelm.database import (
     ConnectionAdapter,
     Database,
+    app_dsn_from_env,
     create_database_from_dsn,
     dialect_capabilities,
     ilike_sql,
     migration_supported,
     normalize_dsn,
     serial_primary_key,
+    test_dsn_from_env as get_test_dsn_from_env,
     to_psycopg_dsn,
 )
+from pyvelm.tests.support.db import _assert_safe_reset_dsn
 
 
 class NormalizeDsnTests(unittest.TestCase):
@@ -77,6 +81,50 @@ class MigrationSupportedTests(unittest.TestCase):
         self.assertFalse(
             migration_supported(conn, ("postgresql",))
         )
+
+
+class TestDsnEnvTests(unittest.TestCase):
+    def test_test_dsn_from_env(self):
+        with mock.patch.dict(
+            os.environ,
+            {"PYVELM_DSN_TEST": "postgresql://localhost/pyvelm_test"},
+            clear=True,
+        ):
+            self.assertEqual(
+                get_test_dsn_from_env(),
+                "postgresql+psycopg://localhost/pyvelm_test",
+            )
+
+    def test_test_dsn_ignores_app_dsn(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "PYVELM_DSN": "postgresql://localhost/pyvelm_dev",
+                "PYVELM_DSN_TEST": "postgresql://localhost/pyvelm_test",
+            },
+            clear=True,
+        ):
+            self.assertNotEqual(get_test_dsn_from_env(), app_dsn_from_env())
+
+    def test_reset_refuses_app_dsn(self):
+        with mock.patch.dict(
+            os.environ,
+            {"PYVELM_DSN": "postgresql://localhost/pyvelm_dev"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Refusing to reset"):
+                _assert_safe_reset_dsn("postgresql://localhost/pyvelm_dev")
+
+    def test_reset_allows_test_dsn_when_app_differs(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "PYVELM_DSN": "postgresql://localhost/pyvelm_dev",
+                "PYVELM_DSN_TEST": "postgresql://localhost/pyvelm_test",
+            },
+            clear=True,
+        ):
+            _assert_safe_reset_dsn("postgresql://localhost/pyvelm_test")
 
 
 if __name__ == "__main__":

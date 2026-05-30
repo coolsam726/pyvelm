@@ -433,11 +433,11 @@ class DevOnlyMenuVisibilityTests(unittest.TestCase):
 
 
 class BuildMenuTreeIntegrationTests(unittest.TestCase):
-    """Uses in-memory registry when PYVELM_DSN is unavailable — skip."""
+    """Uses in-memory registry when PYVELM_DSN_TEST is unavailable — skip."""
 
     @unittest.skipUnless(
-        os.environ.get("PYVELM_DSN"),
-        "PYVELM_DSN not set",
+        os.environ.get("PYVELM_DSN_TEST"),
+        "PYVELM_DSN_TEST not set",
     )
     def test_build_from_db(self):
         from pyvelm import BUILTIN_MODULE_ROOTS, loader
@@ -446,7 +446,7 @@ class BuildMenuTreeIntegrationTests(unittest.TestCase):
         from pyvelm.tests.support.db import db_connection, dsn_from_env, install_modules
 
         if not dsn_from_env():
-            self.skipTest("PYVELM_DSN not set")
+            self.skipTest("PYVELM_DSN_TEST not set")
 
         with db_connection() as conn:
             reg = Registry()

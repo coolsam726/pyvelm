@@ -8,7 +8,8 @@ cd pyvelm
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[docs]"          # docs extras include mkdocs + mkdocstrings
-cp .env.example .env              # set PYVELM_DSN to a throwaway database
+cp .env.example .env              # set PYVELM_DSN (development database)
+cp .env.testing.example .env.testing  # set PYVELM_DSN_TEST (throwaway test DB)
 ```
 
 ## Running the smoke test
@@ -46,9 +47,10 @@ What counts:
   percentage so the gate reflects testable framework code).
 - `examples/` is **not** measured; it drives integration tests only.
 
-Integration tests (require `PYVELM_DSN`, same as CI Postgres service):
+Integration tests (require `PYVELM_DSN_TEST`, loaded from `.env.testing`):
 
 ```bash
+cp .env.testing.example .env.testing   # separate DB from PYVELM_DSN
 pytest pyvelm/tests/test_http_smoke.py -v          # minimal HTTP smoke
 PYVELM_RUN_FULL_BASIC=1 pytest pyvelm/tests/test_zzz_integration_smoke.py -v  # full examples/basic.py
 ```

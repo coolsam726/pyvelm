@@ -9,6 +9,7 @@ __pycache__/
 *.pyc
 *.egg-info/
 .env
+.env.testing
 
 # Node UI build pipeline. node_modules is heavy and reproducible from
 # package.json + lockfile; the compiled dist/ is checked in so the

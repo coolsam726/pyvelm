@@ -424,9 +424,9 @@ class WorkflowRuntimeMoreTests(unittest.TestCase):
     def test_schema_ready_checks_table(self):
         env = MagicMock()
         env.registry = {"workflow.definition": type("C", (), {"_table": "workflow_definition"})}
-        env.conn.execute.return_value.fetchone.return_value = (None,)
+        env.conn.execute.return_value.fetchone.return_value = None
         self.assertFalse(workflow_runtime._workflow_schema_ready(env))
-        env.conn.execute.return_value.fetchone.return_value = ("workflow_definition",)
+        env.conn.execute.return_value.fetchone.return_value = (1,)
         self.assertTrue(workflow_runtime._workflow_schema_ready(env))
 
     def test_maybe_auto_start_inner_starts_when_configured(self):

@@ -2,10 +2,11 @@
 
 All tests that touch a real database should go through this module instead of
 calling ``psycopg.connect`` or ``ConnectionPool`` directly.
+
+Integration tests use ``PYVELM_DSN_TEST`` only — never ``PYVELM_DSN``.
 """
 from __future__ import annotations
 
-import os
 import unittest
 from contextlib import contextmanager
 from functools import wraps
@@ -16,10 +17,13 @@ from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
 from pyvelm.database import (
     ConnectionAdapter,
     Database,
+    TEST_DSN_ENV,
+    app_dsn_from_env,
     capabilities_from_dsn,
     create_database_from_dsn,
     delete_sqlite_file,
     normalize_dsn,
+    test_dsn_from_env,
     to_psycopg_dsn,
 )
 
@@ -32,10 +36,8 @@ _F = TypeVar("_F", bound=Callable)
 
 
 def dsn_from_env() -> str | None:
-    raw = os.environ.get("PYVELM_DSN")
-    if not raw:
-        return None
-    return normalize_dsn(raw)
+    """Return the test database DSN (``PYVELM_DSN_TEST``)."""
+    return test_dsn_from_env()
 
 
 def backend_name(dsn: str | None = None) -> str | None:
@@ -54,30 +56,30 @@ def is_sqlite(dsn: str | None = None) -> bool:
 
 
 def requires_dsn(func: _F) -> _F:
-    """Skip when ``PYVELM_DSN`` is unset (pytest or unittest)."""
+    """Skip when ``PYVELM_DSN_TEST`` is unset (pytest or unittest)."""
 
     @wraps(func)
     def wrapper(*args, **kwargs):
         if not dsn_from_env():
             import pytest
 
-            pytest.skip("PYVELM_DSN not set")
+            pytest.skip(f"{TEST_DSN_ENV} not set")
         return func(*args, **kwargs)
 
     wrapper.__unittest_skip__ = True  # type: ignore[attr-defined]
-    wrapper.__unittest_skip_why__ = "PYVELM_DSN not set"  # type: ignore[attr-defined]
+    wrapper.__unittest_skip_why__ = f"{TEST_DSN_ENV} not set"  # type: ignore[attr-defined]
     return wrapper  # type: ignore[return-value]
 
 
 def requires_backend(name: str) -> Callable[[_F], _F]:
-    """Skip unless ``PYVELM_DSN`` targets *name* (``postgresql`` or ``sqlite``)."""
+    """Skip unless the test DSN targets *name* (``postgresql`` or ``sqlite``)."""
 
     def decorator(func: _F) -> _F:
         @wraps(func)
         def wrapper(*args, **kwargs):
             dsn = dsn_from_env()
             if not dsn:
-                raise unittest.SkipTest("PYVELM_DSN not set")
+                raise unittest.SkipTest(f"{TEST_DSN_ENV} not set")
             if backend_name(dsn) != name:
                 raise unittest.SkipTest(f"requires {name} backend")
             return func(*args, **kwargs)
@@ -92,9 +94,21 @@ def requires_backend(name: str) -> Callable[[_F], _F]:
 postgres_required = requires_backend("postgresql")
 
 
+def _assert_safe_reset_dsn(dsn: str) -> None:
+    """Refuse destructive resets against the application database."""
+    app = app_dsn_from_env()
+    if app and normalize_dsn(app) == normalize_dsn(dsn):
+        raise RuntimeError(
+            f"Refusing to reset {dsn!r} — it matches PYVELM_DSN. "
+            f"Set {TEST_DSN_ENV} to a separate throwaway database for tests "
+            "(see .env.testing.example)."
+        )
+
+
 def reset_database(dsn: str | None = None) -> None:
-    """Wipe the database so the next install starts from a clean slate."""
+    """Wipe the test database so the next install starts from a clean slate."""
     dsn = normalize_dsn(dsn or dsn_from_env() or "")
+    _assert_safe_reset_dsn(dsn)
     cap = capabilities_from_dsn(dsn)
     if cap.name == "sqlite":
         delete_sqlite_file(dsn)
@@ -113,7 +127,7 @@ def reset_database(dsn: str | None = None) -> None:
 def open_database(dsn: str | None = None, *, pool_size: int = 2) -> Database:
     resolved = dsn or dsn_from_env()
     if not resolved:
-        raise RuntimeError("PYVELM_DSN not set")
+        raise RuntimeError(f"{TEST_DSN_ENV} not set")
     return create_database_from_dsn(normalize_dsn(resolved), pool_size=pool_size)
 
 
@@ -171,7 +185,7 @@ class DatabaseTestCase(unittest.TestCase):
     def setUpClass(cls) -> None:
         dsn = dsn_from_env()
         if not dsn:
-            raise unittest.SkipTest("PYVELM_DSN not set")
+            raise unittest.SkipTest(f"{TEST_DSN_ENV} not set")
         if cls.required_backend and backend_name(dsn) != cls.required_backend:
             raise unittest.SkipTest(
                 f"requires {cls.required_backend} backend, got {backend_name(dsn)}"

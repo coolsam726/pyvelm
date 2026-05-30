@@ -13,6 +13,7 @@ from typing import Any, Iterator
 from urllib.parse import urlparse, urlunparse
 
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import Connection as SAConnection
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import QueuePool
 
@@ -164,7 +165,7 @@ class ConnectionAdapter:
     def execute(self, sql: str, params: list | tuple | None = None) -> ExecuteResult:
         sql = self._convert_sql(sql)
         if params is not None:
-            bind = tuple(params)
+            bind = _bind_params(tuple(params), self.capabilities)
             result = self._sa.exec_driver_sql(sql, bind)
         else:
             result = self._sa.exec_driver_sql(sql)
@@ -294,6 +295,55 @@ def require_dsn_from_env() -> str:
     return dsn
 
 
+TEST_DSN_ENV = "PYVELM_DSN_TEST"
+
+
+def load_testing_env() -> bool:
+    """Load ``.env.testing`` when present (Laravel-style test overrides).
+
+    Uses ``override=True`` so test variables win over values already loaded
+    from ``.env``. Returns ``True`` when a file was loaded.
+    """
+    try:
+        from dotenv import find_dotenv, load_dotenv
+    except ImportError:
+        return False
+    path = find_dotenv(".env.testing", usecwd=True)
+    if not path:
+        return False
+    load_dotenv(path, override=True)
+    return True
+
+
+def test_dsn_from_env() -> str | None:
+    import os
+
+    raw = os.environ.get(TEST_DSN_ENV)
+    if not raw:
+        return None
+    return normalize_dsn(raw)
+
+
+def require_test_dsn_from_env() -> str:
+    dsn = test_dsn_from_env()
+    if not dsn:
+        raise SystemExit(
+            f"{TEST_DSN_ENV} not set — configure a throwaway database for tests "
+            "(copy .env.testing.example to .env.testing)."
+        )
+    return dsn
+
+
+def app_dsn_from_env() -> str | None:
+    """Application DSN from ``PYVELM_DSN`` (not used by the test suite)."""
+    import os
+
+    raw = os.environ.get("PYVELM_DSN")
+    if not raw:
+        return None
+    return normalize_dsn(raw)
+
+
 def dsn_display(dsn: str) -> str:
     """Return a DSN safe to print (password redacted)."""
     try:
@@ -358,17 +408,18 @@ def column_exists(conn, table: str, column: str, cap: DialectCapabilities | None
     if cap.name == "sqlite":
         rows = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
         return column in {r[1] for r in rows}
-    if hasattr(conn, "_sa") and conn._sa is not None:
+    sa_conn = _sqlalchemy_connection(conn)
+    if sa_conn is not None:
         from sqlalchemy import inspect as sa_inspect
 
-        cols = sa_inspect(conn._sa.engine).get_columns(table)
+        cols = sa_inspect(sa_conn.engine).get_columns(table)
         return column in {c["name"] for c in cols}
     rows = conn.execute(
-        "SELECT 1 FROM information_schema.columns "
-        "WHERE table_schema = current_schema() AND table_name = %s AND column_name = %s",
-        (table, column),
-    ).fetchone()
-    return row is not None
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = current_schema() AND table_name = %s",
+        (table,),
+    ).fetchall()
+    return column in {r[0] for r in rows}
 
 
 def add_column_if_missing(
@@ -445,6 +496,32 @@ def delete_sqlite_file(dsn: str) -> None:
             os.remove(p)
 
 
+def _sqlalchemy_connection(conn) -> SAConnection | None:
+    sa = getattr(conn, "_sa", None)
+    if isinstance(sa, SAConnection):
+        return sa
+    return None
+
+
+def _bind_params(params: tuple, cap: DialectCapabilities) -> tuple:
+    """Coerce Python types SQLite's driver rejects (date/time since 3.12)."""
+    if cap.name != "sqlite":
+        return params
+    from datetime import date, datetime, time
+
+    out: list[Any] = []
+    for value in params:
+        if isinstance(value, datetime):
+            out.append(value.isoformat(sep=" "))
+        elif isinstance(value, date):
+            out.append(value.isoformat())
+        elif isinstance(value, time):
+            out.append(value.isoformat())
+        else:
+            out.append(value)
+    return tuple(out)
+
+
 def _conn_capabilities(conn) -> DialectCapabilities:
     cap = getattr(conn, "capabilities", None)
     if cap is not None:
@@ -510,10 +587,11 @@ def table_exists(conn, table: str, cap: DialectCapabilities | None = None) -> bo
             (table,),
         ).fetchone()
         return row is not None
-    if hasattr(conn, "_sa") and conn._sa is not None:
+    sa_conn = _sqlalchemy_connection(conn)
+    if sa_conn is not None:
         from sqlalchemy import inspect as sa_inspect
 
-        return sa_inspect(conn._sa.engine).has_table(table)
+        return sa_inspect(sa_conn.engine).has_table(table)
     row = conn.execute(
         "SELECT 1 FROM information_schema.tables "
         "WHERE table_schema = current_schema() AND table_name = %s",

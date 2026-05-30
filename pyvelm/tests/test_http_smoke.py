@@ -1,7 +1,7 @@
 """Minimal full-stack HTTP smoke (install + TestClient).
 
 Exercises ``web.py`` / ``render.py`` without the full ``examples/basic.py``
-script. Runs when ``PYVELM_DSN`` is set (CI provides Postgres or SQLite).
+script. Runs when ``PYVELM_DSN_TEST`` is set (CI provides Postgres or SQLite).
 """
 from __future__ import annotations
 

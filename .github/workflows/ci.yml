@@ -1,5 +1,5 @@
 # Unit tests + coverage on every push/PR to main.
-# Postgres is available for integration tests that set PYVELM_DSN.
+# Integration tests use PYVELM_DSN_TEST (never PYVELM_DSN).
 
 name: ci
 
@@ -21,9 +21,9 @@ jobs:
       matrix:
         include:
           - backend: postgres
-            dsn: postgresql://pyvelm:pyvelm@localhost:5432/pyvelm
+            dsn_test: postgresql://pyvelm:pyvelm@localhost:5432/pyvelm_test
           - backend: sqlite
-            dsn: sqlite:////tmp/pyvelm-ci.db
+            dsn_test: sqlite:////tmp/pyvelm-ci-test.db
 
     services:
       postgres:
@@ -41,7 +41,7 @@ jobs:
           --health-retries 5
 
     env:
-      PYVELM_DSN: ${{ matrix.dsn }}
+      PYVELM_DSN_TEST: ${{ matrix.dsn_test }}
 
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +56,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[test,geo]"
 
+      - name: Create Postgres test database
+        if: matrix.backend == 'postgres'
+        run: PGPASSWORD=pyvelm psql -h localhost -U pyvelm -d pyvelm -c "CREATE DATABASE pyvelm_test;"
+
       - name: Migrate (${{ matrix.backend }})
+        env:
+          PYVELM_DSN: ${{ matrix.dsn_test }}
         run: pyvelm migrate
 
       - name: Run tests with coverage

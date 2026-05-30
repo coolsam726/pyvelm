@@ -5,6 +5,7 @@ import os
 
 import pytest
 
+from pyvelm.database import load_testing_env, normalize_dsn
 from pyvelm.tests.support.db import (
     dsn_from_env,
     open_database,
@@ -13,18 +14,18 @@ from pyvelm.tests.support.db import (
 
 
 def pytest_configure(config) -> None:
-    raw = os.environ.get("PYVELM_DSN")
-    if raw:
-        from pyvelm.database import normalize_dsn
-
-        os.environ["PYVELM_DSN"] = normalize_dsn(raw)
+    load_testing_env()
+    for key in ("PYVELM_DSN_TEST", "PYVELM_DSN"):
+        raw = os.environ.get(key)
+        if raw:
+            os.environ[key] = normalize_dsn(raw)
 
 
 @pytest.fixture(scope="session")
 def pyvelm_dsn() -> str:
     dsn = dsn_from_env()
     if not dsn:
-        pytest.skip("PYVELM_DSN not set")
+        pytest.skip("PYVELM_DSN_TEST not set")
     return dsn
 
 

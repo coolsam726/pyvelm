@@ -195,6 +195,7 @@ class MigrateCommandTests(unittest.TestCase):
             [],
             install_all=True,
             only_module="partners",
+            database_key=None,
         )
 
     @patch("console.commands.migrate.run_migrate_fresh")
