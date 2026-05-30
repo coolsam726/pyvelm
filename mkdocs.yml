@@ -43,6 +43,9 @@ theme:
 
 extra:
   social:
+    - icon: fontawesome/solid/globe
+      link: https://pyvelm.vercel.app/login
+      name: Live demo (admin / admin)
     - icon: fontawesome/solid/heart
       link: https://github.com/sponsors/coolsam726
       name: Sponsor on GitHub

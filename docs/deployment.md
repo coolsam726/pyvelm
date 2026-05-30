@@ -79,6 +79,8 @@ reverse proxy:
 
 ## Vercel (serverless)
 
+**Live demo:** [https://pyvelm.vercel.app/](https://pyvelm.vercel.app/) — click **Sign in**, then **Login** `admin` / **Password** `admin`.
+
 The repo ships a [`vercel.json`](https://github.com/coolsam726/pyvelm/blob/main/vercel.json) demo that builds a bundled
 SQLite database and runs `examples.serve:app` as a Python function.
 

@@ -1,5 +1,9 @@
 # Getting started
 
+**Try it first:** open **[pyvelm.vercel.app](https://pyvelm.vercel.app/)**, click **Sign in**,
+and log in with **Login** `admin` / **Password** `admin` — the same default
+credentials as the Docker quick start below.
+
 This walks through creating a brand-new **PyVELM** app, from
 `pip install pyvelm` to your first custom module showing in the browser.
 Three steps:
