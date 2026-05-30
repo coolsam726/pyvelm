@@ -354,7 +354,7 @@ class CronCliTests(unittest.TestCase):
             patch("pyvelm.cli.loader.load_and_install"),
             patch("pyvelm.cli._tick", side_effect=_tick_and_stop),
         ):
-            cron_loop(dsn="postgresql://localhost/db", roots=[], interval=10.0)
+            cron_loop(dsn="postgresql://localhost/db", roots=[], interval=5.0)
         database.dispose.assert_called_once()
 
 
