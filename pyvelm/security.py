@@ -177,9 +177,9 @@ def user_in_group(env: Environment, group_name: str) -> bool:
     grp = _group_by_name(env, group_name)
     if not grp:
         return False
-    user = env["res.users"].browse(env.uid)
-    if not user.exists():
+    if env.sudo()["res.users"].search_count([("id", "=", env.uid)]) == 0:
         return False
+    user = env["res.users"].browse(env.uid)
     return grp.id in set(user.group_ids.ids)
 
 

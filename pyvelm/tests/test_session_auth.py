@@ -106,6 +106,35 @@ class SessionAuthTests(unittest.TestCase):
             limit=1,
         )
 
+    def test_resolve_session_uid_stateless_verifies_user(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Users(BaseModel):
+                _name = "res.users"
+                name = Char()
+                active = Char(default="True")
+
+        conn = mock.Mock()
+        env = Environment(conn, reg, uid=None)
+        rs = mock.Mock()
+        rs.__bool__ = mock.Mock(return_value=True)
+        rs.ensure_one = mock.Mock()
+        rs.id = 1
+        model = mock.Mock()
+        model.search = mock.Mock(return_value=rs)
+        sudo_env = mock.Mock()
+        sudo_env.__getitem__ = mock.Mock(return_value=model)
+        env.sudo = mock.Mock(return_value=sudo_env)
+
+        with _vercel_env():
+            token = mint_session_cookie(1)
+            uid = resolve_session_uid(env, token)
+        self.assertEqual(uid, 1)
+        model.search.assert_called_once_with(
+            [("id", "=", 1), ("active", "=", True)], limit=1
+        )
+
     def test_revoke_session_noop_on_serverless(self):
         reg = Registry()
         conn = mock.Mock()
