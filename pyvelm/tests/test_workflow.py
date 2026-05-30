@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Registry, loader
-from pyvelm.tests.support.db import install_modules, open_database
+from pyvelm.tests.support.db import install_named_modules, open_database, reset_database
 from pyvelm.workflow.engine import WorkflowEngine
 from pyvelm.workflow.schema import WorkflowDefinitionError, validate_definition
 
@@ -70,12 +70,17 @@ def test_validate_definition_rejects_duplicate_state():
 @pytest.fixture
 def workflow_env(pyvelm_dsn):
     examples = Path(__file__).resolve().parents[2] / "examples" / "modules"
+    reset_database(pyvelm_dsn)
     reg = Registry()
     db = open_database(pyvelm_dsn, pool_size=2)
     with db.connect() as conn:
         env = Environment(conn, registry=reg, uid=1)
         env._acl_bypass = True
-        install_modules(env, list(BUILTIN_MODULE_ROOTS) + [examples], install_all=True)
+        install_named_modules(
+            env,
+            ["admin", "workflow", "partners"],
+            list(BUILTIN_MODULE_ROOTS) + [examples],
+        )
     conn = db.open_connection()
     env = Environment(conn, registry=reg, uid=1)
     env._acl_bypass = True

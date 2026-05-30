@@ -74,10 +74,6 @@ class BootstrapAfterFullInstallTests(DatabaseTestCase):
             Path(__file__).resolve().parents[2] / "examples" / "modules"
         ]
 
-        reg = Registry()
-        env = Environment(self.conn, registry=reg, uid=1)
-        loader.load_and_install(roots, env, install_all=True)
-
         reset_database(self.dsn)
         reg = Registry()
         env = Environment(self.conn, registry=reg, uid=1)

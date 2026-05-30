@@ -443,15 +443,21 @@ class BuildMenuTreeIntegrationTests(unittest.TestCase):
         from pyvelm import BUILTIN_MODULE_ROOTS, loader
         from pyvelm.env import Environment
         from pyvelm.registry import Registry
-        from pyvelm.tests.support.db import db_connection, dsn_from_env, install_modules
+        from pyvelm.tests.support.db import (
+            db_connection,
+            dsn_from_env,
+            install_named_modules,
+            reset_database,
+        )
 
         if not dsn_from_env():
             self.skipTest("PYVELM_DSN_TEST not set")
 
+        reset_database(dsn_from_env())
         with db_connection() as conn:
             reg = Registry()
             env = Environment(conn, reg, uid=1)
-            install_modules(env, BUILTIN_MODULE_ROOTS, install_all=True)
+            install_named_modules(env, ["admin"], BUILTIN_MODULE_ROOTS)
             tree = build_menu_tree(env, "/web/admin")
         self.assertIsInstance(tree, list)
         for node in tree:

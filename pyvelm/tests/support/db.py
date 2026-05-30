@@ -167,6 +167,21 @@ def install_modules(
     return loader.load_and_install(roots, env, install_all=install_all)
 
 
+def install_named_modules(
+    env: Environment,
+    names: list[str],
+    roots: list | None = None,
+) -> None:
+    """Install only *names* (and their dependencies) — not every bootstrap module."""
+    from pyvelm.render import install_module_action
+
+    roots = list(roots or DEFAULT_MODULE_ROOTS)
+    with env.transaction():
+        loader._ensure_ir_module(env)
+    for name in names:
+        install_module_action(env, roots, name)
+
+
 class DatabaseTestCase(unittest.TestCase):
     """Base class for integration tests using :mod:`pyvelm.database`.
 

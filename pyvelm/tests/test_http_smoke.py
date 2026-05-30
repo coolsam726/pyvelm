@@ -11,8 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry
-from pyvelm.render import install_module_action
-from pyvelm.tests.support.db import install_modules, open_database, reset_database
+from pyvelm.tests.support.db import install_named_modules, open_database, reset_database
 from pyvelm.web import create_app
 
 _EXAMPLE_ROOT = Path(__file__).resolve().parents[2] / "examples" / "modules"
@@ -28,10 +27,12 @@ def test_http_smoke_login_list_api(pyvelm_dsn: str):
     db = open_database(pyvelm_dsn, pool_size=2)
     with db.connect() as conn:
         env = Environment(conn, registry=reg)
-        specs = install_modules(env, _MODULE_ROOTS)
-        install_module_action(env, _MODULE_ROOTS, "partners")
-        installed = {s.name for s in specs} | {"partners"}
-        assert _MINIMAL_MODULES <= installed
+        install_named_modules(env, ["admin", "partners"], _MODULE_ROOTS)
+        installed = _MINIMAL_MODULES
+        assert installed <= {
+            row[0]
+            for row in env.conn.execute('SELECT "name" FROM "ir_module"').fetchall()
+        }
 
         Partner = env["res.partner"]
         france = env["res.country"].create({"name": "France", "code": "FR"})
