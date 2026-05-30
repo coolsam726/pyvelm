@@ -82,6 +82,6 @@ not accidental bugs.
 
 ## References
 
-- [docs/multi-database.md](../multi-database.md) — user-facing guide and roadmap
-- [CONTEXT.md](../../CONTEXT.md) § Multi-database support
+- [docs/multi-database.md](../multi-database.md) — user-facing guide, roadmap, and
+  implementation status
 - Plan: v1.0 Postgres+SQLite, v1.1 multi-DB routing, v1.2 MySQL/MariaDB
