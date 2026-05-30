@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Many2many, Registry
 from pyvelm.domain import domain_to_sql, normalize_domain
+from pyvelm.render import install_module_action
 from pyvelm.tests.support.db import DatabaseTestCase, install_modules, reset_database
 
 _EXAMPLE_ROOT = Path(__file__).resolve().parents[2] / "examples" / "modules"
@@ -192,7 +193,7 @@ class DomainCompileTests(unittest.TestCase):
 
 
 class DomainCacheIntegrationTests(DatabaseTestCase):
-    """Cache invalidation tests sharing one full module install."""
+    """Cache invalidation tests with bootstrap + partners only."""
 
     @classmethod
     def setUpClass(cls):
@@ -200,7 +201,8 @@ class DomainCacheIntegrationTests(DatabaseTestCase):
         reset_database(cls.dsn)
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        install_modules(cls.env, _MODULE_ROOTS, install_all=True)
+        install_modules(cls.env, _MODULE_ROOTS)
+        install_module_action(cls.env, list(_MODULE_ROOTS), "partners")
         cls.Partner = cls.env["res.partner"]
         cls.Country = cls.env["res.country"]
         cls.Tag = cls.env["res.tag"]
