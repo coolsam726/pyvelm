@@ -55,7 +55,7 @@ class QuoteAndSummaryTests(unittest.TestCase):
     def test_summary_mixed(self):
         diff = Diff(
             new_tables=[("t", "CREATE TABLE t")],
-            new_columns=[("t", "c", "ALTER", True)],
+            new_columns=[("t", "c", "ALTER", True, "text")],
             alterations=[SchemaAlteration("t", "c", "type", "text→int")],
             orphan_columns=[("t", "old")],
         )
@@ -80,6 +80,7 @@ class RenderMigrationTests(unittest.TestCase):
                     "code",
                     'ALTER TABLE "res_partner" ADD COLUMN "code" text',
                     True,
+                    "text",
                 )
             ],
             alterations=[

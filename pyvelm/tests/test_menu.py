@@ -440,16 +440,18 @@ class BuildMenuTreeIntegrationTests(unittest.TestCase):
         "PYVELM_DSN not set",
     )
     def test_build_from_db(self):
-        import psycopg
-
         from pyvelm import BUILTIN_MODULE_ROOTS, loader
         from pyvelm.env import Environment
         from pyvelm.registry import Registry
+        from pyvelm.tests.support.db import db_connection, dsn_from_env, install_modules
 
-        with psycopg.connect(os.environ["PYVELM_DSN"], autocommit=True) as conn:
+        if not dsn_from_env():
+            self.skipTest("PYVELM_DSN not set")
+
+        with db_connection() as conn:
             reg = Registry()
             env = Environment(conn, reg, uid=1)
-            loader.load_and_install(BUILTIN_MODULE_ROOTS, env, install_all=True)
+            install_modules(env, BUILTIN_MODULE_ROOTS, install_all=True)
             tree = build_menu_tree(env, "/web/admin")
         self.assertIsInstance(tree, list)
         for node in tree:

@@ -1,18 +1,11 @@
 """Domain compiler and comodel-unlink cache tests."""
 from __future__ import annotations
 
-import os
 import unittest
 
 from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Many2many, Registry, loader
 from pyvelm.domain import domain_to_sql, normalize_domain
-
-DSN = os.environ.get("PYVELM_DSN")
-
-try:
-    import psycopg as _psycopg
-except ImportError:
-    _psycopg = None
+from pyvelm.tests.support.db import DatabaseTestCase
 
 
 def _mini_registry():
@@ -194,13 +187,12 @@ class DomainCompileTests(unittest.TestCase):
         self.assertEqual(len(params), 2)
 
 
-@unittest.skipUnless(DSN and _psycopg, "PYVELM_DSN / psycopg not available")
-class DomainCacheTests(unittest.TestCase):
+class DomainCacheTests(DatabaseTestCase):
     @classmethod
     def setUpClass(cls):
         from pathlib import Path
 
-        cls.conn = _psycopg.connect(DSN, autocommit=True)
+        super().setUpClass()
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
         roots = BUILTIN_MODULE_ROOTS + [
@@ -209,10 +201,6 @@ class DomainCacheTests(unittest.TestCase):
         loader.load_and_install(roots, cls.env, install_all=True)
         cls.Partner = cls.env["res.partner"]
         cls.Country = cls.env["res.country"]
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def test_comodel_unlink_clears_many2one_cache(self):
         country = self.Country.create({"name": "CacheUnlink", "code": "CU"})
@@ -225,13 +213,12 @@ class DomainCacheTests(unittest.TestCase):
         self.assertFalse(p.country_id)
 
 
-@unittest.skipUnless(DSN and _psycopg, "PYVELM_DSN / psycopg not available")
-class M2mSymmetricCacheTests(unittest.TestCase):
+class M2mSymmetricCacheTests(DatabaseTestCase):
     @classmethod
     def setUpClass(cls):
         from pathlib import Path
 
-        cls.conn = _psycopg.connect(DSN, autocommit=True)
+        super().setUpClass()
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
         roots = BUILTIN_MODULE_ROOTS + [
@@ -240,10 +227,6 @@ class M2mSymmetricCacheTests(unittest.TestCase):
         loader.load_and_install(roots, cls.env, install_all=True)
         cls.Partner = cls.env["res.partner"]
         cls.Tag = cls.env["res.tag"]
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def test_partner_tag_write_clears_tag_partner_ids_cache(self):
         tag = self.Tag.create({"name": "SymCache"})

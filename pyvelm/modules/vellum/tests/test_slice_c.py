@@ -1,24 +1,20 @@
 """Vellum Slice C — scopes, accessors, mutators, events."""
 from __future__ import annotations
 
-import os
 import unittest
 from pathlib import Path
 
-import psycopg
-
+from pyvelm.tests.support.db import DatabaseTestCase
 from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
 
-DSN = os.environ.get("PYVELM_DSN")
 HERE = Path(__file__).resolve().parents[4]
 MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [HERE / "examples" / "modules"]
 
 
-@unittest.skipUnless(DSN, "PYVELM_DSN not set")
-class VellumSliceCTests(unittest.TestCase):
+class VellumSliceCTests(DatabaseTestCase):
     @classmethod
     def setUpClass(cls):
-        cls.conn = psycopg.connect(DSN, autocommit=True)
+        super().setUpClass()
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
         loader.load_and_install(MODULE_ROOTS, cls.env, install_all=True)
@@ -27,10 +23,6 @@ class VellumSliceCTests(unittest.TestCase):
         Comment.search([]).unlink()
         Note.search([]).unlink()
         cls.env.registry["vellum.demo.note"]._created_log.clear()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def test_scope_on_env_query(self):
         Note = self.env["vellum.demo.note"]

@@ -16,6 +16,14 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: postgres
+            dsn: postgresql://pyvelm:pyvelm@localhost:5432/pyvelm
+          - backend: sqlite
+            dsn: sqlite:////tmp/pyvelm-ci.db
 
     services:
       postgres:
@@ -33,7 +41,7 @@ jobs:
           --health-retries 5
 
     env:
-      PYVELM_DSN: postgresql://pyvelm:pyvelm@localhost:5432/pyvelm
+      PYVELM_DSN: ${{ matrix.dsn }}
 
     steps:
       - uses: actions/checkout@v4
@@ -48,13 +56,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[test,geo]"
 
+      - name: Migrate (${{ matrix.backend }})
+        run: pyvelm migrate
+
       - name: Run tests with coverage
+        if: matrix.backend == 'postgres'
         run: |
           pytest \
             --cov=pyvelm \
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-fail-under=90
+
+      - name: Run tests (${{ matrix.backend }})
+        if: matrix.backend == 'sqlite'
+        run: pytest pyvelm/tests/test_database.py pyvelm/tests/test_database_routing.py -q
 
       - name: Upload coverage to Codecov
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository

@@ -1,26 +1,22 @@
 """Vellum Slice A tests — require PYVELM_DSN and a writable database."""
 from __future__ import annotations
 
-import os
 import unittest
 from pathlib import Path
 
-import psycopg
-
+from pyvelm.tests.support.db import DatabaseTestCase
 from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
 from pyvelm.vellum import Vellum
 
-DSN = os.environ.get("PYVELM_DSN")
 HERE = Path(__file__).resolve().parents[4]
 DEMO_ROOT = HERE / "examples" / "modules"
 MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [DEMO_ROOT]
 
 
-@unittest.skipUnless(DSN, "PYVELM_DSN not set")
-class VellumQueryTests(unittest.TestCase):
+class VellumQueryTests(DatabaseTestCase):
     @classmethod
     def setUpClass(cls):
-        cls.conn = psycopg.connect(DSN, autocommit=True)
+        super().setUpClass()
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
         loader.load_and_install(MODULE_ROOTS, cls.env, install_all=True)
@@ -32,10 +28,6 @@ class VellumQueryTests(unittest.TestCase):
         cls.a = Note.create({"title": "Alpha", "score": 10})
         cls.b = Note.create({"title": "Beta", "score": 50})
         cls.c = Note.create({"title": "Gamma", "score": 120})
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def test_query_where_get_matches_search(self):
         direct = self.env["vellum.demo.note"].search(

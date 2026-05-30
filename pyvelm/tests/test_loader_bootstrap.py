@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock, patch
+from pathlib import Path
+from unittest.mock import MagicMock
 
+from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
 from pyvelm.loader import BOOTSTRAP_MODULES, ModuleSpec, specs_to_install
+from pyvelm.render import install_module_action
+from pyvelm.tests.support.db import DatabaseTestCase, reset_database
 
 
 def _spec(name: str, depends: list[str] | None = None) -> ModuleSpec:
@@ -58,40 +62,27 @@ class SpecsToInstallTests(unittest.TestCase):
         self.assertEqual([s.name for s in result], ["base", "reports"])
 
 
-@unittest.skipUnless(
-    __import__("os").environ.get("PYVELM_DSN"),
-    "PYVELM_DSN not set",
-)
-class BootstrapAfterFullInstallTests(unittest.TestCase):
+class BootstrapAfterFullInstallTests(DatabaseTestCase):
     """Regression: _inherit must not mutate cached base Field descriptors."""
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
     def test_bootstrap_after_install_all(self):
-        import os
-        from pathlib import Path
-
-        import psycopg
-
-        from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
-        from pyvelm.tests.conftest import reset_public_schema
-
-        dsn = os.environ["PYVELM_DSN"]
         roots = BUILTIN_MODULE_ROOTS + [
             Path(__file__).resolve().parents[2] / "examples" / "modules"
         ]
 
-        with psycopg.connect(dsn, autocommit=True) as conn:
-            reg = Registry()
-            env = Environment(conn, registry=reg, uid=1)
-            loader.load_and_install(roots, env, install_all=True)
+        reg = Registry()
+        env = Environment(self.conn, registry=reg, uid=1)
+        loader.load_and_install(roots, env, install_all=True)
 
-        reset_public_schema(dsn)
-        with psycopg.connect(dsn, autocommit=True) as conn:
-            reg = Registry()
-            env = Environment(conn, registry=reg, uid=1)
-            loader.load_and_install(roots, env)
-            from pyvelm.render import install_module_action
-
-            install_module_action(env, list(roots), "partners")
+        reset_database(self.dsn)
+        reg = Registry()
+        env = Environment(self.conn, registry=reg, uid=1)
+        loader.load_and_install(roots, env)
+        install_module_action(env, list(roots), "partners")
 
         import base.models.country as base_country
 

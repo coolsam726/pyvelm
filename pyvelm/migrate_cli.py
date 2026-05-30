@@ -5,39 +5,21 @@ import os
 import sys
 from pathlib import Path
 
-import psycopg
-
 from . import loader
+from .database import (
+    create_database_from_dsn,
+    dsn_display,
+    normalize_dsn,
+    require_dsn_from_env,
+    reset_schema,
+)
+from .database_routing import resolve_migrate_dsn
 from .env import Environment
 from .registry import Registry
 
 
-def require_dsn() -> str:
-    dsn = os.environ.get("PYVELM_DSN")
-    if not dsn:
-        sys.exit("PYVELM_DSN not set")
-    return dsn
-
-
-def dsn_display(dsn: str) -> str:
-    """Return a DSN safe to print (password redacted)."""
-    try:
-        from urllib.parse import urlparse, urlunparse
-
-        parsed = urlparse(dsn)
-        if parsed.scheme and parsed.hostname:
-            netloc = parsed.hostname
-            if parsed.port:
-                netloc = f"{netloc}:{parsed.port}"
-            if parsed.username:
-                netloc = f"{parsed.username}:***@{netloc}"
-            path = parsed.path or ""
-            return urlunparse(
-                (parsed.scheme, netloc, path, parsed.params, "", "")
-            )
-    except Exception:
-        pass
-    return "<dsn>"
+def require_dsn(database_key: str | None = None) -> str:
+    return resolve_migrate_dsn(database_key)
 
 
 def read_installed_versions(conn) -> dict[str, str]:
@@ -106,7 +88,8 @@ def resolve_migrate_specs(
         return ordered
     if fresh_after_wipe:
         return [s for s in ordered if s.name in loader.BOOTSTRAP_MODULES]
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    db = create_database_from_dsn(dsn)
+    with db.connect() as conn:
         env = Environment(conn, registry=Registry(), uid=None)
         return loader.specs_to_install(env, ordered, install_all=False)
 
@@ -114,7 +97,8 @@ def resolve_migrate_specs(
 def execute_db_install(
     dsn: str, to_install: list[loader.ModuleSpec]
 ) -> list[dict]:
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    db = create_database_from_dsn(normalize_dsn(dsn))
+    with db.connect() as conn:
         reg = Registry()
         env = Environment(conn, registry=reg)
         for spec in to_install:
@@ -187,13 +171,10 @@ def confirm_migrate_fresh(*, production: bool, yes: bool) -> None:
 
 
 def drop_schema_contents(conn, schema: str) -> None:
-    from psycopg import sql
-
-    qschema = sql.Identifier(schema)
-    conn.execute(sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(qschema))
-    conn.execute(sql.SQL("CREATE SCHEMA {}").format(qschema))
-    conn.execute(sql.SQL("GRANT ALL ON SCHEMA {} TO CURRENT_USER").format(qschema))
-    conn.execute(sql.SQL("GRANT ALL ON SCHEMA {} TO PUBLIC").format(qschema))
+    conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+    conn.execute(f'CREATE SCHEMA "{schema}"')
+    conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO CURRENT_USER')
+    conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO PUBLIC')
 
 
 def guard_destructive_schema_command(*, label: str) -> None:
@@ -220,9 +201,13 @@ def confirm_destructive_phrase(*, phrase: str, yes: bool, preamble: str) -> None
 
 
 def wipe_schema(dsn: str, schema: str) -> None:
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    db = create_database_from_dsn(normalize_dsn(dsn))
+    with db.connect() as conn:
         print(f"Dropping schema {schema!r}…")
-        drop_schema_contents(conn, schema)
+        if db.capabilities.supports_drop_schema:
+            drop_schema_contents(conn, schema)
+        else:
+            reset_schema(conn, db.capabilities)
         print("Schema dropped + recreated.\n")
 
 
@@ -231,9 +216,10 @@ def run_migrate(
     *,
     install_all: bool = False,
     only_module: str | None = None,
+    database_key: str | None = None,
 ) -> None:
     """Install or upgrade modules — same policy as app boot by default."""
-    dsn = require_dsn()
+    dsn = require_dsn(database_key)
     to_install = resolve_migrate_specs(
         roots,
         dsn,
@@ -251,18 +237,19 @@ def run_db_migrate_fresh(
     only_module: str | None = None,
     yes: bool = False,
     dry_run: bool = False,
+    database_key: str | None = None,
 ) -> None:
     """``pyvelm db migrate-fresh`` — plan + optional production confirmation."""
     from .runtime import is_production
 
-    dsn = require_dsn()
+    dsn = require_dsn(database_key)
     to_install = resolve_migrate_specs(
         roots,
         dsn,
         only_module=only_module,
         install_all=install_all,
     )
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    with create_database_from_dsn(normalize_dsn(dsn)).connect() as conn:
         installed = read_installed_versions(conn)
     production = is_production()
     print_migrate_plan(

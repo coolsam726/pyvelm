@@ -1,28 +1,19 @@
 """Non-admin users must be able to read ``ir.ui.view`` (web UI arch)."""
 from __future__ import annotations
 
-import os
 import unittest
 
-import psycopg
-
-from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
-
-DSN = os.environ.get("PYVELM_DSN")
+from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry
+from pyvelm.tests.support.db import DatabaseTestCase, install_modules
 
 
-@unittest.skipUnless(DSN, "PYVELM_DSN not set")
-class UiViewReadAccessTests(unittest.TestCase):
+class UiViewReadAccessTests(DatabaseTestCase):
     @classmethod
     def setUpClass(cls):
-        cls.conn = psycopg.connect(DSN, autocommit=True)
+        super().setUpClass()
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        loader.load_and_install(BUILTIN_MODULE_ROOTS, cls.env)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
+        install_modules(cls.env, BUILTIN_MODULE_ROOTS)
 
     def test_everyone_can_read_ir_ui_view(self):
         Access = self.env["ir.model.access"]
@@ -50,30 +41,32 @@ class UiViewReadAccessTests(unittest.TestCase):
                     "group_ids": [],
                 }
             )
-        env2 = Environment(self.conn, registry=self.reg, uid=user.id)
-        views = env2["ir.ui.view"].search([], limit=1)
+        uid = user.id
+        anon_env = Environment(self.conn, registry=self.reg, uid=uid)
+        View = anon_env["ir.ui.view"]
+        views = View.search([], limit=1)
         self.assertTrue(views)
 
     def test_non_admin_can_read_own_res_users_row(self):
         User = self.env["res.users"]
-        login = "users_acl_test"
+        login = "view_self_read_user"
         existing = User.search([("login", "=", login)], limit=1)
         if existing:
             user = existing
         else:
             user = User.create(
                 {
-                    "name": "Users ACL Test",
+                    "name": "Self Read",
                     "login": login,
                     "password": "test",
                     "group_ids": [],
                 }
             )
-        env2 = Environment(self.conn, registry=self.reg, uid=user.id)
-        found = env2["res.users"].search([("id", "=", user.id)], limit=1)
-        self.assertTrue(found)
-        found.ensure_one()
-        self.assertEqual(found.name, "Users ACL Test")
+        uid = user.id
+        scoped = Environment(self.conn, registry=self.reg, uid=uid)
+        row = scoped["res.users"].browse((uid,))
+        row.ensure_one()
+        self.assertEqual(row.login, login)
 
 
 if __name__ == "__main__":

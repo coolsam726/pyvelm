@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Registry, loader
+from pyvelm.tests.support.db import install_modules, open_database
 from pyvelm.workflow.engine import WorkflowEngine
 from pyvelm.workflow.schema import WorkflowDefinitionError, validate_definition
-
 
 _SAMPLE_DEF = {
     "version": 1,
@@ -67,20 +68,22 @@ def test_validate_definition_rejects_duplicate_state():
 
 
 @pytest.fixture
-def workflow_env():
-    import psycopg
-    from pathlib import Path
-
-    dsn = __import__("os").environ.get("PYVELM_DSN")
-    if not dsn:
-        pytest.skip("PYVELM_DSN not set")
+def workflow_env(pyvelm_dsn):
     examples = Path(__file__).resolve().parents[2] / "examples" / "modules"
     reg = Registry()
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    db = open_database(pyvelm_dsn, pool_size=2)
+    with db.connect() as conn:
         env = Environment(conn, registry=reg, uid=1)
         env._acl_bypass = True
-        loader.load_and_install(list(BUILTIN_MODULE_ROOTS) + [examples], env, install_all=True)
+        install_modules(env, list(BUILTIN_MODULE_ROOTS) + [examples], install_all=True)
+    conn = db.open_connection()
+    env = Environment(conn, registry=reg, uid=1)
+    env._acl_bypass = True
+    try:
         yield env
+    finally:
+        conn.close()
+        db.dispose()
 
 
 def test_workflow_start_and_transition(workflow_env):

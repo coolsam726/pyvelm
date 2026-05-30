@@ -1,19 +1,12 @@
 """Field tracking (tracking=True) on MailThread models."""
 from __future__ import annotations
 
-import os
 import unittest
 
-from pyvelm import BaseModel, Char, Environment, Many2one, Registry
+from pyvelm import BaseModel, Char, Environment, Registry
 from pyvelm import mail_tracking
 from pyvelm.tests._mail import register_mail_message
-
-DSN = os.environ.get("PYVELM_DSN")
-
-try:
-    import psycopg
-except ImportError:
-    psycopg = None
+from pyvelm.tests.support.db import DatabaseTestCase
 
 
 class TrackingFieldTests(unittest.TestCase):
@@ -80,8 +73,11 @@ class TrackingFormatTests(unittest.TestCase):
         )
 
 
-@unittest.skipUnless(DSN and psycopg, "needs postgres")
-class TrackingWriteTests(unittest.TestCase):
+class TrackingWriteTests(DatabaseTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
     def test_write_posts_tracking_message(self):
         from pyvelm.mail import MailThread
 
@@ -95,37 +91,36 @@ class TrackingWriteTests(unittest.TestCase):
 
             register_mail_message(reg)
 
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            doc = env["test.track.doc"].create(
-                {"name": "Alpha", "note": "quiet"}
-            )
-            doc.write({"name": "Beta"})
-            msgs = env["mail.message"].search(
-                [("model", "=", "test.track.doc"), ("res_id", "=", doc.id)]
-            )
-            tracking = [
-                m
-                for m in msgs
-                if getattr(m, "subtype", None) == "mail_tracking"
-            ]
-            self.assertEqual(len(tracking), 1)
-            self.assertIn("Name", tracking[0].body)
-            self.assertIn("Alpha", tracking[0].body)
-            self.assertIn("Beta", tracking[0].body)
-            self.assertIn("→", tracking[0].body)
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        doc = env["test.track.doc"].create(
+            {"name": "Alpha", "note": "quiet"}
+        )
+        doc.write({"name": "Beta"})
+        msgs = env["mail.message"].search(
+            [("model", "=", "test.track.doc"), ("res_id", "=", doc.id)]
+        )
+        tracking = [
+            m
+            for m in msgs
+            if getattr(m, "subtype", None) == "mail_tracking"
+        ]
+        self.assertEqual(len(tracking), 1)
+        self.assertIn("Name", tracking[0].body)
+        self.assertIn("Alpha", tracking[0].body)
+        self.assertIn("Beta", tracking[0].body)
+        self.assertIn("→", tracking[0].body)
 
-            doc.write({"note": "changed"})
-            tracking2 = env["mail.message"].search(
-                [
-                    ("model", "=", "test.track.doc"),
-                    ("res_id", "=", doc.id),
-                    ("subtype", "=", "mail_tracking"),
-                ]
-            )
-            self.assertEqual(len(tracking2), 1)
+        doc.write({"note": "changed"})
+        tracking2 = env["mail.message"].search(
+            [
+                ("model", "=", "test.track.doc"),
+                ("res_id", "=", doc.id),
+                ("subtype", "=", "mail_tracking"),
+            ]
+        )
+        self.assertEqual(len(tracking2), 1)
 
     def test_non_mail_thread_skips_tracking(self):
         reg = Registry()
@@ -137,16 +132,15 @@ class TrackingWriteTests(unittest.TestCase):
 
             register_mail_message(reg)
 
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            rec = env["test.track.plain"].create({"name": "A"})
-            rec.write({"name": "B"})
-            count = env["mail.message"].search_count(
-                [("model", "=", "test.track.plain")]
-            )
-            self.assertEqual(count, 0)
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        rec = env["test.track.plain"].create({"name": "A"})
+        rec.write({"name": "B"})
+        count = env["mail.message"].search_count(
+            [("model", "=", "test.track.plain")]
+        )
+        self.assertEqual(count, 0)
 
 
 if __name__ == "__main__":

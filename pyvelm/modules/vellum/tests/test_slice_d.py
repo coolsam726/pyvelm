@@ -1,27 +1,23 @@
 """Vellum Slice D — mass assignment and soft deletes."""
 from __future__ import annotations
 
-import os
 import unittest
 from pathlib import Path
 
-import psycopg
-
+from pyvelm.tests.support.db import DatabaseTestCase
 from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Registry, loader
 from pyvelm.vellum import SoftDeletes, Vellum
 from pyvelm.vellum.fillable import filter_mass_assignment
 from pyvelm.vellum.timestamps import apply_timestamp_vals
 
-DSN = os.environ.get("PYVELM_DSN")
 HERE = Path(__file__).resolve().parents[4]
 MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [HERE / "examples" / "modules"]
 
 
-@unittest.skipUnless(DSN, "PYVELM_DSN not set")
-class VellumSliceDTests(unittest.TestCase):
+class VellumSliceDTests(DatabaseTestCase):
     @classmethod
     def setUpClass(cls):
-        cls.conn = psycopg.connect(DSN, autocommit=True)
+        super().setUpClass()
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
         loader.load_and_install(MODULE_ROOTS, cls.env, install_all=True)
@@ -29,10 +25,6 @@ class VellumSliceDTests(unittest.TestCase):
             'ALTER TABLE "vellum_demo_soft_note" '
             'ADD COLUMN IF NOT EXISTS "deleted_at" timestamp'
         )
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def test_guarded_drops_id_on_create(self):
         Note = self.env["vellum.demo.note"]

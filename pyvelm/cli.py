@@ -39,9 +39,6 @@ import sys
 import time
 from pathlib import Path
 
-import psycopg
-from psycopg_pool import ConnectionPool
-
 from .env import Environment
 from . import loader
 from .registry import Registry
@@ -97,17 +94,16 @@ def cron_loop(*, dsn: str, roots: list[Path], interval: float) -> None:
     SIGTERM / SIGINT flip a shutdown flag and the loop exits cleanly
     after the current tick — useful for graceful container restarts.
     """
+    from .database import create_database_from_dsn, normalize_dsn
+
     registry = Registry()
-    # Install pass on boot. The install is idempotent for an already-
-    # migrated database, so this is safe to run on every cron-worker
-    # restart and doubles as a "the DB schema matches the on-disk
-    # manifests" check.
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    database = create_database_from_dsn(normalize_dsn(dsn), pool_size=2)
+    with database.connect() as conn:
         env = Environment(conn, registry=registry)
         loader.load_and_install(roots, env)
         log.info("loaded modules; cron runner ready")
 
-    pool = ConnectionPool(dsn, min_size=1, max_size=2, open=True)
+    pool = database.pool
 
     shutdown = False
 
@@ -133,7 +129,7 @@ def cron_loop(*, dsn: str, roots: list[Path], interval: float) -> None:
                 time.sleep(min(1.0, interval - elapsed))
                 elapsed += 1.0
     finally:
-        pool.close()
+        database.dispose()
 
 
 def _tick(pool, registry: Registry) -> None:
@@ -365,6 +361,10 @@ def _add_db_subcommand(subs) -> None:
         "--module", dest="only_module", default=None,
         help="Limit to one module and its dependencies (e.g. partners).",
     )
+    mig_p.add_argument(
+        "--database", dest="database_key", default=None,
+        help="Target tenant database from PYVELM_DATABASES (v1.1+).",
+    )
     mig_p.set_defaults(func=_run_db_migrate_shim)
 
     fresh_p = db_subs.add_parser(
@@ -435,9 +435,8 @@ def _build_db_env_and_spec(args):
     the connection. Exits with a clear error if the module isn't
     found or if PYVELM_DSN is missing.
     """
-    import psycopg
-
     from . import Environment, Registry, loader
+    from .database import create_database_from_dsn, normalize_dsn
 
     dsn = os.environ.get("PYVELM_DSN")
     if not dsn:
@@ -453,7 +452,8 @@ def _build_db_env_and_spec(args):
     registry = Registry()
     for spec in ordered:
         loader._load_models(spec, registry)
-    conn = psycopg.connect(dsn, autocommit=True)
+    db = create_database_from_dsn(normalize_dsn(dsn))
+    conn = db.open_connection()
     env = Environment(conn, registry=registry)
     return env, specs[args.module], conn
 
@@ -470,7 +470,7 @@ def _run_db_diff(args: argparse.Namespace) -> None:
         print(f"{args.module}: {db_autogen._summary(diff)}")
         for table, _ddl in diff.new_tables:
             print(f"  + table {table}")
-        for table, col, _stmt, was_required in diff.new_columns:
+        for table, col, _stmt, was_required, _sql_type in diff.new_columns:
             tag = " (required — needs backfill)" if was_required else ""
             print(f"  + column {table}.{col}{tag}")
         for alt in diff.alterations:
@@ -581,6 +581,7 @@ def _run_db_migrate_shim(args: argparse.Namespace) -> None:
         _resolve_module_roots(args),
         install_all=args.all,
         only_module=args.only_module,
+        database_key=getattr(args, "database_key", None),
     )
 
 
@@ -642,11 +643,13 @@ def _run_db_nuke(args: argparse.Namespace) -> None:
 
 def _run_db_status(args: argparse.Namespace) -> None:
     """Compare ``ir_module`` rows to discovered manifests."""
+    from .database import create_database_from_dsn, normalize_dsn
+
     dsn = _require_dsn()
     roots = _resolve_module_roots(args)
     specs = loader.discover(roots)
     ordered = loader.resolve_order(specs)
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    with create_database_from_dsn(normalize_dsn(dsn)).connect() as conn:
         installed = _read_installed_versions(conn)
     for spec in ordered:
         db_ver = installed.get(spec.name)
@@ -670,8 +673,7 @@ _BUILTIN_SUBCOMMANDS = frozenset({
 
 def bootstrap_command_env(ctx) -> None:
     """Load registry + DB env for commands with ``requires_db=True``."""
-    import psycopg
-
+    from .database import create_database_from_dsn, normalize_dsn
     from .env import Environment
     from .registry import Registry
 
@@ -683,7 +685,8 @@ def bootstrap_command_env(ctx) -> None:
     registry = Registry()
     for spec in ordered:
         loader._load_models(spec, registry)
-    conn = psycopg.connect(dsn, autocommit=True)
+    db = create_database_from_dsn(normalize_dsn(dsn))
+    conn = db.open_connection()
     ctx.registry = registry
     ctx.env = Environment(conn, registry=registry)
 

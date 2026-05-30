@@ -1,17 +1,10 @@
 """Automatic display_name on every model."""
 from __future__ import annotations
 
-import os
 import unittest
 
 from pyvelm import BaseModel, Char, Environment, Registry, Text
-
-DSN = os.environ.get("PYVELM_DSN")
-
-try:
-    import psycopg
-except ImportError:
-    psycopg = None
+from pyvelm.tests.support.db import DatabaseTestCase
 
 
 class DisplayNameFieldTests(unittest.TestCase):
@@ -91,8 +84,11 @@ class DisplayNameFieldTests(unittest.TestCase):
         self.assertEqual(Custom._fields["display_name"].depends_on, ("name",))
 
 
-@unittest.skipUnless(DSN and psycopg, "needs postgres")
-class DisplayNameRuntimeTests(unittest.TestCase):
+class DisplayNameRuntimeTests(DatabaseTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
     def test_default_and_rec_name(self):
         reg = Registry()
         with reg.activate():
@@ -106,14 +102,13 @@ class DisplayNameRuntimeTests(unittest.TestCase):
                 _rec_name = "label"
                 label = Char()
 
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            item = env["test.dn.item"].create({"label": "ignored"})
-            tagged = env["test.dn.tagged"].create({"label": "Hello"})
-            self.assertEqual(item.display_name, "test.dn.item #1")
-            self.assertEqual(tagged.display_name, "Hello")
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        item = env["test.dn.item"].create({"label": "ignored"})
+        tagged = env["test.dn.tagged"].create({"label": "Hello"})
+        self.assertEqual(item.display_name, "test.dn.item #1")
+        self.assertEqual(tagged.display_name, "Hello")
 
 
 if __name__ == "__main__":

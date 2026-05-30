@@ -7,6 +7,36 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.0.0] — 2026-05-30
+
+### Added
+
+- **SQLAlchemy Core database layer** (`pyvelm.database`) — portable engines,
+  connection pooling, and a psycopg-compatible adapter for ``Environment.conn``.
+  ``PYVELM_DSN`` accepts SQLAlchemy URLs (`postgresql+psycopg://…`, `sqlite:///…`).
+- **SQLite backend (v1.0)** — greenfield install + model-driven schema sync;
+  bundled Postgres migration scripts are skipped on SQLite.
+- **Multi-database routing (v1.1 preview)** — ``PYVELM_DATABASES`` tenant catalog,
+  ``DatabaseSelectorMiddleware``, ``/web/database/selector`` UI, per-request
+  ``pool_map`` / ``registry_cache``, and ``pyvelm migrate --database <key>``.
+- **Documentation** — [multi-database.md](docs/multi-database.md),
+  [ADR 001](docs/adr/001-sqlalchemy-core.md).
+
+### Changed
+
+- **Boot entry points** — ``pyvelm migrate``, ``pyvelm serve``, cron, and
+  ``create_app`` use the database layer instead of raw ``psycopg`` pools.
+- **Schema helpers** — ``db_autogen`` uses SQLAlchemy Inspector / SQLite PRAGMA;
+  dialect-aware ``ADD COLUMN`` and nullability handling.
+- **Domain ILIKE** — SQLite uses ``LOWER(…) LIKE`` via ``DialectCapabilities``.
+
+### Notes
+
+- **v1.0 scope:** one process, one DSN — Postgres *or* SQLite portability.
+  Multi-DB routing requires ``PYVELM_DATABASES`` (Postgres tenants only).
+- SemVer **1.0.0** signals the database layer contract; patch releases continue
+  on 0.26.x until this line ships.
+
 ## [0.26.2] — 2026-05-30
 
 ### Fixed

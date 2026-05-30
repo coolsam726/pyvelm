@@ -216,15 +216,17 @@ def _parse_domain(domain_json: str) -> list:
 
 def create_app(
     registry: Registry,
-    pool: Any,
+    database_or_pool: Any,
     module_roots: list | None = None,
     *,
     runtime_env: str | None = None,
 ) -> FastAPI:
-    """Build the FastAPI app bound to a loaded registry and a Postgres
-    connection pool. Each request checks out a connection, makes an
-    Environment, and returns it on exit. The pool's own retry/backoff
-    handles transient failures.
+    """Build the FastAPI app bound to a loaded registry and database pool.
+
+    Pass a :class:`~pyvelm.database.Database` (v1+) or a legacy pool object
+    exposing ``connection()`` (psycopg_pool or :class:`~pyvelm.database.PoolFacade`).
+    Each request checks out a connection, makes an Environment, and returns
+    it on exit.
 
     `module_roots` is the same list passed to `loader.load_and_install`
     so the Apps catalog page can re-discover the disk-side manifests.
@@ -237,12 +239,17 @@ def create_app(
     ``runtime_env`` (or ``PYVELM_ENV``) selects development vs production:
     API docs, cookie ``Secure`` flags, etc. See :mod:`pyvelm.runtime`.
 
-    `pool` is typed `Any` because `psycopg_pool.ConnectionPool` is generic
-    over the connection class and propagating that here adds friction
-    without buying meaningful type safety — every method we call on it
-    is on the runtime type."""
+    `database_or_pool` is typed `Any` — see :mod:`pyvelm.database.Database`."""
+    from .database import Database
     from .policies import register_builtin_policies
     from .runtime import cookie_options, get_runtime_env, is_development
+
+    if isinstance(database_or_pool, Database):
+        database = database_or_pool
+        pool = database.pool
+    else:
+        database = None
+        pool = database_or_pool
 
     register_builtin_policies()
     env_mode = get_runtime_env(runtime_env)
@@ -259,7 +266,24 @@ def create_app(
     app.state.pyvelm_env = env_mode
     app.state.auth_cookie_options = auth_cookie
     app.state.registry = registry
+    app.state.database = database
     app.state.pool = pool
+
+    from .database_routing import (
+        DATABASE_COOKIE,
+        configure_app_databases,
+        list_selectable_databases,
+        routing_enabled,
+    )
+
+    if database is not None:
+        configure_app_databases(
+            app, database, registry, app.state.module_roots,
+        )
+    if database is not None and routing_enabled(app):
+        from .database_routing import DatabaseSelectorMiddleware
+
+        app.add_middleware(DatabaseSelectorMiddleware)
 
     _REQUIRED_MODELS = ("res.users", "ir.ui.view")
     missing = [m for m in _REQUIRED_MODELS if m not in registry]
@@ -436,8 +460,8 @@ def create_app(
         from pyvelm.request_env import apply_request_scope
         from .render import render_error_page
 
-        with pool.connection() as conn:
-            env = Environment(conn, registry=registry, uid=None)
+        with _active_pool(request).connection() as conn:
+            env = Environment(conn, registry=_active_registry(request), uid=None)
             env = apply_request_scope(
                 env,
                 request,
@@ -529,8 +553,8 @@ def create_app(
             from pyvelm.request_env import apply_request_scope
             from .render import render_access_denied_page
 
-            with pool.connection() as conn:
-                env = Environment(conn, registry=registry, uid=None)
+            with _active_pool(request).connection() as conn:
+                env = Environment(conn, registry=_active_registry(request), uid=None)
                 env = apply_request_scope(
                     env,
                     request,
@@ -557,7 +581,7 @@ def create_app(
 
     def _resolve_user_from_session(env: Environment, token: str | None) -> int | None:
         """Return uid for a valid session token, or None."""
-        if not token or "res.users" not in registry:
+        if not token or "res.users" not in env.registry:
             return None
         # sudo: the request is still anonymous here, so look the user up
         # without ACL (leaves the request env enforced).
@@ -585,7 +609,7 @@ def create_app(
             login, password = raw.decode("utf-8", errors="ignore").split(":", 1)
         except (binascii.Error, ValueError):
             return None
-        if "res.users" not in registry:
+        if "res.users" not in env.registry:
             return None
         # sudo: look up the user without ACL (request env stays enforced).
         users = env.sudo()["res.users"].search(
@@ -601,10 +625,13 @@ def create_app(
         return user.id
 
     def get_env(request: Request):
+        from pyvelm.database_routing import get_request_pool, get_request_registry
         from pyvelm.request_env import apply_request_scope
 
-        with pool.connection() as conn:
-            env = Environment(conn, registry=registry, uid=None)
+        active_registry = get_request_registry(app, request)
+        active_pool = get_request_pool(app, request)
+        with active_pool.connection() as conn:
+            env = Environment(conn, registry=active_registry, uid=None)
             env = apply_request_scope(
                 env,
                 request,
@@ -612,6 +639,16 @@ def create_app(
                 resolve_basic=_resolve_user_from_basic,
             )
             yield env
+
+    def _active_pool(request: Request):
+        from pyvelm.database_routing import get_request_pool
+
+        return get_request_pool(app, request)
+
+    def _active_registry(request: Request):
+        from pyvelm.database_routing import get_request_registry
+
+        return get_request_registry(app, request)
 
     def _load_view(env, module: str, name: str):
         from .render import _load_ui_view
@@ -4092,7 +4129,7 @@ def create_app(
     ):
         if env.uid is None:
             return _login_redirect(request)
-        if "res.users" not in registry:
+        if "res.users" not in env.registry:
             raise HTTPException(503, "User model not loaded")
         Users = env["res.users"]
         # ACL: rely on res.users.read — non-admins fail here with 403.
@@ -4116,7 +4153,7 @@ def create_app(
     ):
         if env.uid is None:
             return _auth_required_response(request)
-        if "res.users" not in registry:
+        if "res.users" not in env.registry:
             raise HTTPException(503, "User model not loaded")
         from .render import render_admin_password_reset_page
 
@@ -4308,6 +4345,43 @@ def create_app(
 
     # ---- login / logout ----
 
+    @app.get("/web/database/selector", response_class=HTMLResponse)
+    def database_selector_page(request: Request):
+        if not routing_enabled(app):
+            return RedirectResponse("/login", status_code=302)
+        options = "".join(
+            f'<option value="{key}">{label}</option>'
+            for key, label in list_selectable_databases(app)
+        )
+        body = (
+            "<!DOCTYPE html><html><head><title>Select database</title>"
+            '<link rel="stylesheet" href="/web/static/css/app.css"></head>'
+            '<body class="min-h-screen flex items-center justify-center bg-slate-50">'
+            '<div class="w-full max-w-md p-8 bg-white shadow rounded-lg">'
+            "<h1 class=\"text-xl font-semibold mb-4\">Select database</h1>"
+            '<form method="post" action="/web/database/select">'
+            f'<label class="block mb-2 text-sm">Database</label>'
+            f'<select name="db" class="w-full border rounded px-3 py-2 mb-4">{options}</select>'
+            '<button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded">Continue</button>'
+            "</form></div></body></html>"
+        )
+        return HTMLResponse(body)
+
+    @app.post("/web/database/select")
+    async def database_selector_submit(request: Request):
+        from pyvelm.database_routing import DEFAULT_DB_KEY
+
+        if not routing_enabled(app):
+            return RedirectResponse("/login", status_code=302)
+        form = await request.form()
+        key = (form.get("db") or DEFAULT_DB_KEY).strip()
+        pool_map = getattr(app.state, "pool_map", None) or {}
+        if key not in pool_map:
+            raise HTTPException(status_code=400, detail=f"Unknown database {key!r}")
+        response = RedirectResponse("/login", status_code=303)
+        response.set_cookie(DATABASE_COOKIE, key, path="/", **auth_cookie)
+        return response
+
     @app.get("/login", response_class=HTMLResponse)
     def login_page(request: Request, next: str = Query(default="")):
         from .home import login_destination
@@ -4315,8 +4389,8 @@ def create_app(
 
         # Already authenticated and the token is valid? Skip the login screen.
         token = request.cookies.get(_SESSION_COOKIE)
-        with pool.connection() as conn:
-            env = Environment(conn, registry=registry, uid=None)
+        with _active_pool(request).connection() as conn:
+            env = Environment(conn, registry=_active_registry(request), uid=None)
             if token and _resolve_user_from_session(env, token) is not None:
                 return RedirectResponse(
                     login_destination(next), status_code=302
@@ -4385,12 +4459,12 @@ def create_app(
         next_url = login_destination((form.get("next") or "").strip())
 
         # Validate credentials.
-        with pool.connection() as conn:
-            env = Environment(conn, registry=registry, uid=None)
+        with _active_pool(request).connection() as conn:
+            env = Environment(conn, registry=_active_registry(request), uid=None)
             # sudo: credential validation runs before any user is bound,
             # so it must read res.users without ACL.
             senv = env.sudo()
-            if "res.users" not in registry:
+            if "res.users" not in env.registry:
                 raise HTTPException(503, "User model not loaded")
             users = senv["res.users"].search(
                 [("login", "=", login_val), ("active", "=", True)], limit=1
@@ -4445,9 +4519,11 @@ def create_app(
     def logout(request: Request):
         token = request.cookies.get(_SESSION_COOKIE)
         if token:
-            with pool.connection() as conn:
+            with _active_pool(request).connection() as conn:
                 # sudo: revoke the token for an as-yet-unidentified session.
-                env = Environment(conn, registry=registry, uid=None).sudo()
+                env = Environment(
+                    conn, registry=_active_registry(request), uid=None,
+                ).sudo()
                 users = env["res.users"].search(
                     [("session_token", "=", token)], limit=1
                 )

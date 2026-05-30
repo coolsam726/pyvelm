@@ -1,25 +1,21 @@
 """Vellum Slice B — relations + with_count."""
 from __future__ import annotations
 
-import os
 import unittest
 from pathlib import Path
 
-import psycopg
-
+from pyvelm.tests.support.db import DatabaseTestCase
 from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Environment, One2many, Registry, loader
 from pyvelm.vellum import Vellum
 
-DSN = os.environ.get("PYVELM_DSN")
 HERE = Path(__file__).resolve().parents[4]
 MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [HERE / "examples" / "modules"]
 
 
-@unittest.skipUnless(DSN, "PYVELM_DSN not set")
-class VellumRelationTests(unittest.TestCase):
+class VellumRelationTests(DatabaseTestCase):
     @classmethod
     def setUpClass(cls):
-        cls.conn = psycopg.connect(DSN, autocommit=True)
+        super().setUpClass()
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
         loader.load_and_install(MODULE_ROOTS, cls.env, install_all=True)
@@ -30,10 +26,6 @@ class VellumRelationTests(unittest.TestCase):
         cls.note = Note.create({"title": "RelNote"})
         cls.c1 = Comment.create({"note_id": cls.note, "body": "a"})
         cls.c2 = Comment.create({"note_id": cls.note, "body": "b"})
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def test_has_many_on_instance(self):
         note = self.env["vellum.demo.note"].browse(self.note.id)

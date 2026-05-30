@@ -44,6 +44,12 @@ def _mock_conn_cm():
     return conn_cm
 
 
+def _mock_database():
+    db = MagicMock()
+    db.connect.return_value = _mock_conn_cm()
+    return db
+
+
 class DbMigrateCliTests(unittest.TestCase):
     def test_migrate_loads_models_and_installs(self):
         spec = _demo_spec()
@@ -68,7 +74,7 @@ class DbMigrateCliTests(unittest.TestCase):
                 "pyvelm.migrate_cli.loader.install",
                 return_value=install_results,
             ) as install,
-            patch("pyvelm.migrate_cli.psycopg.connect", return_value=_mock_conn_cm()),
+            patch("pyvelm.migrate_cli.create_database_from_dsn", return_value=_mock_database()),
             patch("pyvelm.migrate_cli.Registry"),
             patch("pyvelm.migrate_cli.Environment"),
         ):
@@ -90,7 +96,7 @@ class DbMigrateCliTests(unittest.TestCase):
                 return_value=ordered,
             ) as resolve_specs,
             patch("pyvelm.migrate_cli.loader.install", return_value=[]),
-            patch("pyvelm.migrate_cli.psycopg.connect", return_value=_mock_conn_cm()),
+            patch("pyvelm.migrate_cli.create_database_from_dsn", return_value=_mock_database()),
             patch("pyvelm.migrate_cli.Registry"),
             patch("pyvelm.migrate_cli.Environment"),
             patch("pyvelm.migrate_cli.loader._load_models"),
@@ -118,6 +124,7 @@ class DbMigrateCliTests(unittest.TestCase):
             [],
             install_all=True,
             only_module="partners",
+            database_key=None,
         )
 
     def test_status_prints_not_installed(self):
@@ -142,7 +149,7 @@ class DbMigrateCliTests(unittest.TestCase):
             patch("pyvelm.cli._resolve_module_roots", return_value=[]),
             patch("pyvelm.cli.loader.discover", return_value={"tasks": spec}),
             patch("pyvelm.cli.loader.resolve_order", return_value=[spec]),
-            patch("pyvelm.cli.psycopg.connect", return_value=conn_cm),
+            patch("pyvelm.database.create_database_from_dsn", return_value=_mock_database()),
             patch("pyvelm.cli.Registry"),
             patch("pyvelm.cli.Environment") as env_cls,
         ):
@@ -164,7 +171,7 @@ class DbMigrateFreshCliTests(unittest.TestCase):
                 "pyvelm.migrate_cli.resolve_migrate_specs",
                 return_value=ordered,
             ),
-            patch("pyvelm.migrate_cli.psycopg.connect", return_value=_mock_conn_cm()),
+            patch("pyvelm.migrate_cli.create_database_from_dsn", return_value=_mock_database()),
             patch("pyvelm.runtime.is_production", return_value=True),
             patch("pyvelm.runtime.get_runtime_env", return_value="production"),
             patch("builtins.input", return_value="no"),
@@ -193,7 +200,7 @@ class DbMigrateFreshCliTests(unittest.TestCase):
                 "pyvelm.migrate_cli.loader.install",
                 return_value=install_results,
             ) as install,
-            patch("pyvelm.migrate_cli.psycopg.connect", return_value=_mock_conn_cm()),
+            patch("pyvelm.migrate_cli.create_database_from_dsn", return_value=_mock_database()),
             patch("pyvelm.runtime.is_production", return_value=True),
             patch("pyvelm.runtime.get_runtime_env", return_value="production"),
             patch("pyvelm.cli._resolve_module_roots", return_value=[]),
@@ -218,7 +225,7 @@ class DbMigrateFreshCliTests(unittest.TestCase):
                 return_value=ordered,
             ),
             patch("pyvelm.migrate_cli.loader.install") as install,
-            patch("pyvelm.migrate_cli.psycopg.connect", return_value=_mock_conn_cm()),
+            patch("pyvelm.migrate_cli.create_database_from_dsn", return_value=_mock_database()),
             patch("pyvelm.runtime.is_production", return_value=False),
             patch("pyvelm.runtime.get_runtime_env", return_value="development"),
             patch("pyvelm.cli._resolve_module_roots", return_value=[]),
@@ -268,7 +275,7 @@ class DbNukeCliTests(unittest.TestCase):
             patch("pyvelm.cli._ordered_specs_for_install", return_value=ordered),
             patch("pyvelm.migrate_cli.drop_schema_contents") as drop,
             patch("pyvelm.migrate_cli.loader.install", return_value=install_results) as install,
-            patch("pyvelm.migrate_cli.psycopg.connect", return_value=_mock_conn_cm()),
+            patch("pyvelm.migrate_cli.create_database_from_dsn", return_value=_mock_database()),
             patch("pyvelm.runtime.is_production", return_value=False),
             patch("pyvelm.runtime.get_runtime_env", return_value="development"),
         ):
@@ -285,7 +292,7 @@ class DbNukeCliTests(unittest.TestCase):
             patch("pyvelm.cli._ordered_specs_for_install", return_value=ordered),
             patch("pyvelm.migrate_cli.drop_schema_contents") as drop,
             patch("pyvelm.migrate_cli.loader.install") as install,
-            patch("pyvelm.migrate_cli.psycopg.connect", return_value=_mock_conn_cm()),
+            patch("pyvelm.migrate_cli.create_database_from_dsn", return_value=_mock_database()),
             patch("pyvelm.runtime.is_production", return_value=False),
             patch("pyvelm.runtime.get_runtime_env", return_value="development"),
             patch("builtins.input", return_value="wrong"),
