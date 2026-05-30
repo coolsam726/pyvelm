@@ -302,6 +302,19 @@ class MenuParentResolutionTests(unittest.TestCase):
         )
 
 
+class MenuViewHrefTests(unittest.TestCase):
+    def test_view_module_overrides_menu_module(self):
+        from pyvelm.builders import _resolve_menu_href
+
+        href = _resolve_menu_href(
+            href=None,
+            view="workflow_instance.list",
+            view_module="workflow",
+            menu_module="admin",
+        )
+        self.assertEqual(href, "/web/views/workflow/workflow_instance.list")
+
+
 class MenuSyncOrderTests(unittest.TestCase):
     def test_nested_groups_before_leaves(self):
         from pyvelm.loader import _menu_sync_order
