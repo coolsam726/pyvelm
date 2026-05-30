@@ -79,7 +79,7 @@ reverse proxy:
 
 ## Vercel (serverless)
 
-The repo ships a [`vercel.json`](../vercel.json) demo that builds a bundled
+The repo ships a [`vercel.json`](https://github.com/coolsam726/pyvelm/blob/main/vercel.json) demo that builds a bundled
 SQLite database and runs `examples.serve:app` as a Python function.
 
 **Sessions:** each serverless invocation may get its own writable SQLite copy
