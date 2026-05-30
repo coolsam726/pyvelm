@@ -19,16 +19,16 @@ def register_routes(app) -> None:
     from starlette.requests import Request
 
     def _resolve_company_layout(session_token: str, raw_company: str | None) -> str | None:
+        from pyvelm.session_auth import resolve_session_uid
+
         with pool.connection() as conn:
             env = Environment(conn, registry=registry, uid=None)
             env._acl_bypass = True
 
-            users = env["res.users"].search(
-                [("session_token", "=", session_token), ("active", "=", True)],
-                limit=1,
-            )
-            if not users:
+            uid = resolve_session_uid(env, session_token)
+            if uid is None:
                 return None
+            users = env["res.users"].browse(uid)
 
             cid: int | None = None
             if raw_company:
