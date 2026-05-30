@@ -14,6 +14,7 @@ Customize how the UI looks for each company (or globally via environment variabl
 | **Logo URL (dark)** | Logo in dark mode; if empty, the light logo is used |
 | **Favicon URL** | Browser tab icon |
 | **Primary color** | Accent palette (buttons, links, default logo tile) |
+| **Font family** | UI typeface via [Google Fonts](https://fonts.google.com/) (exact family name, e.g. `Roboto`, `Open Sans`). Empty = Inter; global default via `PYVELM_FONT_FAMILY`. |
 | **Copyright** | Footer legal line |
 | **Support email / URL** | Footer links |
 | **Show powered by pyvelm** | Hide the small “Powered by pyvelm” line when off |
@@ -35,13 +36,18 @@ PYVELM_COPYRIGHT="© 2026 Acme Corp. All rights reserved."
 PYVELM_SUPPORT_EMAIL="help@acme.example"
 PYVELM_SUPPORT_URL="https://acme.example/support"
 PYVELM_SHOW_POWERED_BY=0
+PYVELM_FONT_FAMILY="Roboto"
 ```
 
 Requires **base module 0.21.0+** (run **Apps → base → Sync** after upgrade).
+
+Per-company **font family** (`font_family`) requires **base 0.32.0+**.
 
 Per-company **navigation layout** (`menu_layout`) requires **base 0.31.0+**;
 middleware is registered automatically via `base.web:register_routes`.
 
 ## API
 
-Templates receive `brand` and existing `company_theme_style` from `pyvelm.branding.branding_context(env)`.
+Templates receive `brand`, `company_theme_style`, and font keys
+(`company_font_stylesheet_url`, `company_font_style`, `company_font_family`)
+from `pyvelm.branding.branding_context(env)`.

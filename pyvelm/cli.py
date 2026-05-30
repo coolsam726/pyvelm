@@ -7,11 +7,13 @@ A single ``pyvelm`` command dispatches subcommands:
     pyvelm new <module>        Drop a runnable module skeleton into a project.
     pyvelm db diff <module>    Print the schema delta for a module.
     pyvelm db autogen <module> Write an additive migration file.
-    pyvelm db migrate          Install/upgrade all modules (deploy hook).
+    pyvelm migrate               Upgrade installed modules (deploy hook).
     pyvelm db migrate-fresh    Same as migrate, with plan + prod confirmation.
-    pyvelm db nuke             DEV ONLY — drop schema + re-run every install.
+    pyvelm migrate:fresh       DEV ONLY — drop schema, then ``migrate``.
+    pyvelm migrate:reset       DEV ONLY — drop schema (same wipe as ``db nuke``).
+    pyvelm db nuke             DEV ONLY — drop schema + reinstall every module.
     pyvelm db status           Installed vs on-disk module versions.
-    pyvelm list                List Artisan-style module commands.
+    pyvelm list                List core and module commands.
     pyvelm make:module …       Scaffold a module (see docs/console.md).
 
 The legacy ``pyvelm-cron`` entry point keeps working — it's a thin
@@ -292,8 +294,8 @@ def _add_db_subcommand(subs) -> None:
         help="Schema utilities (diff, autogen, migrate, nuke, status).",
         description=(
             "Inspect or update the DB schema against the loaded module "
-            "registry. `diff` / `autogen` draft migrations; `migrate` "
-            "runs install/upgrade for all discovered modules; "
+            "registry. `diff` / `autogen` draft migrations; use "
+            "``pyvelm migrate`` to install/upgrade modules; "
             "`migrate-fresh` adds a plan and production confirmation; "
             "`nuke` (dev only) drops the schema and re-runs every "
             "install from scratch; `status` lists versions. Requires "
@@ -349,16 +351,21 @@ def _add_db_subcommand(subs) -> None:
 
     mig_p = db_subs.add_parser(
         "migrate",
-        help=(
-            "Install or upgrade every discovered module (same as boot "
-            "load_and_install). Use before starting app workers."
-        ),
+        help="Deprecated alias for ``pyvelm migrate``.",
     )
     mig_p.add_argument(
         "--roots", nargs="*", default=None,
         help="Extra module roots (default: pyvelm.toml + PYVELM_MODULE_ROOTS).",
     )
-    mig_p.set_defaults(func=_run_db_migrate)
+    mig_p.add_argument(
+        "--all", action="store_true",
+        help="Install/upgrade every discovered module (legacy full-stack pass).",
+    )
+    mig_p.add_argument(
+        "--module", dest="only_module", default=None,
+        help="Limit to one module and its dependencies (e.g. partners).",
+    )
+    mig_p.set_defaults(func=_run_db_migrate_shim)
 
     fresh_p = db_subs.add_parser(
         "migrate-fresh",
@@ -374,6 +381,10 @@ def _add_db_subcommand(subs) -> None:
     fresh_p.add_argument(
         "--module", dest="only_module", default=None,
         help="Limit to one module and its dependencies (e.g. base).",
+    )
+    fresh_p.add_argument(
+        "--all", action="store_true",
+        help="Install/upgrade every discovered module (legacy full-stack pass).",
     )
     fresh_p.add_argument(
         "--yes", "-y", action="store_true",
@@ -398,9 +409,8 @@ def _add_db_subcommand(subs) -> None:
     nuke_p = db_subs.add_parser(
         "nuke",
         help=(
-            "DROP every table in the public schema and re-run all module "
-            "installs / migrations from scratch. DEVELOPMENT ONLY — refuses "
-            "to run when PYVELM_ENV=production."
+            "DEV ONLY — DROP the schema (same wipe as migrate:reset), then "
+            "reinstall every discovered module. Type ``nuke`` to confirm."
         ),
     )
     nuke_p.add_argument(
@@ -469,16 +479,16 @@ def _run_db_diff(args: argparse.Namespace) -> None:
                 nulls = db_autogen.count_null_rows(env, alt.table, alt.column)
                 if nulls:
                     print(
-                        f"      → db migrate will NOT apply SET NOT NULL yet: "
+                        f"      → migrate will NOT apply SET NOT NULL yet: "
                         f"{nulls} row(s) have NULL in {alt.table}.{alt.column}"
                     )
                     print(
                         "      → backfill those rows (migration script or SQL), "
-                        "then run pyvelm db migrate again"
+                        "then run pyvelm migrate again"
                     )
                 else:
                     print(
-                        f"      → no NULL rows; pyvelm db migrate should apply "
+                        f"      → no NULL rows; pyvelm migrate should apply "
                         f"SET NOT NULL on {alt.table}.{alt.column}"
                     )
         for table, col in diff.orphan_columns:
@@ -543,242 +553,69 @@ def _run_db_autogen(args: argparse.Namespace) -> None:
         print("(Migration body is a no-op — review whether you really need it.)")
 
 
-def _require_dsn() -> str:
-    dsn = os.environ.get("PYVELM_DSN")
-    if not dsn:
-        sys.exit("PYVELM_DSN not set")
-    return dsn
+from .migrate_cli import (
+    confirm_destructive_phrase as _confirm_destructive_phrase,
+    confirm_migrate_fresh as _confirm_migrate_fresh,
+    drop_schema_contents as _drop_schema_contents,
+    dsn_display as _dsn_display,
+    execute_db_install as _execute_db_install,
+    guard_destructive_schema_command as _guard_destructive_schema_command,
+    ordered_specs_for_install as _ordered_specs_for_install,
+    print_install_results as _print_install_results,
+    read_installed_versions as _read_installed_versions,
+    require_dsn as _require_dsn,
+    resolve_migrate_specs as _resolve_migrate_specs,
+    run_db_migrate_fresh,
+    run_migrate,
+    wipe_schema as _wipe_schema,
+)
 
 
-def _dsn_display(dsn: str) -> str:
-    """Return a DSN safe to print (password redacted)."""
-    try:
-        from urllib.parse import urlparse, urlunparse
-
-        parsed = urlparse(dsn)
-        if parsed.scheme and parsed.hostname:
-            netloc = parsed.hostname
-            if parsed.port:
-                netloc = f"{netloc}:{parsed.port}"
-            if parsed.username:
-                netloc = f"{parsed.username}:***@{netloc}"
-            path = parsed.path or ""
-            return urlunparse(
-                (parsed.scheme, netloc, path, parsed.params, "", "")
-            )
-    except Exception:
-        pass
-    return "<dsn>"
-
-
-def _read_installed_versions(conn) -> dict[str, str]:
-    installed: dict[str, str] = {}
-    try:
-        rows = conn.execute(
-            'SELECT "name", "version" FROM "ir_module"'
-        ).fetchall()
-        installed = {str(r[0]): str(r[1]) for r in rows}
-    except Exception:
-        pass
-    return installed
-
-
-def _module_action(installed: dict[str, str], spec: loader.ModuleSpec) -> str:
-    db_ver = installed.get(spec.name)
-    disk = spec.version_str
-    if db_ver is None:
-        return "install"
-    if db_ver == disk:
-        return "sync"
-    return f"upgrade ({db_ver} → {disk})"
-
-
-def _ordered_specs_for_install(
-    roots: list[Path], only_module: str | None
-) -> list[loader.ModuleSpec]:
-    specs = loader.discover(roots)
-    if only_module is not None:
-        if only_module not in specs:
-            sys.exit(
-                f"Module {only_module!r} not discovered. "
-                f"Known: {sorted(specs)}"
-            )
-        needed: set[str] = set()
-
-        def _add(name: str) -> None:
-            if name in needed:
-                return
-            if name not in specs:
-                sys.exit(
-                    f"Module {only_module!r} depends on {name!r}, "
-                    f"which is not in the discovered set."
-                )
-            needed.add(name)
-            for dep in specs[name].depends:
-                _add(dep)
-
-        _add(only_module)
-        ordered = loader.resolve_order(specs)
-        return [s for s in ordered if s.name in needed]
-    return loader.resolve_order(specs)
-
-
-def _print_migrate_plan(
-    *,
-    dsn: str,
-    ordered: list[loader.ModuleSpec],
-    installed: dict[str, str],
-    production: bool,
-) -> None:
-    from .runtime import get_runtime_env
-
-    runtime = get_runtime_env()
-    print("Migration plan (migrate-fresh)")
-    print(f"  PYVELM_ENV:     {runtime}")
-    print(f"  Database:       {_dsn_display(dsn)}")
-    print(f"  Modules:        {len(ordered)}")
-    if production:
-        print(
-            "  Production:     yes — confirmation required "
-            "(use --yes for non-interactive CI)"
-        )
-    print()
-    for spec in ordered:
-        action = _module_action(installed, spec)
-        print(f"  {spec.name:20} {spec.version_str:12}  {action}")
-    print()
-
-
-def _confirm_migrate_fresh(*, production: bool, yes: bool) -> None:
-    if yes:
-        if production:
-            print(
-                "WARNING: --yes skipped production confirmation. "
-                "Only use in trusted CI/deploy pipelines.",
-                file=sys.stderr,
-            )
-        return
-    if not production:
-        return
+def _run_db_migrate_shim(args: argparse.Namespace) -> None:
+    """Backward-compatible alias for ``pyvelm migrate``."""
     print(
-        "This will modify the production database (schema, views, menus, "
-        "migration scripts for version gaps)."
+        "note: `pyvelm db migrate` is deprecated — use `pyvelm migrate`",
+        file=sys.stderr,
     )
-    try:
-        typed = input("Type migrate-fresh to continue: ").strip()
-    except EOFError:
-        sys.exit("Aborted (non-interactive terminal). Use --yes in CI.")
-    if typed != "migrate-fresh":
-        sys.exit("Aborted.")
-
-
-def _execute_db_install(
-    dsn: str, ordered: list[loader.ModuleSpec]
-) -> list[dict]:
-    with psycopg.connect(dsn, autocommit=True) as conn:
-        reg = Registry()
-        env = Environment(conn, registry=reg)
-        for spec in ordered:
-            loader._load_models(spec, reg)
-        return loader.install(ordered, env)
-
-
-def _print_install_results(ordered: list[loader.ModuleSpec], results: list[dict]) -> None:
-    print(f"Migrated {len(ordered)} module(s):")
-    for row in results:
-        parts = [row["name"]]
-        if row.get("schema"):
-            parts.append(row["schema"])
-        if row.get("views"):
-            parts.append(row["views"])
-        if row.get("menus"):
-            parts.append(row["menus"])
-        print("  " + " — ".join(parts))
-
-
-def _run_db_migrate(args: argparse.Namespace) -> None:
-    """Discover modules, load models, install/upgrade — one-shot deploy hook."""
-    dsn = _require_dsn()
-    roots = _resolve_module_roots(args)
-    ordered = _ordered_specs_for_install(roots, None)
-    results = _execute_db_install(dsn, ordered)
-    _print_install_results(ordered, results)
+    run_migrate(
+        _resolve_module_roots(args),
+        install_all=args.all,
+        only_module=args.only_module,
+    )
 
 
 def _run_db_migrate_fresh(args: argparse.Namespace) -> None:
-    """Install/upgrade with a printed plan and production confirmation."""
-    from .runtime import is_production
-
-    dsn = _require_dsn()
-    roots = _resolve_module_roots(args)
-    ordered = _ordered_specs_for_install(roots, args.only_module)
-    with psycopg.connect(dsn, autocommit=True) as conn:
-        installed = _read_installed_versions(conn)
-    production = is_production()
-    _print_migrate_plan(
-        dsn=dsn,
-        ordered=ordered,
-        installed=installed,
-        production=production,
+    run_db_migrate_fresh(
+        _resolve_module_roots(args),
+        install_all=args.all,
+        only_module=args.only_module,
+        yes=args.yes,
+        dry_run=args.dry_run,
     )
-    if args.dry_run:
-        print("Dry run — no changes applied.")
-        return
-    _confirm_migrate_fresh(production=production, yes=args.yes)
-    results = _execute_db_install(dsn, ordered)
-    _print_install_results(ordered, results)
-
-
-def _drop_schema_contents(conn, schema: str) -> None:
-    """DROP SCHEMA <schema> CASCADE and recreate it empty.
-
-    Safer than ``DROP DATABASE`` (we'd lose the role grants, extensions,
-    etc.) and faster than enumerating every table. The connection must
-    be in autocommit so the DDL applies immediately.
-    """
-    from psycopg import sql
-
-    qschema = sql.Identifier(schema)
-    conn.execute(sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(qschema))
-    conn.execute(sql.SQL("CREATE SCHEMA {}").format(qschema))
-    # GRANT defaults that DROP SCHEMA wiped out for the connection user.
-    conn.execute(sql.SQL("GRANT ALL ON SCHEMA {} TO CURRENT_USER").format(qschema))
-    conn.execute(sql.SQL("GRANT ALL ON SCHEMA {} TO PUBLIC").format(qschema))
 
 
 def _confirm_nuke(*, dsn: str, schema: str, yes: bool) -> None:
-    if yes:
-        return
-    print(
-        f"This will DROP every table, view, sequence, and function in "
-        f"schema {schema!r} of {_dsn_display(dsn)}.\n"
-        f"All data is lost. There is no undo."
+    _confirm_destructive_phrase(
+        phrase="nuke",
+        yes=yes,
+        preamble=(
+            f"This will DROP every table, view, sequence, and function in "
+            f"schema {schema!r} of {_dsn_display(dsn)}.\n"
+            f"All data is lost. There is no undo."
+        ),
     )
-    try:
-        typed = input("Type nuke to continue: ").strip()
-    except EOFError:
-        sys.exit("Aborted (non-interactive terminal). Pass --yes in CI.")
-    if typed != "nuke":
-        sys.exit("Aborted.")
 
 
 def _run_db_nuke(args: argparse.Namespace) -> None:
     """DROP the schema and re-run every module install from scratch.
 
-    Refuses to run in production unless ``PYVELM_ALLOW_DB_NUKE=1`` is set
-    (demo/staging deploy pipelines only). The user types ``nuke`` to
-    confirm (or passes ``--yes``). Used to reset a development database
-    to "freshly-installed every module" without manual table-by-table
-    cleanup. Mirrors Laravel's ``migrate:fresh`` semantics.
+    Same schema wipe as ``migrate:reset``, then reinstalls **every**
+    discovered module (``migrate --all``). Refuses production unless
+    ``PYVELM_ALLOW_DB_NUKE=1``. Type ``nuke`` to confirm (or ``--yes``).
     """
-    from .runtime import is_production, get_runtime_env
+    from .runtime import get_runtime_env
 
-    if is_production() and not os.environ.get("PYVELM_ALLOW_DB_NUKE"):
-        sys.exit(
-            "pyvelm db nuke is disabled in production "
-            "(PYVELM_ENV=production). Set PYVELM_ALLOW_DB_NUKE=1 only for "
-            "trusted demo/staging reset pipelines, or use development."
-        )
+    _guard_destructive_schema_command(label="db nuke")
 
     dsn = _require_dsn()
     roots = _resolve_module_roots(args)
@@ -796,10 +633,7 @@ def _run_db_nuke(args: argparse.Namespace) -> None:
 
     _confirm_nuke(dsn=dsn, schema=schema, yes=args.yes)
 
-    with psycopg.connect(dsn, autocommit=True) as conn:
-        print(f"Dropping schema {schema!r}…")
-        _drop_schema_contents(conn, schema)
-        print("Schema dropped + recreated.\n")
+    _wipe_schema(dsn, schema)
 
     print("Reinstalling modules…")
     results = _execute_db_install(dsn, ordered)
@@ -829,7 +663,9 @@ def _run_db_status(args: argparse.Namespace) -> None:
 # Artisan-style module commands (pyvelm make:module, etc.)
 # ---------------------------------------------------------------------------
 
-_BUILTIN_SUBCOMMANDS = frozenset({"cron", "db", "init", "new", "list", "help"})
+_BUILTIN_SUBCOMMANDS = frozenset({
+    "cron", "db", "init", "new", "list", "help",
+})
 
 
 def bootstrap_command_env(ctx) -> None:
@@ -857,10 +693,44 @@ def _command_registry(roots: list[Path] | None = None):
     return loader.discover_commands(roots)
 
 
+# Built-in ``pyvelm`` subcommands (argparse). Listed by ``pyvelm list`` alongside
+# Artisan-style module commands from :func:`loader.discover_commands`.
+_CORE_CLI_COMMANDS: list[tuple[str, str]] = [
+    ("cron", "Run the background cron + mail-dispatcher worker."),
+    ("init <name>", "Scaffold a new pyvelm project."),
+    ("new <module>", "Scaffold a new module inside the current project."),
+    ("db diff <module>", "Print schema delta for a module (no writes)."),
+    ("db autogen <module>", "Write migration file + bump VERSION."),
+    ("db migrate-fresh", "Migrate with pre-flight plan + prod confirmation."),
+    ("db status", "Show ir_module versions vs on-disk manifests."),
+    ("db nuke", "DEV ONLY — drop schema + reinstall every module."),
+    ("list", "List core and module commands."),
+    ("help <command>", "Show help for a module command (e.g. make:module)."),
+]
+
+
+def _print_command_section(title: str, commands: list[tuple[str, str]]) -> None:
+    """Print a aligned name + description block under *title*."""
+    if not commands:
+        return
+    print(title)
+    width = max(len(name) for name, _ in commands)
+    for name, desc in commands:
+        text = (desc or "").strip()
+        pad = " " * (width - len(name) + 2)
+        print(f"  {name}{pad}{text}")
+    print()
+
+
 def _run_command_list(_args: argparse.Namespace | None = None) -> None:
+    print("Available commands:\n")
+    _print_command_section("Core:", list(_CORE_CLI_COMMANDS))
     reg = _command_registry()
-    print("Available commands:")
-    reg.print_list()
+    module_cmds = [(cmd.name, cmd.description or "") for cmd in reg.all()]
+    if module_cmds:
+        _print_command_section("Module:", module_cmds)
+    else:
+        print("Module: (none registered)\n")
 
 
 def _run_command_help(args: argparse.Namespace) -> None:
@@ -902,8 +772,8 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="pyvelm",
         description=(
             "pyvelm command-line tool. Built-ins: cron, init, new, db, "
-            "list, help. Module commands: pyvelm make:module, etc. "
-            "(see `pyvelm list`)."
+            "list, help. Console commands: pyvelm migrate, serve, "
+            "make:module, etc. (see `pyvelm list`)."
         ),
     )
     subs = parser.add_subparsers(dest="command", required=False, metavar="<command>")
@@ -911,7 +781,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     lst = subs.add_parser(
         "list",
-        help="List Artisan-style commands from installed modules.",
+        help="List core CLI commands and Artisan-style module commands.",
     )
     lst.set_defaults(func=_run_command_list)
 
@@ -982,7 +852,7 @@ def main() -> None:
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
-        print("\nModule commands (run `pyvelm list` for full list):")
+        print("\nMore commands (run `pyvelm list` for the full list):")
         reg = _command_registry()
         for cmd in reg.all()[:8]:
             print(f"  {cmd.name:<20} {cmd.description or ''}")

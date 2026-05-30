@@ -15,10 +15,8 @@ from pyvelm.cli import (
     _default_module_roots,
     _dsn_display,
     _load_dotenv,
-    _module_action,
     _ordered_specs_for_install,
     _parse_roots,
-    _print_migrate_plan,
     _require_dsn,
     _resolve_module_roots,
     _run_command_help,
@@ -36,6 +34,11 @@ from pyvelm.cli import (
     main,
 )
 from pyvelm.loader import ModuleSpec
+from pyvelm.migrate_cli import (
+    module_action,
+    print_migrate_plan,
+    resolve_migrate_specs,
+)
 
 
 def _demo_spec(name: str = "demo", depends: list[str] | None = None) -> ModuleSpec:
@@ -91,9 +94,9 @@ class CliHelperTests(unittest.TestCase):
 
     def test_module_action_variants(self):
         spec = _demo_spec()
-        self.assertEqual(_module_action({}, spec), "install")
-        self.assertEqual(_module_action({spec.name: spec.version_str}, spec), "sync")
-        self.assertIn("upgrade", _module_action({spec.name: "0.0.1"}, spec))
+        self.assertEqual(module_action({}, spec), "install")
+        self.assertEqual(module_action({spec.name: spec.version_str}, spec), "sync")
+        self.assertIn("upgrade", module_action({spec.name: "0.0.1"}, spec))
 
     def test_ordered_specs_for_install_unknown_module(self):
         with (
@@ -113,10 +116,86 @@ class CliHelperTests(unittest.TestCase):
             ordered = _ordered_specs_for_install([], "child")
         self.assertEqual([s.name for s in ordered], ["base", "child"])
 
+    def test_resolve_migrate_specs_fresh_after_wipe_bootstraps_bundled_only(self):
+        from pyvelm.loader import BOOTSTRAP_MODULES
+
+        base = _demo_spec("base")
+        admin = _demo_spec("admin", depends=["base"])
+        partners = _demo_spec("partners", depends=["base"])
+        ordered = [base, admin, partners]
+        with (
+            patch(
+                "pyvelm.migrate_cli.ordered_specs_for_install",
+                return_value=ordered,
+            ),
+            patch("pyvelm.cli.psycopg.connect") as connect,
+        ):
+            result = resolve_migrate_specs(
+                [],
+                "postgresql://test",
+                fresh_after_wipe=True,
+            )
+        connect.assert_not_called()
+        expected = [s.name for s in ordered if s.name in BOOTSTRAP_MODULES]
+        self.assertEqual([s.name for s in result], expected)
+        self.assertNotIn("partners", result)
+
+    def test_resolve_migrate_specs_installed_only(self):
+        base = _demo_spec("base")
+        admin = _demo_spec("admin")
+        partners = _demo_spec("partners", depends=["base"])
+        ordered = [base, admin, partners]
+        conn = MagicMock()
+        conn.execute.return_value.fetchall.return_value = [
+            ("base",),
+            ("admin",),
+        ]
+        conn_cm = MagicMock()
+        conn_cm.__enter__ = MagicMock(return_value=conn)
+        conn_cm.__exit__ = MagicMock(return_value=False)
+        with (
+            patch("pyvelm.migrate_cli.ordered_specs_for_install", return_value=ordered),
+            patch("pyvelm.migrate_cli.psycopg.connect", return_value=conn_cm),
+            patch("pyvelm.migrate_cli.loader.specs_to_install", return_value=[base, admin]) as filt,
+        ):
+            result = resolve_migrate_specs([], "postgresql://test")
+        filt.assert_called_once()
+        self.assertEqual([s.name for s in result], ["base", "admin"])
+
+    def test_resolve_migrate_specs_all_skips_filter(self):
+        ordered = [_demo_spec("base"), _demo_spec("partners")]
+        with patch(
+            "pyvelm.migrate_cli.ordered_specs_for_install",
+            return_value=ordered,
+        ) as order_fn:
+            result = resolve_migrate_specs(
+                [],
+                "postgresql://test",
+                install_all=True,
+            )
+        order_fn.assert_called_once()
+        self.assertEqual(result, ordered)
+
+    def test_resolve_migrate_specs_module_uses_subtree(self):
+        base = _demo_spec("base")
+        child = _demo_spec("child", depends=["base"])
+        ordered = [base, child]
+        with patch(
+            "pyvelm.migrate_cli.ordered_specs_for_install",
+            return_value=ordered,
+        ) as order_fn:
+            result = resolve_migrate_specs(
+                [],
+                "postgresql://test",
+                only_module="child",
+            )
+        order_fn.assert_called_once_with([], "child")
+        self.assertEqual(result, ordered)
+
     def test_print_migrate_plan(self):
         spec = _demo_spec()
         with patch("builtins.print") as printed:
-            _print_migrate_plan(
+            print_migrate_plan(
                 dsn="postgresql://localhost/db",
                 ordered=[spec],
                 installed={},
@@ -359,10 +438,16 @@ class MainParserTests(unittest.TestCase):
         from pyvelm.tests.test_console import _DemoCommand
 
         reg = MagicMock()
+        reg.all.return_value = [_DemoCommand()]
         reg.get.return_value = _DemoCommand()
         with patch("pyvelm.cli._command_registry", return_value=reg):
-            _run_command_list(None)
-            reg.print_list.assert_called_once()
+            with patch("builtins.print") as printed:
+                _run_command_list(None)
+            text = " ".join(str(c.args[0]) for c in printed.call_args_list if c.args)
+            self.assertIn("Core:", text)
+            self.assertIn("cron", text)
+            self.assertIn("Module:", text)
+            self.assertIn("demo:run", text)
             _run_command_help(Namespace(command_name="demo:run"))
             reg.get.assert_called_with("demo:run")
 

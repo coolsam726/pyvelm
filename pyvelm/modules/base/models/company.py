@@ -34,6 +34,12 @@ class Company(BaseModel):
     # this company active, the UI overrides the default primary palette.
     # Empty → framework default (indigo in tailwind.css).
     primary_color = Char(string="Primary color")
+    # Google Font family name (e.g. ``Roboto``, ``Open Sans``). Empty → Inter, or
+    # ``PYVELM_FONT_FAMILY`` when set. Loaded from fonts.googleapis.com.
+    font_family = Char(
+        default="",
+        string="Font family",
+    )
 
     # White-label chrome (sidebar, login, footer). Empty fields fall back to
     # ``PYVELM_*`` environment variables — see ``pyvelm.branding``.

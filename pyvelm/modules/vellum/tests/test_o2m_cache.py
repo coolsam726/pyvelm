@@ -23,7 +23,7 @@ class O2mCacheTests(unittest.TestCase):
         cls.conn = psycopg.connect(DSN, autocommit=True)
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        loader.load_and_install(MODULE_ROOTS, cls.env)
+        loader.load_and_install(MODULE_ROOTS, cls.env, install_all=True)
         cls.Partner = cls.env["res.partner"]
 
     @classmethod

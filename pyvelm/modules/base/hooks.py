@@ -140,6 +140,7 @@ def sync(env):
     _seed_res_groups_read_access(env)
     classify_chrome_attachments_public(env)
     _seed_menu_layout_defaults(env)
+    _seed_font_family_defaults(env)
     # Do not call assign_user_group_to_active_users here — it ran on
     # upgrade via migration 0_23→0_24 and must not re-add **User** on
     # every dev reload (serve.py runs load_and_install) after an admin
@@ -190,6 +191,17 @@ def _seed_menu_layout_defaults(env) -> None:
             continue
         if company.menu_layout is None:
             company.write({"menu_layout": ""})
+
+
+def _seed_font_family_defaults(env) -> None:
+    """Ensure ``font_family`` is non-null on every company (empty = Inter / env)."""
+    if "res.company" not in env.registry:
+        return
+    for company in env["res.company"].search([]):
+        if not hasattr(company, "font_family"):
+            continue
+        if company.font_family is None:
+            company.write({"font_family": ""})
 
 
 def _purge_smoke_test_cron(env) -> None:

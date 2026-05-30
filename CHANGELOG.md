@@ -7,6 +7,41 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.26.0] — 2026-05-30
+
+### Added
+
+- **Company font theming** — per-company **Font family** on **Settings → Companies →
+  Branding & white-label** loads a [Google Fonts](https://fonts.google.com/) family
+  (e.g. Roboto, Open Sans). Empty uses Inter; deploy-wide default via
+  ``PYVELM_FONT_FAMILY``. Stylesheet + CSS variables injected via
+  ``layouts/_head_fonts.html`` (base **0.32.0+**).
+
+### Changed
+
+- **Apps catalog** — separate **Upgrade** (secondary; version bump or pending
+  ``db diff``) and **Sync** (warning) buttons on installed modules; Install
+  stays primary.
+- **`pyvelm migrate`**, **`migrate:fresh`**, and **`migrate:reset`** — moved to
+  console commands (shared logic in ``pyvelm.migrate_cli``). ``pyvelm db migrate``
+  remains as a deprecated alias.
+- **`pyvelm serve`** and **`pyvelm test`** — new console commands (uvicorn dev/prod
+  server and pytest wrapper with ``--coverage`` / ``--integration``).
+- **`pyvelm list`** — prints **Core** built-ins (`cron`, `db …`,
+  `migrate:fresh`, …) and **Module** Artisan commands (`make:*`, …).
+- **Fresh-database bootstrap** — app boot and ``pyvelm migrate`` install every
+  bundled module under ``pyvelm/modules/`` (not only **base** + **admin**).
+  External addon roots still require ``--all`` or manual **Apps** install.
+- **`pyvelm migrate:fresh`** — after schema wipe, installs bundled modules by
+  default; ``--all`` includes external addons; ``--module`` limits scope.
+- **`pyvelm db migrate`** — on an existing database, upgrades only modules
+  already in ``ir_module``; on a fresh database, installs all bundled modules.
+  Pass **`--all`** for every discovered module including app addons.
+- **Laravel-style destructive commands** — **`pyvelm migrate:reset`** drops
+  the schema (typed confirmation; blocked in production). **`pyvelm
+  migrate:fresh`** drops the schema then runs **`db migrate`**. **`pyvelm db
+  nuke`** remains drop + reinstall every module (`migrate --all`).
+
 ## [0.25.0] — 2026-05-29
 
 ### Added
@@ -29,6 +64,9 @@ out of the 0.x line.
   runtime, builders, and module `web.py` registrars.
 - **`document_layout` menu** — **Layout & Print** lives under **Settings →
   Organization** (no root-level Document Layout app).
+- **App boot** — `load_and_install` installs only **base** and **admin** on a
+  fresh database; other discovered modules stay in **Apps** until installed
+  (use **`pyvelm db migrate --all`** for a one-shot full install).
 
 ## [0.24.1] — 2026-05-29
 

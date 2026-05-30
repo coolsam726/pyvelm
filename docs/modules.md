@@ -268,15 +268,26 @@ loader.load_and_install(
 )
 ```
 
-`load_and_install(roots, env)` runs three steps end to end:
+`load_and_install(roots, env)` discovers every module under *roots* but
+**only installs a subset** by default:
+
+| Database state | Modules installed on boot |
+|----------------|---------------------------|
+| Fresh (empty `ir_module`) | Every module under **`pyvelm/modules/`** (e.g. `base`, `admin`, `reports`, `vellum`, …) |
+| Already has installed rows | Only modules already in `ir_module` (sync/upgrade) |
+
+Other discovered addons (outside the bundled tree) appear in **Apps** for
+manual install. To install those too (demo scripts, CI), pass
+``install_all=True`` to ``load_and_install`` or run ``pyvelm migrate --all``.
+
+Steps:
 
 1. **Discover** every directory containing a `__pyvelm__.py` under
    the given roots.
 2. **Resolve order** by topologically sorting on `DEPENDS`. Cycles
    and missing deps raise.
-3. **Install** each module in dependency order: schema setup for
-   new modules, migrations for upgrades, and the data-file sync
-   pass either way.
+3. **Load + install/sync** the subset from the table above (schema,
+   hooks, views, menus).
 
 Each step is callable on its own (`loader.discover`,
 `loader.resolve_order`, `loader.install`) for finer control.
@@ -391,8 +402,9 @@ and run DDL.
 
 | Action | What happens |
 |---|---|
-| **Install** | Topologically installs the target and any uninstalled prerequisites. Models are imported into the live registry; the standard install pass runs (schema, hook, view/menu sync). |
-| **Upgrade** / **Sync** | Available for every installed module (including when the manifest version matches `ir_module`). Reloads models and `DATA` files from disk, runs **`SYNC_HOOK`**, then additive schema (`_setup_table` + in-process autogen diff). Version-gap **`migrations/*.py`** run only when the manifest version increased. Re-syncs views and menus. No uninstall/reinstall needed for new `views/*.py` entries. |
+| **Install** | Topologically installs the target and any uninstalled prerequisites. Models are imported into the live registry; the standard install pass runs (schema, hook, view/menu sync). Primary button on the card. |
+| **Upgrade** | Shown when the manifest version is ahead of `ir_module` **or** when `db diff` detects pending schema changes. Reloads models, runs version-gap migrations when needed, applies additive schema, re-syncs views/menus. Secondary (outline) button. |
+| **Sync** | Always available on installed modules. Re-applies schema diff and reloads views/menus from disk without requiring a version bump — use after pulling code. Warning (amber) button. |
 | **Uninstall** | Drops tables owned by the module, deletes its `ir.ui.view` and `ir.ui.menu` rows, removes the `ir_module` entry. All inside one transaction. |
 
 POST endpoints respond with `HX-Redirect: /web/apps` so the sidebar

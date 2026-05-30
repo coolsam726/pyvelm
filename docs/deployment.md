@@ -69,8 +69,9 @@ reverse proxy:
 - **First-boot install.** Run **`pyvelm db migrate`** once per deploy before
   workers start (see [Migrations](migrations.md)). Scaffolded
   `docker-compose.yml` includes a one-shot `migrate` service; `app` waits for
-  it. `app/serve.py` still calls `load_and_install` on boot as a safety net
-  (idempotent).
+  it. Both migrate and `app/serve.py` boot with the same default: **base** and
+  **admin** on a fresh database. Install other modules from **Apps**, or use
+  **`pyvelm db migrate --all`** / **`--module`** when you need a CLI install.
 - **Static assets.** `/web/static/*` is served by Starlette today —
   fine for small deployments. Production setups should put a CDN or
   the reverse proxy in front, serving `pyvelm/static/dist/`

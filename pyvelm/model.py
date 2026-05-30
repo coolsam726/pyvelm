@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import copy
 from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 from .domain import domain_to_sql
@@ -168,8 +169,14 @@ class MetaModel(type):
 
         cls = super().__new__(mcs, ext_name, new_bases, clean_ns)
 
-        # Merge fields: existing + any new ones declared in this extension.
-        merged: dict[str, Field] = dict(existing._fields)
+        # Shallow-copy Field descriptors so rebinding compute deps on the
+        # extended class cannot mutate the parent module's class definition
+        # (cached imports would then leak deps into later registries).
+        merged: dict[str, Field] = {}
+        for attr_name, field in existing._fields.items():
+            cloned = copy(field)
+            cloned.bind(existing._name, attr_name)
+            merged[attr_name] = cloned
         for attr_name, attr_value in list(namespace.items()):
             if isinstance(attr_value, Field):
                 attr_value.bind(existing._name, attr_name)

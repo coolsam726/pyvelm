@@ -35,8 +35,11 @@
                 <div>
                     <dt class="text-2xs font-medium text-body-subtle uppercase tracking-wide">Version</dt>
                     <dd class="text-body mt-0.5">
-                        {% if app.installed_version and app.state == "to_upgrade" %}
+                        {% if app.version_upgrade %}
                         <span class="text-warning-strong">{{ app.installed_version }} → {{ app.available_version }}</span>
+                        {% elif app.has_schema_diff %}
+                        {{ app.installed_version }}
+                        <span class="text-warning-strong">(schema changes pending)</span>
                         {% elif app.installed_version %}
                         {{ app.installed_version }}
                         <span class="text-body-subtle">(available {{ app.available_version }})</span>

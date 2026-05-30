@@ -5771,6 +5771,22 @@ def render_access_denied_page(
     return template.render(**ctx)
 
 
+def _catalog_schema_diff_pending(env, spec) -> tuple[bool, str]:
+    """Return whether ``db diff`` would change anything for an installed module."""
+    from . import db_autogen
+    from . import loader as _loader
+
+    try:
+        if not spec.loaded:
+            _loader._load_models(spec, env.registry)
+        diff = db_autogen.compute_diff(env, spec.name)
+    except Exception:  # noqa: BLE001
+        return False, ""
+    if diff.is_empty:
+        return False, ""
+    return True, db_autogen._summary(diff)
+
+
 def _apps_catalog(env, module_roots: list) -> list[dict]:
     """Discover every module under `module_roots`, join with installed-
     version rows from `ir_module`, and return one dict per module.
@@ -5784,6 +5800,10 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
           "available_version": str,
           "installed_version": str | None,
           "state": "installed" | "to_upgrade" | "uninstalled",
+          "version_upgrade": bool,
+          "has_schema_diff": bool,
+          "needs_upgrade": bool,
+          "schema_diff_summary": str,
           "depends": list[str],
           "deps_missing": list[str],   # names of deps not yet installed
           "deps_unknown": list[str],   # subset of deps_missing that are
@@ -5821,11 +5841,21 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
             if pol and not env.can(cam, pol, perm=cap, model=cam):
                 continue
         inst = installed.get(name)
+        version_upgrade = False
+        has_schema_diff = False
+        schema_diff_summary = ""
         if inst is None:
             state = "uninstalled"
+            needs_upgrade = False
         else:
             installed_v = tuple(int(p) for p in inst.split("."))
-            state = "to_upgrade" if spec.version > installed_v else "installed"
+            version_upgrade = spec.version > installed_v
+            if not version_upgrade:
+                has_schema_diff, schema_diff_summary = _catalog_schema_diff_pending(
+                    env, spec,
+                )
+            needs_upgrade = version_upgrade or has_schema_diff
+            state = "to_upgrade" if needs_upgrade else "installed"
         deps_missing = [d for d in spec.depends if d not in installed]
         deps_unknown = [d for d in deps_missing if d not in specs]
         catalog.append(
@@ -5840,6 +5870,10 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
                 "available_version": spec.version_str,
                 "installed_version": inst,
                 "state": state,
+                "version_upgrade": version_upgrade,
+                "has_schema_diff": has_schema_diff,
+                "needs_upgrade": needs_upgrade,
+                "schema_diff_summary": schema_diff_summary,
                 "depends": spec.depends,
                 "deps_missing": deps_missing,
                 "deps_unknown": deps_unknown,
@@ -5935,7 +5969,7 @@ def upgrade_module_action(env, module_roots: list, target_name: str) -> dict:
     outcomes = _loader.install([spec], env)
     detail = outcomes[0] if outcomes else {}
     parts = [
-        f"Synced {target_name} ({spec.version_str})",
+        f"Upgraded {target_name} ({spec.version_str})",
         detail.get("schema", ""),
         detail.get("views", ""),
         detail.get("menus", ""),
@@ -5944,6 +5978,37 @@ def upgrade_module_action(env, module_roots: list, target_name: str) -> dict:
     return {
         "ok": True,
         "upgraded": [target_name],
+        "message": message,
+        "detail": detail,
+    }
+
+
+def sync_module_action(env, module_roots: list, target_name: str) -> dict:
+    """Re-sync views/menus and apply additive schema without requiring a version bump."""
+    from . import loader as _loader
+
+    specs = _loader.discover(module_roots)
+    if target_name not in specs:
+        raise ValueError(f"Unknown module {target_name!r}")
+    spec = specs[target_name]
+    current = _loader._installed_version(env, target_name)
+    if current is None:
+        raise ValueError(
+            f"Module {target_name!r} is not installed — use Install first."
+        )
+    _loader.reload_installed_models(env, specs)
+    outcomes = _loader.install([spec], env)
+    detail = outcomes[0] if outcomes else {}
+    parts = [
+        f"Synced {target_name} ({spec.version_str})",
+        detail.get("schema", ""),
+        detail.get("views", ""),
+        detail.get("menus", ""),
+    ]
+    message = " | ".join(p for p in parts if p)
+    return {
+        "ok": True,
+        "synced": [target_name],
         "message": message,
         "detail": detail,
     }

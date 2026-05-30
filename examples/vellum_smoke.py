@@ -89,7 +89,7 @@ def main() -> None:
 
         reg = Registry()
         env = Environment(conn, registry=reg, uid=1)
-        specs = loader.load_and_install(MODULE_ROOTS, env)
+        specs = loader.load_and_install(MODULE_ROOTS, env, install_all=True)
         print("Loaded modules:", [s.name for s in specs])
 
         assert "vellum" in {s.name for s in specs}, "bundled vellum module missing"

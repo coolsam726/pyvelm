@@ -206,7 +206,7 @@ class DomainCacheTests(unittest.TestCase):
         roots = BUILTIN_MODULE_ROOTS + [
             Path(__file__).resolve().parents[2] / "examples" / "modules"
         ]
-        loader.load_and_install(roots, cls.env)
+        loader.load_and_install(roots, cls.env, install_all=True)
         cls.Partner = cls.env["res.partner"]
         cls.Country = cls.env["res.country"]
 
@@ -237,7 +237,7 @@ class M2mSymmetricCacheTests(unittest.TestCase):
         roots = BUILTIN_MODULE_ROOTS + [
             Path(__file__).resolve().parents[2] / "examples" / "modules"
         ]
-        loader.load_and_install(roots, cls.env)
+        loader.load_and_install(roots, cls.env, install_all=True)
         cls.Partner = cls.env["res.partner"]
         cls.Tag = cls.env["res.tag"]
 

@@ -167,6 +167,7 @@ VIEWS: list[View] = [
                     field("logo_url_dark", widget="file_url"),
                     field("favicon_url", widget="file_url"),
                     field("primary_color", widget="color"),
+                    "font_family",
                     "copyright_text",
                     "support_email",
                     "support_url",

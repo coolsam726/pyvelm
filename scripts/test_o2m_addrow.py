@@ -24,7 +24,7 @@ def _bootstrap(dsn: str) -> tuple[int, Registry]:
     reg = Registry()
     with psycopg.connect(dsn, autocommit=True) as conn:
         env = Environment(conn, registry=reg, uid=1)
-        loader.load_and_install(MODULE_ROOTS, env)
+        loader.load_and_install(MODULE_ROOTS, env, install_all=True)
         admin = env["res.users"].search([("login", "=", "admin")], limit=1)
         if not admin:
             raise SystemExit("admin user not found")

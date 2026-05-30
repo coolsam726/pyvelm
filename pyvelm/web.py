@@ -228,6 +228,9 @@ def create_app(
 
     `module_roots` is the same list passed to `loader.load_and_install`
     so the Apps catalog page can re-discover the disk-side manifests.
+    Boot-time install only applies **base** and **admin** on a fresh DB;
+    other modules are installed from **Apps**, `pyvelm db migrate --module …`,
+    or `pyvelm db migrate --all`.
     Optional — if omitted, the catalog page reports "no roots configured"
     instead of crashing.
 
@@ -2798,6 +2801,21 @@ def create_app(
 
         try:
             result = upgrade_module_action(env, app.state.module_roots, name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return _apps_action_response(request, env, result)
+
+    @app.post("/web/apps/{name}/sync")
+    def web_app_sync(
+        name: str, request: Request, env: Environment = Depends(get_env)
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        _require_admin(env)
+        from .render import sync_module_action
+
+        try:
+            result = sync_module_action(env, app.state.module_roots, name)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return _apps_action_response(request, env, result)

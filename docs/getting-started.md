@@ -123,6 +123,10 @@ pyvelm db migrate
 # or: docker compose up   # runs migrate, then app + cron
 ```
 
+**Apps boot** (`app/serve.py`) and **`pyvelm db migrate`** only auto-install
+**base** and **admin** on a fresh database; use **Apps → Install**,
+**`pyvelm db migrate --module tasks`**, or **`--all`** for everything else.
+
 The Apps page lists `tasks` in the catalog. After migrate it should show
 **Installed**; otherwise click **Install**. The shell gains a **tasks** app in the sidebar (and its pages in the
 top bar under the default `apps` layout) once menus are synced. See

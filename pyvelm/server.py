@@ -1,8 +1,9 @@
-"""ASGI dev-server helpers shared by ``app.serve`` and ``examples.serve``."""
+"""ASGI dev-server helpers shared by ``app.serve``, ``examples.serve``, and ``pyvelm serve``."""
 from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 from .runtime import DEVELOPMENT, PRODUCTION, get_runtime_env, is_development
@@ -71,3 +72,63 @@ def default_serve_env(*, from_cli: bool) -> str:
     if os.environ.get("PYVELM_ENV"):
         return get_runtime_env()
     return DEVELOPMENT if from_cli else PRODUCTION
+
+
+def guess_serve_import(*, project_root: Path | None = None) -> str | None:
+    """Best-effort ASGI import string for ``pyvelm serve --reload``."""
+    root = (project_root or Path.cwd()).resolve()
+    if (root / "app" / "serve.py").is_file():
+        return "app.serve:app"
+    if (root / "examples" / "serve.py").is_file():
+        return "examples.serve:app"
+    return None
+
+
+def prepare_reload_import(import_str: str) -> list[str]:
+    """Put the project on ``sys.path`` and return uvicorn ``reload_dirs``."""
+    from .scaffolder import find_project_root
+
+    root = find_project_root() or Path.cwd().resolve()
+    if import_str.startswith("app.serve:"):
+        if str(root) not in sys.path:
+            sys.path.insert(0, str(root))
+        return [str(root), str(root / "app")]
+    if import_str.startswith("examples.serve:"):
+        if str(root) not in sys.path:
+            sys.path.insert(0, str(root))
+        return [str(root), str(root / "examples")]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    return [str(root)]
+
+
+def build_serve_app(
+    module_roots: list[Path | str],
+    *,
+    runtime_env: str | None = None,
+) -> Any:
+    """Load modules from the DB and return a FastAPI app for ``pyvelm serve``."""
+    import psycopg
+    from dotenv import find_dotenv, load_dotenv
+    from psycopg_pool import ConnectionPool
+
+    from . import Environment, Registry, loader
+    from .web import create_app
+
+    load_dotenv(find_dotenv(usecwd=True))
+    dsn = os.environ.get("PYVELM_DSN")
+    if not dsn:
+        sys.exit("PYVELM_DSN is not set (copy .env.example to .env)")
+
+    env_mode = apply_runtime_env(runtime_env)
+
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        reg = Registry()
+        env = Environment(conn, registry=reg)
+        specs = loader.load_and_install(module_roots, env)
+        print("Loaded modules:", [s.name for s in specs])
+
+    pool = ConnectionPool(dsn, min_size=1, max_size=4, open=True)
+    return create_app(
+        reg, pool, module_roots=module_roots, runtime_env=env_mode,
+    )

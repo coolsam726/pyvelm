@@ -79,7 +79,7 @@ def workflow_env():
     with psycopg.connect(dsn, autocommit=True) as conn:
         env = Environment(conn, registry=reg, uid=1)
         env._acl_bypass = True
-        loader.load_and_install(list(BUILTIN_MODULE_ROOTS) + [examples], env)
+        loader.load_and_install(list(BUILTIN_MODULE_ROOTS) + [examples], env, install_all=True)
         yield env
 
 

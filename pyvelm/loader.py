@@ -39,6 +39,25 @@ from .registry import Registry
 # Reserved name for the bookkeeping table the loader maintains.
 IR_MODULE_TABLE = "ir_module"
 
+_BUILTIN_MODULES_ROOT = Path(__file__).resolve().parent / "modules"
+
+
+def discover_bootstrap_module_names() -> frozenset[str]:
+    """Technical names of every bundled module under ``pyvelm/modules/``."""
+    if not _BUILTIN_MODULES_ROOT.is_dir():
+        return frozenset({"base", "admin"})
+    return frozenset(
+        p.name
+        for p in _BUILTIN_MODULES_ROOT.iterdir()
+        if p.is_dir() and (p / "__pyvelm__.py").is_file()
+    )
+
+
+# Auto-installed on a fresh database (empty ``ir_module``). Every other
+# discovered module (e.g. app addons outside ``pyvelm/modules/``) is opt-in
+# via **Apps** or ``pyvelm migrate --all``.
+BOOTSTRAP_MODULES: frozenset[str] = discover_bootstrap_module_names()
+
 
 def parse_module_roots_env(value: str) -> list[Path]:
     """Parse ``PYVELM_MODULE_ROOTS`` — comma- or colon-separated paths."""
@@ -282,14 +301,22 @@ def _load_models(spec: ModuleSpec, registry: Registry) -> None:
     (replaced by a `_inherit` extension) are recorded in
     `registry._model_extensions` so `_setup_module_schema` can add their
     new columns.
+
+    When the models package is already in :data:`sys.modules` (uvicorn
+    reload, tests, or a prior ``install_all`` in-process), class bodies
+    do not re-run and ``_inherit`` merges would stay bound to an old
+    registry — reload the package so extensions merge against *registry*.
     """
     if not _has_models_package(spec):
         spec.loaded = True
         return
     with registry.activate():
         before_models: dict[str, type] = dict(registry._models)
-        importlib.import_module(spec.models_package)
-        _sync_models_from_package(spec, registry, before_models)
+        if spec.models_package in sys.modules:
+            reload_models(spec, registry)
+        else:
+            importlib.import_module(spec.models_package)
+            _sync_models_from_package(spec, registry, before_models)
     spec.loaded = True
 
 
@@ -339,6 +366,36 @@ def _ensure_ir_module(env: Environment) -> None:
         f'"version" text NOT NULL, '
         f'"installed_at" timestamptz NOT NULL DEFAULT now())'
     )
+
+
+def _installed_module_names(env: Environment) -> set[str]:
+    _ensure_ir_module(env)
+    rows = env.conn.execute(
+        f'SELECT "name" FROM "{IR_MODULE_TABLE}"',
+    ).fetchall()
+    return {r[0] for r in rows}
+
+
+def specs_to_install(
+    env: Environment,
+    ordered: list[ModuleSpec],
+    *,
+    install_all: bool = False,
+) -> list[ModuleSpec]:
+    """Return the subset of *ordered* specs to load and install on this pass.
+
+    By default (app/cron boot): on a fresh database every bundled module in
+    ``pyvelm/modules/`` (``BOOTSTRAP_MODULES``) is installed; otherwise only
+    rows already present in ``ir_module``. Pass ``install_all=True`` to also
+    install discovered addons outside the bundled tree (``migrate --all``,
+    demo scripts, integration tests).
+    """
+    if install_all:
+        return ordered
+    installed = _installed_module_names(env)
+    if not installed:
+        return [s for s in ordered if s.name in BOOTSTRAP_MODULES]
+    return [s for s in ordered if s.name in installed]
 
 
 def _installed_version(env: Environment, name: str) -> tuple[int, ...] | None:
@@ -778,18 +835,30 @@ def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
     return results
 
 
-def load_and_install(roots: list[Path | str], env: Environment) -> list[ModuleSpec]:
-    """End-to-end: discover, resolve, load models, install. Returns the
-    ordered ModuleSpecs that were processed."""
+def load_and_install(
+    roots: list[Path | str],
+    env: Environment,
+    *,
+    install_all: bool = False,
+) -> list[ModuleSpec]:
+    """End-to-end: discover, resolve, load models, install/sync.
+
+    By default every bundled module under ``pyvelm/modules/`` is installed on
+    a fresh database; other discovered addons stay available in **Apps** until
+    installed. Pass ``install_all=True`` to install every discovered module
+    (used by ``pyvelm migrate --all`` and demo scripts). Returns the specs
+    that were loaded and installed/synced.
+    """
     from pyvelm.policies import register_builtin_policies
 
     register_builtin_policies()
     specs = discover(roots)
     ordered = resolve_order(specs)
-    for spec in ordered:
+    to_install = specs_to_install(env, ordered, install_all=install_all)
+    for spec in to_install:
         _load_models(spec, env.registry)
-    install(ordered, env)
-    return ordered
+    install(to_install, env)
+    return to_install
 
 
 def register_web_routes(app, roots: list[Path | str]) -> None:
@@ -800,10 +869,22 @@ def register_web_routes(app, roots: list[Path | str]) -> None:
     ``app.state.registry`` and ``app.state.pool`` already set) and should
     attach routes, static mounts, or routers. Registrars run in dependency
     order after core ``create_app`` routes are registered.
+
+    Only **installed** modules register routes — uninstalled addons stay
+    visible in **Apps** but do not mount HTTP handlers until installed.
     """
+    from pyvelm import Environment
+
     specs = discover(roots)
     ordered = resolve_order(specs)
+    installed: set[str] | None = None
+    if getattr(app.state, "pool", None) is not None:
+        with app.state.pool.connection() as conn:
+            env = Environment(conn, registry=app.state.registry, uid=None)
+            installed = _installed_module_names(env)
     for spec in ordered:
+        if installed is not None and spec.name not in installed:
+            continue
         if not spec.web_routes:
             continue
         registrar = _import_attr(spec.web_routes)

@@ -213,7 +213,8 @@ Or without docker:
 Add a module:
   pyvelm new my_module
   pyvelm db autogen my_module    # after you add models
-  pyvelm db migrate              # install/upgrade (also runs in compose)
+  pyvelm db migrate              # upgrade installed modules (also runs in compose)
+  pyvelm db migrate --all        # install every discovered module
 
 IDE stubs (optional):
   pyvelm make:stubs              # → .pyvelm/typing/ (see pyrightconfig.json)

@@ -3,3 +3,6 @@
 {% if company_theme_style %}
 <style id="pv-company-theme">{{ company_theme_style }}</style>
 {% endif %}
+{% if company_font_style is defined and company_font_style %}
+<style id="pv-company-font">{{ company_font_style }}</style>
+{% endif %}

@@ -58,6 +58,7 @@ class BrandingTests(unittest.TestCase):
         ctx = branding_context(None)
         self.assertIn("brand", ctx)
         self.assertIn("company_theme_style", ctx)
+        self.assertIn("company_font_stylesheet_url", ctx)
         self.assertEqual(ctx["brand"]["app_name"], "pyvelm")
 
     def test_default_brand_globals(self):

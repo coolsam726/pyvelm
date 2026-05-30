@@ -436,7 +436,7 @@ class BuildMenuTreeIntegrationTests(unittest.TestCase):
         with psycopg.connect(os.environ["PYVELM_DSN"], autocommit=True) as conn:
             reg = Registry()
             env = Environment(conn, reg, uid=1)
-            loader.load_and_install(BUILTIN_MODULE_ROOTS, env)
+            loader.load_and_install(BUILTIN_MODULE_ROOTS, env, install_all=True)
             tree = build_menu_tree(env, "/web/admin")
         self.assertIsInstance(tree, list)
         for node in tree:

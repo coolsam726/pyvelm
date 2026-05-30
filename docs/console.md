@@ -11,8 +11,9 @@ pyvelm list
 pyvelm help make:module
 ```
 
-Built-in framework commands (`cron`, `init`, `new`, `db`) stay as they
-are. Everything else is discovered from installed modules.
+Built-in framework commands (`cron`, `init`, `new`, `db diff`, `db nuke`, …)
+are listed under **Core** when you run `pyvelm list`. Console module commands
+(`migrate`, `migrate:fresh`, `serve`, `make:module`, …) appear under **Module**.
 
 ## Writing a command
 
@@ -79,6 +80,11 @@ Discovery uses the same module roots as the web app (`pyvelm.toml`
 | `make:menu` | `views/menu.py` (or `--append` to existing) |
 | `make:command` | `commands/<name>.py` Artisan command class |
 | `make:stubs` | Generate `.pyvelm/typing/` + create `pyrightconfig.json` when missing — see [IDE typing stubs](ide-typing.md) |
+| `serve` | Run uvicorn (`--env development|production`, `--reload`, `--host`, `--port`) |
+| `test` | Run pytest (`--coverage`, `--integration`, extra args after `--`) |
+| `migrate` | Install/upgrade modules (bootstrap on fresh DB; `--all`, `--module`) |
+| `migrate:fresh` | DEV ONLY — drop schema, then migrate (bootstrap by default) |
+| `migrate:reset` | DEV ONLY — drop schema (empty database) |
 
 Typical workflow:
 
@@ -92,6 +98,10 @@ pyvelm make:view inventory.product --module=inventory
 # (booleans → toggle, O2m/M2m → widget="dialog"). Use --minimal for name-only stub.
 pyvelm make:menu --view=product.list --module=inventory
 pyvelm make:stubs                              # IDE literals + pyrightconfig.json
+pyvelm migrate                         # upgrade installed modules (deploy)
+pyvelm migrate --module tasks          # one module + dependencies
+pyvelm serve --reload                  # dev server (http://127.0.0.1:8000/login)
+pyvelm test                                    # unit tests (pyvelm/tests in this repo)
 pyvelm db autogen inventory --with-views   # migration + views for new models
 docker compose restart app
 # Install via /web/apps

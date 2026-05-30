@@ -1,0 +1,9 @@
+{# Google Fonts — per-company family from res.company.font_family (or PYVELM_FONT_FAMILY). #}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+{% if company_font_stylesheet_url is defined and company_font_stylesheet_url %}
+<link href="{{ company_font_stylesheet_url }}" rel="stylesheet">
+{% else %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet">
+{% endif %}

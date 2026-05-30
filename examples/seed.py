@@ -73,7 +73,7 @@ def main():
     with psycopg.connect(dsn, autocommit=True) as conn:
         reg = Registry()
         env = Environment(conn, registry=reg)
-        loader.load_and_install(MODULE_ROOTS, env)
+        loader.load_and_install(MODULE_ROOTS, env, install_all=True)
 
         Partner = env["res.partner"]
         Country = env["res.country"]

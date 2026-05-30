@@ -22,7 +22,7 @@ class VellumRelationTests(unittest.TestCase):
         cls.conn = psycopg.connect(DSN, autocommit=True)
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        loader.load_and_install(MODULE_ROOTS, cls.env)
+        loader.load_and_install(MODULE_ROOTS, cls.env, install_all=True)
         Note = cls.env["vellum.demo.note"]
         Comment = cls.env["vellum.demo.comment"]
         Comment.search([]).unlink()

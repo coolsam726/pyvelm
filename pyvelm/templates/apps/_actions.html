@@ -20,24 +20,30 @@
             Install{% if app.deps_missing and not compact %} (+ {{ app.deps_missing | length }} dep{% if app.deps_missing | length > 1 %}s{% endif %}){% elif app.deps_missing %} (+{{ app.deps_missing | length }}){% endif %}
         </button>
         {% endif %}
-    {% elif app.state == "to_upgrade" %}
-    <button type="button"
-            hx-post="/web/apps/{{ app.name }}/upgrade"
-            hx-swap="none"
-            hx-confirm="Upgrade {{ app.name }} from {{ app.installed_version }} to {{ app.available_version }}? Applies schema changes, re-syncs views/menus, and runs migrations in one transaction."
-            class="{{ btn }} font-semibold rounded-md
-                   bg-warning text-white hover:opacity-90 transition-opacity">
-        {% if compact %}Upgrade{% else %}Upgrade to {{ app.available_version }}{% endif %}
-    </button>
     {% else %}
-    <button type="button"
-            hx-post="/web/apps/{{ app.name }}/upgrade"
-            hx-swap="none"
-            hx-confirm="Sync {{ app.name }} ({{ app.installed_version }})? Re-applies schema diff, reloads views and menus from disk — use this after pulling new module code without a version bump."
-            class="{{ btn }} font-semibold rounded-md
-                   bg-fg-brand text-white hover:opacity-90 transition-opacity">
-        Sync
-    </button>
+        {% if app.needs_upgrade %}
+        <button type="button"
+                hx-post="/web/apps/{{ app.name }}/upgrade"
+                hx-swap="none"
+                hx-confirm="{% if app.version_upgrade %}Upgrade {{ app.name }} from {{ app.installed_version }} to {{ app.available_version }}? Applies schema changes, re-syncs views/menus, and runs migrations in one transaction.{% else %}Upgrade {{ app.name }}? Applies pending schema changes detected by db diff{% if app.schema_diff_summary %}: {{ app.schema_diff_summary }}{% endif %}.{% endif %}"
+                class="{{ btn }} font-semibold rounded-md
+                       border border-default text-body bg-neutral-primary
+                       hover:bg-neutral-secondary transition-colors">
+            {% if app.version_upgrade and not compact %}
+            Upgrade to {{ app.available_version }}
+            {% else %}
+            Upgrade
+            {% endif %}
+        </button>
+        {% endif %}
+        <button type="button"
+                hx-post="/web/apps/{{ app.name }}/sync"
+                hx-swap="none"
+                hx-confirm="Sync {{ app.name }} ({{ app.installed_version }})? Re-applies schema diff, reloads views and menus from disk — use after pulling module code without a version bump."
+                class="{{ btn }} font-semibold rounded-md
+                       bg-warning text-white hover:opacity-90 transition-opacity">
+            Sync
+        </button>
     {% endif %}
 
     {% if app.state != "uninstalled" and app.name != "base" %}

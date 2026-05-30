@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
 from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
+from pyvelm.render import install_module_action
 from pyvelm.tests.conftest import reset_public_schema
 from pyvelm.web import create_app
 
@@ -30,7 +31,8 @@ def test_http_smoke_login_list_api(pyvelm_dsn: str):
     with psycopg.connect(pyvelm_dsn, autocommit=True) as conn:
         env = Environment(conn, registry=reg)
         specs = loader.load_and_install(_MODULE_ROOTS, env)
-        installed = {s.name for s in specs}
+        install_module_action(env, _MODULE_ROOTS, "partners")
+        installed = {s.name for s in specs} | {"partners"}
         assert _MINIMAL_MODULES <= installed
 
         Partner = env["res.partner"]

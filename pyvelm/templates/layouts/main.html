@@ -7,13 +7,7 @@
 
     {% include "layouts/_head_init.html" %}
     {% include "layouts/_head_branding.html" %}
-
-    {# Inter is the body font in pyvelm.css. Loaded from Google Fonts so
-       the build pipeline doesn't have to ship font files. #}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-          rel="stylesheet">
+    {% include "layouts/_head_fonts.html" %}
 
     {# Compiled CSS — Tailwind v4 + Flowbite plugin + the theme tokens
        defined in pyvelm.css. Built via `npm run build`. #}

@@ -8,13 +8,13 @@ dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
 bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on
 PostgreSQL (psycopg 3), FastAPI, and Jinja2.
 
-**Latest release:** [v0.25.0](releases/v0.25.0.md) (2026-05-29) — document
-layouts & PDF printing, per-company navigation layout.
-See [releases](releases/v0.25.0.md) and the
+**Latest release:** [v0.26.0](releases/v0.26.0.md) (2026-05-30) — company
+font theming, console migrate/serve/test, Apps Upgrade/Sync, bundled-module bootstrap.
+See [releases](releases/v0.26.0.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.25.0
+pip install pyvelm==0.26.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
@@ -61,6 +61,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.26.0](releases/v0.26.0.md) | **[Font theming](branding.md)** (Google Fonts); **console** migrate/serve/test; **Apps Upgrade/Sync**; bundled-module bootstrap |
 | [v0.25.0](releases/v0.25.0.md) | **[Document layouts](document-layout.md)** + PDF routes; **per-company [navigation layout](navigation.md#per-company-override)** (base 0.31) |
 | [v0.24.1](releases/v0.24.1.md) | **Combo/chatter** UI fixes; menu parent **`display_name`** for cross-module picks |
 | [v0.24.0](releases/v0.24.0.md) | Module **`WEB_ROUTES`** — custom FastAPI routes from the manifest |
@@ -186,7 +187,8 @@ pyvelm init my_erp              # scaffold a project
 pyvelm make:module inventory     # empty module shell
 pyvelm make:stubs                # IDE literals + pyrightconfig.json (optional)
 pyvelm db autogen my_module      # write migration file from models
-pyvelm db migrate               # install/upgrade all modules (deploy)
+pyvelm db migrate               # upgrade installed modules (deploy)
+pyvelm db migrate --all         # install/upgrade every discovered module
 pyvelm db status                # installed vs manifest versions
 pyvelm-cron --interval 60        # background cron + mail dispatcher
 ```

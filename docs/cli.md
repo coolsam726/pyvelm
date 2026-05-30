@@ -14,11 +14,12 @@ Subcommands:
 | [`pyvelm init <name>`](#pyvelm-init) | Scaffold a new pyvelm project. |
 | [`pyvelm new <module>`](#pyvelm-new) | Drop a runnable module skeleton into a project. |
 | [`pyvelm db …`](#pyvelm-db) | Schema diff, autogen migrations, migrate, nuke, status. |
-| [`pyvelm list`](#artisan-style-commands) | List module commands (`make:module`, your own, …). |
+| [`pyvelm list`](#artisan-style-commands) | List **core** and **module** commands. |
 | [`pyvelm make:…`](#artisan-style-commands) | Run an Artisan-style command — see [Console commands](console.md). |
 
-`pyvelm --help` shows built-ins; `pyvelm list` shows module commands;
-`pyvelm <name> --help` shows a command's signature.
+`pyvelm --help` summarizes top-level subcommands; `pyvelm list` shows core
+commands (including `db …`) and module commands; `pyvelm <name> --help` shows
+a command's signature.
 
 ## Artisan-style commands
 
@@ -200,27 +201,48 @@ same module roots as `app/serve.py` (`pyvelm.toml` + `PYVELM_MODULE_ROOTS`).
 pyvelm db diff tasks              # print additive schema delta
 pyvelm db autogen tasks           # write migrations/0_x_to_0_y.py + bump VERSION
 pyvelm db autogen tasks --with-views
-pyvelm db migrate                 # install/upgrade every discovered module
-pyvelm db migrate-fresh           # same, with plan + production confirmation
+pyvelm migrate                    # upgrade installed modules (bootstrap on fresh DB)
+pyvelm migrate --all              # install/upgrade every discovered module
+pyvelm migrate --module tasks     # one module + dependencies
+pyvelm db migrate                 # deprecated alias for pyvelm migrate
+pyvelm db migrate-fresh           # plan + production confirmation (no schema wipe)
+pyvelm migrate:reset              # DEV ONLY — drop schema (type migrate:reset)
+pyvelm migrate:fresh              # DEV ONLY — drop schema, then migrate
 pyvelm db nuke                    # DEV ONLY — drop schema + reinstall everything
 pyvelm db status                  # ir_module vs on-disk versions
 ```
 
-**`db migrate`** is the deploy hook: run once before gunicorn workers start.
-Scaffolded Docker projects run it automatically via a `migrate` service.
+**Destructive commands** (`migrate:reset`, `migrate:fresh`, `db nuke`) refuse
+to run when `PYVELM_ENV=production` unless `PYVELM_ALLOW_DB_NUKE=1`. Each
+requires typing its command name to confirm (or pass `--yes` in trusted CI).
+
+| Command | Schema wipe | Then |
+|---------|-------------|------|
+| `migrate:reset` | yes | nothing (empty database) |
+| `migrate:fresh` | yes | `migrate` (bootstrap by default; use `--all` for full catalog) |
+| `db nuke` | yes | reinstall **every** discovered module |
+
+**`pyvelm migrate`** is the deploy hook: run once before gunicorn workers start.
+(`pyvelm db migrate` is a deprecated alias.) By default it matches app boot — on a **fresh** database only **base** and
+**admin** are installed; on an existing database only rows in `ir_module` are
+upgraded/synced. Install other modules from **Apps**, or pass **`--all`** for
+a full-stack pass (demo repos, CI). **`--module`** targets one module and its
+dependencies. Scaffolded Docker projects run migrate automatically via a
+`migrate` service.
 
 **`db migrate-fresh`** runs the same install pass but prints a pre-flight plan
 first. When `PYVELM_ENV=production`, you must type `migrate-fresh` to continue
-(unless `--yes` for CI). Use `--dry-run` to preview without writing, and
-`--module base` to limit to one module and its dependencies.
+(unless `--yes` for CI). Use `--dry-run` to preview without writing,
+`--module base` to limit to one module and its dependencies, and `--all` for
+every discovered module.
 
 **`db nuke`** drops every table, view, sequence, and function in the configured
-schema (`--schema public` by default), recreates it empty, and re-runs every
-module install + migration from scratch — equivalent to "delete the database
-and start over" without losing role grants or extensions. The command
-**refuses to run when `PYVELM_ENV=production`** and prompts you to type `nuke`
-before doing anything destructive (skip with `--yes` for scripted dev resets).
-There is no undo; use it on local dev databases, not anything you care about.
+schema (`--schema public` by default), recreates it empty, and reinstalls
+**every** discovered module — equivalent to ``migrate:reset`` followed by
+``migrate --all``. The command **refuses to run when `PYVELM_ENV=production`**
+unless `PYVELM_ALLOW_DB_NUKE=1`, and prompts you to type `nuke` before doing
+anything destructive (skip with `--yes` for scripted dev resets). There is no
+undo; use on local dev databases, not anything you care about.
 
 ```bash
 PYVELM_ENV=development \

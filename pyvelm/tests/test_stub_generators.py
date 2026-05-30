@@ -18,6 +18,9 @@ from pyvelm.tests._isolation import purge_import_prefix
 
 
 class StubGeneratorTests(unittest.TestCase):
+    def setUp(self):
+        purge_import_prefix("demo")
+
     def tearDown(self):
         purge_import_prefix("demo")
 
@@ -28,6 +31,8 @@ class StubGeneratorTests(unittest.TestCase):
             'modules_root = "app/modules"\n', encoding="utf-8"
         )
         mod = root / "app" / "modules" / "demo"
+        mod.mkdir(parents=True)
+        (mod / "__init__.py").write_text("", encoding="utf-8")
         (mod / "models").mkdir(parents=True)
         (mod / "views").mkdir(parents=True)
         (mod / "__pyvelm__.py").write_text(

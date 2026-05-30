@@ -9,6 +9,8 @@ Configure on **Settings → Companies** (``res.company``) or via environment:
 - ``PYVELM_COPYRIGHT`` — footer legal line
 - ``PYVELM_SUPPORT_EMAIL`` / ``PYVELM_SUPPORT_URL`` — footer support links
 - ``PYVELM_SHOW_POWERED_BY`` — ``0`` / ``false`` hides the powered-by line
+- ``PYVELM_FONT_FAMILY`` — Google Font family name (e.g. ``Roboto``); company
+  field overrides when set
 
 Theme accent still comes from ``res.company.primary_color`` (see ``pyvelm.theme``).
 
@@ -24,6 +26,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from .fonts import company_font_context
 from .theme import company_theme_context
 
 DEFAULT_APP_NAME = "pyvelm"
@@ -131,8 +134,9 @@ def branding_context(
     *,
     company_id: int | None = None,
 ) -> dict[str, Any]:
-    """Theme CSS + ``brand`` dict for Jinja layouts."""
+    """Theme CSS + typography + ``brand`` dict for Jinja layouts."""
     ctx = company_theme_context(env, company_id=company_id)
+    ctx.update(company_font_context(env, company_id=company_id))
     ctx["brand"] = brand_dict(env, company_id=company_id)
     return ctx
 
@@ -140,8 +144,10 @@ def branding_context(
 def default_brand_globals() -> dict[str, Any]:
     """Jinja globals when no ``Environment`` is available."""
     brand = brand_dict(None)
+    font = company_font_context(None)
     return {
         "brand": brand,
         "company_primary_color": "",
         "company_theme_style": "",
+        **font,
     }

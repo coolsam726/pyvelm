@@ -828,10 +828,10 @@ class CliCoverageMoreTests(unittest.TestCase):
             _ordered_specs_for_install([], "child")
 
     def test_confirm_migrate_fresh_production_yes(self):
-        from pyvelm.cli import _confirm_migrate_fresh
+        from pyvelm.migrate_cli import confirm_migrate_fresh
 
         with patch("builtins.print"):
-            _confirm_migrate_fresh(production=True, yes=True)
+            confirm_migrate_fresh(production=True, yes=True)
 
     def test_confirm_nuke_eof(self):
         from pyvelm.cli import _confirm_nuke

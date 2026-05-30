@@ -25,7 +25,7 @@ class ReportExecuteIntegrationTests(unittest.TestCase):
         cls.conn = psycopg.connect(DSN, autocommit=True)
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        loader.load_and_install(_MODULE_ROOTS, cls.env)
+        loader.load_and_install(_MODULE_ROOTS, cls.env, install_all=True)
         Partner = cls.env["res.partner"]
         Country = cls.env["res.country"]
         france = Country.create({"name": "France", "code": "FR"})

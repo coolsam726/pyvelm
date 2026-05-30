@@ -23,7 +23,7 @@ class VellumQueryTests(unittest.TestCase):
         cls.conn = psycopg.connect(DSN, autocommit=True)
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        loader.load_and_install(MODULE_ROOTS, cls.env)
+        loader.load_and_install(MODULE_ROOTS, cls.env, install_all=True)
         from vellum_demo.models.note import DemoNote
 
         cls.DemoNote = DemoNote

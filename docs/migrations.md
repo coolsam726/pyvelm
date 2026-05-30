@@ -15,7 +15,18 @@ a greenfield app and for production deploys.
 
 ### What `pyvelm db migrate` actually runs
 
-For an **already-installed** module, `db migrate` (and **Apps → Upgrade / Sync**) always:
+By default, **`db migrate`** uses the same policy as app boot:
+
+| Database state | Modules touched |
+|----------------|-----------------|
+| Fresh (empty `ir_module`) | **`base`** and **`admin`** only |
+| Already has installed rows | Only modules in `ir_module` (sync/upgrade) |
+
+Pass **`--all`** to install/upgrade every discovered module (legacy full-stack
+deploy). Pass **`--module partners`** to target one module and its dependencies.
+
+For an **already-installed** module on the migrate pass, `db migrate` (and
+**Apps → Upgrade / Sync**) always:
 
 1. Reload models and `DATA` from disk
 2. Run **`SYNC_HOOK`** (if declared)
@@ -84,6 +95,8 @@ Run migrations **once** per deploy, then start gunicorn:
 export PYVELM_DSN=postgresql://...
 export PYVELM_MODULE_ROOTS=/app/app/modules   # if needed
 pyvelm db migrate
+# or, to install every addon in one shot (demo / CI):
+# pyvelm db migrate --all
 gunicorn -c gunicorn_conf.py app.serve:app
 ```
 
@@ -99,12 +112,31 @@ pyvelm db migrate-fresh --module base
 
 CI pipelines can use `pyvelm db migrate` or `pyvelm db migrate-fresh --yes`.
 
+### Destructive resets (development)
+
+Laravel-style commands for wiping a local database. All refuse production
+unless `PYVELM_ALLOW_DB_NUKE=1`, and require typing the command name (or
+`--yes` in CI):
+
+```bash
+pyvelm migrate:reset              # drop schema only — empty database
+pyvelm migrate:fresh              # drop schema, then db migrate (bootstrap)
+pyvelm migrate:fresh --all        # drop schema, then install every module
+pyvelm db nuke                    # drop schema + reinstall every module
+```
+
+**`db nuke`** performs the same schema wipe as **`migrate:reset`**, then
+reinstalls the full discovered catalog (`migrate --all`). Use **`migrate:fresh`**
+when you want the post-reset install policy of plain **`db migrate`** instead.
+
 Docker Compose (scaffolded projects) includes a one-shot `migrate` service that
 runs before `app` — see `docker-compose.yml`.
 
-`app/serve.py` still calls `load_and_install` on boot (idempotent). With
-`pyvelm db migrate` in your deploy pipeline, workers only repeat work if someone
-skips the migrate step.
+`app/serve.py` still calls `load_and_install` on boot (idempotent). On a
+**fresh** database that installs only **base** and **admin** — install other
+modules from **Apps** or run **`pyvelm db migrate --all`** when you need every
+module before workers. With `pyvelm db migrate` in your deploy pipeline,
+workers only repeat work if someone skips the migrate step.
 
 ## Inspect versions
 
@@ -121,8 +153,12 @@ Lists each discovered module, the on-disk manifest version, and whether
 |---------|---------|
 | `pyvelm db diff <module>` | Print schema delta (no writes) |
 | `pyvelm db autogen <module>` | Write migration file + bump `VERSION` |
-| `pyvelm db migrate` | Install/upgrade all modules |
+| `pyvelm db migrate` | Upgrade installed modules (bootstrap on fresh DB) |
+| `pyvelm db migrate --all` | Install/upgrade every discovered module |
 | `pyvelm db migrate-fresh` | Same as migrate, with plan + production confirmation |
+| `pyvelm migrate:reset` | DEV ONLY — drop schema (typed `migrate:reset`) |
+| `pyvelm migrate:fresh` | DEV ONLY — drop schema, then `db migrate` |
+| `pyvelm db nuke` | DEV ONLY — drop schema + reinstall every module |
 | `pyvelm db status` | Installed vs manifest versions |
 
 All require `PYVELM_DSN`. Module roots: `pyvelm.toml` + `PYVELM_MODULE_ROOTS` (same

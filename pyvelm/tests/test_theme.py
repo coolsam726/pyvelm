@@ -79,3 +79,4 @@ def test_main_layout_loads_company_theme_after_stylesheet():
     css_pos = text.index("/web/static/dist/pyvelm.css")
     theme_pos = text.index("layouts/_head_theme.html")
     assert css_pos < theme_pos
+    assert "layouts/_head_fonts.html" in text

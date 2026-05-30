@@ -7,7 +7,13 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from pyvelm.runtime import DEVELOPMENT, PRODUCTION
-from pyvelm.server import apply_runtime_env, default_serve_env, run_dev_server
+from pyvelm.server import (
+    apply_runtime_env,
+    default_serve_env,
+    guess_serve_import,
+    prepare_reload_import,
+    run_dev_server,
+)
 
 
 class ApplyRuntimeEnvTests(unittest.TestCase):
@@ -100,6 +106,43 @@ class RunDevServerTests(unittest.TestCase):
         self.assertIn("/docs", text)
         self.assertIn("admin / admin", text)
         run.assert_called_once()
+
+
+class ServeImportTests(unittest.TestCase):
+    def test_guess_app_serve(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "app").mkdir()
+            (root / "app" / "serve.py").write_text("# stub\n", encoding="utf-8")
+            self.assertEqual(guess_serve_import(project_root=root), "app.serve:app")
+
+    def test_guess_examples_serve(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "examples").mkdir()
+            (root / "examples" / "serve.py").write_text("# stub\n", encoding="utf-8")
+            self.assertEqual(
+                guess_serve_import(project_root=root), "examples.serve:app",
+            )
+
+    def test_prepare_reload_import_app(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "app").mkdir()
+            with patch("pyvelm.scaffolder.find_project_root", return_value=root):
+                dirs = prepare_reload_import("app.serve:app")
+            self.assertIn(str(root), dirs)
+            self.assertIn(str(root / "app"), dirs)
+            self.assertIn(str(root), sys.path)
 
 
 if __name__ == "__main__":

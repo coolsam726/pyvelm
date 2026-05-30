@@ -50,6 +50,7 @@ class WebRoutesManifestTests(unittest.TestCase):
                     encoding="utf-8",
                 )
                 app = MagicMock()
+                app.state.pool = None
                 register_web_routes(app, [root])
         finally:
             sys.modules.pop("demo.web", None)

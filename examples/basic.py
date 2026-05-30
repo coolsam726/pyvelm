@@ -44,7 +44,7 @@ def main():
         # so each run starts clean.
         _drop_known_tables(conn)
 
-        specs = loader.load_and_install(MODULE_ROOTS, env)
+        specs = loader.load_and_install(MODULE_ROOTS, env, install_all=True)
         print("Loaded modules:", [s.name for s in specs])
 
         Partner = env["res.partner"]
