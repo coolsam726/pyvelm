@@ -291,8 +291,10 @@ def _fetch_table_columns_inspector(conn, table: str) -> dict[str, ColumnSchema] 
         return out
     from sqlalchemy import inspect as sa_inspect
 
-    engine = conn._sa.engine
-    insp = sa_inspect(engine)
+    # Inspect the live connection, not the engine: inspecting the engine
+    # opens a second pooled connection that deadlocks on Postgres against an
+    # uncommitted ALTER TABLE held by this connection (ACCESS EXCLUSIVE lock).
+    insp = sa_inspect(conn._sa)
     if table not in insp.get_table_names():
         return None
     out: dict[str, ColumnSchema] = {}

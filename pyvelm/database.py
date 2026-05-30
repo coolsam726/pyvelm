@@ -413,7 +413,11 @@ def column_exists(conn, table: str, column: str, cap: DialectCapabilities | None
     if sa_conn is not None:
         from sqlalchemy import inspect as sa_inspect
 
-        cols = sa_inspect(sa_conn.engine).get_columns(table)
+        # Inspect via the LIVE connection, not the engine. Inspecting the
+        # engine checks out a *second* pooled connection, which deadlocks
+        # on Postgres when this one holds an uncommitted ALTER TABLE (an
+        # ACCESS EXCLUSIVE lock the new connection can never acquire).
+        cols = sa_inspect(sa_conn).get_columns(table)
         return column in {c["name"] for c in cols}
     rows = conn.execute(
         "SELECT column_name FROM information_schema.columns "
@@ -658,7 +662,8 @@ def table_exists(conn, table: str, cap: DialectCapabilities | None = None) -> bo
     if sa_conn is not None:
         from sqlalchemy import inspect as sa_inspect
 
-        return sa_inspect(sa_conn.engine).has_table(table)
+        # Live connection (not engine) — see column_exists for why.
+        return sa_inspect(sa_conn).has_table(table)
     row = conn.execute(
         "SELECT 1 FROM information_schema.tables "
         "WHERE table_schema = current_schema() AND table_name = %s",
