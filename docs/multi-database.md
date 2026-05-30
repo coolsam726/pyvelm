@@ -133,8 +133,7 @@ Or JSON:
 export PYVELM_DATABASES='[{"key":"tenant_a","dsn":"postgresql+psycopg://…","label":"Tenant A"}]'
 ```
 
-See [ADR 001](adr/001-sqlalchemy-core.md) and [CONTEXT.md](../CONTEXT.md) for
-implementation status.
+See [ADR 001](adr/001-sqlalchemy-core.md) for implementation status and roadmap.
 
 ## Related
 
