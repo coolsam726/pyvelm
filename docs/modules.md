@@ -241,7 +241,8 @@ def register_routes(app) -> None:
 You do **not** wire module routes manually in `serve.py`.
 
 **Reads as:** same discovery roots as install — if the module is on disk
-under your roots and declares `WEB_ROUTES`, its URLs are live on boot.
+under your roots and declares `WEB_ROUTES`, its URLs are live on boot and
+after **Apps → Install** (no server restart required).
 
 ### Request scope and CSRF
 

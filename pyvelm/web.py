@@ -2788,6 +2788,13 @@ def create_app(
             result = install_module_action(env, app.state.module_roots, name)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+        installed = result.get("installed") or []
+        if installed:
+            from .loader import register_web_routes
+
+            register_web_routes(
+                app, app.state.module_roots, only=set(installed),
+            )
         return _apps_action_response(request, env, result)
 
     @app.post("/web/apps/{name}/upgrade")

@@ -58,6 +58,70 @@ class WebRoutesManifestTests(unittest.TestCase):
         self.assertEqual(len(called), 1)
         self.assertIs(called[0], app)
 
+    def test_register_web_routes_skips_already_registered(self):
+        called: list = []
+
+        def fake_register(app):
+            called.append(app)
+
+        import sys
+        import types
+
+        mod = types.ModuleType("demo.web")
+        mod.register_routes = fake_register
+        sys.modules["demo.web"] = mod
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                pkg = root / "demo"
+                pkg.mkdir()
+                (pkg / "__pyvelm__.py").write_text(
+                    'NAME = "demo"\n'
+                    'VERSION = (0, 1, 0)\n'
+                    'WEB_ROUTES = "demo.web:register_routes"\n',
+                    encoding="utf-8",
+                )
+                app = MagicMock()
+                app.state.pool = None
+                app.state.registered_web_route_modules = set()
+                register_web_routes(app, [root])
+                register_web_routes(app, [root])
+        finally:
+            sys.modules.pop("demo.web", None)
+
+        self.assertEqual(len(called), 1)
+
+    def test_register_web_routes_only_filter(self):
+        called: list = []
+
+        def fake_register(app):
+            called.append(app)
+
+        import sys
+        import types
+
+        mod = types.ModuleType("demo.web")
+        mod.register_routes = fake_register
+        sys.modules["demo.web"] = mod
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                pkg = root / "demo"
+                pkg.mkdir()
+                (pkg / "__pyvelm__.py").write_text(
+                    'NAME = "demo"\n'
+                    'VERSION = (0, 1, 0)\n'
+                    'WEB_ROUTES = "demo.web:register_routes"\n',
+                    encoding="utf-8",
+                )
+                app = MagicMock()
+                app.state.pool = None
+                register_web_routes(app, [root], only={"other"})
+        finally:
+            sys.modules.pop("demo.web", None)
+
+        self.assertEqual(called, [])
+
 
 if __name__ == "__main__":
     unittest.main()

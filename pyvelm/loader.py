@@ -861,7 +861,12 @@ def load_and_install(
     return to_install
 
 
-def register_web_routes(app, roots: list[Path | str]) -> None:
+def register_web_routes(
+    app,
+    roots: list[Path | str],
+    *,
+    only: set[str] | frozenset[str] | None = None,
+) -> None:
     """Mount each discovered module's ``WEB_ROUTES`` registrar on *app*.
 
     Modules declare ``WEB_ROUTES = "pkg.web:register_routes"`` in
@@ -872,8 +877,18 @@ def register_web_routes(app, roots: list[Path | str]) -> None:
 
     Only **installed** modules register routes — uninstalled addons stay
     visible in **Apps** but do not mount HTTP handlers until installed.
+
+    Pass ``only={...}`` after a live Apps install to mount routes for modules
+    that were not present in ``ir_module`` when the process started. Each
+    module's registrar runs at most once per process (tracked on
+    ``app.state.registered_web_route_modules``).
     """
     from pyvelm import Environment
+
+    registered: set[str] = getattr(app.state, "registered_web_route_modules", None)
+    if registered is None:
+        registered = set()
+        app.state.registered_web_route_modules = registered
 
     specs = discover(roots)
     ordered = resolve_order(specs)
@@ -883,12 +898,17 @@ def register_web_routes(app, roots: list[Path | str]) -> None:
             env = Environment(conn, registry=app.state.registry, uid=None)
             installed = _installed_module_names(env)
     for spec in ordered:
+        if only is not None and spec.name not in only:
+            continue
+        if spec.name in registered:
+            continue
         if installed is not None and spec.name not in installed:
             continue
         if not spec.web_routes:
             continue
         registrar = _import_attr(spec.web_routes)
         registrar(app)
+        registered.add(spec.name)
 
 
 # ---------------------------------------------------------------------------

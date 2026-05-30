@@ -1,6 +1,6 @@
 [project]
 name = "pyvelm"
-version = "0.26.0"
+version = "0.26.1"
 description = "PyVELM — declarative Python ERP: Odoo recordsets & modules, Laravel/Filament ergonomics, unique Tailwind admin shell."
 readme = "README.md"
 license = "LGPL-3.0-or-later"

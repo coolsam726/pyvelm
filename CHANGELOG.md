@@ -7,6 +7,15 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.26.1] — 2026-05-30
+
+### Fixed
+
+- **`WEB_ROUTES` on live Apps install** — installing a module from **Apps**
+  now calls ``register_web_routes`` for that module so HTTP handlers (e.g.
+  **document_layout** ``/report/layout/designer``) are available without a
+  server restart. Each module's registrar runs at most once per process.
+
 ## [0.26.0] — 2026-05-30
 
 ### Added
