@@ -106,7 +106,11 @@ def _assert_safe_reset_dsn(dsn: str) -> None:
 
 
 def reset_database(dsn: str | None = None) -> None:
-    """Wipe the test database so the next install starts from a clean slate."""
+    """Wipe the test database so the next install starts from a clean slate.
+
+    Close any open connections to *dsn* first — Postgres will block ``DROP
+    TABLE`` while other sessions hold locks on those tables.
+    """
     dsn = normalize_dsn(dsn or dsn_from_env() or "")
     _assert_safe_reset_dsn(dsn)
     cap = capabilities_from_dsn(dsn)
@@ -188,9 +192,14 @@ class DatabaseTestCase(unittest.TestCase):
     Provides ``cls.dsn``, ``cls.database``, and ``cls.conn`` (an open
     :class:`~pyvelm.database.ConnectionAdapter`). Subclasses set up their own
     ``Registry`` / ``Environment`` in ``setUpClass``.
+
+    Set ``fresh_db = True`` to wipe the test database before opening ``conn``
+    (required when calling ``reset_database`` — never reset while a connection
+    to the same DSN is still open).
     """
 
     required_backend: str | None = "postgresql"
+    fresh_db: bool = False
 
     dsn: str
     database: Database
@@ -207,6 +216,8 @@ class DatabaseTestCase(unittest.TestCase):
             )
         cls.dsn = dsn
         cls.database = open_database(dsn, pool_size=2)
+        if cls.fresh_db:
+            reset_database(dsn)
         cls.conn = cls.database.open_connection()
 
     @classmethod

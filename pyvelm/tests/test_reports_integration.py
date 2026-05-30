@@ -7,17 +7,18 @@ from pathlib import Path
 from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry
 from pyvelm.reports.execute import run_report
 from pyvelm.reports.service import execute_report, load_report
-from pyvelm.tests.support.db import DatabaseTestCase, install_named_modules, reset_database
+from pyvelm.tests.support.db import DatabaseTestCase, install_named_modules
 
 _EXAMPLE_ROOT = Path(__file__).resolve().parents[2] / "examples" / "modules"
 _MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [_EXAMPLE_ROOT]
 
 
 class ReportExecuteIntegrationTests(DatabaseTestCase):
+    fresh_db = True
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        reset_database(cls.dsn)
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
         install_named_modules(cls.env, ["admin", "reports", "partners"], _MODULE_ROOTS)

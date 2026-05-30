@@ -5,10 +5,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry
 from pyvelm.loader import BOOTSTRAP_MODULES, ModuleSpec, specs_to_install
 from pyvelm.render import install_module_action
-from pyvelm.tests.support.db import DatabaseTestCase, install_named_modules, reset_database
+from pyvelm.tests.support.db import db_connection, install_named_modules, reset_database
 
 
 def _spec(name: str, depends: list[str] | None = None) -> ModuleSpec:
@@ -62,29 +64,24 @@ class SpecsToInstallTests(unittest.TestCase):
         self.assertEqual([s.name for s in result], ["base", "reports"])
 
 
-class BootstrapAfterFullInstallTests(DatabaseTestCase):
-    """Regression: _inherit must not mutate cached base Field descriptors."""
+@pytest.mark.integration
+def test_bootstrap_after_geo_data_and_partners(pyvelm_dsn: str):
+    """geo_data _inherit must not mutate base Country Field descriptors."""
+    roots = BUILTIN_MODULE_ROOTS + [
+        Path(__file__).resolve().parents[2] / "examples" / "modules"
+    ]
 
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-
-    def test_bootstrap_after_geo_data_and_partners(self):
-        """geo_data _inherit must not mutate base Country Field descriptors."""
-        roots = BUILTIN_MODULE_ROOTS + [
-            Path(__file__).resolve().parents[2] / "examples" / "modules"
-        ]
-
-        reset_database(self.dsn)
+    reset_database(pyvelm_dsn)
+    with db_connection(pyvelm_dsn) as conn:
         reg = Registry()
-        env = Environment(self.conn, registry=reg, uid=1)
+        env = Environment(conn, registry=reg, uid=1)
         install_named_modules(env, ["admin", "geo_data"], roots)
         install_module_action(env, list(roots), "partners")
 
-        import base.models.country as base_country
+    import base.models.country as base_country
 
-        display = base_country.Country._fields["display_name"]
-        self.assertNotIn("flag_emoji", display.depends_on)
+    display = base_country.Country._fields["display_name"]
+    assert "flag_emoji" not in display.depends_on
 
 
 if __name__ == "__main__":
