@@ -5,10 +5,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
+from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry
 from pyvelm.loader import BOOTSTRAP_MODULES, ModuleSpec, specs_to_install
 from pyvelm.render import install_module_action
-from pyvelm.tests.support.db import DatabaseTestCase, reset_database
+from pyvelm.tests.support.db import DatabaseTestCase, install_named_modules, reset_database
 
 
 def _spec(name: str, depends: list[str] | None = None) -> ModuleSpec:
@@ -69,7 +69,8 @@ class BootstrapAfterFullInstallTests(DatabaseTestCase):
     def setUpClass(cls):
         super().setUpClass()
 
-    def test_bootstrap_after_install_all(self):
+    def test_bootstrap_after_geo_data_and_partners(self):
+        """geo_data _inherit must not mutate base Country Field descriptors."""
         roots = BUILTIN_MODULE_ROOTS + [
             Path(__file__).resolve().parents[2] / "examples" / "modules"
         ]
@@ -77,7 +78,7 @@ class BootstrapAfterFullInstallTests(DatabaseTestCase):
         reset_database(self.dsn)
         reg = Registry()
         env = Environment(self.conn, registry=reg, uid=1)
-        loader.load_and_install(roots, env)
+        install_named_modules(env, ["admin", "geo_data"], roots)
         install_module_action(env, list(roots), "partners")
 
         import base.models.country as base_country
