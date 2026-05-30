@@ -8,10 +8,10 @@ a greenfield app and for production deploys.
 
 | Layer | When it runs | What it does |
 |-------|----------------|---------------|
-| **Model-driven diff** | `pyvelm db diff` anytime | Compares every stored field to Postgres: new columns, nullability, **type** mismatches, orphan columns |
+| **Model-driven diff** | `pyvelm db diff` anytime | Compares every stored field to the live DB: new columns, nullability, **type** mismatches, orphan columns |
 | **Schema apply** | Every install/upgrade/`db migrate` | `_setup_table` + `apply_schema_diff` — new tables/columns, `SET NOT NULL` when no NULL rows, `DROP NOT NULL` when relaxing |
 | **`SYNC_HOOK`** | Before schema apply on every upgrade/**Sync**/migrate | Idempotent backfills, orphan-column cleanup, and other fixups so `SET NOT NULL` can run in the same pass |
-| **Migration scripts** | Only when `ir_module.version` **&lt; manifest `VERSION`** | `migrations/<from>_to_<to>.py` — one-time, version-gapped transforms: `ALTER TYPE … USING`, renames, DDL autogen cannot emit |
+| **Migration scripts** | Only when `ir_module.version` **&lt; manifest `VERSION`** | `migrations/<from>_to_<to>.py` — Postgres DDL; skipped on SQLite (use greenfield + autogen) |
 
 ### What `pyvelm db migrate` actually runs
 

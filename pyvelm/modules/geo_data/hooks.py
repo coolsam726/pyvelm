@@ -1,26 +1,25 @@
-"""Install hook for geo_data — seed continents, countries, states, cities.
+"""Install hook and on-demand seed for geo_data.
 
-Data sources
-------------
+Data sources (``seed_reference_data`` only)
+--------------------------------------------
 - ``geonamescache.GeonamesCache`` — continents (7), countries (252 with
   continent / ISO3 / phone / currency / capital / population), cities
   (≈32k, filtered down to capitals + population ≥ 100,000).
 - ``pycountry.subdivisions`` — ISO 3166-2 subdivisions (≈5,000),
   linked to the country by ISO alpha-2.
 
-Both packages are optional dependencies. The install hook imports them
+Both packages are optional dependencies. The seed action imports them
 lazily and surfaces a clear ``pip install pyvelm[geo]`` error when
 either is missing.
 
+Install creates tables and ACLs only — use **Seed geography data** on the
+Countries list (or ``POST /web/geo-data/seed``) to load reference rows.
+
 Idempotency
 -----------
-The hook is safe to re-run: existing rows are matched on their
-natural keys (continent ``code``, country ``code``, state ``code``,
-city ``geoname_id``) and only the missing ones are inserted. The
-loader installs each module inside a transaction, so a partial seed
-either commits in full or rolls back.
+``seed_reference_data`` is safe to re-run: existing rows are matched on
+their natural keys and only missing ones are inserted.
 """
-
 from __future__ import annotations
 
 import logging
@@ -34,17 +33,40 @@ _CITY_POPULATION_THRESHOLD = 100_000
 
 
 def install(env):
+    """Schema is handled by the loader; grant ACLs only (no bulk seed)."""
+    _grant_acl(env)
+
+
+def seed_reference_data(env) -> dict[str, int]:
+    """Load continents, countries, states, and cities (on demand).
+
+    Returns counts ``{continents, countries, states, cities}`` inserted
+    on this run (existing rows are skipped or patched).
+    """
     _require_packages()
     import geonamescache
     import pycountry
 
     gc = geonamescache.GeonamesCache()
+    counts = {"continents": 0, "countries": 0, "states": 0, "cities": 0}
 
-    _grant_acl(env)
+    before = len(env["res.continent"].search([]))
     continents = _seed_continents(env, gc)
+    counts["continents"] = len(env["res.continent"].search([])) - before
+
+    before = len(env["res.country"].search([]))
     countries = _seed_countries(env, gc, continents)
+    counts["countries"] = len(env["res.country"].search([])) - before
+
+    before = len(env["res.country.state"].search([]))
     states = _seed_states(env, pycountry, countries)
+    counts["states"] = len(env["res.country.state"].search([])) - before
+
+    before = len(env["res.city"].search([]))
     _seed_cities(env, gc, countries, states)
+    counts["cities"] = len(env["res.city"].search([])) - before
+
+    return counts
 
 
 def _grant_acl(env) -> None:
@@ -127,7 +149,7 @@ def _seed_countries(env, gc, continents: dict[str, int]) -> dict[str, int]:
             or None,
         }
         if iso2 in existing_by_code:
-            # Patch existing rows so re-installs pick up upstream fixes.
+            # Patch existing rows so re-seeds pick up upstream fixes.
             rec = Country.browse(existing_by_code[iso2])
             rec.write({k: v for k, v in vals.items() if v is not None})
             out[iso2] = rec.id
@@ -183,11 +205,7 @@ def _seed_states(env, pycountry, countries: dict[str, int]) -> dict[str, int]:
 def _seed_cities(env, gc, countries: dict[str, int], states: dict[tuple[str, str], int]) -> None:
     """Seed capitals + cities with population ≥ 100k."""
     City = env["res.city"]
-    Country = env["res.country"]
 
-    # Resolve "capital city name" per country once so the seeder can
-    # flag capitals even when their population falls below the
-    # threshold (e.g. Vaduz, ~5,500).
     capitals_by_iso2: dict[str, str] = {
         iso2: (payload.get("capital") or "").strip().lower()
         for iso2, payload in gc.get_countries().items()

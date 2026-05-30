@@ -26,7 +26,7 @@ class TestCommand(Command):
     signature = (
         "test "
         "{--coverage : Run with coverage report} "
-        "{--integration : Include integration tests (requires PYVELM_DSN)} "
+        "{--integration : Include integration tests (requires PYVELM_DSN_TEST)} "
         "{--path= : Test path or node (default: tests/ or pyvelm/tests)}"
     )
 
@@ -44,6 +44,10 @@ class TestCommand(Command):
         path: str | None = None,
         extra: list[str] | None = None,
     ) -> int:
+        from pyvelm.database import load_testing_env
+
+        load_testing_env()
+
         try:
             import pytest
         except ImportError:

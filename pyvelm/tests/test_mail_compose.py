@@ -7,14 +7,12 @@ they run in CI without a database.
 """
 from __future__ import annotations
 
-import os
 import unittest
 from unittest.mock import MagicMock
 
+from pyvelm.tests.support.db import DatabaseTestCase
 from pyvelm import BaseModel, Char, Environment, Registry
-from pyvelm.tests._mail import register_mail_message
-
-DSN = os.environ.get("PYVELM_DSN")
+from pyvelm.tests._mail import register_mail_message, seed_author
 
 
 def _import_split_addresses():
@@ -26,11 +24,6 @@ def _import_split_addresses():
     with reg.activate():
         from pyvelm.mail import _split_addresses
     return _split_addresses
-
-try:
-    import psycopg
-except ImportError:
-    psycopg = None
 
 
 class AddressSplitTests(unittest.TestCase):
@@ -72,13 +65,16 @@ class AddressSplitTests(unittest.TestCase):
         )
 
 
-@unittest.skipUnless(DSN and psycopg, "needs postgres")
-class MailMessageCcBccTests(unittest.TestCase):
-    def test_dispatch_forwards_cc_bcc_reply_to(self):
-        from pyvelm.mail import MailThread
+class MailMessageCcBccTests(DatabaseTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
 
+    def test_dispatch_forwards_cc_bcc_reply_to(self):
         reg = Registry()
         with reg.activate():
+            from pyvelm.mail import MailThread
+
             register_mail_message(reg)
 
             class Partner(MailThread, BaseModel):
@@ -86,46 +82,45 @@ class MailMessageCcBccTests(unittest.TestCase):
                 name = Char(default="Demo")
                 email = Char()
 
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            env._acl_bypass = True
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        env._acl_bypass = True
+        seed_author(env)
+        partner = env["test.compose.partner"].create(
+            {"name": "Acme", "email": "ops@acme.example"}
+        )
+        msg = partner._send_rendered_mail(
+            subject="Hello",
+            body_html="<p>hi</p>",
+            recipient_email="primary@acme.example, second@acme.example",
+            cc="cc1@acme.example",
+            bcc="bcc1@acme.example",
+            reply_to="replyto@acme.example",
+        )
+        self.assertEqual(msg.recipient_cc, "cc1@acme.example")
+        self.assertEqual(msg.recipient_bcc, "bcc1@acme.example")
+        self.assertEqual(msg.reply_to, "replyto@acme.example")
+        backend = MagicMock()
+        stats = env.registry["mail.message"].dispatch_outgoing(env, backend=backend)
+        self.assertGreaterEqual(stats["sent"], 1)
+        self.assertEqual(env["mail.message"].browse(msg.id).state, "sent")
+        kwargs = None
+        for call in backend.send.call_args_list:
+            if call.kwargs.get("cc") == "cc1@acme.example":
+                kwargs = call.kwargs
+                break
+        self.assertIsNotNone(kwargs, "expected backend.send for this message")
+        self.assertEqual(kwargs["bcc"], "bcc1@acme.example")
+        self.assertEqual(kwargs["reply_to"], "replyto@acme.example")
+        self.assertEqual(
+            kwargs["to"], "primary@acme.example, second@acme.example"
+        )
+class MailComposeTests(DatabaseTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
 
-            partner = env["test.compose.partner"].create(
-                {"name": "Acme", "email": "ops@acme.example"}
-            )
-            msg = partner._send_rendered_mail(
-                subject="Hello",
-                body_html="<p>hi</p>",
-                recipient_email="primary@acme.example, second@acme.example",
-                cc="cc1@acme.example",
-                bcc="bcc1@acme.example",
-                reply_to="replyto@acme.example",
-            )
-            self.assertEqual(msg.recipient_cc, "cc1@acme.example")
-            self.assertEqual(msg.recipient_bcc, "bcc1@acme.example")
-            self.assertEqual(msg.reply_to, "replyto@acme.example")
-
-            backend = MagicMock()
-            stats = env.registry["mail.message"].dispatch_outgoing(env, backend=backend)
-            self.assertGreaterEqual(stats["sent"], 1)
-            self.assertEqual(env["mail.message"].browse(msg.id).state, "sent")
-            kwargs = None
-            for call in backend.send.call_args_list:
-                if call.kwargs.get("cc") == "cc1@acme.example":
-                    kwargs = call.kwargs
-                    break
-            self.assertIsNotNone(kwargs, "expected backend.send for this message")
-            self.assertEqual(kwargs["bcc"], "bcc1@acme.example")
-            self.assertEqual(kwargs["reply_to"], "replyto@acme.example")
-            self.assertEqual(
-                kwargs["to"], "primary@acme.example, second@acme.example"
-            )
-
-
-@unittest.skipUnless(DSN and psycopg, "needs postgres")
-class MailComposeTests(unittest.TestCase):
     """Composer model lifecycle: launch / apply template / send / save as.
 
     The framework models (Message, MailTemplate, MailCompose) are imported
@@ -169,109 +164,104 @@ class MailComposeTests(unittest.TestCase):
 
     def test_launch_autofills_to_from_email_field(self):
         reg = self._registry()
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            env._acl_bypass = True
-            partner = env["test.compose.partner2"].create(
-                {"name": "Acme", "email": "billing@acme.example"}
-            )
-            Compose = env.registry["mail.compose.message"]
-            composer = Compose.launch(
-                env, model="test.compose.partner2", res_id=partner.id
-            )
-            self.assertEqual(composer.recipient_to, "billing@acme.example")
-            self.assertEqual(composer.model, "test.compose.partner2")
-            self.assertEqual(composer.res_id, partner.id)
-            self.assertEqual(composer.state, "draft")
-
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        env._acl_bypass = True
+        seed_author(env)
+        partner = env["test.compose.partner2"].create(
+            {"name": "Acme", "email": "billing@acme.example"}
+        )
+        Compose = env.registry["mail.compose.message"]
+        composer = Compose.launch(
+            env, model="test.compose.partner2", res_id=partner.id
+        )
+        self.assertEqual(composer.recipient_to, "billing@acme.example")
+        self.assertEqual(composer.model, "test.compose.partner2")
+        self.assertEqual(composer.res_id, partner.id)
+        self.assertEqual(composer.state, "draft")
     def test_launch_with_template_renders_subject_and_body(self):
         reg = self._registry()
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            env._acl_bypass = True
-            partner = env["test.compose.partner2"].create(
-                {"name": "Acme", "email": "billing@acme.example"}
-            )
-            tpl = env["mail.template"].create(
-                {
-                    "name": "Welcome",
-                    "model": "test.compose.partner2",
-                    "subject": "Hello {{ object.name }}",
-                    "body_html": "<p>Hi {{ object.name }}</p>",
-                    "active": True,
-                }
-            )
-            Compose = env.registry["mail.compose.message"]
-            composer = Compose.launch(
-                env,
-                model="test.compose.partner2",
-                res_id=partner.id,
-                template_id=tpl.id,
-            )
-            self.assertEqual(composer.subject, "Hello Acme")
-            self.assertIn("Hi Acme", composer.body_html or "")
-
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        env._acl_bypass = True
+        seed_author(env)
+        partner = env["test.compose.partner2"].create(
+            {"name": "Acme", "email": "billing@acme.example"}
+        )
+        tpl = env["mail.template"].create(
+            {
+                "name": "Welcome",
+                "model": "test.compose.partner2",
+                "subject": "Hello {{ object.name }}",
+                "body_html": "<p>Hi {{ object.name }}</p>",
+                "active": True,
+            }
+        )
+        Compose = env.registry["mail.compose.message"]
+        composer = Compose.launch(
+            env,
+            model="test.compose.partner2",
+            res_id=partner.id,
+            template_id=tpl.id,
+        )
+        self.assertEqual(composer.subject, "Hello Acme")
+        self.assertIn("Hi Acme", composer.body_html or "")
     def test_action_send_queues_outgoing_message(self):
         reg = self._registry()
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            env._acl_bypass = True
-            partner = env["test.compose.partner2"].create(
-                {"name": "Acme", "email": "billing@acme.example"}
-            )
-            Compose = env.registry["mail.compose.message"]
-            composer = Compose.launch(
-                env, model="test.compose.partner2", res_id=partner.id
-            )
-            composer.write(
-                {
-                    "subject": "Manual subject",
-                    "body_html": "<p>Manual body</p>",
-                    "recipient_cc": "cc@acme.example",
-                    "recipient_bcc": "bcc@acme.example",
-                    "reply_to": "noreply@acme.example",
-                }
-            )
-            composer.action_send()
-            self.assertEqual(composer.state, "sent")
-            msgs = env["mail.message"].search(
-                [("model", "=", "test.compose.partner2"), ("res_id", "=", partner.id)]
-            )
-            self.assertEqual(len(msgs), 1)
-            msg = env["mail.message"].browse(msgs._ids[0])
-            self.assertEqual(msg.subject, "Manual subject")
-            self.assertEqual(msg.recipient_cc, "cc@acme.example")
-            self.assertEqual(msg.recipient_bcc, "bcc@acme.example")
-            self.assertEqual(msg.reply_to, "noreply@acme.example")
-            self.assertEqual(msg.state, "outgoing")
-
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        env._acl_bypass = True
+        seed_author(env)
+        partner = env["test.compose.partner2"].create(
+            {"name": "Acme", "email": "billing@acme.example"}
+        )
+        Compose = env.registry["mail.compose.message"]
+        composer = Compose.launch(
+            env, model="test.compose.partner2", res_id=partner.id
+        )
+        composer.write(
+            {
+                "subject": "Manual subject",
+                "body_html": "<p>Manual body</p>",
+                "recipient_cc": "cc@acme.example",
+                "recipient_bcc": "bcc@acme.example",
+                "reply_to": "noreply@acme.example",
+            }
+        )
+        composer.action_send()
+        self.assertEqual(composer.state, "sent")
+        msgs = env["mail.message"].search(
+            [("model", "=", "test.compose.partner2"), ("res_id", "=", partner.id)]
+        )
+        self.assertEqual(len(msgs), 1)
+        msg = env["mail.message"].browse(msgs._ids[0])
+        self.assertEqual(msg.subject, "Manual subject")
+        self.assertEqual(msg.recipient_cc, "cc@acme.example")
+        self.assertEqual(msg.recipient_bcc, "bcc@acme.example")
+        self.assertEqual(msg.reply_to, "noreply@acme.example")
+        self.assertEqual(msg.state, "outgoing")
     def test_action_save_as_template_creates_template(self):
         reg = self._registry()
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            env._acl_bypass = True
-            partner = env["test.compose.partner2"].create(
-                {"name": "Acme", "email": "billing@acme.example"}
-            )
-            Compose = env.registry["mail.compose.message"]
-            composer = Compose.launch(
-                env, model="test.compose.partner2", res_id=partner.id
-            )
-            composer.write({"subject": "Reusable", "body_html": "<p>Body</p>"})
-            tpl = composer.action_save_as_template(name="My template")
-            self.assertEqual(tpl.name, "My template")
-            self.assertEqual(tpl.model, "test.compose.partner2")
-            self.assertEqual(tpl.subject, "Reusable")
-            self.assertIn("Body", tpl.body_html or "")
-
-
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        env._acl_bypass = True
+        seed_author(env)
+        partner = env["test.compose.partner2"].create(
+            {"name": "Acme", "email": "billing@acme.example"}
+        )
+        Compose = env.registry["mail.compose.message"]
+        composer = Compose.launch(
+            env, model="test.compose.partner2", res_id=partner.id
+        )
+        composer.write({"subject": "Reusable", "body_html": "<p>Body</p>"})
+        tpl = composer.action_save_as_template(name="My template")
+        self.assertEqual(tpl.name, "My template")
+        self.assertEqual(tpl.model, "test.compose.partner2")
+        self.assertEqual(tpl.subject, "Reusable")
+        self.assertIn("Body", tpl.body_html or "")
 if __name__ == "__main__":
     unittest.main()

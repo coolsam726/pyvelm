@@ -1,18 +1,11 @@
 """Domain compiler and comodel-unlink cache tests."""
 from __future__ import annotations
 
-import os
 import unittest
 
-from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Many2many, Registry, loader
+from pyvelm import BaseModel, Char, Environment, Many2many, Many2one, Registry
 from pyvelm.domain import domain_to_sql, normalize_domain
-
-DSN = os.environ.get("PYVELM_DSN")
-
-try:
-    import psycopg as _psycopg
-except ImportError:
-    _psycopg = None
+from pyvelm.tests.support.db import DatabaseTestCase
 
 
 def _mini_registry():
@@ -29,6 +22,30 @@ def _mini_registry():
             tag_ids = Many2many("test.tag")
 
     return reg, Partner
+
+
+def _cache_test_registry() -> Registry:
+    reg = Registry()
+    with reg.activate():
+
+        class Country(BaseModel):
+            _name = "test.cache.country"
+            name = Char()
+            code = Char()
+
+        class Partner(BaseModel):
+            _name = "test.cache.partner"
+            name = Char()
+            code = Char()
+            country_id = Many2one("test.cache.country", ondelete="SET NULL")
+            tag_ids = Many2many("test.cache.tag")
+
+        class Tag(BaseModel):
+            _name = "test.cache.tag"
+            name = Char()
+            partner_ids = Many2many("test.cache.partner")
+
+    return reg
 
 
 class DomainCompileTests(unittest.TestCase):
@@ -194,25 +211,18 @@ class DomainCompileTests(unittest.TestCase):
         self.assertEqual(len(params), 2)
 
 
-@unittest.skipUnless(DSN and _psycopg, "PYVELM_DSN / psycopg not available")
-class DomainCacheTests(unittest.TestCase):
+class DomainCacheIntegrationTests(DatabaseTestCase):
+    """Cache invalidation against minimal models (no module install)."""
+
     @classmethod
     def setUpClass(cls):
-        from pathlib import Path
-
-        cls.conn = _psycopg.connect(DSN, autocommit=True)
-        cls.reg = Registry()
+        super().setUpClass()
+        cls.reg = _cache_test_registry()
+        cls.reg.init_db(cls.conn)
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        roots = BUILTIN_MODULE_ROOTS + [
-            Path(__file__).resolve().parents[2] / "examples" / "modules"
-        ]
-        loader.load_and_install(roots, cls.env, install_all=True)
-        cls.Partner = cls.env["res.partner"]
-        cls.Country = cls.env["res.country"]
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
+        cls.Partner = cls.env["test.cache.partner"]
+        cls.Country = cls.env["test.cache.country"]
+        cls.Tag = cls.env["test.cache.tag"]
 
     def test_comodel_unlink_clears_many2one_cache(self):
         country = self.Country.create({"name": "CacheUnlink", "code": "CU"})
@@ -223,27 +233,6 @@ class DomainCacheTests(unittest.TestCase):
         country.unlink()
         p = self.Partner.browse(partner.id)
         self.assertFalse(p.country_id)
-
-
-@unittest.skipUnless(DSN and _psycopg, "PYVELM_DSN / psycopg not available")
-class M2mSymmetricCacheTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        from pathlib import Path
-
-        cls.conn = _psycopg.connect(DSN, autocommit=True)
-        cls.reg = Registry()
-        cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        roots = BUILTIN_MODULE_ROOTS + [
-            Path(__file__).resolve().parents[2] / "examples" / "modules"
-        ]
-        loader.load_and_install(roots, cls.env, install_all=True)
-        cls.Partner = cls.env["res.partner"]
-        cls.Tag = cls.env["res.tag"]
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def test_partner_tag_write_clears_tag_partner_ids_cache(self):
         tag = self.Tag.create({"name": "SymCache"})

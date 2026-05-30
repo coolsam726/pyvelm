@@ -181,6 +181,7 @@ def domain_to_sql(
     joins: list[str] | None = None,
     join_aliases: dict[tuple, str] | None = None,
     join_counter: list[int] | None = None,
+    capabilities=None,
 ) -> tuple[str, list[Any], str]:
     """Compile a domain to SQL.
 
@@ -191,6 +192,10 @@ def domain_to_sql(
     """
     if not domain:
         return "TRUE", [], ""
+
+    from .database import dialect_capabilities, ilike_sql
+
+    cap = capabilities or dialect_capabilities("postgresql")
 
     domain_norm = normalize_domain(expand_or_groups(list(domain)))
     tree, end = _parse_polish(domain_norm, 0)
@@ -348,13 +353,13 @@ def domain_to_sql(
             inner_clauses.append(f"{leaf_ref} NOT LIKE %s")
             inner_params.append(value)
         elif universal and op == "ilike":
-            inner_clauses.append(f"{leaf_ref} NOT ILIKE %s")
+            inner_clauses.append(f"NOT ({ilike_sql(leaf_ref, cap)})")
             inner_params.append(value)
         elif leaf_op == "like":
             inner_clauses.append(f"{leaf_ref} LIKE %s")
             inner_params.append(value)
         elif leaf_op == "ilike":
-            inner_clauses.append(f"{leaf_ref} ILIKE %s")
+            inner_clauses.append(ilike_sql(leaf_ref, cap))
             inner_params.append(value)
         else:
             raise ValueError(f"Unknown operator: {leaf_op!r}")
@@ -429,7 +434,7 @@ def domain_to_sql(
             return f"{col_sql} LIKE %s", leaf_params
         if op == "ilike":
             leaf_params.append(value)
-            return f"{col_sql} ILIKE %s", leaf_params
+            return ilike_sql(col_sql, cap), leaf_params
         raise ValueError(f"Unknown operator: {op!r}")
 
     def _compile_tree(node) -> tuple[str, list[Any]]:

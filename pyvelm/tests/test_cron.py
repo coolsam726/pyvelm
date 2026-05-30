@@ -2,20 +2,13 @@
 from __future__ import annotations
 
 import io
-import os
 import unittest
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from pyvelm import BaseModel, Char, Environment, Registry
-
-DSN = os.environ.get("PYVELM_DSN")
-
-try:
-    import psycopg
-except ImportError:
-    psycopg = None
+from pyvelm.tests.support.db import DatabaseTestCase
 
 
 def _registry():
@@ -244,14 +237,10 @@ class CronRunNowUnitTests(unittest.TestCase):
             CronJob.run_now(job)
 
 
-@unittest.skipUnless(DSN and psycopg, "PYVELM_DSN required")
-class CronJobIntegrationTests(unittest.TestCase):
+class CronJobIntegrationTests(DatabaseTestCase):
     @classmethod
     def setUpClass(cls):
-        try:
-            cls.conn = psycopg.connect(DSN, autocommit=True, connect_timeout=3)
-        except Exception as exc:
-            raise unittest.SkipTest(f"cannot connect to PYVELM_DSN: {exc}") from exc
+        super().setUpClass()
         cls.reg = _registry()
         cls.reg.init_db(cls.conn)
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
@@ -259,10 +248,6 @@ class CronJobIntegrationTests(unittest.TestCase):
         cls.Cron = cls.env["ir.cron"]
         cls.Action = cls.env["ir.actions.server"]
         cls.Target = cls.env["test.cron.target"]
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def setUp(self):
         self.Cron.search([]).unlink()

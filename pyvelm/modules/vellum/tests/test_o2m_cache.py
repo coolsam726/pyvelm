@@ -8,27 +8,22 @@ from unittest import mock
 
 import psycopg
 
+from pyvelm.tests.support.db import DatabaseTestCase
 from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
 from pyvelm.fields import _collection_ids_from_cache
 
-DSN = os.environ.get("PYVELM_DSN")
 HERE = Path(__file__).resolve().parents[4]
 MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [HERE / "examples" / "modules"]
 
 
-@unittest.skipUnless(DSN, "PYVELM_DSN not set")
-class O2mCacheTests(unittest.TestCase):
+class O2mCacheTests(DatabaseTestCase):
     @classmethod
     def setUpClass(cls):
-        cls.conn = psycopg.connect(DSN, autocommit=True)
+        super().setUpClass()
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
         loader.load_and_install(MODULE_ROOTS, cls.env, install_all=True)
         cls.Partner = cls.env["res.partner"]
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def test_one2many_populates_and_reuses_cache(self):
         parent = self.Partner.create({"name": "CacheParent", "code": "CP"})

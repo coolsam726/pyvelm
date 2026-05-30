@@ -360,12 +360,10 @@ def reload_installed_models(env: Environment, specs: dict[str, ModuleSpec]) -> N
 
 
 def _ensure_ir_module(env: Environment) -> None:
-    env.conn.execute(
-        f'CREATE TABLE IF NOT EXISTS "{IR_MODULE_TABLE}" ('
-        f'"name" text PRIMARY KEY, '
-        f'"version" text NOT NULL, '
-        f'"installed_at" timestamptz NOT NULL DEFAULT now())'
-    )
+    from pyvelm.database import _conn_capabilities, ir_module_create_sql
+
+    cap = _conn_capabilities(env.conn)
+    env.conn.execute(ir_module_create_sql(cap))
 
 
 def _installed_module_names(env: Environment) -> set[str]:
@@ -503,6 +501,11 @@ def _run_migrations(spec: ModuleSpec, env: Environment,
         mod_name = f"{spec.migrations_package}.{p.stem}"
         m = importlib.import_module(mod_name)
         if hasattr(m, "migrate"):
+            from pyvelm.database import migration_supported
+
+            supported = getattr(m, "supported_backends", ("postgresql",))
+            if not migration_supported(env.conn, supported):
+                continue
             m.migrate(env)
 
 
@@ -795,9 +798,12 @@ def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
                     spec.sync_hook(env)
                 applied = db_autogen.apply_schema_diff(env, spec.name)
                 schema_note = applied.summary()
+                from pyvelm.database import _conn_capabilities, now_sql
+
+                cap = _conn_capabilities(env.conn)
                 env.conn.execute(
                     f'UPDATE "{IR_MODULE_TABLE}" SET "version" = %s, '
-                    f'"installed_at" = now() WHERE "name" = %s',
+                    f'"installed_at" = {now_sql(cap)} WHERE "name" = %s',
                     [spec.version_str, spec.name],
                 )
             # Load data files (views, menus) from disk — always reload

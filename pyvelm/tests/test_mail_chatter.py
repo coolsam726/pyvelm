@@ -1,19 +1,12 @@
 """General chatter panel, filters, and POST route."""
 from __future__ import annotations
 
-import os
 import unittest
 
 from pyvelm import BaseModel, Char, Environment, Registry
 from pyvelm import mail_chatter
-from pyvelm.tests._mail import register_mail_message
-
-DSN = os.environ.get("PYVELM_DSN")
-
-try:
-    import psycopg
-except ImportError:
-    psycopg = None
+from pyvelm.tests._mail import register_mail_message, seed_author
+from pyvelm.tests.support.db import DatabaseTestCase
 
 
 class ChatterContextTests(unittest.TestCase):
@@ -49,8 +42,11 @@ class ChatterContextTests(unittest.TestCase):
         self.assertTrue(mail_chatter._matches_filter(email, "emails"))
 
 
-@unittest.skipUnless(DSN and psycopg, "needs postgres")
-class ChatterWriteTests(unittest.TestCase):
+class ChatterWriteTests(DatabaseTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
     def test_post_note_and_render(self):
         from pyvelm.mail import MailThread
         from pyvelm.render import render_chatter_panel
@@ -64,20 +60,20 @@ class ChatterWriteTests(unittest.TestCase):
 
             register_mail_message(reg)
 
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            env._acl_bypass = True
-            doc = env["test.chatter.doc"].create({"name": "A"})
-            mail_chatter.post_chatter_message(
-                env, "test.chatter.doc", doc.id, "Hello from test"
-            )
-            html = render_chatter_panel(env, "test.chatter.doc", doc.id)
-            self.assertNotIn("pv-chatter-root", html)
-            self.assertIn("Hello from test", html)
-            self.assertIn("Activity", html)
-            self.assertIn("Log note", html)
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        env._acl_bypass = True
+        seed_author(env)
+        doc = env["test.chatter.doc"].create({"name": "A"})
+        mail_chatter.post_chatter_message(
+            env, "test.chatter.doc", doc.id, "Hello from test"
+        )
+        html = render_chatter_panel(env, "test.chatter.doc", doc.id)
+        self.assertNotIn("pv-chatter-root", html)
+        self.assertIn("Hello from test", html)
+        self.assertIn("Activity", html)
+        self.assertIn("Log note", html)
 
     def test_excludes_workflow_subtype(self):
         from pyvelm.mail import MailThread
@@ -91,30 +87,30 @@ class ChatterWriteTests(unittest.TestCase):
 
             register_mail_message(reg)
 
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            env._acl_bypass = True
-            doc = env["test.chatter.filter"].create({"name": "X"})
-            Message = env["mail.message"]
-            Message.create({
-                "model": "test.chatter.filter",
-                "res_id": doc.id,
-                "body": "User note",
-                "subtype": "note",
-            })
-            Message.create({
-                "model": "test.chatter.filter",
-                "res_id": doc.id,
-                "body": "Workflow started",
-                "subtype": "workflow",
-            })
-            msgs = mail_chatter.record_chatter_messages(
-                env, "test.chatter.filter", doc.id
-            )
-            self.assertEqual(len(msgs), 1)
-            self.assertIn("User note", msgs[0]["body"])
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        env._acl_bypass = True
+        seed_author(env)
+        doc = env["test.chatter.filter"].create({"name": "X"})
+        Message = env["mail.message"]
+        Message.create({
+            "model": "test.chatter.filter",
+            "res_id": doc.id,
+            "body": "User note",
+            "subtype": "note",
+        })
+        Message.create({
+            "model": "test.chatter.filter",
+            "res_id": doc.id,
+            "body": "Workflow started",
+            "subtype": "workflow",
+        })
+        msgs = mail_chatter.record_chatter_messages(
+            env, "test.chatter.filter", doc.id
+        )
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("User note", msgs[0]["body"])
 
     def test_email_filter_and_notify(self):
         from pyvelm.mail import MailThread
@@ -128,31 +124,31 @@ class ChatterWriteTests(unittest.TestCase):
 
             register_mail_message(reg)
 
-        with psycopg.connect(DSN) as conn:
-            reg.init_db(conn)
-            conn.commit()
-            env = Environment(conn, reg, uid=1)
-            env._acl_bypass = True
-            doc = env["test.chatter.email"].create({"name": "E"})
-            mail_chatter.post_chatter_message(
-                env,
-                "test.chatter.email",
-                doc.id,
-                "Please review",
-                action="email",
-                recipient_email="reviewer@example.com",
-                subject="Review",
-            )
-            emails = mail_chatter.record_chatter_messages(
-                env, "test.chatter.email", doc.id, filter_key="emails"
-            )
-            self.assertEqual(len(emails), 1)
-            self.assertEqual(emails[0]["recipient_email"], "reviewer@example.com")
-            self.assertEqual(emails[0]["email_state"], "Queued")
-            notes = mail_chatter.record_chatter_messages(
-                env, "test.chatter.email", doc.id, filter_key="notes"
-            )
-            self.assertEqual(len(notes), 0)
+        reg.init_db(self.conn)
+        self.conn.commit()
+        env = Environment(self.conn, reg, uid=1)
+        env._acl_bypass = True
+        seed_author(env)
+        doc = env["test.chatter.email"].create({"name": "E"})
+        mail_chatter.post_chatter_message(
+            env,
+            "test.chatter.email",
+            doc.id,
+            "Please review",
+            action="email",
+            recipient_email="reviewer@example.com",
+            subject="Review",
+        )
+        emails = mail_chatter.record_chatter_messages(
+            env, "test.chatter.email", doc.id, filter_key="emails"
+        )
+        self.assertEqual(len(emails), 1)
+        self.assertEqual(emails[0]["recipient_email"], "reviewer@example.com")
+        self.assertEqual(emails[0]["email_state"], "Queued")
+        notes = mail_chatter.record_chatter_messages(
+            env, "test.chatter.email", doc.id, filter_key="notes"
+        )
+        self.assertEqual(len(notes), 0)
 
 
 if __name__ == "__main__":

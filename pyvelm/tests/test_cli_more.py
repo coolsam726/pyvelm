@@ -81,7 +81,7 @@ class CliHelperTests(unittest.TestCase):
 
     def test_require_dsn_ok(self):
         with patch.dict(os.environ, {"PYVELM_DSN": "postgresql://u:p@h/db"}):
-            self.assertEqual(_require_dsn(), "postgresql://u:p@h/db")
+            self.assertEqual(_require_dsn(), "postgresql+psycopg://u:p@h/db")
 
     def test_dsn_display_redacts_password(self):
         dsn = "postgresql://user:secret@localhost:5432/mydb"
@@ -128,14 +128,14 @@ class CliHelperTests(unittest.TestCase):
                 "pyvelm.migrate_cli.ordered_specs_for_install",
                 return_value=ordered,
             ),
-            patch("pyvelm.cli.psycopg.connect") as connect,
+            patch("pyvelm.migrate_cli.create_database_from_dsn") as mk_db,
         ):
             result = resolve_migrate_specs(
                 [],
                 "postgresql://test",
                 fresh_after_wipe=True,
             )
-        connect.assert_not_called()
+        mk_db.assert_not_called()
         expected = [s.name for s in ordered if s.name in BOOTSTRAP_MODULES]
         self.assertEqual([s.name for s in result], expected)
         self.assertNotIn("partners", result)
@@ -155,7 +155,7 @@ class CliHelperTests(unittest.TestCase):
         conn_cm.__exit__ = MagicMock(return_value=False)
         with (
             patch("pyvelm.migrate_cli.ordered_specs_for_install", return_value=ordered),
-            patch("pyvelm.migrate_cli.psycopg.connect", return_value=conn_cm),
+            patch("pyvelm.migrate_cli.create_database_from_dsn", return_value=MagicMock(connect=MagicMock(return_value=conn_cm))),
             patch("pyvelm.migrate_cli.loader.specs_to_install", return_value=[base, admin]) as filt,
         ):
             result = resolve_migrate_specs([], "postgresql://test")
@@ -342,20 +342,20 @@ class CronCliTests(unittest.TestCase):
         conn_cm.__enter__ = MagicMock(return_value=MagicMock())
         conn_cm.__exit__ = MagicMock(return_value=False)
         pool.connection.return_value = conn_cm
+        database = MagicMock()
+        database.pool = pool
+        database.connect.return_value = conn_cm
 
         def _tick_and_stop(_pool, _reg):
             signal.raise_signal(signal.SIGTERM)
 
         with (
-            patch("pyvelm.cli.psycopg.connect") as connect,
+            patch("pyvelm.database.create_database_from_dsn", return_value=database),
             patch("pyvelm.cli.loader.load_and_install"),
-            patch("pyvelm.cli.ConnectionPool", return_value=pool),
             patch("pyvelm.cli._tick", side_effect=_tick_and_stop),
         ):
-            connect.return_value.__enter__ = MagicMock(return_value=MagicMock())
-            connect.return_value.__exit__ = MagicMock(return_value=False)
-            cron_loop(dsn="postgresql://localhost/db", roots=[], interval=60.0)
-        pool.close.assert_called_once()
+            cron_loop(dsn="postgresql://localhost/db", roots=[], interval=5.0)
+        database.dispose.assert_called_once()
 
 
 class MainParserTests(unittest.TestCase):
@@ -386,6 +386,9 @@ class MainParserTests(unittest.TestCase):
         conn_cm.__enter__ = MagicMock(return_value=MagicMock())
         conn_cm.__exit__ = MagicMock(return_value=False)
         pool.connection.return_value = conn_cm
+        database = MagicMock()
+        database.pool = pool
+        database.connect.return_value = conn_cm
 
         import signal
 
@@ -398,14 +401,11 @@ class MainParserTests(unittest.TestCase):
             signal.raise_signal(signal.SIGTERM)
 
         with (
-            patch("pyvelm.cli.psycopg.connect") as connect,
+            patch("pyvelm.database.create_database_from_dsn", return_value=database),
             patch("pyvelm.cli.loader.load_and_install"),
-            patch("pyvelm.cli.ConnectionPool", return_value=pool),
             patch("pyvelm.cli._tick", side_effect=_tick_fail),
         ):
-            connect.return_value.__enter__ = MagicMock(return_value=MagicMock())
-            connect.return_value.__exit__ = MagicMock(return_value=False)
-            cron_loop(dsn="postgresql://localhost/db", roots=[], interval=60.0)
+            cron_loop(dsn="postgresql://localhost/db", roots=[], interval=10.0)
 
     def test_build_parser_has_subcommands(self):
         parser = _build_parser()
@@ -474,7 +474,7 @@ class MainParserTests(unittest.TestCase):
             patch("pyvelm.cli.loader.discover", return_value={spec.name: spec}),
             patch("pyvelm.cli.loader.resolve_order", return_value=[spec]),
             patch("pyvelm.cli.loader._load_models"),
-            patch("pyvelm.cli.psycopg.connect", return_value=conn),
+            patch("pyvelm.database.create_database_from_dsn", return_value=MagicMock(open_connection=MagicMock(return_value=conn))),
         ):
             bootstrap_command_env(ctx)
         self.assertIsNotNone(ctx.env)

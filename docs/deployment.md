@@ -96,7 +96,8 @@ cron:
 
 | variable / arg | default | what it does |
 |---|---|---|
-| `PYVELM_DSN` | (required) | Postgres connection string |
+| `PYVELM_DSN` | (required) | SQLAlchemy URL — `postgresql+psycopg://…` (production) or `sqlite:///…` (dev/CI) |
+| `PYVELM_DATABASES` | — | Optional multi-tenant catalog (`key=dsn,…` or JSON); see [multi-database.md](multi-database.md) |
 | `PYVELM_MODULE_ROOTS` | (required) | Colon-separated module dirs |
 | `PYVELM_CRON_INTERVAL` / `--interval` | `60` | Seconds between ticks |
 | `--roots` | env var | Override the module-root list inline |

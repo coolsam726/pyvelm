@@ -50,6 +50,18 @@ VIEWS: list[View] = [
             "population",
         ],
         form_view="geo_data.country.form",
+        page_actions=[
+            {
+                "label": "Seed geography data",
+                "url": "/web/geo-data/seed",
+                "method": "POST",
+                "confirm": (
+                    "Load continents, countries, states, and major cities from "
+                    "geonamescache? Requires pyvelm[geo]. This may take a minute."
+                ),
+                "perm": "write",
+            },
+        ],
     ),
     list_view(
         "geo_data.state.compact",

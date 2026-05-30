@@ -580,7 +580,7 @@ def models_affected_by_diff(
     tables: set[str] = set()
     for table, _ddl in diff.new_tables:
         tables.add(table)
-    for table, _col, _stmt, _req in diff.new_columns:
+    for table, _col, _stmt, _req, _sql_type in diff.new_columns:
         tables.add(table)
     models: set[str] = set()
     for model_name, cls in reg._models.items():

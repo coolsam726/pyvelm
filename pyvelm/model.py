@@ -325,27 +325,32 @@ class BaseModel(metaclass=MetaModel):
 
     @classmethod
     def _setup_table(cls, conn) -> None:
-        # Phase 1: create the table if it doesn't exist (includes all
-        # currently-known columns with their constraints).
-        cols = ['"id" SERIAL PRIMARY KEY']
+        from .database import (
+            _conn_capabilities,
+            add_column_if_missing,
+            normalize_column_ddl,
+            normalize_sql_type,
+            serial_primary_key,
+            table_exists,
+        )
+
+        cap = _conn_capabilities(conn)
+        existed = table_exists(conn, cls._table, cap)
+        cols = [serial_primary_key(cap)]
         for f in cls._fields.values():
             if not f.is_stored or f.name == "id":
                 continue
-            cols.append(f.column_ddl())
+            cols.append(normalize_column_ddl(f.column_ddl(), cap))
         conn.execute(
             f'CREATE TABLE IF NOT EXISTS "{cls._table}" ({", ".join(cols)})'
         )
-        # Phase 2: add any columns that are missing (idempotent).
-        # Used when a module extends an existing model via _inherit at
-        # install time.  Existing columns are a no-op; new ones are added
-        # as nullable so pre-existing rows aren't rejected.
+        if not existed:
+            return
         for f in cls._fields.values():
             if not f.is_stored or f.name == "id":
                 continue
-            conn.execute(
-                f'ALTER TABLE "{cls._table}" '
-                f'ADD COLUMN IF NOT EXISTS "{f.column}" {f.sql_type}'
-            )
+            sql_type = normalize_sql_type(f.sql_type, cap)
+            add_column_if_missing(conn, cls._table, f.column, sql_type, cap)
 
     @classmethod
     def _drop_table(cls, conn) -> None:
@@ -405,7 +410,13 @@ class BaseModel(metaclass=MetaModel):
     @classmethod
     def _setup_foreign_keys(cls, conn, registry) -> None:
         # Imported here to avoid a top-level cycle with fields.py.
+        from .database import _conn_capabilities, table_exists
         from .fields import Many2one
+
+        cap = _conn_capabilities(conn)
+        if cap.name == "sqlite":
+            # SQLite: defer FK constraints to inline CREATE TABLE only.
+            return
 
         for f in cls._fields.values():
             if not isinstance(f, Many2one):
@@ -417,20 +428,7 @@ class BaseModel(metaclass=MetaModel):
                     f"{cls._name}.{f.name} references unknown model {f.comodel_name!r}"
                 )
             target = registry[f.comodel_name]
-            # Cross-module ``_inherit`` adds fields whose target table
-            # belongs to a not-yet-installed module. The extending
-            # module's own ``_setup_module_schema`` runs FK setup on
-            # this class again once its tables exist (via
-            # ``_model_extensions``), so we defer the constraint until
-            # then rather than failing the base install with
-            # ``UndefinedTable``. The DROP-IF-EXISTS below is also
-            # idempotent on the second pass.
-            row = conn.execute(
-                "SELECT 1 FROM information_schema.tables "
-                "WHERE table_schema = current_schema() AND table_name = %s",
-                [target._table],
-            ).fetchone()
-            if row is None:
+            if not table_exists(conn, target._table, cap):
                 continue
             constraint = f"{cls._table}_{f.column}_fkey"
             conn.execute(
@@ -718,15 +716,25 @@ class BaseModel(metaclass=MetaModel):
             field = self._fields[fname]
             cols.append(f'"{field.column}"')
             params.append(field.to_sql_param(value))
+        cap = getattr(self.env.conn, "capabilities", None)
+        if cap is None:
+            from .database import dialect_capabilities, fetch_lastrowid, returning_id_clause
+            cap = dialect_capabilities("postgresql")
+        else:
+            from .database import fetch_lastrowid, returning_id_clause
+        ret = returning_id_clause(cap)
         if cols:
             sql = (
                 f'INSERT INTO "{self._table}" ({", ".join(cols)}) '
-                f'VALUES ({", ".join(["%s"] * len(cols))}) RETURNING "id"'
+                f'VALUES ({", ".join(["%s"] * len(cols))}){ret}'
             )
         else:
-            sql = f'INSERT INTO "{self._table}" DEFAULT VALUES RETURNING "id"'
+            sql = f'INSERT INTO "{self._table}" DEFAULT VALUES{ret}'
         cur = self.env.conn.execute(sql, params)
-        new_id = cur.fetchone()[0]
+        if ret:
+            new_id = cur.fetchone()[0]
+        else:
+            new_id = fetch_lastrowid(self.env.conn, self._table)
         # Seed cache with the normalized (SQL-shape) value, so Many2one
         # caches the int FK, not whatever the user passed in.
         for fname, value in column_vals.items():
@@ -934,7 +942,10 @@ class BaseModel(metaclass=MetaModel):
         ):
             full_domain.append(("company_id", "=", self.env.company_id))
         where, params, joins = domain_to_sql(
-            full_domain, self.__class__, self.env.registry
+            full_domain,
+            self.__class__,
+            self.env.registry,
+            capabilities=getattr(self.env.conn, "capabilities", None),
         )
         base = f'"{self._table}"'
         sql = f'SELECT {base}."id" FROM {base}{joins} WHERE {where}'
@@ -960,7 +971,10 @@ class BaseModel(metaclass=MetaModel):
         ):
             full_domain.append(("company_id", "=", self.env.company_id))
         where, params, joins = domain_to_sql(
-            full_domain, self.__class__, self.env.registry
+            full_domain,
+            self.__class__,
+            self.env.registry,
+            capabilities=getattr(self.env.conn, "capabilities", None),
         )
         base = f'"{self._table}"'
         sql = f'SELECT COUNT(*) FROM {base}{joins} WHERE {where}'
@@ -1125,7 +1139,10 @@ class BaseModel(metaclass=MetaModel):
             measure_keys.append(("__count", "count_star", None))
 
         where, params, joins = domain_to_sql(
-            full_domain, cls, self.env.registry
+            full_domain,
+            cls,
+            self.env.registry,
+            capabilities=getattr(self.env.conn, "capabilities", None),
         )
         sql = (
             f"SELECT {', '.join(select_parts)} "

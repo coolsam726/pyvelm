@@ -802,7 +802,7 @@ class EnsureViewsAndDiffTests(unittest.TestCase):
         env.registry = reg
         diff = MagicMock()
         diff.new_tables = [(Partner._table, "CREATE")]
-        diff.new_columns = [(Partner._table, "email", "ALTER", False)]
+        diff.new_columns = [(Partner._table, "email", "ALTER", False, "text")]
         models = models_affected_by_diff(env, "demo", diff)
         self.assertIn("demo.partner", models)
         other_reg = Registry()

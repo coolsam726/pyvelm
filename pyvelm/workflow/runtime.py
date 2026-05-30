@@ -7,10 +7,9 @@ def _workflow_schema_ready(env) -> bool:
     if "workflow.definition" not in env.registry:
         return False
     cls = env.registry["workflow.definition"]
-    row = env.conn.execute(
-        "SELECT to_regclass(%s)", [cls._table]
-    ).fetchone()
-    return bool(row and row[0])
+    from pyvelm.database import table_exists
+
+    return table_exists(env.conn, cls._table)
 
 
 def maybe_auto_start_workflow(env, record) -> None:

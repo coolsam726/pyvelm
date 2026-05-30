@@ -108,27 +108,24 @@ def build_serve_app(
     runtime_env: str | None = None,
 ) -> Any:
     """Load modules from the DB and return a FastAPI app for ``pyvelm serve``."""
-    import psycopg
     from dotenv import find_dotenv, load_dotenv
-    from psycopg_pool import ConnectionPool
 
     from . import Environment, Registry, loader
+    from .database import create_database_from_dsn, require_dsn_from_env
     from .web import create_app
 
     load_dotenv(find_dotenv(usecwd=True))
-    dsn = os.environ.get("PYVELM_DSN")
-    if not dsn:
-        sys.exit("PYVELM_DSN is not set (copy .env.example to .env)")
+    dsn = require_dsn_from_env()
 
     env_mode = apply_runtime_env(runtime_env)
 
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    database = create_database_from_dsn(dsn, pool_size=4)
+    with database.connect() as conn:
         reg = Registry()
         env = Environment(conn, registry=reg)
         specs = loader.load_and_install(module_roots, env)
         print("Loaded modules:", [s.name for s in specs])
 
-    pool = ConnectionPool(dsn, min_size=1, max_size=4, open=True)
     return create_app(
-        reg, pool, module_roots=module_roots, runtime_env=env_mode,
+        reg, database, module_roots=module_roots, runtime_env=env_mode,
     )

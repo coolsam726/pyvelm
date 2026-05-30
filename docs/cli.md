@@ -53,7 +53,8 @@ Configuration:
 |---|---|---|
 | `--interval` / `PYVELM_CRON_INTERVAL` | `60` | Seconds between ticks. |
 | `--roots` / `PYVELM_MODULE_ROOTS` | — | Colon-separated module-discovery roots. The framework's `BUILTIN_MODULE_ROOTS` are always prepended automatically; only your app's addons need to be listed. |
-| `PYVELM_DSN` | — | Required — Postgres DSN. |
+| `PYVELM_DSN` | — | Required — SQLAlchemy URL (`postgresql+psycopg://…` or `sqlite:///…`). |
+| `PYVELM_DATABASES` | — | Optional (v1.1+) — comma `key=dsn` or JSON list for multi-DB routing. |
 
 Run via Docker (`docker compose up` uses the bundled service),
 systemd (see [Deployment](deployment.md)),
@@ -204,6 +205,7 @@ pyvelm db autogen tasks --with-views
 pyvelm migrate                    # upgrade installed modules (bootstrap on fresh DB)
 pyvelm migrate --all              # install/upgrade every discovered module
 pyvelm migrate --module tasks     # one module + dependencies
+pyvelm migrate --database tenant_a  # target a PYVELM_DATABASES tenant (v1.1+)
 pyvelm db migrate                 # deprecated alias for pyvelm migrate
 pyvelm db migrate-fresh           # plan + production confirmation (no schema wipe)
 pyvelm migrate:reset              # DEV ONLY — drop schema (type migrate:reset)

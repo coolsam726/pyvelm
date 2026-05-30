@@ -34,13 +34,13 @@ def _adopt_legacy_module(env) -> None:
 
 def _migrate_company_field(env) -> None:
     """Move data from legacy ``report_layout`` column to ``document_layout``."""
+    from pyvelm.database import column_exists
+
     conn = env.conn
-    rows = conn.execute(
-        "SELECT column_name FROM information_schema.columns "
-        "WHERE table_schema = 'public' AND table_name = 'res_company' "
-        "AND column_name IN ('report_layout', 'document_layout')",
-    ).fetchall()
-    cols = {r[0] for r in rows}
+    cols: set[str] = set()
+    for name in ("report_layout", "document_layout"):
+        if column_exists(conn, "res_company", name):
+            cols.add(name)
     if "report_layout" in cols and "document_layout" in cols:
         conn.execute(
             'UPDATE "res_company" SET "document_layout" = "report_layout" '

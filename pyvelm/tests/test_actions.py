@@ -2,18 +2,11 @@
 from __future__ import annotations
 
 import json
-import os
 import unittest
 from unittest.mock import MagicMock
 
 from pyvelm import BaseModel, Char, Environment, Registry
-
-DSN = os.environ.get("PYVELM_DSN")
-
-try:
-    import psycopg
-except ImportError:
-    psycopg = None
+from pyvelm.tests.support.db import DatabaseTestCase
 
 
 def _registry() -> Registry:
@@ -33,22 +26,17 @@ def _registry() -> Registry:
     return reg
 
 
-@unittest.skipUnless(DSN and psycopg, "PYVELM_DSN required")
-class ServerActionIntegrationTests(unittest.TestCase):
+class ServerActionIntegrationTests(DatabaseTestCase):
     @classmethod
     def setUpClass(cls):
+        super().setUpClass()
         cls.reg = _registry()
-        cls.conn = psycopg.connect(DSN, autocommit=True)
         cls.reg.init_db(cls.conn)
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
         cls.env._acl_bypass = True
         cls.Action = cls.env["ir.actions.server"]
         cls.Target = cls.env["test.action.target"]
         cls.Target.search([]).unlink()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def setUp(self):
         self.Target.search([]).unlink()

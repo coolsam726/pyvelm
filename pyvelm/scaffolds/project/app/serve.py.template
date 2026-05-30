@@ -17,9 +17,7 @@ import os
 import sys
 from pathlib import Path
 
-import psycopg
 from dotenv import load_dotenv
-from psycopg_pool import ConnectionPool
 
 from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
 from pyvelm.runtime import DEVELOPMENT, PRODUCTION
@@ -62,21 +60,21 @@ MODULE_ROOTS = _collect_module_roots()
 
 
 def _build_app(*, runtime_env: str | None = None):
-    dsn = os.environ.get("PYVELM_DSN")
-    if not dsn:
-        sys.exit("PYVELM_DSN is not set (copy .env.example to .env)")
+    from pyvelm.database import create_database_from_dsn, require_dsn_from_env
+
+    dsn = require_dsn_from_env()
 
     env_mode = apply_runtime_env(runtime_env)
 
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    database = create_database_from_dsn(dsn, pool_size=4)
+    with database.connect() as conn:
         reg = Registry()
         env = Environment(conn, registry=reg)
         specs = loader.load_and_install(MODULE_ROOTS, env)
         print("Loaded modules:", [s.name for s in specs])
 
-    pool = ConnectionPool(dsn, min_size=1, max_size=4, open=True)
     return create_app(
-        reg, pool, module_roots=MODULE_ROOTS, runtime_env=env_mode,
+        reg, database, module_roots=MODULE_ROOTS, runtime_env=env_mode,
     )
 
 

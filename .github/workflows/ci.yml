@@ -1,5 +1,6 @@
 # Unit tests + coverage on every push/PR to main.
-# Postgres is available for integration tests that set PYVELM_DSN.
+# Integration tests use PYVELM_DSN_TEST (never PYVELM_DSN).
+# Tests bootstrap their own schema (reset + install_modules) — no pyvelm migrate step.
 
 name: ci
 
@@ -14,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  test-postgres:
     runs-on: ubuntu-latest
 
     services:
@@ -33,7 +34,7 @@ jobs:
           --health-retries 5
 
     env:
-      PYVELM_DSN: postgresql://pyvelm:pyvelm@localhost:5432/pyvelm
+      PYVELM_DSN_TEST: postgresql://pyvelm:pyvelm@localhost:5432/pyvelm_test
 
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +48,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[test,geo]"
+
+      - name: Create Postgres test database
+        run: PGPASSWORD=pyvelm psql -h localhost -U pyvelm -d pyvelm -c "CREATE DATABASE pyvelm_test;"
 
       - name: Run tests with coverage
         run: |
@@ -64,3 +68,25 @@ jobs:
           slug: coolsam726/pyvelm
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+
+  test-sqlite:
+    runs-on: ubuntu-latest
+
+    env:
+      PYVELM_DSN_TEST: sqlite:////tmp/pyvelm-ci-test.db
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install package and test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,geo]"
+
+      - name: Run database portability tests
+        run: pytest pyvelm/tests/test_database.py pyvelm/tests/test_database_routing.py -q

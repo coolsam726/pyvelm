@@ -133,7 +133,8 @@ class DomainPathTests(unittest.TestCase):
             self.reg,
         )
         self.assertIn("NOT (EXISTS", where)
-        self.assertIn("NOT ILIKE", where)
+        self.assertIn("ILIKE", where)
+        self.assertIn('NOT (_e1_0t."name"', where)
 
     def test_exists_empty_in_universal(self):
         where, params, _ = domain_to_sql(

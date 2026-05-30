@@ -14,15 +14,23 @@ class MigrateCommand(Command):
     signature = (
         "migrate "
         "{--all : Install/upgrade every discovered module} "
-        "{--module= : Limit to one module and its dependencies}"
+        "{--module= : Limit to one module and its dependencies} "
+        "{--database= : Target a tenant from PYVELM_DATABASES (v1.1+)}"
     )
 
-    def handle(self, all: bool = False, module: str | None = None) -> int:
+    def handle(
+        self,
+        all: bool = False,
+        module: str | None = None,
+        database: str | None = None,
+    ) -> int:
         only_module = (module or "").strip() or None
+        database_key = (database or "").strip() or None
         run_migrate(
             self._ctx.roots,
             install_all=all,
             only_module=only_module,
+            database_key=database_key,
         )
         return 0
 

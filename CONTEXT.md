@@ -299,9 +299,16 @@ See [docs/releases/v0.11.0.md](docs/releases/v0.11.0.md). Key paths:
 **Post-release polish ideas:** shallow variable API, subject-line insert UX,
 example `send_mail` in a demo module.
 
-## Multi-database support (planned)
+## Multi-database support (v1.0 shipped, v1.1 routing)
 
-**Status:** planning / not started. **Decision date:** 2026-05-29.
+**Status:** v1.0 portability **shipped** (Postgres + SQLite). v1.1 multi-DB routing
+**available** when ``PYVELM_DATABASES`` is set. **ADR:**
+[docs/adr/001-sqlalchemy-core.md](docs/adr/001-sqlalchemy-core.md). **Guide:**
+[docs/multi-database.md](docs/multi-database.md).
+
+**v1.0 target:** PostgreSQL + SQLite via SQLAlchemy Core (one DSN per process).
+**v1.1 target:** multi-DB routing on PostgreSQL. See the guide for exit criteria
+and roadmap.
 
 ### Goal
 
@@ -397,7 +404,7 @@ SQLite: single process only).
 
 ### Open planning questions (continue in next session)
 
-1. Add `sqlalchemy` to core dependencies vs optional `[sql]` extra during transition?
+1. ~~Add `sqlalchemy` to core dependencies vs optional `[sql]` extra during transition?~~ **Resolved (ADR 001):** core dependency.
 2. Single `Metadata` object on `Registry` vs per-model `Table` registration timing?
 3. How do hand-written migrations declare `supported_backends = ("postgresql",)`?
 4. Oracle: identity/sequence strategy for `id` and superuser seed (uid=1 convention)?
@@ -419,7 +426,7 @@ SQLite: single process only).
 
 | Gap | Status |
 |-----|--------|
-| Multi-database dialect layer (SQLAlchemy Core) | **Planned** — see [Multi-database support (planned)](#multi-database-support-planned). |
+| Multi-database dialect layer (SQLAlchemy Core) | **Shipped (v1.0)** — Postgres + SQLite; see [Multi-database support](#multi-database-support-v10-shipped-v11-routing). |
 | `env.cache` LRU / eviction | Still open — one env per request, working set usually bounded. |
 | Cache restore on `env.transaction()` rollback | Still open — DB rolls back; session cache is not snapshotted. |
 | M2M command tuples `[(0,_,vals), (4,id), …]` | Still open — Many2many write is **replace-only** (`fields.py`). |

@@ -433,23 +433,31 @@ class DevOnlyMenuVisibilityTests(unittest.TestCase):
 
 
 class BuildMenuTreeIntegrationTests(unittest.TestCase):
-    """Uses in-memory registry when PYVELM_DSN is unavailable — skip."""
+    """Uses in-memory registry when PYVELM_DSN_TEST is unavailable — skip."""
 
     @unittest.skipUnless(
-        os.environ.get("PYVELM_DSN"),
-        "PYVELM_DSN not set",
+        os.environ.get("PYVELM_DSN_TEST"),
+        "PYVELM_DSN_TEST not set",
     )
     def test_build_from_db(self):
-        import psycopg
-
         from pyvelm import BUILTIN_MODULE_ROOTS, loader
         from pyvelm.env import Environment
         from pyvelm.registry import Registry
+        from pyvelm.tests.support.db import (
+            db_connection,
+            dsn_from_env,
+            install_named_modules,
+            reset_database,
+        )
 
-        with psycopg.connect(os.environ["PYVELM_DSN"], autocommit=True) as conn:
+        if not dsn_from_env():
+            self.skipTest("PYVELM_DSN_TEST not set")
+
+        reset_database(dsn_from_env())
+        with db_connection() as conn:
             reg = Registry()
             env = Environment(conn, reg, uid=1)
-            loader.load_and_install(BUILTIN_MODULE_ROOTS, env, install_all=True)
+            install_named_modules(env, ["admin"], BUILTIN_MODULE_ROOTS)
             tree = build_menu_tree(env, "/web/admin")
         self.assertIsInstance(tree, list)
         for node in tree:

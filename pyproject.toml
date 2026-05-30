@@ -1,6 +1,6 @@
 [project]
 name = "pyvelm"
-version = "0.26.2"
+version = "1.0.0"
 description = "PyVELM — declarative Python ERP: Odoo recordsets & modules, Laravel/Filament ergonomics, unique Tailwind admin shell."
 readme = "README.md"
 license = "LGPL-3.0-or-later"
@@ -37,6 +37,7 @@ classifiers = [
 dependencies = [
     "psycopg[binary]>=3.2",
     "psycopg-pool>=3.2",
+    "sqlalchemy>=2.0",
     "python-dotenv>=1.0",
     "fastapi>=0.115",
     "httpx>=0.27",
@@ -129,7 +130,9 @@ pyvelm = [
 testpaths = ["pyvelm/tests"]
 pythonpath = ["."]
 markers = [
-    "integration: full-stack smoke (requires PYVELM_DSN; drops tables)",
+    "integration: full-stack smoke (requires PYVELM_DSN; may reset schema)",
+    "postgres: requires PostgreSQL PYVELM_DSN",
+    "sqlite: requires SQLite PYVELM_DSN",
 ]
 
 [tool.coverage.run]

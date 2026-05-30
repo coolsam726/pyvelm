@@ -1,41 +1,32 @@
-"""Report execution against a live Postgres database."""
+"""Report execution against a live database."""
 from __future__ import annotations
 
-import os
 import unittest
 from pathlib import Path
 
-import psycopg
-
-from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry, loader
+from pyvelm import BUILTIN_MODULE_ROOTS, Environment, Registry
 from pyvelm.reports.execute import run_report
 from pyvelm.reports.service import execute_report, load_report
-from pyvelm.tests.conftest import reset_public_schema
+from pyvelm.tests.support.db import DatabaseTestCase, install_named_modules
 
-DSN = os.environ.get("PYVELM_DSN")
 _EXAMPLE_ROOT = Path(__file__).resolve().parents[2] / "examples" / "modules"
 _MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [_EXAMPLE_ROOT]
 
 
-@unittest.skipUnless(DSN, "PYVELM_DSN not set")
-class ReportExecuteIntegrationTests(unittest.TestCase):
+class ReportExecuteIntegrationTests(DatabaseTestCase):
+    fresh_db = True
+
     @classmethod
     def setUpClass(cls):
-        reset_public_schema(DSN)
-        cls.conn = psycopg.connect(DSN, autocommit=True)
+        super().setUpClass()
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        loader.load_and_install(_MODULE_ROOTS, cls.env, install_all=True)
-        Partner = cls.env["res.partner"]
+        install_named_modules(cls.env, ["admin", "reports", "partners"], _MODULE_ROOTS)
         Country = cls.env["res.country"]
         france = Country.create({"name": "France", "code": "FR"})
         cls.env["res.partner"].create(
             {"name": "Report Alice", "code": "RAL", "country_id": france}
         )
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.conn.close()
 
     def test_run_report_detail_with_m2o_label(self):
         defn = {

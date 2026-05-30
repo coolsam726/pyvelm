@@ -83,7 +83,7 @@ class Diff:
     """Structured delta between declared models and the DB."""
 
     new_tables: list[tuple[str, str]] = _dc_field(default_factory=list)
-    new_columns: list[tuple[str, str, str, bool]] = _dc_field(default_factory=list)
+    new_columns: list[tuple[str, str, str, bool, str]] = _dc_field(default_factory=list)
     orphan_columns: list[tuple[str, str]] = _dc_field(default_factory=list)
     alterations: list[SchemaAlteration] = _dc_field(default_factory=list)
 
@@ -144,7 +144,13 @@ def compute_diff(env: "Environment", module: str) -> Diff:
             expected[f.column] = (f, f.column_ddl())
         actual = _fetch_table_columns(env, table)
         if actual is None:
-            col_ddls = ['"id" SERIAL PRIMARY KEY'] + [
+            from .database import serial_primary_key
+
+            cap = getattr(env.conn, "capabilities", None)
+            if cap is None:
+                from .database import dialect_capabilities
+                cap = dialect_capabilities("postgresql")
+            col_ddls = [serial_primary_key(cap)] + [
                 ddl for _, ddl in expected.values()
             ]
             ddl = (
@@ -164,7 +170,9 @@ def compute_diff(env: "Environment", module: str) -> Diff:
                 stmt = (
                     f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS {safe_ddl}'
                 )
-                diff.new_columns.append((table, col, stmt, was_required))
+                diff.new_columns.append(
+                    (table, col, stmt, was_required, _field_type_spec(field_obj))
+                )
                 continue
             db_col = actual[col]
             if col in _SKIP_ALTERATION_COLUMNS:
@@ -210,6 +218,17 @@ def compute_diff(env: "Environment", module: str) -> Diff:
 
 def _fetch_table_columns(env, table: str) -> dict[str, ColumnSchema] | None:
     """Column name → schema snapshot, or ``None`` if the table is missing."""
+    conn = env.conn
+    cap = getattr(conn, "capabilities", None)
+    sa = getattr(conn, "_sa", None)
+    if cap is not None and sa is not None:
+        try:
+            from sqlalchemy.engine import Connection
+
+            if isinstance(sa, Connection):
+                return _fetch_table_columns_inspector(conn, table)
+        except ImportError:
+            pass
     rows = env.conn.execute(
         "SELECT column_name, is_nullable, udt_name, data_type "
         "FROM information_schema.columns "
@@ -230,6 +249,61 @@ def _fetch_table_columns(env, table: str) -> dict[str, ColumnSchema] | None:
         (table,),
     ).fetchone()
     return {} if exists else None
+
+
+def _normalize_inspector_type(col_type) -> str:
+    name = type(col_type).__name__.lower()
+    mapping = {
+        "integer": "integer",
+        "bigint": "bigint",
+        "boolean": "boolean",
+        "float": "double precision",
+        "double": "double precision",
+        "string": "text",
+        "text": "text",
+        "datetime": "timestamp",
+        "date": "date",
+        "time": "time",
+        "numeric": "numeric",
+    }
+    for key, norm in mapping.items():
+        if key in name:
+            return norm
+    return "text"
+
+
+def _fetch_table_columns_inspector(conn, table: str) -> dict[str, ColumnSchema] | None:
+    cap = getattr(conn, "capabilities", None)
+    if cap is not None and cap.name == "sqlite":
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name = %s",
+            (table,),
+        ).fetchone()
+        if not row:
+            return None
+        rows = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
+        out: dict[str, ColumnSchema] = {}
+        for _cid, name, col_type, notnull, _default, _pk in rows:
+            out[name] = ColumnSchema(
+                nullable=not bool(notnull),
+                type_spec=(col_type or "text").lower(),
+            )
+        return out
+    from sqlalchemy import inspect as sa_inspect
+
+    # Inspect the live connection, not the engine: inspecting the engine
+    # opens a second pooled connection that deadlocks on Postgres against an
+    # uncommitted ALTER TABLE held by this connection (ACCESS EXCLUSIVE lock).
+    insp = sa_inspect(conn._sa)
+    if table not in insp.get_table_names():
+        return None
+    out: dict[str, ColumnSchema] = {}
+    for col in insp.get_columns(table):
+        out[col["name"]] = ColumnSchema(
+            nullable=bool(col.get("nullable", True)),
+            type_spec=_normalize_inspector_type(col["type"]),
+        )
+    return out
 
 
 # ---- rendering -------------------------------------------------------
@@ -259,7 +333,7 @@ def render_migration(
         return "\n".join(out) + "\n"
     for _, ddl in diff.new_tables:
         out.append(f"    env.conn.execute({_q(ddl)})")
-    for table, col, stmt, was_required in diff.new_columns:
+    for table, col, stmt, was_required, _sql_type in diff.new_columns:
         out.append(f"    env.conn.execute({_q(stmt)})")
         if was_required:
             out.append(
@@ -417,6 +491,10 @@ def _column_has_nulls(env: "Environment", table: str, column: str) -> bool:
 def _apply_nullability(
     env: "Environment", diff: Diff, result: ApplyResult
 ) -> None:
+    from pyvelm.database import _conn_capabilities
+
+    if _conn_capabilities(env.conn).name == "sqlite":
+        return
     for alt in diff.alterations:
         if alt.kind == "set_not_null":
             if _column_has_nulls(env, alt.table, alt.column):
@@ -439,6 +517,12 @@ def _apply_nullability(
             result.drop_not_null += 1
 
 
+def _column_exists(env, table: str, column: str) -> bool:
+    from pyvelm.database import column_exists
+
+    return column_exists(env.conn, table, column)
+
+
 def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
     """Apply model/DB drift: additive DDL plus safe nullability changes."""
     diff = compute_diff(env, module)
@@ -448,8 +532,22 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
     )
     for _, ddl in diff.new_tables:
         env.conn.execute(ddl)
-    for _table, _col, stmt, _was_required in diff.new_columns:
-        env.conn.execute(stmt)
+    from pyvelm.database import add_column_if_missing, _conn_capabilities, normalize_sql_type
+
+    cap = _conn_capabilities(env.conn)
+    for table, col, stmt, _was_required, sql_type in diff.new_columns:
+        if _column_exists(env, table, col):
+            continue
+        if cap.supports_add_column_if_not_exists:
+            env.conn.execute(stmt)
+        else:
+            add_column_if_missing(
+                env.conn,
+                table,
+                col,
+                normalize_sql_type(sql_type, cap),
+                cap,
+            )
     # Re-diff so new columns can receive SET NOT NULL in the same pass.
     diff = compute_diff(env, module)
     _apply_nullability(env, diff, result)
