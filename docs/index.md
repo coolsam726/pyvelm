@@ -8,13 +8,13 @@ dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
 bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on
 PostgreSQL (psycopg 3), FastAPI, and Jinja2.
 
-**Latest release:** [v0.26.1](releases/v0.26.1.md) (2026-05-30) — **WEB_ROUTES**
-mount on live Apps install (no restart for document_layout designer, etc.).
-See [releases](releases/v0.26.1.md) and the
+**Latest release:** [v0.26.2](releases/v0.26.2.md) (2026-05-30) — workflow sidebar
+links point at ``/web/views/workflow/…`` (fixes 404 on Instances/Approvals/Tasks).
+See [releases](releases/v0.26.2.md) and the
 [changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
 
 ```bash
-pip install pyvelm==0.26.1
+pip install pyvelm==0.26.2
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
@@ -61,6 +61,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v0.26.2](releases/v0.26.2.md) | **Workflow** sidebar links — ``view_module="workflow"`` fixes 404 on Instances/Approvals/Tasks |
 | [v0.26.1](releases/v0.26.1.md) | **`WEB_ROUTES`** mount on **Apps** install — no restart for [document layout](document-layout.md) designer / PDF routes |
 | [v0.26.0](releases/v0.26.0.md) | **[Font theming](branding.md)** (Google Fonts); **console** migrate/serve/test; **Apps Upgrade/Sync**; bundled-module bootstrap |
 | [v0.25.0](releases/v0.25.0.md) | **[Document layouts](document-layout.md)** + PDF routes; **per-company [navigation layout](navigation.md#per-company-override)** (base 0.31) |

@@ -7,6 +7,15 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [0.26.2] — 2026-05-30
+
+### Fixed
+
+- **Workflow sidebar links** — **Instances**, **Approvals**, and **Tasks** under
+  **Workflows → Operations** now resolve to ``/web/views/workflow/…`` instead of
+  ``/web/views/admin/…`` (404). Menu entries use ``view_module="workflow"``; run
+  ``pyvelm migrate`` or **Apps → admin → Sync** to update stored hrefs.
+
 ## [0.26.1] — 2026-05-30
 
 ### Fixed
