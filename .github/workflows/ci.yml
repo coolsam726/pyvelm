@@ -79,7 +79,7 @@ jobs:
         run: pytest pyvelm/tests/test_database.py pyvelm/tests/test_database_routing.py -q
 
       - name: Upload coverage to Codecov
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: matrix.backend == 'postgres' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
