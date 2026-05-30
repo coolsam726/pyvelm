@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
-from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Many2many, Registry, loader
+from pyvelm import BUILTIN_MODULE_ROOTS, BaseModel, Char, Environment, Many2many, Registry
 from pyvelm.domain import domain_to_sql, normalize_domain
-from pyvelm.tests.support.db import DatabaseTestCase
+from pyvelm.tests.support.db import DatabaseTestCase, install_modules, reset_database
+
+_EXAMPLE_ROOT = Path(__file__).resolve().parents[2] / "examples" / "modules"
+_MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [_EXAMPLE_ROOT]
 
 
 def _mini_registry():
@@ -187,20 +191,19 @@ class DomainCompileTests(unittest.TestCase):
         self.assertEqual(len(params), 2)
 
 
-class DomainCacheTests(DatabaseTestCase):
+class DomainCacheIntegrationTests(DatabaseTestCase):
+    """Cache invalidation tests sharing one full module install."""
+
     @classmethod
     def setUpClass(cls):
-        from pathlib import Path
-
         super().setUpClass()
+        reset_database(cls.dsn)
         cls.reg = Registry()
         cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        roots = BUILTIN_MODULE_ROOTS + [
-            Path(__file__).resolve().parents[2] / "examples" / "modules"
-        ]
-        loader.load_and_install(roots, cls.env, install_all=True)
+        install_modules(cls.env, _MODULE_ROOTS, install_all=True)
         cls.Partner = cls.env["res.partner"]
         cls.Country = cls.env["res.country"]
+        cls.Tag = cls.env["res.tag"]
 
     def test_comodel_unlink_clears_many2one_cache(self):
         country = self.Country.create({"name": "CacheUnlink", "code": "CU"})
@@ -211,22 +214,6 @@ class DomainCacheTests(DatabaseTestCase):
         country.unlink()
         p = self.Partner.browse(partner.id)
         self.assertFalse(p.country_id)
-
-
-class M2mSymmetricCacheTests(DatabaseTestCase):
-    @classmethod
-    def setUpClass(cls):
-        from pathlib import Path
-
-        super().setUpClass()
-        cls.reg = Registry()
-        cls.env = Environment(cls.conn, registry=cls.reg, uid=1)
-        roots = BUILTIN_MODULE_ROOTS + [
-            Path(__file__).resolve().parents[2] / "examples" / "modules"
-        ]
-        loader.load_and_install(roots, cls.env, install_all=True)
-        cls.Partner = cls.env["res.partner"]
-        cls.Tag = cls.env["res.tag"]
 
     def test_partner_tag_write_clears_tag_partner_ids_cache(self):
         tag = self.Tag.create({"name": "SymCache"})

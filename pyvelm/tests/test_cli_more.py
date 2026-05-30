@@ -354,7 +354,7 @@ class CronCliTests(unittest.TestCase):
             patch("pyvelm.cli.loader.load_and_install"),
             patch("pyvelm.cli._tick", side_effect=_tick_and_stop),
         ):
-            cron_loop(dsn="postgresql://localhost/db", roots=[], interval=60.0)
+            cron_loop(dsn="postgresql://localhost/db", roots=[], interval=10.0)
         database.dispose.assert_called_once()
 
 
@@ -405,7 +405,7 @@ class MainParserTests(unittest.TestCase):
             patch("pyvelm.cli.loader.load_and_install"),
             patch("pyvelm.cli._tick", side_effect=_tick_fail),
         ):
-            cron_loop(dsn="postgresql://localhost/db", roots=[], interval=60.0)
+            cron_loop(dsn="postgresql://localhost/db", roots=[], interval=10.0)
 
     def test_build_parser_has_subcommands(self):
         parser = _build_parser()
