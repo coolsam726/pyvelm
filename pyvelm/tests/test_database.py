@@ -14,9 +14,12 @@ from pyvelm.database import (
     create_database_from_dsn,
     dialect_capabilities,
     ilike_sql,
+    is_serverless_runtime,
     migration_supported,
     normalize_dsn,
+    resolve_sqlite_dsn_for_runtime,
     serial_primary_key,
+    sqlite_file_path,
     test_dsn_from_env as get_test_dsn_from_env,
     to_psycopg_dsn,
 )
@@ -81,6 +84,43 @@ class MigrationSupportedTests(unittest.TestCase):
         self.assertFalse(
             migration_supported(conn, ("postgresql",))
         )
+
+
+class ServerlessSqliteTests(unittest.TestCase):
+    def test_is_serverless_detects_vercel(self):
+        with mock.patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
+            self.assertTrue(is_serverless_runtime())
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(is_serverless_runtime())
+
+    def test_resolve_copies_readonly_bundled_db_to_tmp(self):
+        import stat
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            seed = Path(tmp) / "seed.db"
+            seed.write_bytes(b"sqlite-seed-bytes")
+            seed.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+            dsn = f"sqlite:///{seed}"
+            with mock.patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
+                resolved = resolve_sqlite_dsn_for_runtime(dsn)
+            dest = sqlite_file_path(resolved)
+            self.assertIsNotNone(dest)
+            assert dest is not None
+            self.assertTrue(dest.startswith("/tmp/pyvelm-"))
+            self.assertTrue(Path(dest).is_file())
+            self.assertEqual(Path(dest).read_bytes(), b"sqlite-seed-bytes")
+            Path(dest).unlink(missing_ok=True)
+
+    def test_resolve_honors_pyvelm_sqlite_path(self):
+        with mock.patch.dict(
+            os.environ,
+            {"VERCEL": "1", "PYVELM_SQLITE_PATH": "/tmp/custom-pyvelm.db"},
+            clear=True,
+        ):
+            out = resolve_sqlite_dsn_for_runtime("sqlite:///var/readonly.db")
+        self.assertEqual(out, "sqlite:////tmp/custom-pyvelm.db")
 
 
 class TestDsnEnvTests(unittest.TestCase):

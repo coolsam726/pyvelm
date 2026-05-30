@@ -231,6 +231,7 @@ class Database:
         echo: bool = False,
     ) -> Database:
         normalized = normalize_dsn(dsn)
+        normalized = resolve_sqlite_dsn_for_runtime(normalized)
         caps = capabilities_from_dsn(normalized)
         kwargs: dict[str, Any] = {"echo": echo}
         if caps.name == "sqlite":
@@ -477,12 +478,78 @@ def sqlite_file_path(dsn: str) -> str | None:
     parsed = urlparse(normalize_dsn(dsn))
     if parsed.scheme.split("+", 1)[0].lower() != "sqlite":
         return None
-    path = (parsed.path or "").lstrip("/")
+    raw = parsed.path or ""
+    if raw.startswith("//"):
+        return raw[1:]
+    path = raw.lstrip("/")
     if parsed.netloc:
         path = f"/{parsed.netloc}/{path}" if path else f"/{parsed.netloc}"
     elif path and not path.startswith("/"):
         path = str(__import__("pathlib").Path(path).resolve())
     return path or None
+
+
+def is_serverless_runtime() -> bool:
+    """True on Vercel, AWS Lambda, and similar read-only filesystem hosts."""
+    import os
+
+    return bool(
+        os.environ.get("VERCEL")
+        or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+        or os.environ.get("LAMBDA_TASK_ROOT")
+    )
+
+
+def _sqlite_url_for_path(path: str) -> str:
+    from pathlib import Path
+
+    return f"sqlite:///{Path(path).resolve()}"
+
+
+def resolve_sqlite_dsn_for_runtime(dsn: str) -> str:
+    """Use a writable SQLite file on serverless (copy bundled DB to ``/tmp`` once).
+
+    Vercel/Lambda deploy the app bundle read-only. A SQLite file baked in at
+    build time (``var/vercel-demo.db``) cannot accept writes; this copies it
+    to ``/tmp`` on first use. Prefer ``postgresql://…`` (Supabase) for production.
+    """
+    normalized = normalize_dsn(dsn)
+    if capabilities_from_dsn(normalized).name != "sqlite":
+        return normalized
+    if not is_serverless_runtime():
+        return normalized
+
+    import hashlib
+    import os
+    import shutil
+    from pathlib import Path
+
+    override = (os.environ.get("PYVELM_SQLITE_PATH") or "").strip()
+    if override:
+        return _sqlite_url_for_path(override)
+
+    source = sqlite_file_path(normalized)
+    if source:
+        src = Path(source)
+        if (
+            str(src.resolve()).startswith("/tmp/")
+            and src.is_file()
+            and os.access(source, os.W_OK)
+        ):
+            return normalized
+
+    stem = hashlib.sha256((source or normalized).encode()).hexdigest()[:12]
+    dest = Path("/tmp") / f"pyvelm-{stem}.db"
+
+    if dest.is_file():
+        return _sqlite_url_for_path(str(dest))
+
+    if source and Path(source).is_file():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
+        return _sqlite_url_for_path(str(dest))
+
+    return _sqlite_url_for_path(str(dest))
 
 
 def delete_sqlite_file(dsn: str) -> None:

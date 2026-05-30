@@ -1,8 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm ci && npm run build && PYVELM_ALLOW_DB_NUKE=1 pyvelm db nuke -y",
+  "buildCommand": "npm ci && npm run build && PYVELM_ALLOW_DB_NUKE=1 PYVELM_DSN=sqlite:///var/vercel-demo.db pyvelm db nuke -y",
   "env": {
     "PYVELM_ENV": "production",
+    "PYVELM_DSN": "sqlite:///var/vercel-demo.db",
     "PYVELM_MODULE_ROOTS": "examples/modules:examples/modules_demo",
     "PYVELM_MAIL_BACKEND": "disabled"
   }
