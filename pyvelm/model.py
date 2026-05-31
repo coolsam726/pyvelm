@@ -354,7 +354,11 @@ class BaseModel(metaclass=MetaModel):
 
     @classmethod
     def _drop_table(cls, conn) -> None:
-        conn.execute(f'DROP TABLE IF EXISTS "{cls._table}" CASCADE')
+        from .database import _conn_capabilities
+
+        cap = _conn_capabilities(conn)
+        cascade = "" if cap.name in ("sqlite", "mysql") else " CASCADE"
+        conn.execute(f'DROP TABLE IF EXISTS "{cls._table}"{cascade}')
 
     @classmethod
     def _validate_relations(cls, registry) -> None:
@@ -414,8 +418,8 @@ class BaseModel(metaclass=MetaModel):
         from .fields import Many2one
 
         cap = _conn_capabilities(conn)
-        if cap.name == "sqlite":
-            # SQLite: defer FK constraints to inline CREATE TABLE only.
+        if cap.name in ("sqlite", "mysql"):
+            # SQLite / MySQL: defer FK constraints to inline CREATE TABLE only.
             return
 
         for f in cls._fields.values():

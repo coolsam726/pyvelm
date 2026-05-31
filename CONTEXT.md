@@ -299,16 +299,18 @@ See [docs/releases/v0.11.0.md](docs/releases/v0.11.0.md). Key paths:
 **Post-release polish ideas:** shallow variable API, subject-line insert UX,
 example `send_mail` in a demo module.
 
-## Multi-database support (v1.0 shipped, v1.1 routing)
+## Multi-database support (v1.0 shipped; v1.1 portability)
 
-**Status:** v1.0 portability **shipped** (Postgres + SQLite). v1.1 multi-DB routing
-**available** when ``PYVELM_DATABASES`` is set. **ADR:**
+**Status:** v1.0 portability **shipped** (Postgres + SQLite). **v1.1 target:** MySQL /
+MariaDB on the same Core layer. Multi-DB routing (`PYVELM_DATABASES`) exists as a
+**preview** but is **not** the v1.1 release — routing ships after additional backends
+pass install/smoke. **ADR:**
 [docs/adr/001-sqlalchemy-core.md](docs/adr/001-sqlalchemy-core.md). **Guide:**
 [docs/multi-database.md](docs/multi-database.md).
 
-**v1.0 target:** PostgreSQL + SQLite via SQLAlchemy Core (one DSN per process).
-**v1.1 target:** multi-DB routing on PostgreSQL. See the guide for exit criteria
-and roadmap.
+**v1.0 (done):** PostgreSQL + SQLite via SQLAlchemy Core (one DSN per process).
+**v1.1 (next):** MySQL / MariaDB. **v1.2:** Oracle. **v1.3+:** multi-DB routing.
+See the guide for exit criteria and roadmap.
 
 ### Goal
 

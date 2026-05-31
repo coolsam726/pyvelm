@@ -302,16 +302,28 @@ class DbNukeCliTests(unittest.TestCase):
         drop.assert_not_called()
         install.assert_not_called()
 
-    def test_drop_schema_contents_runs_drop_and_create(self):
+    def test_drop_schema_contents_standard_path(self):
+        from unittest.mock import patch
+
         conn = MagicMock()
         conn.capabilities.name = "postgresql"
-        drop_schema_contents(conn, "public")
-        self.assertGreaterEqual(conn.execute.call_count, 2)
+        with patch("pyvelm.database.uses_serverless_schema_wipe", return_value=False):
+            drop_schema_contents(conn, "public")
+        sqls = [str(c.args[0]) for c in conn.execute.call_args_list]
+        self.assertTrue(any("pg_terminate_backend" in s for s in sqls))
+        self.assertFalse(any("pg_advisory_lock" in s for s in sqls))
+        self.assertTrue(any("DROP SCHEMA" in s for s in sqls))
+
+    def test_drop_schema_contents_serverless_path(self):
+        from unittest.mock import patch
+
+        conn = MagicMock()
+        conn.capabilities.name = "postgresql"
+        with patch("pyvelm.database.uses_serverless_schema_wipe", return_value=True):
+            drop_schema_contents(conn, "public")
         sqls = [str(c.args[0]) for c in conn.execute.call_args_list]
         self.assertTrue(any("pg_advisory_lock" in s for s in sqls))
         self.assertFalse(any("pg_terminate_backend" in s for s in sqls))
-        self.assertTrue(any("DROP SCHEMA" in s for s in sqls))
-        self.assertTrue(any("CREATE SCHEMA" in s for s in sqls))
         self.assertTrue(any("pg_advisory_unlock" in s for s in sqls))
 
 

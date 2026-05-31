@@ -1,24 +1,32 @@
-{# App footer — copyright, support links, optional powered-by. #}
+{# App footer — copyright, support, powered-by, and dev DB (inline). #}
 {% set b = brand if brand is defined else none %}
-{% if b and (b.copyright or b.support_email or b.support_url or b.show_powered_by) %}
+{% set _dev = dev_db_display if dev_db_display is defined and dev_db_display else none %}
+{% set _show_branding = b and (b.copyright or b.support_email or b.support_url or b.show_powered_by) %}
+{% if _show_branding or _dev %}
 <footer class="px-4 md:px-6 py-4 border-t border-default text-2xs text-body-subtle shrink-0">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div class="min-w-0">
-            {% if b.copyright %}
+            {% if b and b.copyright %}
             <p class="truncate">{{ b.copyright }}</p>
             {% endif %}
         </div>
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0">
-            {% if b.support_email %}
+            {% if b and b.support_email %}
             <a href="mailto:{{ b.support_email }}"
                class="text-fg-brand hover:underline">{{ b.support_email }}</a>
             {% endif %}
-            {% if b.support_url %}
+            {% if b and b.support_url %}
             <a href="{{ b.support_url }}" target="_blank" rel="noopener noreferrer"
                class="text-fg-brand hover:underline">Support</a>
             {% endif %}
-            {% if b.show_powered_by %}
+            {% if b and b.show_powered_by %}
             <span class="text-body-subtle/60">Powered by pyvelm</span>
+            {% endif %}
+            {% if _dev %}
+            <span class="inline-flex items-center gap-1.5">
+                <span class="px-1.5 py-0.5 rounded bg-warning-soft text-warning-strong font-sans font-semibold uppercase tracking-wide text-2xs">Dev</span>
+                <span class="font-mono">{{ _dev }}</span>
+            </span>
             {% endif %}
         </div>
     </div>

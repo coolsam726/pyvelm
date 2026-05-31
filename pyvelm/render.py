@@ -5497,14 +5497,14 @@ def render_landing_page(env=None, *, current_path: str | None = None) -> str:
     from .branding import branding_context
     from .home import home_url, login_url
 
-    brand = branding_context(env)
-    app = brand.get("app_name") or "pyvelm"
+    ctx = branding_context(env)
+    app = (ctx.get("brand") or {}).get("app_name") or "pyvelm"
     template = _env.get_template("landing.html")
-    tagline = (brand.get("app_tagline") or "").strip() or (
+    tagline = ((ctx.get("brand") or {}).get("app_tagline") or "").strip() or (
         "Sign in to manage your data, workflows, and team — or explore the demo modules."
     )
     return template.render(
-        brand=brand,
+        **ctx,
         headline=f"Welcome to {app}",
         tagline=tagline,
         get_started_href=login_url(),

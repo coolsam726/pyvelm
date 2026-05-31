@@ -23,7 +23,7 @@ from pyvelm.database import (
     test_dsn_from_env as get_test_dsn_from_env,
     to_psycopg_dsn,
 )
-from pyvelm.tests.support.db import _assert_safe_reset_dsn
+from pyvelm.tests.support.db import _assert_safe_reset_dsn, requires_backend
 
 
 class NormalizeDsnTests(unittest.TestCase):
@@ -55,6 +55,33 @@ class DialectCapabilitiesTests(unittest.TestCase):
         cap = dialect_capabilities("postgresql")
         self.assertIn("ILIKE", ilike_sql('"t"."name"', cap))
 
+    def test_mysql_capabilities(self):
+        cap = dialect_capabilities("mysql")
+        self.assertFalse(cap.supports_ilike)
+        self.assertFalse(cap.supports_returning)
+        self.assertIn("LOWER", ilike_sql('"t"."name"', cap))
+        self.assertIn("AUTO_INCREMENT", serial_primary_key(cap))
+
+    def test_mariadb_normalised_to_mysql(self):
+        self.assertEqual(
+            normalize_dsn("mariadb://u:p@localhost/db"),
+            "mariadb+pymysql://u:p@localhost/db",
+        )
+        self.assertEqual(dialect_capabilities("mariadb").name, "mysql")
+
+    def test_mysql_dsn_normalisation(self):
+        self.assertEqual(
+            normalize_dsn("mysql://u:p@localhost/db"),
+            "mysql+pymysql://u:p@localhost/db",
+        )
+
+    def test_ir_module_create_sql_mysql_varchar_primary_key(self):
+        from pyvelm.database import ir_module_create_sql
+
+        sql = ir_module_create_sql(dialect_capabilities("mysql"))
+        self.assertIn('"name" VARCHAR(255) PRIMARY KEY', sql)
+        self.assertNotIn("text PRIMARY KEY", sql)
+
 
 class SqliteDatabaseTests(unittest.TestCase):
     def test_create_table_and_insert(self):
@@ -67,6 +94,7 @@ class SqliteDatabaseTests(unittest.TestCase):
                     'CREATE TABLE IF NOT EXISTS "demo" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "name" text)'
                 )
                 conn.execute('INSERT INTO "demo" ("name") VALUES (%s)', ["alpha"])
+            with db.connect() as conn:
                 row = conn.execute('SELECT "name" FROM "demo" WHERE "id" = %s', [1]).fetchone()
             db.dispose()
         self.assertEqual(row, ("alpha",))
@@ -76,11 +104,40 @@ class SqliteDatabaseTests(unittest.TestCase):
         self.assertIn("AUTOINCREMENT", serial_primary_key(cap))
 
 
+@requires_backend("mysql")
+class MysqlDatabaseTests(unittest.TestCase):
+    def test_autocommit_insert_visible_on_next_connection(self):
+        from pyvelm.tests.support.db import dsn_from_env, reset_database
+
+        dsn = dsn_from_env()
+        assert dsn is not None
+        reset_database(dsn)
+        db = create_database_from_dsn(dsn, pool_size=1)
+        with db.connect() as conn:
+            conn.execute(
+                'CREATE TABLE IF NOT EXISTS "demo" ('
+                '"id" INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY, "name" text)'
+            )
+            conn.execute('INSERT INTO "demo" ("name") VALUES (%s)', ["alpha"])
+        with db.connect() as conn:
+            row = conn.execute('SELECT "name" FROM "demo" WHERE "id" = %s', [1]).fetchone()
+        db.dispose()
+        self.assertEqual(row, ("alpha",))
+
+
 class MigrationSupportedTests(unittest.TestCase):
     def test_skips_postgres_only_on_sqlite(self):
         cap = dialect_capabilities("sqlite")
         conn = mock.Mock()
         conn.dialect_name = "sqlite"
+        self.assertFalse(
+            migration_supported(conn, ("postgresql",))
+        )
+
+    def test_skips_postgres_only_on_mysql(self):
+        cap = dialect_capabilities("mysql")
+        conn = mock.Mock()
+        conn.dialect_name = "mysql"
         self.assertFalse(
             migration_supported(conn, ("postgresql",))
         )

@@ -24,25 +24,6 @@ Maintained by [Sam Maosa](https://github.com/coolsam726) alongside
 [nested-comments](https://github.com/coolsam726/nested-comments), and other packages —
 [**sponsor on GitHub**](https://github.com/sponsors/coolsam726) (one profile, all projects).
 
-## Live demo
-
-Try PyVELM in the browser — no install required:
-
-1. Open **[https://pyvelm.vercel.app/](https://pyvelm.vercel.app/)**
-2. Click **Sign in** (or **Get started** on the landing page)
-3. Sign in with the default demo credentials:
-
-   | Field | Value |
-   |-------|-------|
-   | **Login** | `admin` |
-   | **Password** | `admin` |
-
-The hosted demo runs the same example modules as `examples/serve.py`: partners, CRM,
-tags, sales users, workflow records, Vellum demo notes, and Feedback Signals. On
-**Supabase Postgres** (recommended for Vercel), branding and other edits persist
-until the next deploy; each deploy runs `pyvelm db nuke` to reset the demo DB.
-See [Deploying → Vercel](deployment.md#vercel-serverless).
-
 ## Quick start
 
 **From PyPI** (scaffold a new app):

@@ -1,8 +1,11 @@
-"""Multi-database routing (v1.1+) — Postgres tenant selection in one process.
+"""Multi-database routing (preview) — Postgres tenant selection in one process.
 
 See docs/multi-database.md. v1.0 uses a single ``PYVELM_DSN``; when
 ``PYVELM_DATABASES`` lists extra databases, routing middleware and the
 database selector UI bind requests to the matching pool and registry.
+
+Routing is **not** the v1.1 release target — additional backends (MySQL/MariaDB,
+Oracle) ship first; routing is planned for v1.3+ after portability is complete.
 """
 from __future__ import annotations
 

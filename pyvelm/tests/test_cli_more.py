@@ -435,8 +435,12 @@ class MainParserTests(unittest.TestCase):
         run.assert_called_once()
 
     def test_load_dotenv_no_file(self):
-        with patch("pathlib.Path.exists", return_value=False):
-            _load_dotenv()  # should not raise
+        with (
+            patch("dotenv.find_dotenv", return_value=""),
+            patch("dotenv.load_dotenv") as load,
+        ):
+            _load_dotenv()
+        load.assert_not_called()
 
     def test_command_list_and_help(self):
         from pyvelm.tests.test_console import _DemoCommand

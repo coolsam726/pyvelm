@@ -12,6 +12,7 @@
     {% include "layouts/_head_theme.html" %}
 </head>
 <body class="bg-neutral-secondary text-body min-h-screen flex flex-col font-sans antialiased">
+{% include "layouts/_page_loader.html" %}
 <div class="flex-1 flex items-center justify-center px-6">
     <div class="w-full max-w-sm">
         <div class="bg-neutral-primary border border-default rounded-xl shadow-sm px-8 py-10">
@@ -72,25 +73,13 @@
         </div>
     </div>
 </div>
-{% if brand is defined and (brand.copyright or brand.support_email or brand.support_url or brand.show_powered_by) %}
-<footer class="py-6 px-6 text-center text-2xs text-body-subtle">
-    {% if brand.copyright %}
-    <p>{{ brand.copyright }}</p>
-    {% endif %}
-    <p class="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-        {% if brand.support_email %}
-        <a href="mailto:{{ brand.support_email }}" class="text-fg-brand hover:underline">{{ brand.support_email }}</a>
-        {% endif %}
-        {% if brand.support_url %}
-        <a href="{{ brand.support_url }}" target="_blank" rel="noopener noreferrer"
-           class="text-fg-brand hover:underline">Support</a>
-        {% endif %}
-        {% if brand.show_powered_by %}
-        <span class="text-body-subtle/60">Powered by pyvelm</span>
-        {% endif %}
-    </p>
-</footer>
-{% endif %}
-{% include "layouts/_footer_dev.html" %}
+{% include "layouts/_footer_branding.html" %}
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        document.documentElement.classList.remove('pv-app-loading');
+        const el = document.getElementById('pv-swap-blocker');
+        if (el) el.setAttribute('aria-hidden', 'true');
+    });
+</script>
 </body>
 </html>

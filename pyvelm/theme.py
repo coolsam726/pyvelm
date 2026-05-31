@@ -122,7 +122,9 @@ def company_theme_context(env, *, company_id: int | None = None) -> dict[str, st
     empty = {"company_primary_color": "", "company_theme_style": ""}
     if env is None:
         return empty
-    cid = env.company_id if company_id is None else company_id
+    from pyvelm.fonts import resolve_branding_company_id
+
+    cid = resolve_branding_company_id(env, company_id=company_id)
     if cid is None or "res.company" not in env.registry:
         return empty
     Company = env.with_company(None).sudo()["res.company"]

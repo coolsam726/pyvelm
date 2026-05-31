@@ -37,6 +37,14 @@ class DialectCapabilities:
     placeholder: str  # ``%s`` (postgres/psycopg) or ``?`` (sqlite)
 
 
+def _dialect_base_name(dialect_name: str) -> str:
+    """Normalise SQLAlchemy dialect names to pyvelm capability keys."""
+    name = (dialect_name or "postgresql").split("+", 1)[0].lower()
+    if name in ("mariadb", "mysql"):
+        return "mysql"
+    return name
+
+
 def normalize_dsn(dsn: str) -> str:
     """Normalise legacy DSNs to SQLAlchemy URL form."""
     dsn = (dsn or "").strip()
@@ -46,6 +54,10 @@ def normalize_dsn(dsn: str) -> str:
         dsn = "postgresql+psycopg://" + dsn[len("postgres://") :]
     elif dsn.startswith("postgresql://") and "+psycopg" not in dsn.split(":", 1)[0]:
         dsn = "postgresql+psycopg://" + dsn[len("postgresql://") :]
+    elif dsn.startswith("mysql://") and "+pymysql" not in dsn.split(":", 1)[0]:
+        dsn = "mysql+pymysql://" + dsn[len("mysql://") :]
+    elif dsn.startswith("mariadb://") and "+pymysql" not in dsn.split(":", 1)[0]:
+        dsn = "mariadb+pymysql://" + dsn[len("mariadb://") :]
     return dsn
 
 
@@ -65,7 +77,7 @@ def to_psycopg_dsn(dsn: str) -> str:
 
 
 def dialect_capabilities(dialect_name: str) -> DialectCapabilities:
-    name = (dialect_name or "postgresql").split("+", 1)[0].lower()
+    name = _dialect_base_name(dialect_name)
     if name == "sqlite":
         return DialectCapabilities(
             name="sqlite",
@@ -75,6 +87,16 @@ def dialect_capabilities(dialect_name: str) -> DialectCapabilities:
             supports_drop_schema=False,
             schema_reset=SchemaResetStrategy.DROP_ALL_TABLES,
             placeholder="?",
+        )
+    if name == "mysql":
+        return DialectCapabilities(
+            name="mysql",
+            supports_returning=False,
+            supports_ilike=False,
+            supports_add_column_if_not_exists=False,
+            supports_drop_schema=False,
+            schema_reset=SchemaResetStrategy.DROP_ALL_TABLES,
+            placeholder="%s",
         )
     return DialectCapabilities(
         name="postgresql",
@@ -91,6 +113,19 @@ def capabilities_from_dsn(dsn: str) -> DialectCapabilities:
     parsed = urlparse(normalize_dsn(dsn))
     scheme = (parsed.scheme or "").split("+", 1)[0].lower()
     return dialect_capabilities(scheme)
+
+
+def _configure_engine(engine: Engine, caps: DialectCapabilities) -> None:
+    """Dialect-specific engine hooks (MySQL ``ANSI_QUOTES`` for quoted identifiers)."""
+    if caps.name != "mysql":
+        return
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def _mysql_on_connect(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("SET SESSION sql_mode = 'ANSI_QUOTES'")
+        cursor.close()
 
 
 class ExecuteResult:
@@ -175,21 +210,32 @@ class ConnectionAdapter:
         return ExecuteResult(rows=rows, rowcount=result.rowcount)
 
     def commit(self) -> None:
-        if self._dbapi is not None and hasattr(self._dbapi, "commit"):
-            self._dbapi.commit()
-        elif self._sa is not None:
+        if self._sa is not None:
             self._sa.commit()
+        elif self._dbapi is not None and hasattr(self._dbapi, "commit"):
+            self._dbapi.commit()
         self._in_tx = False
 
     def rollback(self) -> None:
-        if self._dbapi is not None and hasattr(self._dbapi, "rollback"):
-            self._dbapi.rollback()
-        elif self._sa is not None:
+        if self._sa is not None:
             self._sa.rollback()
+        elif self._dbapi is not None and hasattr(self._dbapi, "rollback"):
+            self._dbapi.rollback()
         self._in_tx = False
 
     def close(self) -> None:
         if self._sa is not None and self.owns_sa:
+            # SQLAlchemy 2 autobegin opens a transaction even when DBAPI
+            # autocommit is True (MySQL/MariaDB). Commit pending work before
+            # close so boot/migrate one-shots persist across pool checkouts.
+            if self.autocommit:
+                try:
+                    self.commit()
+                except Exception:
+                    try:
+                        self.rollback()
+                    except Exception:
+                        pass
             self._sa.close()
 
 
@@ -206,7 +252,7 @@ class PoolFacade:
 
 
 class Database:
-    """Process-scoped database handle (one DSN). v1.1 may map many Database instances."""
+    """Process-scoped database handle (one DSN). Multi-DB routing may map many instances."""
 
     def __init__(
         self,
@@ -244,6 +290,7 @@ class Database:
             kwargs["pool_size"] = pool_size
             kwargs["max_overflow"] = 0
         engine = create_engine(normalized, **kwargs)
+        _configure_engine(engine, caps)
         return cls(engine, dsn=normalized, capabilities=caps, pool_size=pool_size)
 
     @contextmanager
@@ -296,13 +343,18 @@ def require_dsn_from_env() -> str:
     return dsn
 
 
-def nuke_dsn_from_env() -> str:
-    """DSN for ``db nuke`` / schema wipe — prefers ``PYVELM_NUKE_DSN``.
+def uses_serverless_schema_wipe() -> bool:
+    """True when schema wipe needs serverless/managed-Postgres hardening."""
+    import os
 
-    On Vercel + Supabase use the **session pooler** (``*.pooler.supabase.com:5432``),
-    not transaction mode (``:6543``) and not the direct ``db.*.supabase.co`` host
-    (often IPv6-only and refused from Vercel builds).
-    """
+    if is_serverless_runtime():
+        return True
+    flag = (os.environ.get("PYVELM_NUKE_SERVERLESS") or "").strip().lower()
+    return flag in ("1", "true", "yes", "on")
+
+
+def nuke_dsn_from_env() -> str:
+    """DSN for ``db nuke`` — ``PYVELM_NUKE_DSN`` when set, else ``PYVELM_DSN``."""
     import os
 
     raw = (os.environ.get("PYVELM_NUKE_DSN") or os.environ.get("PYVELM_DSN") or "").strip()
@@ -333,22 +385,22 @@ def is_supabase_direct_host(dsn: str) -> bool:
 
 
 def warn_if_poor_nuke_dsn(dsn: str) -> None:
-    """Emit stderr hints when a schema wipe DSN is likely to fail."""
+    """Emit stderr hints when a schema wipe DSN is likely to fail (serverless only)."""
+    if not uses_serverless_schema_wipe():
+        return
     import sys
 
     if is_transaction_pooler_dsn(dsn):
         print(
             "WARNING: Schema wipe through a transaction pooler (port 6543) can "
-            "deadlock. Set PYVELM_NUKE_DSN to Supabase **session** pooler "
-            "(same pooler host, port 5432) for build / CI nuke steps.",
+            "deadlock. Use a session pooler URL (port 5432) for PYVELM_NUKE_DSN.",
             file=sys.stderr,
         )
         return
-    if is_supabase_direct_host(dsn) and is_serverless_runtime():
+    if is_supabase_direct_host(dsn):
         print(
             "WARNING: Supabase direct host db.*.supabase.co is often IPv6-only "
-            "and refused from Vercel. Use session pooler "
-            "(*.pooler.supabase.com:5432) for PYVELM_NUKE_DSN instead.",
+            "from serverless builders. Use *.pooler.supabase.com:5432 instead.",
             file=sys.stderr,
         )
 
@@ -389,27 +441,24 @@ def terminate_other_backends(conn: ConnectionAdapter) -> None:
 
 
 def prepare_postgres_schema_drop(conn: ConnectionAdapter, schema: str) -> None:
-    """Serialize before ``DROP SCHEMA … CASCADE``.
-
-    Does not call ``pg_terminate_backend`` — managed Postgres (Supabase) denies
-    that for superuser sessions. Use advisory lock + ``lock_timeout`` instead.
-    Opt in locally with ``PYVELM_TERMINATE_BACKENDS=1`` when you have superuser.
-    """
+    """Prepare session settings before ``DROP SCHEMA … CASCADE``."""
     if conn.capabilities.name != "postgresql":
         return
-    safe = (schema or "public").replace("'", "''")
-    conn.execute(f"SELECT pg_advisory_lock(hashtext('pyvelm:wipe:{safe}'))")
     import os
 
-    flag = (os.environ.get("PYVELM_TERMINATE_BACKENDS") or "").strip().lower()
-    if flag in ("1", "true", "yes", "on"):
+    if uses_serverless_schema_wipe():
+        safe = (schema or "public").replace("'", "''")
+        conn.execute(f"SELECT pg_advisory_lock(hashtext('pyvelm:wipe:{safe}'))")
+        lock_timeout = (os.environ.get("PYVELM_NUKE_LOCK_TIMEOUT") or "120s").strip()
+    else:
         terminate_other_backends(conn)
-    conn.execute("SET lock_timeout = '120s'")
+        lock_timeout = (os.environ.get("PYVELM_NUKE_LOCK_TIMEOUT") or "15s").strip()
+    conn.execute(f"SET lock_timeout = '{lock_timeout or '15s'}'")
     conn.execute("SET statement_timeout = '300s'")
 
 
 def release_postgres_schema_drop_lock(conn: ConnectionAdapter, schema: str) -> None:
-    if conn.capabilities.name != "postgresql":
+    if conn.capabilities.name != "postgresql" or not uses_serverless_schema_wipe():
         return
     safe = (schema or "public").replace("'", "''")
     conn.execute(f"SELECT pg_advisory_unlock(hashtext('pyvelm:wipe:{safe}'))")
@@ -493,6 +542,8 @@ def dsn_display(dsn: str) -> str:
 def serial_primary_key(cap: DialectCapabilities) -> str:
     if cap.name == "sqlite":
         return '"id" INTEGER PRIMARY KEY AUTOINCREMENT'
+    if cap.name == "mysql":
+        return '"id" INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY'
     return '"id" SERIAL PRIMARY KEY'
 
 
@@ -505,6 +556,10 @@ def returning_id_clause(cap: DialectCapabilities) -> str:
 
 
 def fetch_lastrowid(conn: ConnectionAdapter, table: str) -> int:
+    cap = _conn_capabilities(conn)
+    if cap.name == "mysql":
+        row = conn.execute("SELECT LAST_INSERT_ID()").fetchone()
+        return int(row[0]) if row and row[0] is not None else 0
     row = conn.execute(f'SELECT MAX("id") FROM "{table}"').fetchone()
     return int(row[0]) if row and row[0] is not None else 0
 
@@ -570,7 +625,10 @@ def add_column_if_missing(
         conn.execute(stmt)
     except Exception as exc:
         orig = getattr(exc, "orig", exc)
-        if cap.name == "sqlite" and "duplicate column" in str(orig).lower():
+        msg = str(orig).lower()
+        if cap.name == "sqlite" and "duplicate column" in msg:
+            return False
+        if cap.name == "mysql" and "duplicate column" in msg:
             return False
         raise
     return True
@@ -585,10 +643,20 @@ def reset_schema(conn: ConnectionAdapter, cap: DialectCapabilities) -> None:
         return
 
     if cap.schema_reset == SchemaResetStrategy.DROP_ALL_TABLES:
-        engine = conn._sa.engine
-        insp = inspect(engine)
-        for table in insp.get_table_names():
+        if cap.name == "mysql":
+            conn.execute("SET FOREIGN_KEY_CHECKS = 0")
+        sa_conn = _sqlalchemy_connection(conn)
+        if sa_conn is not None:
+            from sqlalchemy import inspect as sa_inspect
+
+            tables = sa_inspect(sa_conn).get_table_names()
+        else:
+            engine = conn._sa.engine
+            tables = inspect(engine).get_table_names()
+        for table in tables:
             conn.execute(f'DROP TABLE IF EXISTS "{table}"')
+        if cap.name == "mysql":
+            conn.execute("SET FOREIGN_KEY_CHECKS = 1")
         return
 
     raise RuntimeError(f"Unsupported schema reset for dialect {cap.name!r}")
@@ -729,22 +797,40 @@ def _conn_capabilities(conn) -> DialectCapabilities:
 
 
 def timestamp_sql_type(cap: DialectCapabilities) -> str:
-    return "timestamp" if cap.name == "sqlite" else "timestamptz"
+    if cap.name == "sqlite":
+        return "timestamp"
+    if cap.name == "mysql":
+        return "DATETIME(6)"
+    return "timestamptz"
 
 
 def now_sql(cap: DialectCapabilities) -> str:
-    return "CURRENT_TIMESTAMP" if cap.name == "sqlite" else "now()"
+    if cap.name == "postgresql":
+        return "now()"
+    return "CURRENT_TIMESTAMP"
+
+
+_PORTABLE_TYPE_MAP: dict[str, dict[str, str]] = {
+    "sqlite": {
+        "double precision": "REAL",
+        "timestamptz": "timestamp",
+        "SERIAL": "INTEGER",
+    },
+    "mysql": {
+        "double precision": "DOUBLE",
+        "timestamptz": "DATETIME(6)",
+        "timestamp": "DATETIME(6)",
+        "boolean": "BOOLEAN",
+        "SERIAL": "INTEGER",
+    },
+}
 
 
 def normalize_sql_type(type_spec: str, cap: DialectCapabilities) -> str:
     """Map Postgres-oriented field types to the active dialect."""
-    if cap.name != "sqlite":
+    mapping = _PORTABLE_TYPE_MAP.get(cap.name)
+    if not mapping:
         return type_spec
-    mapping = {
-        "double precision": "REAL",
-        "timestamptz": "timestamp",
-        "SERIAL": "INTEGER",
-    }
     out = type_spec
     for src, dst in mapping.items():
         out = out.replace(src, dst)
@@ -752,25 +838,31 @@ def normalize_sql_type(type_spec: str, cap: DialectCapabilities) -> str:
 
 
 def normalize_column_ddl(ddl: str, cap: DialectCapabilities) -> str:
-    if cap.name != "sqlite":
+    mapping = _PORTABLE_TYPE_MAP.get(cap.name)
+    if not mapping:
         return ddl
     out = ddl
-    for src, dst in (
-        ("double precision", "REAL"),
-        ("timestamptz", "timestamp"),
-        ("SERIAL", "INTEGER"),
-    ):
+    for src, dst in mapping.items():
         out = out.replace(src, dst)
     return out
+
+
+def string_sql_type(cap: DialectCapabilities, *, primary_key: bool = False) -> str:
+    """Portable string column type for Char/Text (MySQL needs VARCHAR for PK/index)."""
+    if cap.name == "mysql":
+        return "VARCHAR(255)" if primary_key else "TEXT"
+    return "text"
 
 
 def ir_module_create_sql(cap: DialectCapabilities) -> str:
     ts = timestamp_sql_type(cap)
     default = now_sql(cap)
+    name_type = string_sql_type(cap, primary_key=True)
+    version_type = string_sql_type(cap)
     return (
         f'CREATE TABLE IF NOT EXISTS "ir_module" ('
-        f'"name" text PRIMARY KEY, '
-        f'"version" text NOT NULL, '
+        f'"name" {name_type} PRIMARY KEY, '
+        f'"version" {version_type} NOT NULL, '
         f'"installed_at" {ts} NOT NULL DEFAULT {default})'
     )
 

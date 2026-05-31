@@ -12,7 +12,7 @@ and import from ``document_layout.api``.
 
 NAME: str = "document_layout"
 DISPLAY_NAME: str = "Document Layouts"
-VERSION: tuple[int, ...] = (0, 2, 0)
+VERSION: tuple[int, ...] = (0, 3, 0)
 SUMMARY: str = "Configurable company document layout + record-to-PDF printing."
 DESCRIPTION: str = (
     "A configurable external document layout (logo, address, accent colour, "

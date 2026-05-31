@@ -12,9 +12,11 @@ Customize how the UI looks for each company (or globally via environment variabl
 | **Tagline** | Login subtitle |
 | **Logo URL (light)** | Sidebar / login in light mode |
 | **Logo URL (dark)** | Logo in dark mode; if empty, the light logo is used |
+| **Header logo height (px)** | Logo height in the admin shell sidebar (default 68 when 0; matches the 60px main header row plus padding) |
+| **Show app name in header** | When off, only the logo (or default tile) shows in the sidebar / top bar |
 | **Favicon URL** | Browser tab icon |
 | **Primary color** | Accent palette (buttons, links, default logo tile) |
-| **Font family** | UI typeface via [Google Fonts](https://fonts.google.com/) (exact family name, e.g. `Roboto`, `Open Sans`). Empty = Inter; global default via `PYVELM_FONT_FAMILY`. |
+| **Font family** | UI typeface — pick from curated Google Fonts (empty = Inter; global default via `PYVELM_FONT_FAMILY`) |
 | **Copyright** | Footer legal line |
 | **Support email / URL** | Footer links |
 | **Show powered by pyvelm** | Hide the small “Powered by pyvelm” line when off |
@@ -31,6 +33,8 @@ PYVELM_APP_NAME="Acme ERP"
 PYVELM_APP_TAGLINE="Sign in to your workspace"
 PYVELM_LOGO_URL="/api/attachment/12/download"
 PYVELM_LOGO_URL_DARK="/api/attachment/14/download"
+PYVELM_HEADER_LOGO_HEIGHT=48
+PYVELM_SHOW_HEADER_BRAND_TEXT=0
 PYVELM_FAVICON_URL="/api/attachment/13/download"
 PYVELM_COPYRIGHT="© 2026 Acme Corp. All rights reserved."
 PYVELM_SUPPORT_EMAIL="help@acme.example"
@@ -42,6 +46,8 @@ PYVELM_FONT_FAMILY="Roboto"
 Requires **base module 0.21.0+** (run **Apps → base → Sync** after upgrade).
 
 Per-company **font family** (`font_family`) requires **base 0.32.0+**.
+
+**Header logo height** and **show app name in header** require **base 0.33.0+**.
 
 Per-company **navigation layout** (`menu_layout`) requires **base 0.31.0+**;
 middleware is registered automatically via `base.web:register_routes`.

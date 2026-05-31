@@ -15,7 +15,7 @@ class MigrateCommand(Command):
         "migrate "
         "{--all : Install/upgrade every discovered module} "
         "{--module= : Limit to one module and its dependencies} "
-        "{--database= : Target a tenant from PYVELM_DATABASES (v1.1+)}"
+        "{--database= : Target a tenant from PYVELM_DATABASES (routing preview)}"
     )
 
     def handle(

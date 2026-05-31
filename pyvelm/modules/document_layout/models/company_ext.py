@@ -5,7 +5,7 @@ layout variant / paper format.
 """
 from __future__ import annotations
 
-from pyvelm import BaseModel, Char, depends
+from pyvelm import BaseModel, Char, depends, Integer
 
 from ..constants import DOCUMENT_LAYOUT_CHOICES, GOOGLE_FONT_CHOICES, GOOGLE_FONTS
 
@@ -30,6 +30,10 @@ class ResCompanyDocumentLayout(BaseModel):
     )
     secondary_color = Char(string="Secondary color")
     google_font = Char(string="Google Font", choices=GOOGLE_FONT_CHOICES)
+    document_logo_height = Integer(
+        default=0,
+        string="Document logo height (px)",
+    )
     # Pseudo-field that hosts the "Design layout" dialog button (see widgets.py).
     document_designer = Char(
         compute="_compute_document_designer", store=False, string="Designer",

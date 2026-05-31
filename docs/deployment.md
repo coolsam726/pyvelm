@@ -67,7 +67,25 @@ volumes:
 ```
 
 Alternatively set **`PYVELM_ATTACHMENT_BACKEND=db`** and store bytes in
-Postgres (same trade-off as on Vercel — fine for small/medium files).
+Postgres (fine for small/medium files when you prefer a single backup target).
+
+### Normal deployment path (no serverless overhead)
+
+A standard **Docker / gunicorn + Postgres** stack does **not** run `db nuke` at
+deploy time. Workers connect with **`PYVELM_DSN`** directly to Postgres (no
+pooler required on a private network). Schema changes go through **`pyvelm migrate`**
+once per deploy; the app bootstraps installed modules idempotently.
+
+| Concern | Normal deployment | Serverless (experimental) |
+|---------|-------------------|-------------------------|
+| DB at runtime | Direct Postgres URL | Often pooler + shared remote DB |
+| File uploads | `local` + volume (default) | `db` backend or `/tmp` only |
+| Sessions | DB-backed (`session_token`) | Signed cookies or shared Postgres |
+| `db nuke` / schema wipe | Dev CLI only; fast path (15s lock timeout) | Extra retries, advisory locks |
+
+`pyvelm db nuke` and `migrate:reset` use a **fast path** on self-hosted Postgres
+(terminate sibling connections, single attempt). Serverless hardening applies
+only when `VERCEL` / `AWS_LAMBDA_*` is set or `PYVELM_NUKE_SERVERLESS=1`.
 
 ## Scaling out
 
@@ -98,45 +116,15 @@ reverse proxy:
   the reverse proxy in front, serving `pyvelm/static/dist/`
   directly.
 
-## Vercel (serverless)
+## Vercel (experimental — not recommended)
 
-**Live demo:** [https://pyvelm.vercel.app/](https://pyvelm.vercel.app/) — click **Sign in**, then **Login** `admin` / **Password** `admin`.
+Serverless hosts impose read-only filesystems, per-instance SQLite, pooler
+deadlocks on schema wipes, and other constraints that do not apply to a normal
+Docker or VPS deployment. **`vercel.json` only builds frontend assets** — no
+database reset at deploy time. For production use **Docker Compose** (below) or
+your own Postgres + gunicorn stack.
 
-The repo ships a [`vercel.json`](https://github.com/coolsam726/pyvelm/blob/main/vercel.json) that runs `examples.serve:app` as a Python function on Vercel.
-
-### Supabase Postgres (recommended)
-
-Use a **dedicated throwaway Supabase project** for the demo — not your dev database.
-
-1. Create a Supabase project and copy the **connection pooler** URI (port **6543**).
-2. In the Vercel project → **Settings → Environment Variables**, set:
-
-   | Variable | Value |
-   |----------|--------|
-   | `PYVELM_DSN` | `postgresql://postgres.[ref]:[password]@….pooler.supabase.com:6543/postgres?sslmode=require` — **transaction** pooler for runtime |
-   | `PYVELM_NUKE_DSN` | **Build only** — **session** pooler on the **same** `*.pooler.supabase.com` host, port **5432** (supports `DROP SCHEMA`). Do **not** use `db.[ref].supabase.co` — Vercel builds often cannot reach it (IPv6). Do **not** reuse the `:6543` URI. |
-   | `PYVELM_MODULE_ROOTS` | `examples/modules:examples/modules_demo` (already in `vercel.json`) |
-   | `PYVELM_SECRET_KEY` | Optional random string |
-
-   Do **not** set `PYVELM_ALLOW_DB_NUKE` on the runtime environment — only the build uses it (see below).
-
-3. Deploy. Each build runs:
-
-   ```bash
-   PYVELM_ALLOW_DB_NUKE=1 pyvelm db nuke -y
-   ```
-
-   That drops the `public` schema, reinstalls every example module, and re-seeds demo data. **Branding, partners, and other edits persist between requests** until the next deploy; a new deploy resets the database to the seeded snapshot.
-
-   `pyvelm db nuke` uses an advisory lock and retries `DROP SCHEMA` on lock contention. It does **not** call `pg_terminate_backend` (Supabase denies that). Set `PYVELM_NUKE_DSN` to session pooler `:5432` on `pooler.supabase.com`.
-
-With Postgres, sessions are stored in `res.users.session_token` as on Docker — no stateless cookie workaround is needed.
-
-**File uploads:** the deployment filesystem is read-only (except `/tmp`). Set **`PYVELM_ATTACHMENT_BACKEND=db`** so attachment bytes are stored in Postgres (`ir.attachment.datas`). This is already set in `vercel.json`; do not point `PYVELM_ATTACHMENT_DIR` at `/var/data` or other bundle paths on Vercel.
-
-### SQLite fallback (not recommended)
-
-Bundled SQLite under `/tmp` is per serverless instance and does not persist writes across cold starts or instances. Only use for local experiments; set `PYVELM_STATELESS_SESSIONS=1` and see `.env.example` if you must.
+See [Getting started](getting-started.md) and the compose file in the repo root.
 
 ## The cron worker
 
@@ -158,7 +146,7 @@ cron:
 | variable / arg | default | what it does |
 |---|---|---|
 | `PYVELM_DSN` | (required) | SQLAlchemy URL — `postgresql+psycopg://…` (production) or `sqlite:///…` (dev/CI) |
-| `PYVELM_DATABASES` | — | Optional multi-tenant catalog (`key=dsn,…` or JSON); see [multi-database.md](multi-database.md) |
+| `PYVELM_DATABASES` | — | Optional **preview** multi-tenant catalog (`key=dsn,…` or JSON); not v1.1 — see [multi-database.md](multi-database.md) |
 | `PYVELM_MODULE_ROOTS` | (required) | Colon-separated module dirs |
 | `PYVELM_CRON_INTERVAL` / `--interval` | `60` | Seconds between ticks |
 | `--roots` | env var | Override the module-root list inline |

@@ -1,18 +1,19 @@
 # Multi-database support
 
-Pyvelm **v1.x** adds portable database backends and (from **v1.1**) optional
-multi-database routing on PostgreSQL. This guide is the user-facing companion to
+Pyvelm **v1.x** adds portable database backends first; **multi-database routing**
+(one process, many PostgreSQL tenants) ships after additional backends pass the
+same install/smoke bar. This guide is the user-facing companion to
 [ADR 001: SQLAlchemy Core](adr/001-sqlalchemy-core.md).
 
 ## Two tracks
 
 | Track | What it means | First release |
 |-------|---------------|---------------|
-| **Portability** | One process, one DSN — run on PostgreSQL *or* SQLite (later MySQL/Oracle) | **v1.0.0** |
-| **Multi-DB routing** | One process, many PostgreSQL databases (db selector, per-DB sessions) | **v1.1.0+** |
+| **Portability** | One process, one DSN — PostgreSQL, SQLite, then MySQL/MariaDB, then Oracle | **v1.0.0** (Postgres + SQLite); **v1.1.0+** (MySQL/MariaDB) |
+| **Multi-DB routing** | One process, many PostgreSQL databases (db selector, per-DB sessions) | **After v1.1** — preview code exists; not a release target until portability is complete |
 
-**v1.0 does not** include Odoo-style database selection UI or a `pool_map` of
-tenant databases. Design hooks in the connection layer prepare for v1.1.
+**v1.1 is for additional backends**, not tenant routing. Routing hooks (`pool_map`,
+``PYVELM_DATABASES``) are in the tree as a **preview** for early adopters only.
 
 ## Configuration
 
@@ -28,23 +29,35 @@ export PYVELM_DSN="postgresql://pyvelm:pyvelm@localhost:5432/pyvelm"
 # SQLite (dev / CI — single process only)
 export PYVELM_DSN="sqlite:////tmp/pyvelm-dev.db"
 export PYVELM_DSN="sqlite:///./var/app.db"
+
+# MySQL / MariaDB (v1.1+)
+export PYVELM_DSN="mysql+pymysql://pyvelm:pyvelm@localhost:3306/pyvelm"
+export PYVELM_DSN="mariadb+pymysql://pyvelm:pyvelm@localhost:3306/pyvelm"
 ```
 
 All CLI commands (`pyvelm migrate`, `pyvelm serve`, cron) read the same variable.
 
 ## Backend matrix
 
-| Backend | v1.0 | Role | Constraints |
-|---------|------|------|-------------|
-| **PostgreSQL** | Supported | Production reference | Bundled module migrations; full feature set |
-| **SQLite** | Supported | Dev, CI, embedded demos | Single process; no multi-worker production |
-| **MySQL / MariaDB** | Planned v1.2 | Common OSS hosting | — |
-| **Oracle** | Planned later | Enterprise | — |
+| Backend | Status | Role | Constraints |
+|---------|--------|------|-------------|
+| **PostgreSQL** | **v1.0** | Production reference | Bundled module migrations; full feature set |
+| **SQLite** | **v1.0** | Dev, CI, embedded demos | Single process; no multi-worker production |
+| **MySQL / MariaDB** | **v1.1 (in progress)** | Common OSS hosting | Greenfield install + autogen; Postgres migrations skipped |
+| **Oracle** | **v1.2 target** | Enterprise | Highest dialect cost; likely last portability backend |
 
 ### PostgreSQL
 
 - Reference backend for docs, performance, and bundled `migrations/*.py`.
 - Use `postgresql+psycopg://` (psycopg 3 driver).
+
+### MySQL / MariaDB
+
+- Use `mysql+pymysql://` or `mariadb+pymysql://` (PyMySQL driver, bundled in pyvelm).
+- Quoted identifiers require `ANSI_QUOTES` — set automatically on connect.
+- Bundled Postgres-only `migrations/*.py` are skipped; use greenfield install +
+  model-driven `apply_schema_diff`.
+- `INSERT` uses `LAST_INSERT_ID()` (no `RETURNING` dependency).
 
 ### SQLite
 
@@ -105,13 +118,23 @@ Hand-written migration modules may declare `supported_backends = ("postgresql",)
 | Version | Deliverable |
 |---------|-------------|
 | **v1.0.0** | SQLAlchemy Core layer; Postgres + SQLite end-to-end |
-| **v1.1.0** | Multi-DB routing on Postgres (selector, `pool_map`, session binding) |
-| **v1.2.0** | MySQL / MariaDB |
-| **Later** | Oracle, optional Alembic for app-authored migrations |
+| **v1.1.0** | MySQL / MariaDB — same install/smoke bar as v1.0 |
+| **v1.2.0** | Oracle |
+| **v1.3.0+** | Multi-DB routing on Postgres (selector, `pool_map`, session binding) — polish preview + integration tests |
+| **Later** | Optional Alembic for app-authored migrations |
 
-## v1.1: multi-DB routing
+### v1.1 exit criteria (MySQL / MariaDB)
 
-When ``PYVELM_DATABASES`` lists tenant Postgres databases:
+- `DialectCapabilities` for `mysql` / `mariadb` (placeholders, `ILIKE`, `RETURNING`, schema reset)
+- `pyvelm migrate` greenfield install on MySQL/MariaDB service container
+- `examples/basic.py` (or equivalent smoke) passes
+- HTTP smoke subset in CI matrix (alongside Postgres + SQLite)
+- Bundled Postgres-only `migrations/*.py` skipped; model-driven `apply_schema_diff` carries schema
+
+## Multi-DB routing (preview — not v1.1)
+
+Routing is **implemented in preview** but **deferred** until v1.1/v1.2 portability
+ships. When ``PYVELM_DATABASES`` lists tenant Postgres databases:
 
 - **Config** — comma-separated ``key=dsn`` or JSON array (see below)
 - **Middleware** — ``DatabaseSelectorMiddleware`` sets the active DB from cookie, host, or ``/web/db/<key>/…`` path

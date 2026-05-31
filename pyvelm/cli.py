@@ -363,7 +363,7 @@ def _add_db_subcommand(subs) -> None:
     )
     mig_p.add_argument(
         "--database", dest="database_key", default=None,
-        help="Target tenant database from PYVELM_DATABASES (v1.1+).",
+        help="Target tenant database from PYVELM_DATABASES (routing preview).",
     )
     mig_p.set_defaults(func=_run_db_migrate_shim)
 
