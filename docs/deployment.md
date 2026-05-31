@@ -113,8 +113,8 @@ Use a **dedicated throwaway Supabase project** for the demo — not your dev dat
 
    | Variable | Value |
    |----------|--------|
-   | `PYVELM_DSN` | `postgresql://postgres.[ref]:[password]@….pooler.supabase.com:6543/postgres?sslmode=require` |
-   | `PYVELM_NUKE_DSN` | **Build only** — direct Postgres on port **5432** (`db.[ref].supabase.co`). Required for `db nuke` in `buildCommand`; the transaction pooler deadlocks on `DROP SCHEMA`. |
+   | `PYVELM_DSN` | `postgresql://postgres.[ref]:[password]@….pooler.supabase.com:6543/postgres?sslmode=require` — **transaction** pooler for runtime |
+   | `PYVELM_NUKE_DSN` | **Build only** — **session** pooler on the **same** `*.pooler.supabase.com` host, port **5432** (supports `DROP SCHEMA`). Do **not** use `db.[ref].supabase.co` — Vercel builds often cannot reach it (IPv6). Do **not** reuse the `:6543` URI. |
    | `PYVELM_MODULE_ROOTS` | `examples/modules:examples/modules_demo` (already in `vercel.json`) |
    | `PYVELM_SECRET_KEY` | Optional random string |
 
@@ -128,7 +128,9 @@ Use a **dedicated throwaway Supabase project** for the demo — not your dev dat
 
    That drops the `public` schema, reinstalls every example module, and re-seeds demo data. **Branding, partners, and other edits persist between requests** until the next deploy; a new deploy resets the database to the seeded snapshot.
 
-   `pyvelm db nuke` terminates other database sessions and takes an advisory lock before `DROP SCHEMA` to avoid deadlocks with warm serverless instances. Still use **`PYVELM_NUKE_DSN`** (direct port 5432) for the build — not the pooler on 6543.
+   `pyvelm db nuke` terminates other database sessions and takes an advisory lock before `DROP SCHEMA` to avoid deadlocks with warm serverless instances. Use **`PYVELM_NUKE_DSN`** with the session pooler (`:5432` on `pooler.supabase.com`), not transaction mode (`:6543`) and not the direct `db.*` host.
+
+   In Supabase → **Project Settings → Database → Connection string**, choose **Connection pooling** → **Session mode** (port 5432) for `PYVELM_NUKE_DSN`.
 
 With Postgres, sessions are stored in `res.users.session_token` as on Docker — no stateless cookie workaround is needed.
 

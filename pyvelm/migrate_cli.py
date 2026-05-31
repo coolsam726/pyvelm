@@ -15,6 +15,7 @@ from .database import (
     release_postgres_schema_drop_lock,
     require_dsn_from_env,
     reset_schema,
+    warn_if_poor_nuke_dsn,
 )
 from .database_routing import resolve_migrate_dsn
 from .env import Environment
@@ -208,13 +209,7 @@ def confirm_destructive_phrase(*, phrase: str, yes: bool, preamble: str) -> None
 
 
 def wipe_schema(dsn: str, schema: str) -> None:
-    if "6543" in dsn or "pooler" in dsn.lower():
-        print(
-            "WARNING: Schema wipe through a transaction pooler can deadlock. "
-            "Set PYVELM_NUKE_DSN to a direct Postgres URL (port 5432) for "
-            "build / CI nuke steps.",
-            file=sys.stderr,
-        )
+    warn_if_poor_nuke_dsn(dsn)
     db = create_database_from_dsn(normalize_dsn(dsn))
     with db.connect() as conn:
         print(f"Dropping schema {schema!r}…")

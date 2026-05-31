@@ -182,6 +182,34 @@ class TestDsnEnvTests(unittest.TestCase):
                 "postgresql+psycopg://localhost/direct",
             )
 
+    def test_transaction_pooler_detects_6543(self):
+        from pyvelm.database import is_transaction_pooler_dsn
+
+        self.assertTrue(
+            is_transaction_pooler_dsn(
+                "postgresql://u:p@aws.pooler.supabase.com:6543/postgres"
+            )
+        )
+        self.assertFalse(
+            is_transaction_pooler_dsn(
+                "postgresql://u:p@aws.pooler.supabase.com:5432/postgres"
+            )
+        )
+
+    def test_supabase_direct_host(self):
+        from pyvelm.database import is_supabase_direct_host
+
+        self.assertTrue(
+            is_supabase_direct_host(
+                "postgresql://postgres:pw@db.abcdef.supabase.co:5432/postgres"
+            )
+        )
+        self.assertFalse(
+            is_supabase_direct_host(
+                "postgresql://postgres:pw@aws.pooler.supabase.com:5432/postgres"
+            )
+        )
+
 
 class DevelopmentDbDisplayTests(unittest.TestCase):
     def test_hidden_in_production(self):
