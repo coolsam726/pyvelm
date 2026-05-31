@@ -174,6 +174,14 @@ def confirm_migrate_fresh(*, production: bool, yes: bool) -> None:
         sys.exit("Aborted.")
 
 
+def _nuke_attempts() -> int:
+    raw = (os.environ.get("PYVELM_NUKE_ATTEMPTS") or "6").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 6
+
+
 def drop_schema_contents(conn, schema: str) -> None:
     prepare_postgres_schema_drop(conn, schema)
     try:
@@ -182,13 +190,20 @@ def drop_schema_contents(conn, schema: str) -> None:
         release_postgres_schema_drop_lock(conn, schema)
 
 
-def _drop_schema_with_retry(conn, schema: str, *, attempts: int = 6) -> None:
+def _drop_schema_with_retry(conn, schema: str, *, attempts: int | None = None) -> None:
     """Run DROP/CREATE SCHEMA; retry on lock contention (warm serverless instances)."""
     import time
 
+    if attempts is None:
+        attempts = _nuke_attempts()
     last_err: BaseException | None = None
     for attempt in range(attempts):
         try:
+            if attempt:
+                print(
+                    f"  Retrying schema drop ({attempt + 1}/{attempts})…",
+                    flush=True,
+                )
             conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
             conn.execute(f'CREATE SCHEMA "{schema}"')
             conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO CURRENT_USER')
@@ -201,8 +216,16 @@ def _drop_schema_with_retry(conn, schema: str, *, attempts: int = 6) -> None:
                 for part in (exc, getattr(exc, "orig", None), getattr(exc, "__cause__", None))
                 if part
             )
-            if any(token in msg for token in ("deadlock", "lock timeout", "could not obtain lock")):
-                time.sleep(min(2**attempt, 30))
+            if any(
+                token in msg
+                for token in (
+                    "deadlock",
+                    "lock timeout",
+                    "could not obtain lock",
+                    "canceling statement due to lock",
+                )
+            ):
+                time.sleep(min(2**attempt, 45))
                 continue
             raise
     assert last_err is not None
@@ -234,14 +257,21 @@ def confirm_destructive_phrase(*, phrase: str, yes: bool, preamble: str) -> None
 
 def wipe_schema(dsn: str, schema: str) -> None:
     warn_if_poor_nuke_dsn(dsn)
+    vercel_env = os.environ.get("VERCEL_ENV", "")
+    if vercel_env == "production":
+        print(
+            "Note: production build — the previous deployment may still hold DB "
+            "locks until serverless instances go idle.",
+            flush=True,
+        )
     db = create_database_from_dsn(normalize_dsn(dsn))
     with db.connect() as conn:
-        print(f"Dropping schema {schema!r}…")
+        print(f"Dropping schema {schema!r}…", flush=True)
         if db.capabilities.supports_drop_schema:
             drop_schema_contents(conn, schema)
         else:
             reset_schema(conn, db.capabilities)
-        print("Schema dropped + recreated.\n")
+        print("Schema dropped + recreated.\n", flush=True)
 
 
 def run_migrate(

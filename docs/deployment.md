@@ -109,7 +109,7 @@ The repo ships a [`vercel.json`](https://github.com/coolsam726/pyvelm/blob/main/
 Use a **dedicated throwaway Supabase project** for the demo — not your dev database.
 
 1. Create a Supabase project and copy the **connection pooler** URI (port **6543**).
-2. In the Vercel project → **Settings → Environment Variables**, set:
+2. In the Vercel project → **Settings → Environment Variables**, set (scope **Production** and **Preview** — not Preview-only):
 
    | Variable | Value |
    |----------|--------|
@@ -129,6 +129,8 @@ Use a **dedicated throwaway Supabase project** for the demo — not your dev dat
    That drops the `public` schema, reinstalls every example module, and re-seeds demo data. **Branding, partners, and other edits persist between requests** until the next deploy; a new deploy resets the database to the seeded snapshot.
 
    `pyvelm db nuke` uses an advisory lock and retries `DROP SCHEMA` on lock contention. It does **not** call `pg_terminate_backend` (Supabase denies that). Set `PYVELM_NUKE_DSN` to session pooler `:5432` on `pooler.supabase.com`.
+
+   **Production vs preview:** preview builds have no traffic on the new URL; **production** builds run while the old deployment is still live and can hold DB locks. `scripts/vercel-build.sh` waits 45s and retries up to 20 times on production. Tune with `PYVELM_NUKE_DELAY_SECONDS` / `PYVELM_NUKE_ATTEMPTS` if needed.
 
 With Postgres, sessions are stored in `res.users.session_token` as on Docker — no stateless cookie workaround is needed.
 

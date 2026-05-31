@@ -404,7 +404,8 @@ def prepare_postgres_schema_drop(conn: ConnectionAdapter, schema: str) -> None:
     flag = (os.environ.get("PYVELM_TERMINATE_BACKENDS") or "").strip().lower()
     if flag in ("1", "true", "yes", "on"):
         terminate_other_backends(conn)
-    conn.execute("SET lock_timeout = '120s'")
+    lock_timeout = (os.environ.get("PYVELM_NUKE_LOCK_TIMEOUT") or "120s").strip() or "120s"
+    conn.execute(f"SET lock_timeout = '{lock_timeout}'")
     conn.execute("SET statement_timeout = '300s'")
 
 

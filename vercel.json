@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm ci && npm run build && pip install '.[geo]' && PYVELM_ENV=production PYVELM_ALLOW_DB_NUKE=1 pyvelm db nuke -y",
+  "buildCommand": "bash scripts/vercel-build.sh",
   "env": {
     "PYVELM_ENV": "production",
     "PYVELM_MODULE_ROOTS": "examples/modules:examples/modules_demo",
