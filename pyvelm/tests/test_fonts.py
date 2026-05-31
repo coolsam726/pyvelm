@@ -137,9 +137,10 @@ class _FakeEnvLevel:
 
 
 class _FakeEnv:
-    def __init__(self, mgr, *, company_id=1, has_company_model=True):
+    def __init__(self, mgr, *, company_id=1, has_company_model=True, uid=None):
         self._mgr = mgr
         self.company_id = company_id
+        self.uid = uid
         self.registry = {"res.company"} if has_company_model else set()
 
     def with_company(self, _cid):

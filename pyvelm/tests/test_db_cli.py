@@ -307,7 +307,7 @@ class DbNukeCliTests(unittest.TestCase):
 
         conn = MagicMock()
         conn.capabilities.name = "postgresql"
-        with patch("pyvelm.migrate_cli.uses_serverless_schema_wipe", return_value=False):
+        with patch("pyvelm.database.uses_serverless_schema_wipe", return_value=False):
             drop_schema_contents(conn, "public")
         sqls = [str(c.args[0]) for c in conn.execute.call_args_list]
         self.assertTrue(any("pg_terminate_backend" in s for s in sqls))
@@ -319,7 +319,7 @@ class DbNukeCliTests(unittest.TestCase):
 
         conn = MagicMock()
         conn.capabilities.name = "postgresql"
-        with patch("pyvelm.migrate_cli.uses_serverless_schema_wipe", return_value=True):
+        with patch("pyvelm.database.uses_serverless_schema_wipe", return_value=True):
             drop_schema_contents(conn, "public")
         sqls = [str(c.args[0]) for c in conn.execute.call_args_list]
         self.assertTrue(any("pg_advisory_lock" in s for s in sqls))

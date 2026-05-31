@@ -104,10 +104,11 @@ def resolve_branding_company_id(
     cid = env.company_id
     if cid is not None:
         return cid
-    if env.uid and "res.users" in env.registry and "res.company" in env.registry:
+    uid = getattr(env, "uid", None)
+    if uid and "res.users" in env.registry and "res.company" in env.registry:
         try:
             env.prime_current_user_cache()
-            user = env["res.users"].browse(env.uid)
+            user = env["res.users"].browse(uid)
             home = user.company_id
             if home:
                 return home.id
