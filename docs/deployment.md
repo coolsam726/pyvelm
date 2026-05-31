@@ -128,9 +128,7 @@ Use a **dedicated throwaway Supabase project** for the demo — not your dev dat
 
    That drops the `public` schema, reinstalls every example module, and re-seeds demo data. **Branding, partners, and other edits persist between requests** until the next deploy; a new deploy resets the database to the seeded snapshot.
 
-   `pyvelm db nuke` terminates other database sessions and takes an advisory lock before `DROP SCHEMA` to avoid deadlocks with warm serverless instances. Use **`PYVELM_NUKE_DSN`** with the session pooler (`:5432` on `pooler.supabase.com`), not transaction mode (`:6543`) and not the direct `db.*` host.
-
-   In Supabase → **Project Settings → Database → Connection string**, choose **Connection pooling** → **Session mode** (port 5432) for `PYVELM_NUKE_DSN`.
+   `pyvelm db nuke` uses an advisory lock and retries `DROP SCHEMA` on lock contention. It does **not** call `pg_terminate_backend` (Supabase denies that). Set `PYVELM_NUKE_DSN` to session pooler `:5432` on `pooler.supabase.com`.
 
 With Postgres, sessions are stored in `res.users.session_token` as on Docker — no stateless cookie workaround is needed.
 

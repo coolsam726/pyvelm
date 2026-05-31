@@ -177,12 +177,36 @@ def confirm_migrate_fresh(*, production: bool, yes: bool) -> None:
 def drop_schema_contents(conn, schema: str) -> None:
     prepare_postgres_schema_drop(conn, schema)
     try:
-        conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
-        conn.execute(f'CREATE SCHEMA "{schema}"')
-        conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO CURRENT_USER')
-        conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO PUBLIC')
+        _drop_schema_with_retry(conn, schema)
     finally:
         release_postgres_schema_drop_lock(conn, schema)
+
+
+def _drop_schema_with_retry(conn, schema: str, *, attempts: int = 6) -> None:
+    """Run DROP/CREATE SCHEMA; retry on lock contention (warm serverless instances)."""
+    import time
+
+    last_err: BaseException | None = None
+    for attempt in range(attempts):
+        try:
+            conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+            conn.execute(f'CREATE SCHEMA "{schema}"')
+            conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO CURRENT_USER')
+            conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO PUBLIC')
+            return
+        except Exception as exc:
+            last_err = exc
+            msg = " ".join(
+                str(part).lower()
+                for part in (exc, getattr(exc, "orig", None), getattr(exc, "__cause__", None))
+                if part
+            )
+            if any(token in msg for token in ("deadlock", "lock timeout", "could not obtain lock")):
+                time.sleep(min(2**attempt, 30))
+                continue
+            raise
+    assert last_err is not None
+    raise last_err
 
 
 def guard_destructive_schema_command(*, label: str) -> None:

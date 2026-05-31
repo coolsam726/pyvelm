@@ -389,12 +389,21 @@ def terminate_other_backends(conn: ConnectionAdapter) -> None:
 
 
 def prepare_postgres_schema_drop(conn: ConnectionAdapter, schema: str) -> None:
-    """Serialize and clear blockers before ``DROP SCHEMA … CASCADE``."""
+    """Serialize before ``DROP SCHEMA … CASCADE``.
+
+    Does not call ``pg_terminate_backend`` — managed Postgres (Supabase) denies
+    that for superuser sessions. Use advisory lock + ``lock_timeout`` instead.
+    Opt in locally with ``PYVELM_TERMINATE_BACKENDS=1`` when you have superuser.
+    """
     if conn.capabilities.name != "postgresql":
         return
     safe = (schema or "public").replace("'", "''")
     conn.execute(f"SELECT pg_advisory_lock(hashtext('pyvelm:wipe:{safe}'))")
-    terminate_other_backends(conn)
+    import os
+
+    flag = (os.environ.get("PYVELM_TERMINATE_BACKENDS") or "").strip().lower()
+    if flag in ("1", "true", "yes", "on"):
+        terminate_other_backends(conn)
     conn.execute("SET lock_timeout = '120s'")
     conn.execute("SET statement_timeout = '300s'")
 

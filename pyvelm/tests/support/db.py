@@ -121,28 +121,6 @@ def reset_database(dsn: str | None = None) -> None:
     import psycopg
 
     with psycopg.connect(to_psycopg_dsn(dsn), autocommit=True) as conn:
-        # Best-effort: same policy as terminate_other_backends (Supabase may
-        # deny terminating superuser backends — ignore and continue).
-        conn.execute(
-            """
-            DO $$
-            DECLARE r RECORD;
-            BEGIN
-              FOR r IN
-                SELECT pid FROM pg_stat_activity
-                WHERE datname = current_database()
-                  AND pid <> pg_backend_pid()
-                  AND usename = current_user
-              LOOP
-                BEGIN
-                  PERFORM pg_terminate_backend(r.pid);
-                EXCEPTION WHEN OTHERS THEN
-                  NULL;
-                END;
-              END LOOP;
-            END $$;
-            """
-        )
         conn.execute("SET lock_timeout = '15s'")
         conn.execute("DROP SCHEMA public CASCADE")
         conn.execute("CREATE SCHEMA public")
