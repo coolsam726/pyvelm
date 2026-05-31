@@ -614,11 +614,13 @@ def _run_db_nuke(args: argparse.Namespace) -> None:
     discovered module (``migrate --all``). Refuses production unless
     ``PYVELM_ALLOW_DB_NUKE=1``. Type ``nuke`` to confirm (or ``--yes``).
     """
+    from .database import normalize_dsn, nuke_dsn_from_env as _nuke_dsn_from_env
     from .runtime import get_runtime_env
 
     _guard_destructive_schema_command(label="db nuke")
 
     dsn = _require_dsn()
+    nuke_dsn = _nuke_dsn_from_env()
     roots = _resolve_module_roots(args)
     ordered = _ordered_specs_for_install(roots, None)
     schema = args.schema or "public"
@@ -626,6 +628,8 @@ def _run_db_nuke(args: argparse.Namespace) -> None:
     print("Nuke + reinstall plan")
     print(f"  PYVELM_ENV:     {get_runtime_env()}")
     print(f"  Database:       {_dsn_display(dsn)}")
+    if nuke_dsn != normalize_dsn(dsn):
+        print(f"  Nuke DSN:       {_dsn_display(nuke_dsn)}")
     print(f"  Schema:         {schema}")
     print(f"  Modules:        {len(ordered)}")
     for spec in ordered:
@@ -634,7 +638,7 @@ def _run_db_nuke(args: argparse.Namespace) -> None:
 
     _confirm_nuke(dsn=dsn, schema=schema, yes=args.yes)
 
-    _wipe_schema(dsn, schema)
+    _wipe_schema(nuke_dsn, schema)
 
     print("Reinstalling modules…")
     results = _execute_db_install(dsn, ordered)

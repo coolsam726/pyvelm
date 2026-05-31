@@ -113,7 +113,8 @@ Use a **dedicated throwaway Supabase project** for the demo — not your dev dat
 
    | Variable | Value |
    |----------|--------|
-   | `PYVELM_DSN` | `postgresql://postgres.[ref]:[password]@….pooler.supabase.com:6543/postgres?sslmode=require` |
+   | `PYVELM_DSN` | `postgresql://postgres.[ref]:[password]@….pooler.supabase.com:6543/postgres?sslmode=require` — **transaction** pooler for runtime |
+   | `PYVELM_NUKE_DSN` | **Build only** — **session** pooler on the **same** `*.pooler.supabase.com` host, port **5432** (supports `DROP SCHEMA`). Do **not** use `db.[ref].supabase.co` — Vercel builds often cannot reach it (IPv6). Do **not** reuse the `:6543` URI. |
    | `PYVELM_MODULE_ROOTS` | `examples/modules:examples/modules_demo` (already in `vercel.json`) |
    | `PYVELM_SECRET_KEY` | Optional random string |
 
@@ -126,6 +127,8 @@ Use a **dedicated throwaway Supabase project** for the demo — not your dev dat
    ```
 
    That drops the `public` schema, reinstalls every example module, and re-seeds demo data. **Branding, partners, and other edits persist between requests** until the next deploy; a new deploy resets the database to the seeded snapshot.
+
+   `pyvelm db nuke` uses an advisory lock and retries `DROP SCHEMA` on lock contention. It does **not** call `pg_terminate_backend` (Supabase denies that). Set `PYVELM_NUKE_DSN` to session pooler `:5432` on `pooler.supabase.com`.
 
 With Postgres, sessions are stored in `res.users.session_token` as on Docker — no stateless cookie workaround is needed.
 

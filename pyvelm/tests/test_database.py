@@ -166,6 +166,58 @@ class TestDsnEnvTests(unittest.TestCase):
         ):
             _assert_safe_reset_dsn("postgresql://localhost/pyvelm_test")
 
+    def test_nuke_dsn_prefers_nuke_env(self):
+        from pyvelm.database import nuke_dsn_from_env
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "PYVELM_DSN": "postgresql://localhost/pooler",
+                "PYVELM_NUKE_DSN": "postgresql://localhost/direct",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                nuke_dsn_from_env(),
+                "postgresql+psycopg://localhost/direct",
+            )
+
+    def test_transaction_pooler_detects_6543(self):
+        from pyvelm.database import is_transaction_pooler_dsn
+
+        self.assertTrue(
+            is_transaction_pooler_dsn(
+                "postgresql://u:p@aws.pooler.supabase.com:6543/postgres"
+            )
+        )
+        self.assertFalse(
+            is_transaction_pooler_dsn(
+                "postgresql://u:p@aws.pooler.supabase.com:5432/postgres"
+            )
+        )
+
+    def test_supabase_direct_host(self):
+        from pyvelm.database import is_supabase_direct_host
+
+        self.assertTrue(
+            is_supabase_direct_host(
+                "postgresql://postgres:pw@db.abcdef.supabase.co:5432/postgres"
+            )
+        )
+        self.assertFalse(
+            is_supabase_direct_host(
+                "postgresql://postgres:pw@aws.pooler.supabase.com:5432/postgres"
+            )
+        )
+
+    def test_terminate_other_backends_swallows_errors(self):
+        from pyvelm.database import terminate_other_backends
+
+        conn = mock.MagicMock()
+        conn.capabilities.name = "postgresql"
+        conn.execute.side_effect = RuntimeError("permission denied")
+        terminate_other_backends(conn)  # must not raise
+
 
 class DevelopmentDbDisplayTests(unittest.TestCase):
     def test_hidden_in_production(self):

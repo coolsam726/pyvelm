@@ -296,6 +296,125 @@ def require_dsn_from_env() -> str:
     return dsn
 
 
+def nuke_dsn_from_env() -> str:
+    """DSN for ``db nuke`` / schema wipe — prefers ``PYVELM_NUKE_DSN``.
+
+    On Vercel + Supabase use the **session pooler** (``*.pooler.supabase.com:5432``),
+    not transaction mode (``:6543``) and not the direct ``db.*.supabase.co`` host
+    (often IPv6-only and refused from Vercel builds).
+    """
+    import os
+
+    raw = (os.environ.get("PYVELM_NUKE_DSN") or os.environ.get("PYVELM_DSN") or "").strip()
+    if not raw:
+        raise SystemExit("PYVELM_DSN not set")
+    return normalize_dsn(raw)
+
+
+def is_transaction_pooler_dsn(dsn: str) -> bool:
+    """True for pgBouncer *transaction* mode (Supabase port 6543)."""
+    try:
+        parsed = urlparse(normalize_dsn(dsn))
+        if parsed.port == 6543:
+            return True
+    except Exception:
+        pass
+    return ":6543" in (dsn or "")
+
+
+def is_supabase_direct_host(dsn: str) -> bool:
+    """True when the host is Supabase's direct ``db.<ref>.supabase.co`` endpoint."""
+    try:
+        parsed = urlparse(normalize_dsn(dsn))
+        host = (parsed.hostname or "").lower()
+        return host.startswith("db.") and host.endswith(".supabase.co")
+    except Exception:
+        return False
+
+
+def warn_if_poor_nuke_dsn(dsn: str) -> None:
+    """Emit stderr hints when a schema wipe DSN is likely to fail."""
+    import sys
+
+    if is_transaction_pooler_dsn(dsn):
+        print(
+            "WARNING: Schema wipe through a transaction pooler (port 6543) can "
+            "deadlock. Set PYVELM_NUKE_DSN to Supabase **session** pooler "
+            "(same pooler host, port 5432) for build / CI nuke steps.",
+            file=sys.stderr,
+        )
+        return
+    if is_supabase_direct_host(dsn) and is_serverless_runtime():
+        print(
+            "WARNING: Supabase direct host db.*.supabase.co is often IPv6-only "
+            "and refused from Vercel. Use session pooler "
+            "(*.pooler.supabase.com:5432) for PYVELM_NUKE_DSN instead.",
+            file=sys.stderr,
+        )
+
+
+def terminate_other_backends(conn: ConnectionAdapter) -> None:
+    """Best-effort terminate of other sessions owned by ``current_user``.
+
+    Helps before ``DROP SCHEMA`` when warm app instances still hold locks.
+    On managed Postgres (Supabase) terminating superuser-owned backends raises
+    ``InsufficientPrivilege`` — those failures are ignored so the wipe can
+    proceed (advisory lock + ``lock_timeout`` handle the rest).
+    """
+    if conn.capabilities.name != "postgresql":
+        return
+    try:
+        conn.execute(
+            """
+            DO $$
+            DECLARE r RECORD;
+            BEGIN
+              FOR r IN
+                SELECT pid FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND pid <> pg_backend_pid()
+                  AND usename = current_user
+              LOOP
+                BEGIN
+                  PERFORM pg_terminate_backend(r.pid);
+                EXCEPTION WHEN OTHERS THEN
+                  NULL;
+                END;
+              END LOOP;
+            END $$;
+            """
+        )
+    except Exception:
+        pass
+
+
+def prepare_postgres_schema_drop(conn: ConnectionAdapter, schema: str) -> None:
+    """Serialize before ``DROP SCHEMA … CASCADE``.
+
+    Does not call ``pg_terminate_backend`` — managed Postgres (Supabase) denies
+    that for superuser sessions. Use advisory lock + ``lock_timeout`` instead.
+    Opt in locally with ``PYVELM_TERMINATE_BACKENDS=1`` when you have superuser.
+    """
+    if conn.capabilities.name != "postgresql":
+        return
+    safe = (schema or "public").replace("'", "''")
+    conn.execute(f"SELECT pg_advisory_lock(hashtext('pyvelm:wipe:{safe}'))")
+    import os
+
+    flag = (os.environ.get("PYVELM_TERMINATE_BACKENDS") or "").strip().lower()
+    if flag in ("1", "true", "yes", "on"):
+        terminate_other_backends(conn)
+    conn.execute("SET lock_timeout = '120s'")
+    conn.execute("SET statement_timeout = '300s'")
+
+
+def release_postgres_schema_drop_lock(conn: ConnectionAdapter, schema: str) -> None:
+    if conn.capabilities.name != "postgresql":
+        return
+    safe = (schema or "public").replace("'", "''")
+    conn.execute(f"SELECT pg_advisory_unlock(hashtext('pyvelm:wipe:{safe}'))")
+
+
 TEST_DSN_ENV = "PYVELM_DSN_TEST"
 
 
