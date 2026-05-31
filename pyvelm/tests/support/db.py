@@ -121,21 +121,29 @@ def reset_database(dsn: str | None = None) -> None:
     import psycopg
 
     with psycopg.connect(to_psycopg_dsn(dsn), autocommit=True) as conn:
-        # Idle/leaked sessions from earlier tests (e.g. the session-scoped
-        # pool in conftest) can hold table locks and make DROP TABLE block
-        # forever. Terminate every other backend on this database first.
+        # Best-effort: same policy as terminate_other_backends (Supabase may
+        # deny terminating superuser backends — ignore and continue).
         conn.execute(
             """
-            SELECT pg_terminate_backend(pid)
-            FROM pg_stat_activity
-            WHERE datname = current_database()
-              AND pid <> pg_backend_pid()
+            DO $$
+            DECLARE r RECORD;
+            BEGIN
+              FOR r IN
+                SELECT pid FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND pid <> pg_backend_pid()
+                  AND usename = current_user
+              LOOP
+                BEGIN
+                  PERFORM pg_terminate_backend(r.pid);
+                EXCEPTION WHEN OTHERS THEN
+                  NULL;
+                END;
+              END LOOP;
+            END $$;
             """
         )
-        # Never hang CI: if a lock still can't be taken quickly, fail loudly.
         conn.execute("SET lock_timeout = '15s'")
-        # Drop and recreate the schema in one shot — faster and avoids
-        # per-table CASCADE ordering issues.
         conn.execute("DROP SCHEMA public CASCADE")
         conn.execute("CREATE SCHEMA public")
 

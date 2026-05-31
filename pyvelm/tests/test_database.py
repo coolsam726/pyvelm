@@ -210,6 +210,14 @@ class TestDsnEnvTests(unittest.TestCase):
             )
         )
 
+    def test_terminate_other_backends_swallows_errors(self):
+        from pyvelm.database import terminate_other_backends
+
+        conn = mock.MagicMock()
+        conn.capabilities.name = "postgresql"
+        conn.execute.side_effect = RuntimeError("permission denied")
+        terminate_other_backends(conn)  # must not raise
+
 
 class DevelopmentDbDisplayTests(unittest.TestCase):
     def test_hidden_in_production(self):

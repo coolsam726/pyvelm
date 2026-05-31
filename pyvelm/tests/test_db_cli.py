@@ -310,6 +310,7 @@ class DbNukeCliTests(unittest.TestCase):
         sqls = [str(c.args[0]) for c in conn.execute.call_args_list]
         self.assertTrue(any("pg_advisory_lock" in s for s in sqls))
         self.assertTrue(any("pg_terminate_backend" in s for s in sqls))
+        self.assertTrue(any("usename = current_user" in s for s in sqls))
         self.assertTrue(any("DROP SCHEMA" in s for s in sqls))
         self.assertTrue(any("CREATE SCHEMA" in s for s in sqls))
         self.assertTrue(any("pg_advisory_unlock" in s for s in sqls))

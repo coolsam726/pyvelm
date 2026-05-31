@@ -354,21 +354,38 @@ def warn_if_poor_nuke_dsn(dsn: str) -> None:
 
 
 def terminate_other_backends(conn: ConnectionAdapter) -> None:
-    """Terminate every other session on the current Postgres database.
+    """Best-effort terminate of other sessions owned by ``current_user``.
 
-    Required before ``DROP SCHEMA`` when pooler connections or warm serverless
-    instances still hold locks (otherwise ``deadlock detected``).
+    Helps before ``DROP SCHEMA`` when warm app instances still hold locks.
+    On managed Postgres (Supabase) terminating superuser-owned backends raises
+    ``InsufficientPrivilege`` — those failures are ignored so the wipe can
+    proceed (advisory lock + ``lock_timeout`` handle the rest).
     """
     if conn.capabilities.name != "postgresql":
         return
-    conn.execute(
-        """
-        SELECT pg_terminate_backend(pid)
-        FROM pg_stat_activity
-        WHERE datname = current_database()
-          AND pid <> pg_backend_pid()
-        """
-    )
+    try:
+        conn.execute(
+            """
+            DO $$
+            DECLARE r RECORD;
+            BEGIN
+              FOR r IN
+                SELECT pid FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND pid <> pg_backend_pid()
+                  AND usename = current_user
+              LOOP
+                BEGIN
+                  PERFORM pg_terminate_backend(r.pid);
+                EXCEPTION WHEN OTHERS THEN
+                  NULL;
+                END;
+              END LOOP;
+            END $$;
+            """
+        )
+    except Exception:
+        pass
 
 
 def prepare_postgres_schema_drop(conn: ConnectionAdapter, schema: str) -> None:
