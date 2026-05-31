@@ -92,26 +92,42 @@ class SessionAuthTests(unittest.TestCase):
             env.__getitem__.assert_not_called()
 
     def test_resolve_session_uid_db_mode(self):
-        self.assertFalse(uses_stateless_sessions())
-        reg = Registry()
-        with reg.activate():
+        # Isolate from developer ``.env`` (e.g. ``PYVELM_DSN=sqlite:////tmp/…``)
+        # which other CLI tests may load into ``os.environ``.
+        clean = {
+            k: v
+            for k, v in os.environ.items()
+            if k
+            not in (
+                "PYVELM_DSN",
+                "PYVELM_STATELESS_SESSIONS",
+                "VERCEL",
+                "AWS_LAMBDA_FUNCTION_NAME",
+                "LAMBDA_TASK_ROOT",
+            )
+        }
+        with mock.patch.dict(os.environ, clean, clear=True):
+            uses_stateless_sessions.cache_clear()
+            self.assertFalse(uses_stateless_sessions())
+            reg = Registry()
+            with reg.activate():
 
-            class Users(BaseModel):
-                _name = "res.users"
+                class Users(BaseModel):
+                    _name = "res.users"
 
-        conn = mock.Mock()
-        env = Environment(conn, reg, uid=None)
-        rs = mock.Mock()
-        rs.__bool__ = mock.Mock(return_value=True)
-        rs.ensure_one = mock.Mock()
-        rs.id = 5
-        model = mock.Mock()
-        model.search = mock.Mock(return_value=rs)
-        sudo_env = mock.Mock()
-        sudo_env.__getitem__ = mock.Mock(return_value=model)
-        env.sudo = mock.Mock(return_value=sudo_env)
+            conn = mock.Mock()
+            env = Environment(conn, reg, uid=None)
+            rs = mock.Mock()
+            rs.__bool__ = mock.Mock(return_value=True)
+            rs.ensure_one = mock.Mock()
+            rs.id = 5
+            model = mock.Mock()
+            model.search = mock.Mock(return_value=rs)
+            sudo_env = mock.Mock()
+            sudo_env.__getitem__ = mock.Mock(return_value=model)
+            env.sudo = mock.Mock(return_value=sudo_env)
 
-        uid = resolve_session_uid(env, "db-token-abc")
+            uid = resolve_session_uid(env, "db-token-abc")
         self.assertEqual(uid, 5)
         model.search.assert_called_once_with(
             [("session_token", "=", "db-token-abc"), ("active", "=", True)],
