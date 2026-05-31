@@ -15,6 +15,7 @@ from .database import (
     release_postgres_schema_drop_lock,
     require_dsn_from_env,
     reset_schema,
+    uses_serverless_schema_wipe,
     warn_if_poor_nuke_dsn,
 )
 from .database_routing import resolve_migrate_dsn
@@ -175,6 +176,8 @@ def confirm_migrate_fresh(*, production: bool, yes: bool) -> None:
 
 
 def _nuke_attempts() -> int:
+    if not uses_serverless_schema_wipe():
+        return 1
     raw = (os.environ.get("PYVELM_NUKE_ATTEMPTS") or "6").strip()
     try:
         return max(1, int(raw))
@@ -256,14 +259,8 @@ def confirm_destructive_phrase(*, phrase: str, yes: bool, preamble: str) -> None
 
 
 def wipe_schema(dsn: str, schema: str) -> None:
-    warn_if_poor_nuke_dsn(dsn)
-    vercel_env = os.environ.get("VERCEL_ENV", "")
-    if vercel_env == "production":
-        print(
-            "Note: production build — the previous deployment may still hold DB "
-            "locks until serverless instances go idle.",
-            flush=True,
-        )
+    if uses_serverless_schema_wipe():
+        warn_if_poor_nuke_dsn(dsn)
     db = create_database_from_dsn(normalize_dsn(dsn))
     with db.connect() as conn:
         print(f"Dropping schema {schema!r}…", flush=True)

@@ -296,13 +296,18 @@ def require_dsn_from_env() -> str:
     return dsn
 
 
-def nuke_dsn_from_env() -> str:
-    """DSN for ``db nuke`` / schema wipe — prefers ``PYVELM_NUKE_DSN``.
+def uses_serverless_schema_wipe() -> bool:
+    """True when schema wipe needs serverless/managed-Postgres hardening."""
+    import os
 
-    On Vercel + Supabase use the **session pooler** (``*.pooler.supabase.com:5432``),
-    not transaction mode (``:6543``) and not the direct ``db.*.supabase.co`` host
-    (often IPv6-only and refused from Vercel builds).
-    """
+    if is_serverless_runtime():
+        return True
+    flag = (os.environ.get("PYVELM_NUKE_SERVERLESS") or "").strip().lower()
+    return flag in ("1", "true", "yes", "on")
+
+
+def nuke_dsn_from_env() -> str:
+    """DSN for ``db nuke`` — ``PYVELM_NUKE_DSN`` when set, else ``PYVELM_DSN``."""
     import os
 
     raw = (os.environ.get("PYVELM_NUKE_DSN") or os.environ.get("PYVELM_DSN") or "").strip()
@@ -333,22 +338,22 @@ def is_supabase_direct_host(dsn: str) -> bool:
 
 
 def warn_if_poor_nuke_dsn(dsn: str) -> None:
-    """Emit stderr hints when a schema wipe DSN is likely to fail."""
+    """Emit stderr hints when a schema wipe DSN is likely to fail (serverless only)."""
+    if not uses_serverless_schema_wipe():
+        return
     import sys
 
     if is_transaction_pooler_dsn(dsn):
         print(
             "WARNING: Schema wipe through a transaction pooler (port 6543) can "
-            "deadlock. Set PYVELM_NUKE_DSN to Supabase **session** pooler "
-            "(same pooler host, port 5432) for build / CI nuke steps.",
+            "deadlock. Use a session pooler URL (port 5432) for PYVELM_NUKE_DSN.",
             file=sys.stderr,
         )
         return
-    if is_supabase_direct_host(dsn) and is_serverless_runtime():
+    if is_supabase_direct_host(dsn):
         print(
             "WARNING: Supabase direct host db.*.supabase.co is often IPv6-only "
-            "and refused from Vercel. Use session pooler "
-            "(*.pooler.supabase.com:5432) for PYVELM_NUKE_DSN instead.",
+            "from serverless builders. Use *.pooler.supabase.com:5432 instead.",
             file=sys.stderr,
         )
 
@@ -389,28 +394,24 @@ def terminate_other_backends(conn: ConnectionAdapter) -> None:
 
 
 def prepare_postgres_schema_drop(conn: ConnectionAdapter, schema: str) -> None:
-    """Serialize before ``DROP SCHEMA … CASCADE``.
-
-    Does not call ``pg_terminate_backend`` — managed Postgres (Supabase) denies
-    that for superuser sessions. Use advisory lock + ``lock_timeout`` instead.
-    Opt in locally with ``PYVELM_TERMINATE_BACKENDS=1`` when you have superuser.
-    """
+    """Prepare session settings before ``DROP SCHEMA … CASCADE``."""
     if conn.capabilities.name != "postgresql":
         return
-    safe = (schema or "public").replace("'", "''")
-    conn.execute(f"SELECT pg_advisory_lock(hashtext('pyvelm:wipe:{safe}'))")
     import os
 
-    flag = (os.environ.get("PYVELM_TERMINATE_BACKENDS") or "").strip().lower()
-    if flag in ("1", "true", "yes", "on"):
+    if uses_serverless_schema_wipe():
+        safe = (schema or "public").replace("'", "''")
+        conn.execute(f"SELECT pg_advisory_lock(hashtext('pyvelm:wipe:{safe}'))")
+        lock_timeout = (os.environ.get("PYVELM_NUKE_LOCK_TIMEOUT") or "120s").strip()
+    else:
         terminate_other_backends(conn)
-    lock_timeout = (os.environ.get("PYVELM_NUKE_LOCK_TIMEOUT") or "120s").strip() or "120s"
-    conn.execute(f"SET lock_timeout = '{lock_timeout}'")
+        lock_timeout = (os.environ.get("PYVELM_NUKE_LOCK_TIMEOUT") or "15s").strip()
+    conn.execute(f"SET lock_timeout = '{lock_timeout or '15s'}'")
     conn.execute("SET statement_timeout = '300s'")
 
 
 def release_postgres_schema_drop_lock(conn: ConnectionAdapter, schema: str) -> None:
-    if conn.capabilities.name != "postgresql":
+    if conn.capabilities.name != "postgresql" or not uses_serverless_schema_wipe():
         return
     safe = (schema or "public").replace("'", "''")
     conn.execute(f"SELECT pg_advisory_unlock(hashtext('pyvelm:wipe:{safe}'))")

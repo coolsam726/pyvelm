@@ -37,11 +37,8 @@ Try PyVELM in the browser — no install required:
    | **Login** | `admin` |
    | **Password** | `admin` |
 
-The hosted demo runs the same example modules as `examples/serve.py`: partners, CRM,
-tags, sales users, workflow records, Vellum demo notes, and Feedback Signals. On
-**Supabase Postgres** (recommended for Vercel), branding and other edits persist
-until the next deploy; each deploy runs `pyvelm db nuke` to reset the demo DB.
-See [Deploying → Vercel](deployment.md#vercel-serverless).
+The hosted demo may be unavailable while serverless hosting is experimental.
+For a reliable setup use **Docker Compose** below or [Deploying](deployment.md).
 
 ## Quick start
 
