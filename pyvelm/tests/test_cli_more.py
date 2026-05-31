@@ -92,6 +92,10 @@ class CliHelperTests(unittest.TestCase):
     def test_dsn_display_fallback(self):
         self.assertEqual(_dsn_display("not-a-url"), "<dsn>")
 
+    def test_dsn_display_sqlite_path(self):
+        shown = _dsn_display("sqlite:///tmp/pyvelm-dev.db")
+        self.assertEqual(shown, "sqlite:///tmp/pyvelm-dev.db")
+
     def test_module_action_variants(self):
         spec = _demo_spec()
         self.assertEqual(module_action({}, spec), "install")

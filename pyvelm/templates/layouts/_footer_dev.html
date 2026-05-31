@@ -1,0 +1,9 @@
+{# Dev-mode database indicator — only rendered when ``dev_db_display`` is set. #}
+{% if dev_db_display is defined and dev_db_display %}
+<footer class="px-4 md:px-6 py-2 border-t border-default bg-neutral-secondary/80 text-2xs font-mono text-body-subtle shrink-0">
+    <span class="inline-flex items-center gap-2 flex-wrap">
+        <span class="px-1.5 py-0.5 rounded bg-warning-soft text-warning-strong font-sans font-semibold uppercase tracking-wide text-2xs">Dev</span>
+        <span>{{ dev_db_display }}</span>
+    </span>
+</footer>
+{% endif %}

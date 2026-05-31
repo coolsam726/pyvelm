@@ -45,6 +45,8 @@ import uuid
 from pathlib import Path
 from typing import Protocol
 
+from pyvelm.database import is_serverless_runtime
+
 
 class StorageBackend(Protocol):
     """Minimal interface for blob storage."""
@@ -69,6 +71,42 @@ def _sanitize(name: str) -> str:
     return cleaned[:120]  # arbitrary cap to keep paths sane
 
 
+def _resolve_attachment_root(explicit: str | os.PathLike | None = None) -> Path:
+    """Return a writable attachment directory for the current runtime."""
+    if explicit is not None:
+        return Path(explicit).resolve()
+
+    env_root = os.environ.get("PYVELM_ATTACHMENT_DIR")
+    path = Path(env_root or "./data/attachments")
+
+    if is_serverless_runtime():
+        # Vercel/Lambda only allow writes under /tmp — paths like /var/data
+        # or ./data/attachments under the deployment bundle are read-only.
+        resolved = path.resolve()
+        if env_root and str(resolved).startswith("/tmp/"):
+            return resolved
+        return Path("/tmp/pyvelm-attachments").resolve()
+
+    return path.resolve()
+
+
+def _resolve_attachment_backend() -> str:
+    """Pick ``local`` vs ``db`` — auto ``db`` on serverless + Postgres unless overridden."""
+    explicit = (os.environ.get("PYVELM_ATTACHMENT_BACKEND") or "").strip().lower()
+    if explicit:
+        return explicit
+    if is_serverless_runtime():
+        try:
+            from pyvelm.database import app_dsn_from_env, capabilities_from_dsn
+
+            dsn = app_dsn_from_env()
+            if dsn and capabilities_from_dsn(dsn).name == "postgresql":
+                return "db"
+        except Exception:
+            pass
+    return "local"
+
+
 # ---- local filesystem backend ----------------------------------------------
 
 
@@ -82,8 +120,7 @@ class LocalStorageBackend:
     ORM unlink over filesystem noise)."""
 
     def __init__(self, root: str | os.PathLike | None = None) -> None:
-        env_root = os.environ.get("PYVELM_ATTACHMENT_DIR")
-        self.root = Path(root or env_root or "./data/attachments").resolve()
+        self.root = _resolve_attachment_root(root)
 
     def _full_path(self, key: str) -> Path:
         # Reject absolute / parent-escape keys — defence in depth even
@@ -159,7 +196,7 @@ def get_backend() -> StorageBackend:
     global _DEFAULT
     if _DEFAULT is not None:
         return _DEFAULT
-    kind = (os.environ.get("PYVELM_ATTACHMENT_BACKEND") or "local").lower()
+    kind = _resolve_attachment_backend()
     if kind == "db":
         _DEFAULT = DbStorageBackend()
     elif kind == "local":

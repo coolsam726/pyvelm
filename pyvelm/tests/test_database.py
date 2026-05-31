@@ -167,5 +167,40 @@ class TestDsnEnvTests(unittest.TestCase):
             _assert_safe_reset_dsn("postgresql://localhost/pyvelm_test")
 
 
+class DevelopmentDbDisplayTests(unittest.TestCase):
+    def test_hidden_in_production(self):
+        from pyvelm.render import development_db_display
+
+        with mock.patch.dict(
+            os.environ,
+            {"PYVELM_ENV": "production", "PYVELM_DSN": "sqlite:///tmp/x.db"},
+            clear=True,
+        ):
+            self.assertIsNone(development_db_display())
+
+    def test_shows_redacted_dsn_in_development(self):
+        from pyvelm.render import development_db_display
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "PYVELM_ENV": "development",
+                "PYVELM_DSN": "postgresql://user:secret@localhost:5432/pyvelm",
+            },
+            clear=True,
+        ):
+            shown = development_db_display()
+        self.assertIn("postgresql", shown)
+        self.assertIn("user:***", shown)
+        self.assertNotIn("secret", shown)
+
+    def test_missing_dsn_in_development(self):
+        from pyvelm.render import development_db_display
+
+        with mock.patch.dict(os.environ, {"PYVELM_ENV": "development"}, clear=True):
+            shown = development_db_display()
+        self.assertIn("PYVELM_DSN not set", shown)
+
+
 if __name__ == "__main__":
     unittest.main()

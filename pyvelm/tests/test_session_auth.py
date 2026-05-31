@@ -54,6 +54,18 @@ class SessionAuthTests(unittest.TestCase):
             token = mint_session_cookie(3)
             self.assertEqual(verify_session_cookie(token), 3)
 
+    def test_postgres_on_serverless_uses_db_sessions(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "VERCEL": "1",
+                "PYVELM_DSN": "postgresql://u:p@db.example.com:5432/demo",
+            },
+            clear=False,
+        ):
+            uses_stateless_sessions.cache_clear()
+            self.assertFalse(uses_stateless_sessions())
+
     def test_establish_session_skips_db_on_serverless(self):
         reg = Registry()
         with reg.activate():

@@ -48,6 +48,27 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 That sets `PYVELM_ENV=development` and runs `python -m app.serve --reload`
 instead of gunicorn.
 
+### Persistent file uploads (Docker)
+
+The default **`local`** attachment backend writes under `./data/attachments`
+inside the container. That path is writable but **not persisted** across
+`docker compose build` unless you mount a volume:
+
+```yaml
+app:
+  volumes:
+    - attachment_data:/app/data/attachments
+  # optional explicit path:
+  # environment:
+  #   PYVELM_ATTACHMENT_DIR: /var/data/attachments
+
+volumes:
+  attachment_data:
+```
+
+Alternatively set **`PYVELM_ATTACHMENT_BACKEND=db`** and store bytes in
+Postgres (same trade-off as on Vercel — fine for small/medium files).
+
 ## Scaling out
 
 A few things shift when you run multiple workers or sit behind a
@@ -81,23 +102,38 @@ reverse proxy:
 
 **Live demo:** [https://pyvelm.vercel.app/](https://pyvelm.vercel.app/) — click **Sign in**, then **Login** `admin` / **Password** `admin`.
 
-The repo ships a [`vercel.json`](https://github.com/coolsam726/pyvelm/blob/main/vercel.json) demo that builds a bundled
-SQLite database and runs `examples.serve:app` as a Python function.
+The repo ships a [`vercel.json`](https://github.com/coolsam726/pyvelm/blob/main/vercel.json) that runs `examples.serve:app` as a Python function on Vercel.
 
-**Sessions:** each serverless invocation may get its own writable SQLite copy
-under `/tmp`. A login that stores `session_token` in the database is therefore
-invisible to the next request on a different instance — which looks like
-“every navigation sends me back to sign in”. When `VERCEL` is set (or on Lambda),
-pyvelm uses **HMAC-signed session cookies** instead: the cookie carries `uid` and
-expiry; no shared writable store is required.
+### Supabase Postgres (recommended)
 
-Set **`PYVELM_SECRET_KEY`** in the Vercel project env for a stable signing key
-(across redeploys and preview URLs). If omitted, a per-deployment fallback is
-derived from `VERCEL_URL`.
+Use a **dedicated throwaway Supabase project** for the demo — not your dev database.
 
-For production, prefer **Supabase/Postgres** (`PYVELM_DSN=postgresql://…`) so
-data and DB-backed sessions persist across instances. See comments in
-`.env.example`.
+1. Create a Supabase project and copy the **connection pooler** URI (port **6543**).
+2. In the Vercel project → **Settings → Environment Variables**, set:
+
+   | Variable | Value |
+   |----------|--------|
+   | `PYVELM_DSN` | `postgresql://postgres.[ref]:[password]@….pooler.supabase.com:6543/postgres?sslmode=require` |
+   | `PYVELM_MODULE_ROOTS` | `examples/modules:examples/modules_demo` (already in `vercel.json`) |
+   | `PYVELM_SECRET_KEY` | Optional random string |
+
+   Do **not** set `PYVELM_ALLOW_DB_NUKE` on the runtime environment — only the build uses it (see below).
+
+3. Deploy. Each build runs:
+
+   ```bash
+   PYVELM_ALLOW_DB_NUKE=1 pyvelm db nuke -y
+   ```
+
+   That drops the `public` schema, reinstalls every example module, and re-seeds demo data. **Branding, partners, and other edits persist between requests** until the next deploy; a new deploy resets the database to the seeded snapshot.
+
+With Postgres, sessions are stored in `res.users.session_token` as on Docker — no stateless cookie workaround is needed.
+
+**File uploads:** the deployment filesystem is read-only (except `/tmp`). Set **`PYVELM_ATTACHMENT_BACKEND=db`** so attachment bytes are stored in Postgres (`ir.attachment.datas`). This is already set in `vercel.json`; do not point `PYVELM_ATTACHMENT_DIR` at `/var/data` or other bundle paths on Vercel.
+
+### SQLite fallback (not recommended)
+
+Bundled SQLite under `/tmp` is per serverless instance and does not persist writes across cold starts or instances. Only use for local experiments; set `PYVELM_STATELESS_SESSIONS=1` and see `.env.example` if you must.
 
 ## The cron worker
 

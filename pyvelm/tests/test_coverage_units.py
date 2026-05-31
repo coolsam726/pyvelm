@@ -87,6 +87,26 @@ class StorageTests(unittest.TestCase):
             b = get_backend()
             self.assertIsInstance(b, LocalStorageBackend)
 
+    def test_serverless_postgres_defaults_to_db_backend(self):
+        with patch.dict(
+            os.environ,
+            {
+                "VERCEL": "1",
+                "PYVELM_DSN": "postgresql://user:pass@host/db",
+            },
+            clear=True,
+        ):
+            os.environ.pop("PYVELM_ATTACHMENT_BACKEND", None)
+            reset_backend_cache()
+            b = get_backend()
+            self.assertIsInstance(b, DbStorageBackend)
+
+    def test_serverless_local_backend_uses_tmp_dir(self):
+        with patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
+            os.environ.pop("PYVELM_ATTACHMENT_DIR", None)
+            backend = LocalStorageBackend()
+            self.assertTrue(str(backend.root).startswith("/tmp/"))
+
 
 class ServerHelperTests(unittest.TestCase):
     def test_apply_runtime_env(self):

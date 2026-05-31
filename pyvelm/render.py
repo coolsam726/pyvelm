@@ -5197,6 +5197,7 @@ def render_login_page(
             "next": next,
             "prefill_login": prefill_login,
             "csrf_token": csrf_token,
+            "dev_db_display": development_db_display(env),
         }
     )
     return template.render(**ctx)
@@ -5510,6 +5511,7 @@ def render_landing_page(env=None, *, current_path: str | None = None) -> str:
         sign_in_href=login_url(),
         home_url=home_url(),
         current_path=current_path or "/",
+        dev_db_display=development_db_display(env),
     )
 
 
@@ -6683,6 +6685,34 @@ def build_breadcrumbs(
     return crumbs
 
 
+def development_db_display(env=None) -> str | None:
+    """Redacted active database line for the dev-mode footer, or ``None`` in production."""
+    from pyvelm.runtime import is_development
+
+    if not is_development():
+        return None
+
+    import os
+
+    from pyvelm.database import app_dsn_from_env, capabilities_from_dsn, dsn_display
+
+    cap = None
+    if env is not None:
+        cap = getattr(getattr(env, "conn", None), "capabilities", None)
+
+    dsn = app_dsn_from_env()
+    if dsn and cap is None:
+        try:
+            cap = capabilities_from_dsn(dsn)
+        except Exception:
+            pass
+
+    backend = cap.name if cap else "database"
+    if not dsn:
+        return f"{backend} (PYVELM_DSN not set)"
+    return f"{backend} · {dsn_display(dsn)}"
+
+
 def layout_context(
     env,
     current_path: str | None = None,
@@ -6750,4 +6780,5 @@ def layout_context(
         # pass `leaf_label`; renderers can override `breadcrumbs`
         # directly when the page lives outside the menu altogether.
         "breadcrumbs": breadcrumbs,
+        "dev_db_display": development_db_display(env),
     }
