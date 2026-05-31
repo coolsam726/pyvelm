@@ -166,6 +166,22 @@ class TestDsnEnvTests(unittest.TestCase):
         ):
             _assert_safe_reset_dsn("postgresql://localhost/pyvelm_test")
 
+    def test_nuke_dsn_prefers_nuke_env(self):
+        from pyvelm.database import nuke_dsn_from_env
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "PYVELM_DSN": "postgresql://localhost/pooler",
+                "PYVELM_NUKE_DSN": "postgresql://localhost/direct",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                nuke_dsn_from_env(),
+                "postgresql+psycopg://localhost/direct",
+            )
+
 
 class DevelopmentDbDisplayTests(unittest.TestCase):
     def test_hidden_in_production(self):

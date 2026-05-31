@@ -10,6 +10,9 @@ from .database import (
     create_database_from_dsn,
     dsn_display,
     normalize_dsn,
+    nuke_dsn_from_env,
+    prepare_postgres_schema_drop,
+    release_postgres_schema_drop_lock,
     require_dsn_from_env,
     reset_schema,
 )
@@ -171,10 +174,14 @@ def confirm_migrate_fresh(*, production: bool, yes: bool) -> None:
 
 
 def drop_schema_contents(conn, schema: str) -> None:
-    conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
-    conn.execute(f'CREATE SCHEMA "{schema}"')
-    conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO CURRENT_USER')
-    conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO PUBLIC')
+    prepare_postgres_schema_drop(conn, schema)
+    try:
+        conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        conn.execute(f'CREATE SCHEMA "{schema}"')
+        conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO CURRENT_USER')
+        conn.execute(f'GRANT ALL ON SCHEMA "{schema}" TO PUBLIC')
+    finally:
+        release_postgres_schema_drop_lock(conn, schema)
 
 
 def guard_destructive_schema_command(*, label: str) -> None:
@@ -201,6 +208,13 @@ def confirm_destructive_phrase(*, phrase: str, yes: bool, preamble: str) -> None
 
 
 def wipe_schema(dsn: str, schema: str) -> None:
+    if "6543" in dsn or "pooler" in dsn.lower():
+        print(
+            "WARNING: Schema wipe through a transaction pooler can deadlock. "
+            "Set PYVELM_NUKE_DSN to a direct Postgres URL (port 5432) for "
+            "build / CI nuke steps.",
+            file=sys.stderr,
+        )
     db = create_database_from_dsn(normalize_dsn(dsn))
     with db.connect() as conn:
         print(f"Dropping schema {schema!r}…")

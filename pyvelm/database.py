@@ -296,6 +296,52 @@ def require_dsn_from_env() -> str:
     return dsn
 
 
+def nuke_dsn_from_env() -> str:
+    """DSN for ``db nuke`` / schema wipe — prefers direct ``PYVELM_NUKE_DSN``."""
+    import os
+
+    raw = (os.environ.get("PYVELM_NUKE_DSN") or os.environ.get("PYVELM_DSN") or "").strip()
+    if not raw:
+        raise SystemExit("PYVELM_DSN not set")
+    return normalize_dsn(raw)
+
+
+def terminate_other_backends(conn: ConnectionAdapter) -> None:
+    """Terminate every other session on the current Postgres database.
+
+    Required before ``DROP SCHEMA`` when pooler connections or warm serverless
+    instances still hold locks (otherwise ``deadlock detected``).
+    """
+    if conn.capabilities.name != "postgresql":
+        return
+    conn.execute(
+        """
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND pid <> pg_backend_pid()
+        """
+    )
+
+
+def prepare_postgres_schema_drop(conn: ConnectionAdapter, schema: str) -> None:
+    """Serialize and clear blockers before ``DROP SCHEMA … CASCADE``."""
+    if conn.capabilities.name != "postgresql":
+        return
+    safe = (schema or "public").replace("'", "''")
+    conn.execute(f"SELECT pg_advisory_lock(hashtext('pyvelm:wipe:{safe}'))")
+    terminate_other_backends(conn)
+    conn.execute("SET lock_timeout = '120s'")
+    conn.execute("SET statement_timeout = '300s'")
+
+
+def release_postgres_schema_drop_lock(conn: ConnectionAdapter, schema: str) -> None:
+    if conn.capabilities.name != "postgresql":
+        return
+    safe = (schema or "public").replace("'", "''")
+    conn.execute(f"SELECT pg_advisory_unlock(hashtext('pyvelm:wipe:{safe}'))")
+
+
 TEST_DSN_ENV = "PYVELM_DSN_TEST"
 
 

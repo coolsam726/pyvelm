@@ -114,6 +114,7 @@ Use a **dedicated throwaway Supabase project** for the demo — not your dev dat
    | Variable | Value |
    |----------|--------|
    | `PYVELM_DSN` | `postgresql://postgres.[ref]:[password]@….pooler.supabase.com:6543/postgres?sslmode=require` |
+   | `PYVELM_NUKE_DSN` | **Build only** — direct Postgres on port **5432** (`db.[ref].supabase.co`). Required for `db nuke` in `buildCommand`; the transaction pooler deadlocks on `DROP SCHEMA`. |
    | `PYVELM_MODULE_ROOTS` | `examples/modules:examples/modules_demo` (already in `vercel.json`) |
    | `PYVELM_SECRET_KEY` | Optional random string |
 
@@ -126,6 +127,8 @@ Use a **dedicated throwaway Supabase project** for the demo — not your dev dat
    ```
 
    That drops the `public` schema, reinstalls every example module, and re-seeds demo data. **Branding, partners, and other edits persist between requests** until the next deploy; a new deploy resets the database to the seeded snapshot.
+
+   `pyvelm db nuke` terminates other database sessions and takes an advisory lock before `DROP SCHEMA` to avoid deadlocks with warm serverless instances. Still use **`PYVELM_NUKE_DSN`** (direct port 5432) for the build — not the pooler on 6543.
 
 With Postgres, sessions are stored in `res.users.session_token` as on Docker — no stateless cookie workaround is needed.
 

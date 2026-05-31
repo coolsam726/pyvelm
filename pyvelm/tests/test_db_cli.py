@@ -304,12 +304,15 @@ class DbNukeCliTests(unittest.TestCase):
 
     def test_drop_schema_contents_runs_drop_and_create(self):
         conn = MagicMock()
+        conn.capabilities.name = "postgresql"
         drop_schema_contents(conn, "public")
         self.assertGreaterEqual(conn.execute.call_count, 2)
-        first_sql = str(conn.execute.call_args_list[0].args[0])
-        second_sql = str(conn.execute.call_args_list[1].args[0])
-        self.assertIn("DROP SCHEMA", first_sql)
-        self.assertIn("CREATE SCHEMA", second_sql)
+        sqls = [str(c.args[0]) for c in conn.execute.call_args_list]
+        self.assertTrue(any("pg_advisory_lock" in s for s in sqls))
+        self.assertTrue(any("pg_terminate_backend" in s for s in sqls))
+        self.assertTrue(any("DROP SCHEMA" in s for s in sqls))
+        self.assertTrue(any("CREATE SCHEMA" in s for s in sqls))
+        self.assertTrue(any("pg_advisory_unlock" in s for s in sqls))
 
 
 class MigrateColonCommandTests(unittest.TestCase):
