@@ -349,6 +349,12 @@ def dsn_display(dsn: str) -> str:
     """Return a DSN safe to print (password redacted)."""
     try:
         parsed = urlparse(normalize_dsn(dsn))
+        scheme = (parsed.scheme or "").split("+", 1)[0].lower()
+        if scheme == "sqlite":
+            path = parsed.path or ""
+            if parsed.netloc:
+                path = f"/{parsed.netloc}{path}"
+            return f"sqlite://{path or ':memory:'}"
         if parsed.scheme and parsed.hostname:
             netloc = parsed.hostname
             if parsed.port:

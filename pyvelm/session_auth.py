@@ -37,6 +37,16 @@ def uses_stateless_sessions() -> bool:
         return True
     if flag in ("0", "false", "no", "off"):
         return False
+    # Remote Postgres (Supabase, Neon, …) is shared across serverless
+    # instances — DB-backed sessions and writes persist like Docker.
+    try:
+        from pyvelm.database import capabilities_from_dsn, normalize_dsn
+
+        raw = (os.environ.get("PYVELM_DSN") or "").strip()
+        if raw and capabilities_from_dsn(normalize_dsn(raw)).name == "postgresql":
+            return False
+    except Exception:
+        pass
     if is_serverless_runtime():
         return True
     # Bundled SQLite copied to /tmp (Vercel demo) — DB tokens are not shared
