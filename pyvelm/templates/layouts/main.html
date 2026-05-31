@@ -122,13 +122,14 @@
               md:translate-x-0 transition-transform duration-200 ease-in-out"
        :class="{ '-translate-x-full': !sidebarOpen }">
 
-    {# Brand — logo + app name only. The current page title lives in
-       the heading region under the breadcrumbs (Filament-style), not
-       as a sidebar subtitle. #}
-    <div class="px-4 min-h-[60px] flex items-center justify-between gap-2 border-b border-default/60">
+    {# Brand — fixed-height row (matches logo height); close btn is absolute
+       so mobile/desktop share the same row height. #}
+    <div class="relative px-4 pr-10 md:pr-4 shrink-0 overflow-hidden
+                flex items-center border-b border-default/60"
+         {% if brand is defined %}style="height: {{ brand.header_logo_height }}px;"{% else %}style="height: 68px;"{% endif %}>
         {% include "layouts/_brand_mark.html" %}
         <button @click="sidebarOpen = false" aria-label="Close sidebar"
-                class="md:hidden p-1 rounded-md text-body-subtle hover:text-heading hover:bg-neutral-secondary">
+                class="absolute right-3 top-1/2 -translate-y-1/2 md:hidden p-1 rounded-md text-body-subtle hover:text-heading hover:bg-neutral-secondary">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
             </svg>

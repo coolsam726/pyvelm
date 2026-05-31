@@ -4,7 +4,13 @@ from __future__ import annotations
 import os
 import unittest
 
-from pyvelm.branding import brand_dict, branding_context, default_brand_globals
+from pyvelm.branding import (
+    DEFAULT_HEADER_LOGO_HEIGHT,
+    brand_dict,
+    branding_context,
+    default_brand_globals,
+    header_logo_style,
+)
 
 
 class BrandingTests(unittest.TestCase):
@@ -13,6 +19,35 @@ class BrandingTests(unittest.TestCase):
         self.assertEqual(brand["app_name"], "pyvelm")
         self.assertFalse(brand["has_logo"])
         self.assertTrue(brand["show_powered_by"])
+
+    def test_default_header_logo_height(self):
+        brand = brand_dict(None)
+        self.assertEqual(brand["header_logo_height"], DEFAULT_HEADER_LOGO_HEIGHT)
+        self.assertTrue(brand["show_header_brand_text"])
+        self.assertEqual(
+            brand["header_logo_style"],
+            f"height: {DEFAULT_HEADER_LOGO_HEIGHT}px; width: auto;",
+        )
+
+    def test_header_logo_height_env_override(self):
+        os.environ["PYVELM_HEADER_LOGO_HEIGHT"] = "80"
+        try:
+            brand = brand_dict(None)
+            self.assertEqual(brand["header_logo_height"], 80)
+            self.assertEqual(brand["header_logo_style"], "height: 80px; width: auto;")
+        finally:
+            os.environ.pop("PYVELM_HEADER_LOGO_HEIGHT", None)
+
+    def test_header_logo_style_has_no_width_cap(self):
+        self.assertNotIn("max-width", header_logo_style(120))
+
+    def test_show_header_brand_text_env_override(self):
+        os.environ["PYVELM_SHOW_HEADER_BRAND_TEXT"] = "0"
+        try:
+            brand = brand_dict(None)
+            self.assertFalse(brand["show_header_brand_text"])
+        finally:
+            os.environ.pop("PYVELM_SHOW_HEADER_BRAND_TEXT", None)
 
     def test_env_overrides(self):
         os.environ["PYVELM_APP_NAME"] = "Acme ERP"
@@ -126,10 +161,12 @@ class BrandingFromCompanyTests(unittest.TestCase):
             support_email="help@co",
             support_url="https://co/help",
             show_powered_by=False,
+            show_header_brand_text=False,
         )
         env = _FakeEnv(_FakeCompanyManager(co))
         brand = brand_dict(env, company_id=1)
         self.assertEqual(brand["app_name"], "Co Name")
+        self.assertFalse(brand["show_header_brand_text"])
         self.assertEqual(brand["tagline"], "Co tagline")
         self.assertEqual(brand["logo_url_light"], "/co-light.png")
         self.assertEqual(brand["logo_url_dark"], "/co-light.png")

@@ -26,6 +26,7 @@ VIEWS: list[View] = [
                 _w("document_designer", "design_button"),
                 "document_layout", "paper_format", "google_font",
                 _w("logo_url", "file_url"),
+                "document_logo_height",
                 _w("primary_color", "color"),
                 _w("secondary_color", "color"),
             ]),

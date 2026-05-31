@@ -5,6 +5,8 @@ Configure on **Settings → Companies** (``res.company``) or via environment:
 - ``PYVELM_APP_NAME`` — replaces "pyvelm" in chrome and titles
 - ``PYVELM_APP_TAGLINE`` — login subtitle
 - ``PYVELM_LOGO_URL`` / ``PYVELM_LOGO_URL_DARK`` — logo for light / dark UI (dark falls back to light)
+- ``PYVELM_HEADER_LOGO_HEIGHT`` — brand logo height in the admin shell (px; default 68)
+- ``PYVELM_SHOW_HEADER_BRAND_TEXT`` — ``0`` / ``false`` hides the app name beside the logo
 - ``PYVELM_FAVICON_URL`` — favicon URL (e.g. attachment download paths)
 - ``PYVELM_COPYRIGHT`` — footer legal line
 - ``PYVELM_SUPPORT_EMAIL`` / ``PYVELM_SUPPORT_URL`` — footer support links
@@ -31,6 +33,9 @@ from .theme import company_theme_context
 
 DEFAULT_APP_NAME = "pyvelm"
 DEFAULT_TAGLINE = "Welcome back."
+DEFAULT_HEADER_LOGO_HEIGHT = 68
+DEFAULT_DOCUMENT_LOGO_HEIGHT = 56
+LOGO_WIDTH_ASPECT = 4  # PDF logo width cap = height × aspect (keeps wide marks on-page)
 
 
 def _env_str(key: str) -> str:
@@ -54,6 +59,50 @@ def _pick_str(company_val: str | None, env_key: str, default: str = "") -> str:
     return default
 
 
+def _pick_int(company_val, env_key: str, *, default: int) -> int:
+    """Positive int from a company value, else env, else default."""
+    for raw in (company_val, _env_str(env_key)):
+        if raw in (None, ""):
+            continue
+        try:
+            n = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if n > 0:
+            return n
+    return default
+
+
+def header_logo_style(height_px: int) -> str:
+    """Inline style for the admin shell brand logo — height on the image, no width cap."""
+    return f"height: {height_px}px; width: auto;"
+
+
+def logo_max_width_px(height_px: int, *, aspect: float = LOGO_WIDTH_ASPECT) -> int:
+    """Width cap scaled with logo height (PDF/document headers)."""
+    return max(int(height_px * aspect), height_px)
+
+
+def document_logo_height_px(height: int | None) -> int:
+    """Resolved PDF/document logo height (default when unset/invalid)."""
+    try:
+        n = int(height or 0)
+        if n > 0:
+            return n
+    except (TypeError, ValueError):
+        pass
+    return DEFAULT_DOCUMENT_LOGO_HEIGHT
+
+
+def document_logo_style(height_px: int, *, aspect: float = LOGO_WIDTH_ASPECT) -> str:
+    """Inline style for PDF / document header logos (forces height, capped width)."""
+    mw = logo_max_width_px(height_px, aspect=aspect)
+    return (
+        f"height: {height_px}px; width: auto; max-width: {mw}px; "
+        "object-fit: contain; display: block;"
+    )
+
+
 def _load_company_branding(env, company_id: int | None) -> dict[str, Any] | None:
     if env is None or company_id is None or "res.company" not in env.registry:
         return None
@@ -67,6 +116,8 @@ def _load_company_branding(env, company_id: int | None) -> dict[str, Any] | None
         "app_tagline": co.app_tagline,
         "logo_url": co.logo_url,
         "logo_url_dark": co.logo_url_dark,
+        "header_logo_height": co.header_logo_height,
+        "show_header_brand_text": co.show_header_brand_text,
         "favicon_url": co.favicon_url,
         "copyright_text": co.copyright_text,
         "support_email": co.support_email,
@@ -110,8 +161,17 @@ def brand_dict(
     support_url = _pick_str(co.get("support_url") if co else None, "PYVELM_SUPPORT_URL")
     if co is not None:
         show_powered_by = bool(co.get("show_powered_by"))
+        _show_text = co.get("show_header_brand_text", True)
+        show_header_brand_text = True if _show_text is None else bool(_show_text)
     else:
         show_powered_by = _env_bool("PYVELM_SHOW_POWERED_BY", default=True)
+        show_header_brand_text = _env_bool("PYVELM_SHOW_HEADER_BRAND_TEXT", default=True)
+
+    header_logo_height = _pick_int(
+        co.get("header_logo_height") if co else None,
+        "PYVELM_HEADER_LOGO_HEIGHT",
+        default=DEFAULT_HEADER_LOGO_HEIGHT,
+    )
 
     return {
         "app_name": app_name,
@@ -119,6 +179,9 @@ def brand_dict(
         "logo_url": logo_url_light,
         "logo_url_light": logo_url_light,
         "logo_url_dark": logo_url_dark,
+        "header_logo_height": header_logo_height,
+        "header_logo_style": header_logo_style(header_logo_height),
+        "show_header_brand_text": show_header_brand_text,
         "favicon_url": favicon_url,
         "copyright": copyright_text,
         "support_email": support_email,

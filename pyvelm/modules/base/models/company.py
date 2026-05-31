@@ -10,7 +10,7 @@ and thus loads res.company first).
 """
 from __future__ import annotations
 
-from pyvelm import BaseModel, Boolean, Char, Many2one
+from pyvelm import BaseModel, Boolean, Char, Integer, Many2one
 
 from ..constants import MENU_LAYOUT_CHOICES
 
@@ -47,6 +47,14 @@ class Company(BaseModel):
     app_tagline = Char(string="Tagline")
     logo_url = Char(string="Logo URL (light)")
     logo_url_dark = Char(string="Logo URL (dark)")
+    header_logo_height = Integer(
+        default=0,
+        string="Header logo height (px)",
+    )
+    show_header_brand_text = Boolean(
+        default=True,
+        string="Show app name in header",
+    )
     favicon_url = Char(string="Favicon URL")
     copyright_text = Char(string="Copyright")
     support_email = Char(string="Support email")

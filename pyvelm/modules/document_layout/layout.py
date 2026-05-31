@@ -15,6 +15,8 @@ from typing import Callable
 
 from markupsafe import Markup
 
+from pyvelm.branding import document_logo_height_px, document_logo_style, logo_max_width_px
+
 from . import pdf as _pdf
 
 _ATTACHMENT_URL = re.compile(r"/api/attachment/(\d+)/download")
@@ -212,11 +214,20 @@ def _company_context(env, company=None) -> dict:
                 "copyright": "", "layout": "light", "paper": "A4",
                 "paper_width": pw, "paper_height": ph,
                 "paper_content_min": paper_content_min_height("A4"),
-                "folder_tint": tint_color(accent), "vat": ""}
+                "folder_tint": tint_color(accent), "vat": "",
+                "document_logo_height": document_logo_height_px(0),
+                "document_logo_max_width": logo_max_width_px(document_logo_height_px(0)),
+                "document_logo_style": document_logo_style(document_logo_height_px(0)),
+                "document_logo_style_md": document_logo_style(document_logo_height_px(0)),
+                "document_logo_style_folder": document_logo_style(document_logo_height_px(0)),
+            }
     accent = company.primary_color or "#1f2937"
     font = company.google_font or ""
     paper = company.paper_format or "A4"
     pw, ph = paper_css_size(paper)
+    doc_logo_h = document_logo_height_px(
+        getattr(company, "document_logo_height", 0) if company else 0
+    )
     return {
         "name": company.name or "",
         "address_lines": company._address_lines(),
@@ -233,6 +244,11 @@ def _company_context(env, company=None) -> dict:
         "paper_content_min": paper_content_min_height(paper),
         "folder_tint": tint_color(accent),
         "vat": company.vat or "",
+        "document_logo_height": doc_logo_h,
+        "document_logo_max_width": logo_max_width_px(doc_logo_h),
+        "document_logo_style": document_logo_style(doc_logo_h),
+        "document_logo_style_md": document_logo_style(doc_logo_h),
+        "document_logo_style_folder": document_logo_style(doc_logo_h),
     }
 
 

@@ -38,6 +38,8 @@ def _ctx(*, layout: str = "light", accent: str = "#714B67", **extra) -> dict:
         "paper_content_min": paper_content_min_height("A4"),
         "folder_tint": tint_color(accent),
         "vat": "US12345671",
+        "document_logo_height": 56,
+        "document_logo_max_width": 224,
     }
     base.update(extra)
     return base

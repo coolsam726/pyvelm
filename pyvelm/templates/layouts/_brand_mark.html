@@ -3,10 +3,11 @@
 {% set b = brand if brand is defined else none %}
 {% set _bm_variant = brand_mark_variant if brand_mark_variant is defined else 'sidebar' %}
 {% if b %}
-<a href="{{ home_href | default('/web/admin') }}" class="flex items-center gap-2.5 min-w-0 text-heading hover:opacity-90 transition
+<a href="{{ home_href | default('/web/admin') }}" class="flex items-center gap-2.5 min-w-0 leading-none text-heading hover:opacity-90 transition
           {% if _bm_variant == 'sidebar' %}flex-1{% else %}max-w-full{% endif %}" aria-label="{{ b.app_name }} home">
     {% if b.has_logo %}
-    {% set logo_class = 'h-13 w-auto max-w-[8rem] rounded-lg object-contain shrink-0' %}
+    {% set logo_class = 'rounded-lg shrink-0' %}
+    {% set logo_style = b.header_logo_style %}
     {% include "layouts/_brand_logo.html" %}
     {% else %}
     <div class="size-10 rounded-lg bg-fg-brand flex items-center justify-center shrink-0">
@@ -17,11 +18,17 @@
         </svg>
     </div>
     {% endif %}
-    <div class="min-w-0">
-        <span class="font-semibold text-heading text-sm tracking-tight block truncate">{{ b.app_name }}</span>
+    {% if b.show_header_brand_text %}
+    <div class="min-w-0 overflow-hidden">
+        <span class="font-semibold text-heading text-sm tracking-tight block truncate whitespace-nowrap">{{ b.app_name }}</span>
         {% if brand_subtitle is defined and brand_subtitle %}
         <span class="text-xs text-body-subtle truncate block mt-0.5">{{ brand_subtitle }}</span>
         {% endif %}
     </div>
+    {% elif brand_subtitle is defined and brand_subtitle %}
+    <div class="min-w-0">
+        <span class="text-xs text-body-subtle truncate block">{{ brand_subtitle }}</span>
+    </div>
+    {% endif %}
 </a>
 {% endif %}
