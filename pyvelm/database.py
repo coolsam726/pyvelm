@@ -210,21 +210,32 @@ class ConnectionAdapter:
         return ExecuteResult(rows=rows, rowcount=result.rowcount)
 
     def commit(self) -> None:
-        if self._dbapi is not None and hasattr(self._dbapi, "commit"):
-            self._dbapi.commit()
-        elif self._sa is not None:
+        if self._sa is not None:
             self._sa.commit()
+        elif self._dbapi is not None and hasattr(self._dbapi, "commit"):
+            self._dbapi.commit()
         self._in_tx = False
 
     def rollback(self) -> None:
-        if self._dbapi is not None and hasattr(self._dbapi, "rollback"):
-            self._dbapi.rollback()
-        elif self._sa is not None:
+        if self._sa is not None:
             self._sa.rollback()
+        elif self._dbapi is not None and hasattr(self._dbapi, "rollback"):
+            self._dbapi.rollback()
         self._in_tx = False
 
     def close(self) -> None:
         if self._sa is not None and self.owns_sa:
+            # SQLAlchemy 2 autobegin opens a transaction even when DBAPI
+            # autocommit is True (MySQL/MariaDB). Commit pending work before
+            # close so boot/migrate one-shots persist across pool checkouts.
+            if self.autocommit:
+                try:
+                    self.commit()
+                except Exception:
+                    try:
+                        self.rollback()
+                    except Exception:
+                        pass
             self._sa.close()
 
 

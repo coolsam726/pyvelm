@@ -23,7 +23,7 @@ from pyvelm.database import (
     test_dsn_from_env as get_test_dsn_from_env,
     to_psycopg_dsn,
 )
-from pyvelm.tests.support.db import _assert_safe_reset_dsn
+from pyvelm.tests.support.db import _assert_safe_reset_dsn, requires_backend
 
 
 class NormalizeDsnTests(unittest.TestCase):
@@ -94,6 +94,7 @@ class SqliteDatabaseTests(unittest.TestCase):
                     'CREATE TABLE IF NOT EXISTS "demo" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "name" text)'
                 )
                 conn.execute('INSERT INTO "demo" ("name") VALUES (%s)', ["alpha"])
+            with db.connect() as conn:
                 row = conn.execute('SELECT "name" FROM "demo" WHERE "id" = %s', [1]).fetchone()
             db.dispose()
         self.assertEqual(row, ("alpha",))
@@ -101,6 +102,27 @@ class SqliteDatabaseTests(unittest.TestCase):
     def test_serial_primary_key_sqlite(self):
         cap = dialect_capabilities("sqlite")
         self.assertIn("AUTOINCREMENT", serial_primary_key(cap))
+
+
+@requires_backend("mysql")
+class MysqlDatabaseTests(unittest.TestCase):
+    def test_autocommit_insert_visible_on_next_connection(self):
+        from pyvelm.tests.support.db import dsn_from_env, reset_database
+
+        dsn = dsn_from_env()
+        assert dsn is not None
+        reset_database(dsn)
+        db = create_database_from_dsn(dsn, pool_size=1)
+        with db.connect() as conn:
+            conn.execute(
+                'CREATE TABLE IF NOT EXISTS "demo" ('
+                '"id" INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY, "name" text)'
+            )
+            conn.execute('INSERT INTO "demo" ("name") VALUES (%s)', ["alpha"])
+        with db.connect() as conn:
+            row = conn.execute('SELECT "name" FROM "demo" WHERE "id" = %s', [1]).fetchone()
+        db.dispose()
+        self.assertEqual(row, ("alpha",))
 
 
 class MigrationSupportedTests(unittest.TestCase):
