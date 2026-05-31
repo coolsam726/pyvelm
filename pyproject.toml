@@ -65,6 +65,12 @@ geo = [
     "pycountry>=24.6",
     "geonamescache>=2.0",
 ]
+mssql = [
+    "pyodbc>=5.0",
+]
+oracle = [
+    "oracledb>=2.0",
+]
 test = [
     "pytest>=8.3",
     "pytest-cov>=5.0",

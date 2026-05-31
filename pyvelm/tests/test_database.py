@@ -75,6 +75,50 @@ class DialectCapabilitiesTests(unittest.TestCase):
             "mysql+pymysql://u:p@localhost/db",
         )
 
+    def test_mssql_capabilities(self):
+        cap = dialect_capabilities("mssql")
+        self.assertFalse(cap.supports_ilike)
+        self.assertFalse(cap.supports_returning)
+        self.assertIn("IDENTITY", serial_primary_key(cap))
+
+    def test_mssql_dsn_normalisation(self):
+        self.assertEqual(
+            normalize_dsn("mssql://u:p@localhost/db"),
+            "mssql+pyodbc://u:p@localhost/db",
+        )
+        self.assertEqual(
+            normalize_dsn("sqlserver://u:p@localhost/db"),
+            "mssql+pyodbc://u:p@localhost/db",
+        )
+
+    def test_oracle_capabilities(self):
+        cap = dialect_capabilities("oracle")
+        self.assertFalse(cap.supports_ilike)
+        self.assertTrue(cap.supports_returning)
+        self.assertIn("IDENTITY", serial_primary_key(cap))
+
+    def test_oracle_dsn_normalisation(self):
+        self.assertEqual(
+            normalize_dsn("oracle://u:p@localhost/db"),
+            "oracle+oracledb://u:p@localhost/db",
+        )
+
+    def test_append_search_pagination_mssql(self):
+        from pyvelm.database import append_search_pagination
+
+        cap = dialect_capabilities("mssql")
+        sql = append_search_pagination(
+            'SELECT "t"."id" FROM "t" WHERE 1=1',
+            base_table_sql='"t"',
+            limit=10,
+            offset=5,
+            order=None,
+            cap=cap,
+        )
+        self.assertIn("OFFSET 5 ROWS", sql)
+        self.assertIn("FETCH NEXT 10 ROWS ONLY", sql)
+        self.assertNotIn("LIMIT", sql)
+
     def test_ir_module_create_sql_mysql_varchar_primary_key(self):
         from pyvelm.database import ir_module_create_sql
 
@@ -125,6 +169,27 @@ class MysqlDatabaseTests(unittest.TestCase):
         self.assertEqual(row, ("alpha",))
 
 
+@requires_backend("mssql")
+class MssqlDatabaseTests(unittest.TestCase):
+    def test_autocommit_insert_visible_on_next_connection(self):
+        from pyvelm.tests.support.db import dsn_from_env, reset_database
+
+        dsn = dsn_from_env()
+        assert dsn is not None
+        reset_database(dsn)
+        db = create_database_from_dsn(dsn, pool_size=1)
+        with db.connect() as conn:
+            conn.execute(
+                'CREATE TABLE "demo" ('
+                '"id" INTEGER NOT NULL IDENTITY(1,1) PRIMARY KEY, "name" NVARCHAR(255))'
+            )
+            conn.execute('INSERT INTO "demo" ("name") VALUES (%s)', ["alpha"])
+        with db.connect() as conn:
+            row = conn.execute('SELECT "name" FROM "demo" WHERE "id" = %s', [1]).fetchone()
+        db.dispose()
+        self.assertEqual(row, ("alpha",))
+
+
 class MigrationSupportedTests(unittest.TestCase):
     def test_skips_postgres_only_on_sqlite(self):
         cap = dialect_capabilities("sqlite")
@@ -138,6 +203,13 @@ class MigrationSupportedTests(unittest.TestCase):
         cap = dialect_capabilities("mysql")
         conn = mock.Mock()
         conn.dialect_name = "mysql"
+        self.assertFalse(
+            migration_supported(conn, ("postgresql",))
+        )
+
+    def test_skips_postgres_only_on_mssql(self):
+        conn = mock.Mock()
+        conn.dialect_name = "mssql"
         self.assertFalse(
             migration_supported(conn, ("postgresql",))
         )
