@@ -836,13 +836,22 @@ def normalize_column_ddl(ddl: str, cap: DialectCapabilities) -> str:
     return out
 
 
+def string_sql_type(cap: DialectCapabilities, *, primary_key: bool = False) -> str:
+    """Portable string column type for Char/Text (MySQL needs VARCHAR for PK/index)."""
+    if cap.name == "mysql":
+        return "VARCHAR(255)" if primary_key else "TEXT"
+    return "text"
+
+
 def ir_module_create_sql(cap: DialectCapabilities) -> str:
     ts = timestamp_sql_type(cap)
     default = now_sql(cap)
+    name_type = string_sql_type(cap, primary_key=True)
+    version_type = string_sql_type(cap)
     return (
         f'CREATE TABLE IF NOT EXISTS "ir_module" ('
-        f'"name" text PRIMARY KEY, '
-        f'"version" text NOT NULL, '
+        f'"name" {name_type} PRIMARY KEY, '
+        f'"version" {version_type} NOT NULL, '
         f'"installed_at" {ts} NOT NULL DEFAULT {default})'
     )
 

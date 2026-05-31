@@ -75,6 +75,13 @@ class DialectCapabilitiesTests(unittest.TestCase):
             "mysql+pymysql://u:p@localhost/db",
         )
 
+    def test_ir_module_create_sql_mysql_varchar_primary_key(self):
+        from pyvelm.database import ir_module_create_sql
+
+        sql = ir_module_create_sql(dialect_capabilities("mysql"))
+        self.assertIn('"name" VARCHAR(255) PRIMARY KEY', sql)
+        self.assertNotIn("text PRIMARY KEY", sql)
+
 
 class SqliteDatabaseTests(unittest.TestCase):
     def test_create_table_and_insert(self):
