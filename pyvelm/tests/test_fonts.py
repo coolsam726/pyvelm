@@ -25,6 +25,11 @@ class FontNormalizeTests(unittest.TestCase):
         self.assertEqual(normalize_font_family("default"), "")
 
     def test_valid_google_font_names(self):
+        from pyvelm.fonts import UI_FONT_FAMILIES
+
+        for name in UI_FONT_FAMILIES:
+            with self.subTest(name=name):
+                self.assertEqual(normalize_font_family(name), name)
         self.assertEqual(normalize_font_family("Roboto"), "Roboto")
         self.assertEqual(normalize_font_family("Open Sans"), "Open Sans")
         self.assertEqual(normalize_font_family("Source Sans 3"), "Source Sans 3")
@@ -49,12 +54,25 @@ class FontUrlTests(unittest.TestCase):
 class FontCssTests(unittest.TestCase):
     def test_company_font_css_sets_variables(self):
         css = company_font_css("Roboto")
+        self.assertIn("@layer theme", css)
         self.assertIn("--font-sans: 'Roboto', ui-sans-serif", css)
-        self.assertIn("--font-body: 'Roboto', ui-sans-serif", css)
+        self.assertIn("--default-font-family: 'Roboto', ui-sans-serif", css)
+        self.assertIn("html, body", css)
+        self.assertIn("font-family: 'Roboto', ui-sans-serif", css)
 
     def test_empty_family_emits_no_css(self):
         self.assertEqual(company_font_css(""), "")
         self.assertEqual(company_font_css("Inter"), "")
+
+
+class FontChoicesTests(unittest.TestCase):
+    def test_ui_font_family_choices_include_default(self):
+        from pyvelm.fonts import UI_FONT_FAMILY_CHOICES, UI_FONT_FAMILIES
+
+        self.assertEqual(UI_FONT_FAMILY_CHOICES[0], ("", "Default (Inter)"))
+        choice_values = {v for v, _lbl in UI_FONT_FAMILY_CHOICES}
+        for family in UI_FONT_FAMILIES:
+            self.assertIn(family, choice_values)
 
 
 class FontContextTests(unittest.TestCase):
@@ -152,6 +170,19 @@ class BrandingFontIntegrationTests(unittest.TestCase):
     def test_default_brand_globals_include_font(self):
         g = default_brand_globals()
         self.assertIn("company_font_stylesheet_url", g)
+
+    def test_head_theme_renders_font_css_without_escaping_quotes(self):
+        import jinja2
+
+        from pyvelm.fonts import company_font_css
+
+        loader = jinja2.PackageLoader("pyvelm", "templates")
+        env = jinja2.Environment(loader=loader, autoescape=True)
+        template = env.get_template("layouts/_head_theme.html")
+        css = company_font_css("Poppins")
+        html = template.render(company_theme_style="", company_font_style=css)
+        self.assertIn("font-family: 'Poppins'", html)
+        self.assertNotIn("&#39;", html)
 
 
 if __name__ == "__main__":

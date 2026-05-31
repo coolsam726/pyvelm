@@ -7,6 +7,15 @@ out of the 0.x line.
 
 ## Unreleased
 
+### Changed
+
+- **MySQL / MariaDB (v1.1 WIP)** — `DialectCapabilities` for `mysql`/`mariadb`,
+  DSN normalisation (`mysql+pymysql://`), portable DDL/type mapping, schema reset,
+  MariaDB CI job + HTTP smoke. Requires `pymysql` (core dependency).
+- **Roadmap** — v1.1 targets **MySQL/MariaDB** portability; multi-DB routing
+  (``PYVELM_DATABASES`` preview) moves to **v1.3+** after Oracle and additional
+  backends pass install/smoke. See [multi-database.md](docs/multi-database.md).
+
 ## [1.0.0] — 2026-05-30
 
 ### Added
@@ -16,9 +25,10 @@ out of the 0.x line.
   ``PYVELM_DSN`` accepts SQLAlchemy URLs (`postgresql+psycopg://…`, `sqlite:///…`).
 - **SQLite backend (v1.0)** — greenfield install + model-driven schema sync;
   bundled Postgres migration scripts are skipped on SQLite.
-- **Multi-database routing (v1.1 preview)** — ``PYVELM_DATABASES`` tenant catalog,
+- **Multi-database routing (preview)** — ``PYVELM_DATABASES`` tenant catalog,
   ``DatabaseSelectorMiddleware``, ``/web/database/selector`` UI, per-request
   ``pool_map`` / ``registry_cache``, and ``pyvelm migrate --database <key>``.
+  Not the v1.1 release; routing ships after MySQL/MariaDB/Oracle portability.
 - **Documentation** — [multi-database.md](docs/multi-database.md),
   [ADR 001](docs/adr/001-sqlalchemy-core.md).
 
@@ -33,7 +43,7 @@ out of the 0.x line.
 ### Notes
 
 - **v1.0 scope:** one process, one DSN — Postgres *or* SQLite portability.
-  Multi-DB routing requires ``PYVELM_DATABASES`` (Postgres tenants only).
+  Multi-DB routing is preview-only; v1.1 adds MySQL/MariaDB.
 - SemVer **1.0.0** signals the database layer contract; patch releases continue
   on 0.26.x until this line ships.
 

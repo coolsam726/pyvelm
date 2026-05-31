@@ -51,6 +51,10 @@ def is_postgres(dsn: str | None = None) -> bool:
     return backend_name(dsn) == "postgresql"
 
 
+def is_mysql(dsn: str | None = None) -> bool:
+    return backend_name(dsn) == "mysql"
+
+
 def is_sqlite(dsn: str | None = None) -> bool:
     return backend_name(dsn) == "sqlite"
 
@@ -72,7 +76,7 @@ def requires_dsn(func: _F) -> _F:
 
 
 def requires_backend(name: str) -> Callable[[_F], _F]:
-    """Skip unless the test DSN targets *name* (``postgresql`` or ``sqlite``)."""
+    """Skip unless the test DSN targets *name* (``postgresql``, ``sqlite``, ``mysql``)."""
 
     def decorator(func: _F) -> _F:
         @wraps(func)
@@ -116,6 +120,16 @@ def reset_database(dsn: str | None = None) -> None:
     cap = capabilities_from_dsn(dsn)
     if cap.name == "sqlite":
         delete_sqlite_file(dsn)
+        return
+    if cap.name == "mysql":
+        from pyvelm.database import create_database_from_dsn, reset_schema
+
+        db = create_database_from_dsn(dsn, pool_size=1)
+        try:
+            with db.connect() as conn:
+                reset_schema(conn, cap)
+        finally:
+            db.dispose()
         return
 
     import psycopg

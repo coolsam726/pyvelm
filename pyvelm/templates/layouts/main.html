@@ -110,6 +110,8 @@
       class="bg-neutral-secondary text-body min-h-screen flex font-sans antialiased
              {% if use_sidebar %}md:flex-row{% else %}flex-col{% endif %}">
 
+{% include "layouts/_page_loader.html" %}
+
 {% if use_sidebar %}
 {# ───── Mobile backdrop ───── #}
 <div x-show="sidebarOpen" x-cloak x-transition.opacity
@@ -407,7 +409,6 @@
     </main>
 
     {% include "layouts/_footer_branding.html" %}
-    {% include "layouts/_footer_dev.html" %}
     </div>{# /overflow scroll region #}
 </div>
 
@@ -511,8 +512,7 @@
                     <div x-show="mode === 'content'"
                          x-ref="content"
                          data-pv-form-shell
-                         class="p-4 flex-1 overflow-auto min-h-0">
-                        <p x-show="loading" class="text-sm text-body-subtle">Loading…</p>
+                         class="p-4 flex-1 overflow-auto relative min-h-[8rem]">
                     </div>
                 </div>
             </div>
@@ -522,6 +522,150 @@
 
 {% include "_pv_files_alpine.html" %}
 <script>
+    // ── Boot loader + HTMX swap blocker ──
+    // Must register before Alpine (defer) so alpine:initialized is not missed.
+    (function () {
+        const BLOCKER_ID = 'pv-swap-blocker';
+        const BLOCK_TARGETS = '[data-pv-form-shell], #pv-table-container, #pv-kanban-container';
+        const SHOW_DELAY_MS = 120;
+        let depth = 0;
+        let showTimer = null;
+        let activeTarget = null;
+
+        function blockerEl() {
+            return document.getElementById(BLOCKER_ID);
+        }
+
+        function shouldBlock(detail) {
+            const target = detail && detail.target;
+            if (!target || !target.matches(BLOCK_TARGETS)) return false;
+            const elt = detail.elt;
+            const swap = (elt && elt.getAttribute && elt.getAttribute('hx-swap')) || 'innerHTML';
+            if (swap === 'none' || swap === 'delete') return false;
+            return true;
+        }
+
+        function positionBlocker(target) {
+            const el = blockerEl();
+            if (!el || !target) return;
+            const rect = target.getBoundingClientRect();
+            el.style.top = rect.top + 'px';
+            el.style.left = rect.left + 'px';
+            el.style.width = Math.max(rect.width, 0) + 'px';
+            el.style.height = Math.max(rect.height, 0) + 'px';
+        }
+
+        function showBlocker(target) {
+            const el = blockerEl();
+            if (!el || !target) return;
+            activeTarget = target;
+            target.setAttribute('aria-busy', 'true');
+            positionBlocker(target);
+            el.classList.add('pv-swap-blocker--visible');
+            el.setAttribute('aria-hidden', 'false');
+        }
+
+        function hideBlocker() {
+            clearTimeout(showTimer);
+            showTimer = null;
+            depth = Math.max(0, depth - 1);
+            if (depth > 0) return;
+            const el = blockerEl();
+            if (activeTarget) {
+                activeTarget.removeAttribute('aria-busy');
+                activeTarget = null;
+            }
+            if (el) {
+                el.classList.remove('pv-swap-blocker--visible');
+                if (!document.documentElement.classList.contains('pv-app-loading')) {
+                    el.setAttribute('aria-hidden', 'true');
+                }
+                el.style.width = '';
+                el.style.height = '';
+                el.style.top = '';
+                el.style.left = '';
+            }
+        }
+
+        function dismissAppBootLoader() {
+            if (!document.documentElement.classList.contains('pv-app-loading')) return;
+            document.documentElement.classList.remove('pv-app-loading');
+            const el = blockerEl();
+            if (!el || depth > 0 || el.classList.contains('pv-swap-blocker--visible')) {
+                return;
+            }
+            window.setTimeout(() => {
+                if (depth === 0 && !el.classList.contains('pv-swap-blocker--visible')) {
+                    el.setAttribute('aria-hidden', 'true');
+                }
+            }, 200);
+        }
+
+        window.pvDismissAppBootLoader = dismissAppBootLoader;
+
+        function onAppShellReady() {
+            dismissAppBootLoader();
+            if (typeof window.pvConsumeFlash === 'function') {
+                window.pvConsumeFlash();
+            }
+        }
+
+        document.addEventListener('alpine:initialized', onAppShellReady);
+        document.addEventListener('DOMContentLoaded', () => {
+            requestAnimationFrame(() => {
+                if (document.documentElement.classList.contains('pv-app-loading')) {
+                    onAppShellReady();
+                }
+            });
+        });
+        window.addEventListener('load', () => {
+            if (document.documentElement.classList.contains('pv-app-loading')) {
+                onAppShellReady();
+            }
+        });
+
+        function requestBlocker(detail) {
+            if (!shouldBlock(detail)) return;
+            depth += 1;
+            const target = detail.target;
+            const el = blockerEl();
+            clearTimeout(showTimer);
+            if (el && el.classList.contains('pv-swap-blocker--visible')) {
+                if (activeTarget !== target) showBlocker(target);
+                return;
+            }
+            showTimer = setTimeout(() => {
+                if (depth > 0) showBlocker(target);
+            }, SHOW_DELAY_MS);
+        }
+
+        document.body.addEventListener('htmx:beforeRequest', e => {
+            requestBlocker(e.detail);
+        });
+        document.body.addEventListener('htmx:afterRequest', hideBlocker);
+        document.body.addEventListener('htmx:sendError', hideBlocker);
+        document.body.addEventListener('htmx:timeout', hideBlocker);
+        document.body.addEventListener('htmx:responseError', hideBlocker);
+
+        function repositionIfVisible() {
+            if (depth > 0 && activeTarget) positionBlocker(activeTarget);
+        }
+        window.addEventListener('scroll', repositionIfVisible, true);
+        window.addEventListener('resize', repositionIfVisible);
+
+        window.pvSwapBlock = {
+            show(target) {
+                if (!target) return;
+                depth += 1;
+                clearTimeout(showTimer);
+                showTimer = setTimeout(() => showBlocker(target), SHOW_DELAY_MS);
+            },
+            hide() {
+                hideBlocker();
+            },
+        };
+    })();
+
     document.addEventListener('alpine:init', () => {
         // Shared sidebar / theme / nav-active state.
         Alpine.data('pyvelm', () => ({
@@ -821,9 +965,9 @@
                 this._resolve = cfg.onResult || null;
                 this._x = null;
                 this._y = null;
-                this.loading = true;
                 this.open = true;
                 await this.$nextTick();
+                const contentEl = this.$refs.content;
                 try {
                     if (cfg.url && window.htmx) {
                         // `htmx.ajax` processes the swapped DOM so
@@ -832,7 +976,7 @@
                         // MutationObserver picks up the x-data
                         // widgets automatically.
                         await window.htmx.ajax('GET', cfg.url, {
-                            target: this.$refs.content,
+                            target: contentEl,
                             swap: 'innerHTML',
                             headers: {
                                 'HX-Request': 'true',
@@ -841,7 +985,6 @@
                         });
                     }
                 } finally {
-                    this.loading = false;
                     await this.$nextTick();
                     this.center();
                 }
@@ -985,10 +1128,6 @@
                 window.pvToast(flash, { title: 'Apps', variant: 'success' });
             }
         };
-        // After Alpine has mounted global chrome (toast stack, dialog).
-        document.addEventListener('alpine:initialized', () => {
-            window.pvConsumeFlash();
-        });
 
         // ── Replace hx-confirm with the draggable pvConfirm dialog ──
         // ── CSRF: inject X-CSRF-Token on every HTMX request ──
@@ -1006,6 +1145,7 @@
             const token = pvReadCsrf();
             if (token) e.detail.headers['X-CSRF-Token'] = token;
         });
+
         // Inject a hidden `_csrf` into every plain (non-HTMX) POST form
         // so the logout button, password-change form, and any future
         // direct browser submit pass CSRF without per-template plumbing.

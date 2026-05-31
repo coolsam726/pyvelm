@@ -55,6 +55,26 @@ class DialectCapabilitiesTests(unittest.TestCase):
         cap = dialect_capabilities("postgresql")
         self.assertIn("ILIKE", ilike_sql('"t"."name"', cap))
 
+    def test_mysql_capabilities(self):
+        cap = dialect_capabilities("mysql")
+        self.assertFalse(cap.supports_ilike)
+        self.assertFalse(cap.supports_returning)
+        self.assertIn("LOWER", ilike_sql('"t"."name"', cap))
+        self.assertIn("AUTO_INCREMENT", serial_primary_key(cap))
+
+    def test_mariadb_normalised_to_mysql(self):
+        self.assertEqual(
+            normalize_dsn("mariadb://u:p@localhost/db"),
+            "mariadb+pymysql://u:p@localhost/db",
+        )
+        self.assertEqual(dialect_capabilities("mariadb").name, "mysql")
+
+    def test_mysql_dsn_normalisation(self):
+        self.assertEqual(
+            normalize_dsn("mysql://u:p@localhost/db"),
+            "mysql+pymysql://u:p@localhost/db",
+        )
+
 
 class SqliteDatabaseTests(unittest.TestCase):
     def test_create_table_and_insert(self):
@@ -81,6 +101,14 @@ class MigrationSupportedTests(unittest.TestCase):
         cap = dialect_capabilities("sqlite")
         conn = mock.Mock()
         conn.dialect_name = "sqlite"
+        self.assertFalse(
+            migration_supported(conn, ("postgresql",))
+        )
+
+    def test_skips_postgres_only_on_mysql(self):
+        cap = dialect_capabilities("mysql")
+        conn = mock.Mock()
+        conn.dialect_name = "mysql"
         self.assertFalse(
             migration_supported(conn, ("postgresql",))
         )

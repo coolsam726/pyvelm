@@ -90,3 +90,43 @@ jobs:
 
       - name: Run database portability tests
         run: pytest pyvelm/tests/test_database.py pyvelm/tests/test_database_routing.py -q
+
+  test-mariadb:
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: pyvelm
+          MARIADB_DATABASE: pyvelm_test
+          MARIADB_USER: pyvelm
+          MARIADB_PASSWORD: pyvelm
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      PYVELM_DSN_TEST: mysql+pymysql://pyvelm:pyvelm@127.0.0.1:3306/pyvelm_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install package and test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,geo]"
+
+      - name: Run MariaDB portability tests
+        run: |
+          pytest pyvelm/tests/test_database.py pyvelm/tests/test_database_routing.py \
+            pyvelm/tests/test_http_smoke.py -q

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pyvelm import BaseModel, Boolean, Char, Integer, Many2one
 
-from ..constants import MENU_LAYOUT_CHOICES
+from ..constants import FONT_FAMILY_CHOICES, MENU_LAYOUT_CHOICES
 
 
 class Company(BaseModel):
@@ -39,6 +39,7 @@ class Company(BaseModel):
     font_family = Char(
         default="",
         string="Font family",
+        choices=FONT_FAMILY_CHOICES,
     )
 
     # White-label chrome (sidebar, login, footer). Empty fields fall back to

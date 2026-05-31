@@ -16,7 +16,7 @@ Customize how the UI looks for each company (or globally via environment variabl
 | **Show app name in header** | When off, only the logo (or default tile) shows in the sidebar / top bar |
 | **Favicon URL** | Browser tab icon |
 | **Primary color** | Accent palette (buttons, links, default logo tile) |
-| **Font family** | UI typeface via [Google Fonts](https://fonts.google.com/) (exact family name, e.g. `Roboto`, `Open Sans`). Empty = Inter; global default via `PYVELM_FONT_FAMILY`. |
+| **Font family** | UI typeface — pick from curated Google Fonts (empty = Inter; global default via `PYVELM_FONT_FAMILY`) |
 | **Copyright** | Footer legal line |
 | **Support email / URL** | Footer links |
 | **Show powered by pyvelm** | Hide the small “Powered by pyvelm” line when off |

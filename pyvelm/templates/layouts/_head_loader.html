@@ -1,0 +1,50 @@
+{# Boot + HTMX swap loader — one element (#pv-swap-blocker), two modes. #}
+<style>
+  #pv-swap-blocker {
+    position: fixed;
+    z-index: 62;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, var(--color-neutral-primary) 88%, transparent);
+    backdrop-filter: blur(3px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+  #pv-swap-blocker.pv-swap-blocker--visible,
+  html.pv-app-loading #pv-swap-blocker {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  html.pv-app-loading #pv-swap-blocker {
+    inset: 0;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    z-index: 9999;
+  }
+  #pv-swap-blocker .pv-swap-blocker__spinner {
+    width: 2rem;
+    height: 2rem;
+    color: var(--color-fg-brand);
+    animation: pv-swap-blocker-spin 0.75s linear infinite;
+  }
+  @keyframes pv-swap-blocker-spin {
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #pv-swap-blocker { transition: none; }
+    #pv-swap-blocker .pv-swap-blocker__spinner {
+      animation: none;
+    }
+  }
+</style>
+<script>
+    document.documentElement.classList.add('pv-app-loading');
+</script>

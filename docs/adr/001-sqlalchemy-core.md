@@ -10,8 +10,9 @@ Pyvelm today speaks PostgreSQL only: hand-built SQL strings (`%s` binds, `ILIKE`
 `information_schema`, `DROP SCHEMA`), psycopg 3 connections, and
 `psycopg_pool.ConnectionPool`. The product goal for **v1.x** is:
 
-1. **Portability (v1.0)** — run on PostgreSQL *or* SQLite with one DSN per process.
-2. **Multi-DB routing (v1.1+)** — one process serving many PostgreSQL databases
+1. **Portability (v1.0 → v1.2)** — run on PostgreSQL, SQLite, MySQL/MariaDB, and
+   Oracle with one DSN per process.
+2. **Multi-DB routing (v1.3+)** — one process serving many PostgreSQL databases
    (Odoo-style tenancy), built on the same connection layer.
 
 Maintaining parallel SQL for every backend in `model.py`, `domain.py`, and
@@ -58,7 +59,7 @@ not accidental bugs.
 
 - One compilation path for DML/DDL/domain across backends.
 - Inspector-based autogen works on SQLite and future MySQL/Oracle.
-- Engine abstraction prepares for v1.1 multi-DB `pool_map` without rewriting ORM.
+- Engine abstraction prepares for future multi-DB `pool_map` without rewriting ORM.
 
 **Negative**
 
@@ -84,4 +85,5 @@ not accidental bugs.
 
 - [docs/multi-database.md](../multi-database.md) — user-facing guide, roadmap, and
   implementation status
-- Plan: v1.0 Postgres+SQLite, v1.1 multi-DB routing, v1.2 MySQL/MariaDB
+- Plan: v1.0 Postgres+SQLite, **v1.1 MySQL/MariaDB**, **v1.2 Oracle**,
+  **v1.3+ multi-DB routing** (preview in tree)

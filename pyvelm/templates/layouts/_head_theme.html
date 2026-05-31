@@ -1,8 +1,8 @@
 {# Per-company primary palette — include AFTER /web/static/dist/pyvelm.css so
    these :root overrides win over the default indigo @theme tokens. #}
 {% if company_theme_style %}
-<style id="pv-company-theme">{{ company_theme_style }}</style>
+<style id="pv-company-theme">{{ company_theme_style | safe }}</style>
 {% endif %}
 {% if company_font_style is defined and company_font_style %}
-<style id="pv-company-font">{{ company_font_style }}</style>
+<style id="pv-company-font">{{ company_font_style | safe }}</style>
 {% endif %}

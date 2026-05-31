@@ -132,7 +132,13 @@ def brand_dict(
     company_id: int | None = None,
 ) -> dict[str, Any]:
     """Resolved branding for templates (``brand`` context key)."""
-    cid = env.company_id if (env is not None and company_id is None) else company_id
+    from pyvelm.fonts import resolve_branding_company_id
+
+    cid = (
+        resolve_branding_company_id(env, company_id=company_id)
+        if env is not None
+        else company_id
+    )
     co = _load_company_branding(env, cid) if env is not None else None
 
     app_name = _pick_str(

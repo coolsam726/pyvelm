@@ -24,22 +24,6 @@ Maintained by [Sam Maosa](https://github.com/coolsam726) alongside
 [nested-comments](https://github.com/coolsam726/nested-comments), and other packages —
 [**sponsor on GitHub**](https://github.com/sponsors/coolsam726) (one profile, all projects).
 
-## Live demo
-
-Try PyVELM in the browser — no install required:
-
-1. Open **[https://pyvelm.vercel.app/](https://pyvelm.vercel.app/)**
-2. Click **Sign in** (or **Get started** on the landing page)
-3. Sign in with the default demo credentials:
-
-   | Field | Value |
-   |-------|-------|
-   | **Login** | `admin` |
-   | **Password** | `admin` |
-
-The hosted demo may be unavailable while serverless hosting is experimental.
-For a reliable setup use **Docker Compose** below or [Deploying](deployment.md).
-
 ## Quick start
 
 **From PyPI** (scaffold a new app):

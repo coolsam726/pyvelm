@@ -493,7 +493,7 @@ def _apply_nullability(
 ) -> None:
     from pyvelm.database import _conn_capabilities
 
-    if _conn_capabilities(env.conn).name == "sqlite":
+    if _conn_capabilities(env.conn).name in ("sqlite", "mysql"):
         return
     for alt in diff.alterations:
         if alt.kind == "set_not_null":

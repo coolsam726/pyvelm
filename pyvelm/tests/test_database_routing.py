@@ -1,4 +1,4 @@
-"""Tests for multi-database routing (v1.1)."""
+"""Tests for multi-database routing (preview — v1.3+ target)."""
 from __future__ import annotations
 
 import os
