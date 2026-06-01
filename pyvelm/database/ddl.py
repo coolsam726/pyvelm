@@ -183,12 +183,20 @@ def string_sql_type(cap: DialectCapabilities, *, primary_key: bool = False) -> s
 
 def ir_module_create_sql(cap: DialectCapabilities) -> str:
     ts = timestamp_sql_type(cap)
-    default = now_sql(cap)
     name_type = string_sql_type(cap, primary_key=True)
     version_type = string_sql_type(cap)
-    column_ddl = (
-        f'"name" {name_type} PRIMARY KEY, '
-        f'"version" {version_type} NOT NULL, '
-        f'"installed_at" {ts} NOT NULL DEFAULT {default}'
-    )
+    if cap.name in ("postgresql", "sqlite"):
+        default = now_sql(cap)
+        column_ddl = (
+            f'"name" {name_type} PRIMARY KEY, '
+            f'"version" {version_type} NOT NULL, '
+            f'"installed_at" {ts} NOT NULL DEFAULT {default}'
+        )
+    else:
+        # Oracle and some MySQL/MSSQL modes reject expression defaults here.
+        column_ddl = (
+            f'"name" {name_type} PRIMARY KEY, '
+            f'"version" {version_type} NOT NULL, '
+            f'"installed_at" {ts} NOT NULL'
+        )
     return create_table_sql("ir_module", column_ddl, cap)

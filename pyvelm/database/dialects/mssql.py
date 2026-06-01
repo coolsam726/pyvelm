@@ -55,6 +55,10 @@ def serial_primary_key() -> str:
 
 def fetch_lastrowid(conn: ConnectionAdapter, table: str) -> int:
     row = conn.execute("SELECT CAST(SCOPE_IDENTITY() AS INTEGER)").fetchone()
+    if row and row[0] is not None:
+        return int(row[0])
+    # Fallback for edge cases where SCOPE_IDENTITY() returns NULL.
+    row = conn.execute(f'SELECT MAX("id") FROM "{table}"').fetchone()
     return int(row[0]) if row and row[0] is not None else 0
 
 

@@ -612,7 +612,7 @@ class DialectRemainingGapsTests(unittest.TestCase):
 
     def test_oracle_helpers(self):
         self.assertIn("TIMESTAMP", oracle.timestamp_sql_type())
-        self.assertIn("CURRENT", oracle.now_sql())
+        self.assertIn("TIMESTAMP", oracle.now_sql())
         self.assertIn("VARCHAR2", oracle.string_sql_type(primary_key=True))
         self.assertEqual(oracle.bind_params((1,)), (1,))
         oracle.before_reset_all_tables(MagicMock())

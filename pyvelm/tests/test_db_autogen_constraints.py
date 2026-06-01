@@ -56,6 +56,8 @@ def _mock_env(rows, cls, *, null_check_returns=None):
 
     conn = MagicMock()
     executed: list[str] = []
+    # conn_capabilities() should fall back to dialect_name in these tests.
+    conn.capabilities = None
     conn.dialect_name = "postgresql"
 
     def execute(sql, params=None):
