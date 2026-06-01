@@ -139,14 +139,14 @@ Steps:
    verbatim (including `### Added` / `### Fixed` headings). GitHub Release
    bodies use the same text via CI (`scripts/extract_changelog.py`).
 
-4. **Watch the release workflow.** The tag push fires three jobs in
-   sequence:
-   - `build` — sdist + wheel + `twine check`.
-   - `publish-pypi` — uploads to PyPI via OIDC trusted publishing.
-     No API token; configure once on the PyPI project page.
-   - `github-release` — publishes a GitHub Release with the wheel +
-     sdist attached and **release notes from CHANGELOG.md** (not the
-     auto-generated commit list).
+4. **Watch the release workflows.** The tag push fires:
+   - **release** (`release.yml`) — `build` (sdist + wheel + `twine check`),
+     then `publish-pypi` (PyPI via OIDC trusted publishing; no API token),
+     then `github-release` (wheel + sdist attached; **release notes from
+     CHANGELOG.md**, not the auto-generated commit list).
+   - **docs** (`docs.yml`) — `mkdocs build --strict` and deploy to GitHub
+     Pages from the tagged tree. Docs are **not** rebuilt on every `main`
+     push; fix doc links locally with `mkdocs build --strict` before tagging.
 
    To fix an existing release body after the fact:
 

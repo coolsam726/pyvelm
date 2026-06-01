@@ -1,23 +1,19 @@
-# Build the MkDocs site on every push to main and publish via the
-# official GitHub Pages deploy action (Pages → "Build and deployment"
-# → Source = "GitHub Actions" must be enabled once in the repo
-# settings; nothing else needs configuration).
+# Build the MkDocs site and publish to GitHub Pages when a release tag
+# is pushed (`v*`). Pages → "Build and deployment" → Source = "GitHub
+# Actions" must be enabled once in the repo settings.
 #
-# Manual runs via the Actions tab are wired up too for one-off
-# rebuilds (e.g. after fixing only docstrings).
+# Manual runs via the Actions tab are wired up too for one-off rebuilds
+# (e.g. after fixing only docstrings).
+#
+# Docs are not rebuilt on every `main` push — only on release tags (and
+# workflow_dispatch). Run `mkdocs build --strict` locally before merging.
 
 name: docs
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "docs/**"
-      - "pyvelm/**.py"
-      - "mkdocs.yml"
-      - "pyproject.toml"
-      - ".github/workflows/docs.yml"
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:

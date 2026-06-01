@@ -9,6 +9,8 @@ out of the 0.x line.
 
 ### Changed
 
+- **docs CI** — `.github/workflows/docs.yml` deploys to GitHub Pages on `v*`
+  release tags (and `workflow_dispatch`) only, not on every `main` push.
 - **MySQL / MariaDB (v1.1 WIP)** — `DialectCapabilities` for `mysql`/`mariadb`,
   DSN normalisation (`mysql+pymysql://`), portable DDL/type mapping, schema reset,
   MariaDB CI job + HTTP smoke. Requires `pymysql` (core dependency).
