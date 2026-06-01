@@ -191,7 +191,7 @@ def domain_to_sql(
     mode the third return value is always ``""`` — read ``joins`` instead.
     """
     if not domain:
-        return "TRUE", [], ""
+        return "1=1", [], ""
 
     from .database import dialect_capabilities, ilike_sql
 
@@ -338,14 +338,14 @@ def domain_to_sql(
         elif leaf_op == "in":
             values = [_coerce(leaf_field, v) for v in value]
             if not values:
-                return ("TRUE", []) if universal else ("FALSE", [])
+                return ("1=1", []) if universal else ("1=0", [])
             placeholders = ",".join(["%s"] * len(values))
             inner_clauses.append(f"{leaf_ref} IN ({placeholders})")
             inner_params.extend(values)
         elif leaf_op == "not in":
             values = [_coerce(leaf_field, v) for v in value]
             if not values:
-                return ("TRUE", []) if universal else ("TRUE", [])
+                return ("1=1", []) if universal else ("1=1", [])
             placeholders = ",".join(["%s"] * len(values))
             inner_clauses.append(f"{leaf_ref} NOT IN ({placeholders})")
             inner_params.extend(values)
@@ -418,14 +418,14 @@ def domain_to_sql(
         if op == "in":
             values = [_coerce(field, v) for v in value]
             if not values:
-                return "FALSE", leaf_params
+                return "1=0", leaf_params
             placeholders = ",".join(["%s"] * len(values))
             leaf_params.extend(values)
             return f"{col_sql} IN ({placeholders})", leaf_params
         if op == "not in":
             values = [_coerce(field, v) for v in value]
             if not values:
-                return "TRUE", leaf_params
+                return "1=1", leaf_params
             placeholders = ",".join(["%s"] * len(values))
             leaf_params.extend(values)
             return f"{col_sql} NOT IN ({placeholders})", leaf_params

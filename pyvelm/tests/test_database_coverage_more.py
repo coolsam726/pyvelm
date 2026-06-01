@@ -479,6 +479,14 @@ class ConnectionAdapterMoreTests(unittest.TestCase):
         self.assertEqual(cap.placeholder, "?")
         self.assertEqual(adapter._convert_sql('WHERE "name" = %s'), 'WHERE "name" = ?')
 
+    def test_placeholder_conversion_oracle(self):
+        cap = dialect_caps("oracle")
+        adapter = ConnectionAdapter(MagicMock(), capabilities=cap)
+        self.assertEqual(
+            adapter._convert_sql('WHERE "name" = %s AND "version" = %s'),
+            'WHERE "name" = :1 AND "version" = :2',
+        )
+
     def test_commit_rollback_via_dbapi(self):
         dbapi = MagicMock()
         dbapi.autocommit = False

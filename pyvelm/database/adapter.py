@@ -78,9 +78,17 @@ class ConnectionAdapter:
             self._dbapi.autocommit = bool(value)
 
     def _convert_sql(self, sql: str) -> str:
-        if self.capabilities.placeholder == "%s":
-            return sql
         if "%s" not in sql:
+            return sql
+        if self.capabilities.name == "oracle":
+            # oracledb expects numeric bind markers (:1, :2, ...).
+            parts = sql.split("%s")
+            out = [parts[0]]
+            for idx, part in enumerate(parts[1:], start=1):
+                out.append(f":{idx}")
+                out.append(part)
+            return "".join(out)
+        if self.capabilities.placeholder == "%s":
             return sql
         return sql.replace("%s", "?")
 
