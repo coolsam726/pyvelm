@@ -124,7 +124,10 @@ def reset_schema(conn: ConnectionAdapter, cap: DialectCapabilities) -> None:
         else:
             tables = inspect(conn._sa.engine).get_table_names()
         for table in tables:
-            conn.execute(f'DROP TABLE IF EXISTS "{table}"')
+            if cap.name == "oracle":
+                conn.execute(f'DROP TABLE "{table}"')
+            else:
+                conn.execute(f'DROP TABLE IF EXISTS "{table}"')
         backend.after_reset_all_tables(conn)
         return
 

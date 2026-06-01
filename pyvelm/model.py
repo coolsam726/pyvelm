@@ -359,7 +359,16 @@ class BaseModel(metaclass=MetaModel):
         from .database import _conn_capabilities
 
         cap = _conn_capabilities(conn)
-        cascade = "" if cap.name in ("sqlite", "mysql", "mssql", "oracle") else " CASCADE"
+        if cap.name == "oracle":
+            try:
+                conn.execute(f'DROP TABLE "{cls._table}"')
+            except Exception as exc:
+                msg = str(getattr(exc, "orig", exc)).lower()
+                if "does not exist" in msg or "ora-00942" in msg:
+                    return
+                raise
+            return
+        cascade = "" if cap.name in ("sqlite", "mysql", "mssql") else " CASCADE"
         conn.execute(f'DROP TABLE IF EXISTS "{cls._table}"{cascade}')
 
     @classmethod
