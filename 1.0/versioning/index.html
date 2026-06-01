@@ -1159,6 +1159,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#when-docs-are-built-vs-published" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When docs are built vs published
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#local-preview" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2126,6 +2137,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#when-docs-are-built-vs-published" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When docs are built vs published
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#local-preview" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2171,6 +2193,36 @@
 <p>The site is published with <a href="https://github.com/jimporter/mike">mike</a> on the
 <code>gh-pages</code> branch. Each <strong>release tag</strong> (<code>v*</code>) deploys a versioned subtree;
 <strong>latest</strong> is the default alias (root redirect).</p>
+<h2 id="when-docs-are-built-vs-published">When docs are built vs published<a class="headerlink" href="#when-docs-are-built-vs-published" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Trigger</th>
+<th>What runs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pull request to <code>main</code></td>
+<td><code>mkdocs build --strict</code> only (CI gate, no publish)</td>
+</tr>
+<tr>
+<td>Push tag <code>v*</code> (e.g. <code>v1.0.0</code>)</td>
+<td><code>mike deploy</code> → <code>gh-pages</code>, then GitHub Pages rebuild</td>
+</tr>
+<tr>
+<td><code>workflow_dispatch</code></td>
+<td>Same as a tag deploy (manual version input)</td>
+</tr>
+</tbody>
+</table>
+<p>Doc changes on <code>main</code> are <strong>not</strong> published until you cut a release tag (or run
+the docs workflow manually). That keeps the version picker aligned with releases.</p>
+<p><strong>GitHub Pages source</strong> must be <strong>Deploy from a branch → <code>gh-pages</code> / <code>(root)</code></strong>,
+not “GitHub Actions” or <code>main</code>. If the live site shows an old flat build with no
+version picker, fix Pages settings and run:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>repos/coolsam726/pyvelm/pages/builds
+</span></code></pre></div>
 <table>
 <thead>
 <tr>
@@ -2199,37 +2251,42 @@
 </table>
 <p>Use the version picker in the header to switch.</p>
 <h2 id="local-preview">Local preview<a class="headerlink" href="#local-preview" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[docs]&quot;</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Current tree (no version prefix — good for editing)</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>mkdocs<span class="w"> </span>serve
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># Match a versioned deploy layout</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>mike<span class="w"> </span>serve
+<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[docs]&quot;</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Current tree (no version prefix — good for editing)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>mkdocs<span class="w"> </span>serve
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Match a versioned deploy layout</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>mike<span class="w"> </span>serve
 </span></code></pre></div>
 <h2 id="maintainer-commands">Maintainer commands<a class="headerlink" href="#maintainer-commands" title="Permanent link">&para;</a></h2>
 <p>After merging doc changes on <code>main</code>, cut a release tag. CI runs
 <code>.github/workflows/docs.yml</code> and executes:</p>
-<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>mike<span class="w"> </span>deploy<span class="w"> </span>--push<span class="w"> </span>--update-aliases<span class="w"> </span>&lt;version&gt;<span class="w"> </span>latest
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>mike<span class="w"> </span>set-default<span class="w"> </span>--push<span class="w"> </span>latest
+<div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>mike<span class="w"> </span>deploy<span class="w"> </span>--push<span class="w"> </span>--update-aliases<span class="w"> </span>&lt;version&gt;<span class="w"> </span>latest
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>mike<span class="w"> </span>set-default<span class="w"> </span>--push<span class="w"> </span>latest
 </span></code></pre></div>
 <p>Manual deploy (same as CI, from a clean <code>main</code> checkout):</p>
-<div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>fetch<span class="w"> </span>origin<span class="w"> </span>main
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[docs]&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>git<span class="w"> </span>config<span class="w"> </span>user.name<span class="w"> </span><span class="s2">&quot;you&quot;</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>git<span class="w"> </span>config<span class="w"> </span>user.email<span class="w"> </span><span class="s2">&quot;you@example.com&quot;</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nv">VERSION</span><span class="o">=</span><span class="m">1</span>.0<span class="w">   </span><span class="c1"># no leading v in mike paths</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>mike<span class="w"> </span>deploy<span class="w"> </span>--push<span class="w"> </span>--update-aliases<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$VERSION</span><span class="s2">&quot;</span><span class="w"> </span>latest
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>mike<span class="w"> </span>set-default<span class="w"> </span>--push<span class="w"> </span>latest
+<div class="highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>git<span class="w"> </span>fetch<span class="w"> </span>origin<span class="w"> </span>main
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[docs]&quot;</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>git<span class="w"> </span>config<span class="w"> </span>user.name<span class="w"> </span><span class="s2">&quot;you&quot;</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>git<span class="w"> </span>config<span class="w"> </span>user.email<span class="w"> </span><span class="s2">&quot;you@example.com&quot;</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nv">VERSION</span><span class="o">=</span><span class="m">1</span>.0<span class="w">   </span><span class="c1"># no leading v in mike paths</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>mike<span class="w"> </span>deploy<span class="w"> </span>--push<span class="w"> </span>--update-aliases<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$VERSION</span><span class="s2">&quot;</span><span class="w"> </span>latest
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>mike<span class="w"> </span>set-default<span class="w"> </span>--push<span class="w"> </span>latest
 </span></code></pre></div>
-<p>Backfill an older release from its tag (optional):</p>
-<div class="highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>git<span class="w"> </span>checkout<span class="w"> </span>v0.26.2
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>mike<span class="w"> </span>deploy<span class="w"> </span>--push<span class="w"> </span>--update-aliases<span class="w"> </span><span class="m">0</span>.26<span class="w"> </span>latest<span class="w">   </span><span class="c1"># omit --update-aliases to keep latest on 1.0</span>
+<p>Backfill an older release (e.g. <strong>0.26</strong> for <code>v0.26.2</code>) without moving <strong>latest</strong>:</p>
+<ol>
+<li>Actions → <strong>docs</strong> → <strong>Run workflow</strong></li>
+<li>Set version to <code>0.26</code>, turn off <strong>update latest</strong></li>
+<li>Or locally:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>git<span class="w"> </span>checkout<span class="w"> </span>v0.26.2
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>mike<span class="w"> </span>deploy<span class="w"> </span>--push<span class="w"> </span><span class="m">0</span>.26<span class="w">   </span><span class="c1"># do not pass latest if 1.0 should stay default</span>
 </span></code></pre></div>
 <p>Validate links before tagging:</p>
-<div class="highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict
+<div class="highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict
 </span></code></pre></div>
 <p>See <a href="https://github.com/coolsam726/pyvelm/blob/main/CONTRIBUTING.md#documentation">CONTRIBUTING.md</a>.</p>
 

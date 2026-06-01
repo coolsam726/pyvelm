@@ -4400,7 +4400,8 @@ legacy inline SVG) and no <code>parent</code> or
 e.g. <code>"partners.business"</code> for group <code>business</code> in module
 <code>partners</code>) and an <code>href</code> (typically <code>/web/views/&lt;module&gt;/&lt;view&gt;</code>).</p>
 <p>Prefer :class:<code>~pyvelm.builders.Menus</code> so <code>parent</code> and <code>href</code> are
-derived from short group names and view names.</p>
+derived from short group names and view names. Nested trees use
+:class:<code>~pyvelm.builders.MenuBranch</code> (<code>m.group(...).children([...])</code>).</p>
 
 
 
@@ -4430,7 +4431,8 @@ derived from short group names and view names.</p>
 <span class="normal"><a href="#__codelineno-0-565">565</a></span>
 <span class="normal"><a href="#__codelineno-0-566">566</a></span>
 <span class="normal"><a href="#__codelineno-0-567">567</a></span>
-<span class="normal"><a href="#__codelineno-0-568">568</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-549"><a id="__codelineno-0-549" name="__codelineno-0-549"></a><span class="k">class</span><span class="w"> </span><span class="nc">Menu</span><span class="p">(</span><span class="n">_MenuRequired</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-568">568</a></span>
+<span class="normal"><a href="#__codelineno-0-569">569</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-549"><a id="__codelineno-0-549" name="__codelineno-0-549"></a><span class="k">class</span><span class="w"> </span><span class="nc">Menu</span><span class="p">(</span><span class="n">_MenuRequired</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 </span><span id="__span-0-550"><a id="__codelineno-0-550" name="__codelineno-0-550"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;One entry in a module&#39;s ``MENUS`` list.</span>
 </span><span id="__span-0-551"><a id="__codelineno-0-551" name="__codelineno-0-551"></a>
 </span><span id="__span-0-552"><a id="__codelineno-0-552" name="__codelineno-0-552"></a><span class="sd">    Top-level groups have an ``icon`` (Heroicons name like ``&quot;home&quot;`` or</span>
@@ -4440,16 +4442,17 @@ derived from short group names and view names.</p>
 </span><span id="__span-0-556"><a id="__codelineno-0-556" name="__codelineno-0-556"></a><span class="sd">    ``partners``) and an ``href`` (typically ``/web/views/&lt;module&gt;/&lt;view&gt;``).</span>
 </span><span id="__span-0-557"><a id="__codelineno-0-557" name="__codelineno-0-557"></a>
 </span><span id="__span-0-558"><a id="__codelineno-0-558" name="__codelineno-0-558"></a><span class="sd">    Prefer :class:`~pyvelm.builders.Menus` so ``parent`` and ``href`` are</span>
-</span><span id="__span-0-559"><a id="__codelineno-0-559" name="__codelineno-0-559"></a><span class="sd">    derived from short group names and view names.</span>
-</span><span id="__span-0-560"><a id="__codelineno-0-560" name="__codelineno-0-560"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-561"><a id="__codelineno-0-561" name="__codelineno-0-561"></a>
-</span><span id="__span-0-562"><a id="__codelineno-0-562" name="__codelineno-0-562"></a>    <span class="n">icon</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-0-563"><a id="__codelineno-0-563" name="__codelineno-0-563"></a>    <span class="n">href</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-0-564"><a id="__codelineno-0-564" name="__codelineno-0-564"></a>    <span class="n">parent</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># fully qualified: &quot;&lt;module&gt;.&lt;menu_name&gt;&quot;</span>
-</span><span id="__span-0-565"><a id="__codelineno-0-565" name="__codelineno-0-565"></a>    <span class="n">sequence</span><span class="p">:</span> <span class="nb">int</span>
-</span><span id="__span-0-566"><a id="__codelineno-0-566" name="__codelineno-0-566"></a>    <span class="n">access_model</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># gate visibility on this model …</span>
-</span><span id="__span-0-567"><a id="__codelineno-0-567" name="__codelineno-0-567"></a>    <span class="n">access_perm</span><span class="p">:</span> <span class="nb">str</span>   <span class="c1"># … with this perm (default &quot;read&quot;)</span>
-</span><span id="__span-0-568"><a id="__codelineno-0-568" name="__codelineno-0-568"></a>    <span class="n">access_policy</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># optional policy method name for recordless gating</span>
+</span><span id="__span-0-559"><a id="__codelineno-0-559" name="__codelineno-0-559"></a><span class="sd">    derived from short group names and view names. Nested trees use</span>
+</span><span id="__span-0-560"><a id="__codelineno-0-560" name="__codelineno-0-560"></a><span class="sd">    :class:`~pyvelm.builders.MenuBranch` (``m.group(...).children([...])``).</span>
+</span><span id="__span-0-561"><a id="__codelineno-0-561" name="__codelineno-0-561"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-562"><a id="__codelineno-0-562" name="__codelineno-0-562"></a>
+</span><span id="__span-0-563"><a id="__codelineno-0-563" name="__codelineno-0-563"></a>    <span class="n">icon</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-0-564"><a id="__codelineno-0-564" name="__codelineno-0-564"></a>    <span class="n">href</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-0-565"><a id="__codelineno-0-565" name="__codelineno-0-565"></a>    <span class="n">parent</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># fully qualified: &quot;&lt;module&gt;.&lt;menu_name&gt;&quot;</span>
+</span><span id="__span-0-566"><a id="__codelineno-0-566" name="__codelineno-0-566"></a>    <span class="n">sequence</span><span class="p">:</span> <span class="nb">int</span>
+</span><span id="__span-0-567"><a id="__codelineno-0-567" name="__codelineno-0-567"></a>    <span class="n">access_model</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># gate visibility on this model …</span>
+</span><span id="__span-0-568"><a id="__codelineno-0-568" name="__codelineno-0-568"></a>    <span class="n">access_perm</span><span class="p">:</span> <span class="nb">str</span>   <span class="c1"># … with this perm (default &quot;read&quot;)</span>
+</span><span id="__span-0-569"><a id="__codelineno-0-569" name="__codelineno-0-569"></a>    <span class="n">access_policy</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># optional policy method name for recordless gating</span>
 </span></code></pre></div></td></tr></table></div>
               </details>
 
@@ -4509,8 +4512,7 @@ catalog metadata) has sensible defaults.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>pyvelm/types.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-578">578</a></span>
-<span class="normal"><a href="#__codelineno-0-579">579</a></span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-579">579</a></span>
 <span class="normal"><a href="#__codelineno-0-580">580</a></span>
 <span class="normal"><a href="#__codelineno-0-581">581</a></span>
 <span class="normal"><a href="#__codelineno-0-582">582</a></span>
@@ -4540,38 +4542,39 @@ catalog metadata) has sensible defaults.</p>
 <span class="normal"><a href="#__codelineno-0-606">606</a></span>
 <span class="normal"><a href="#__codelineno-0-607">607</a></span>
 <span class="normal"><a href="#__codelineno-0-608">608</a></span>
-<span class="normal"><a href="#__codelineno-0-609">609</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-578"><a id="__codelineno-0-578" name="__codelineno-0-578"></a><span class="k">class</span><span class="w"> </span><span class="nc">Manifest</span><span class="p">(</span><span class="n">_ManifestRequired</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-</span><span id="__span-0-579"><a id="__codelineno-0-579" name="__codelineno-0-579"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Shape of a ``__pyvelm__.py`` manifest&#39;s module-level globals.</span>
-</span><span id="__span-0-580"><a id="__codelineno-0-580" name="__codelineno-0-580"></a>
-</span><span id="__span-0-581"><a id="__codelineno-0-581" name="__codelineno-0-581"></a><span class="sd">    The loader reads these as individual attributes, so a manifest</span>
-</span><span id="__span-0-582"><a id="__codelineno-0-582" name="__codelineno-0-582"></a><span class="sd">    declares them at module scope rather than building a dict named</span>
-</span><span id="__span-0-583"><a id="__codelineno-0-583" name="__codelineno-0-583"></a><span class="sd">    Manifest. This TypedDict exists for tooling that wants to</span>
-</span><span id="__span-0-584"><a id="__codelineno-0-584" name="__codelineno-0-584"></a><span class="sd">    validate a manifest as a single shape.</span>
-</span><span id="__span-0-585"><a id="__codelineno-0-585" name="__codelineno-0-585"></a>
-</span><span id="__span-0-586"><a id="__codelineno-0-586" name="__codelineno-0-586"></a><span class="sd">    Only ``NAME`` and ``VERSION`` are strictly required by the loader;</span>
-</span><span id="__span-0-587"><a id="__codelineno-0-587" name="__codelineno-0-587"></a><span class="sd">    everything else (the install hook, model package, dependencies,</span>
-</span><span id="__span-0-588"><a id="__codelineno-0-588" name="__codelineno-0-588"></a><span class="sd">    catalog metadata) has sensible defaults.</span>
-</span><span id="__span-0-589"><a id="__codelineno-0-589" name="__codelineno-0-589"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-590"><a id="__codelineno-0-590" name="__codelineno-0-590"></a>
-</span><span id="__span-0-591"><a id="__codelineno-0-591" name="__codelineno-0-591"></a>    <span class="n">DEPENDS</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
-</span><span id="__span-0-592"><a id="__codelineno-0-592" name="__codelineno-0-592"></a>    <span class="n">DATA</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
-</span><span id="__span-0-593"><a id="__codelineno-0-593" name="__codelineno-0-593"></a>    <span class="n">MODELS_PACKAGE</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-0-594"><a id="__codelineno-0-594" name="__codelineno-0-594"></a>    <span class="n">MIGRATIONS_PACKAGE</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-0-595"><a id="__codelineno-0-595" name="__codelineno-0-595"></a>    <span class="n">INSTALL_HOOK</span><span class="p">:</span> <span class="nb">str</span>            <span class="c1"># dotted reference, e.g. &quot;pkg.mod:fn&quot;</span>
-</span><span id="__span-0-596"><a id="__codelineno-0-596" name="__codelineno-0-596"></a>    <span class="n">SYNC_HOOK</span><span class="p">:</span> <span class="nb">str</span>               <span class="c1"># runs on Apps Sync (installed, same version)</span>
-</span><span id="__span-0-597"><a id="__codelineno-0-597" name="__codelineno-0-597"></a>    <span class="n">WEB_ROUTES</span><span class="p">:</span> <span class="nb">str</span>              <span class="c1"># dotted ``register_routes(app)`` hook</span>
-</span><span id="__span-0-598"><a id="__codelineno-0-598" name="__codelineno-0-598"></a>    <span class="n">COMMANDS</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>         <span class="c1"># dotted Command classes, e.g. &quot;pkg.cmd:MyCommand&quot;</span>
-</span><span id="__span-0-599"><a id="__codelineno-0-599" name="__codelineno-0-599"></a>    <span class="c1"># Apps catalog metadata — purely informational, drives /web/apps.</span>
-</span><span id="__span-0-600"><a id="__codelineno-0-600" name="__codelineno-0-600"></a>    <span class="n">DISPLAY_NAME</span><span class="p">:</span> <span class="nb">str</span>            <span class="c1"># human label; NAME is the technical id</span>
-</span><span id="__span-0-601"><a id="__codelineno-0-601" name="__codelineno-0-601"></a>    <span class="n">SUMMARY</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-0-602"><a id="__codelineno-0-602" name="__codelineno-0-602"></a>    <span class="n">DESCRIPTION</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-0-603"><a id="__codelineno-0-603" name="__codelineno-0-603"></a>    <span class="n">CATEGORY</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-0-604"><a id="__codelineno-0-604" name="__codelineno-0-604"></a>    <span class="n">AUTHOR</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-0-605"><a id="__codelineno-0-605" name="__codelineno-0-605"></a>    <span class="n">ICON</span><span class="p">:</span> <span class="nb">str</span>                    <span class="c1"># raw inline SVG markup</span>
-</span><span id="__span-0-606"><a id="__codelineno-0-606" name="__codelineno-0-606"></a>    <span class="c1"># Optional Apps catalog visibility gate (UI only):</span>
-</span><span id="__span-0-607"><a id="__codelineno-0-607" name="__codelineno-0-607"></a>    <span class="n">CATALOG_ACCESS_MODEL</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-0-608"><a id="__codelineno-0-608" name="__codelineno-0-608"></a>    <span class="n">CATALOG_ACCESS_PERM</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-0-609"><a id="__codelineno-0-609" name="__codelineno-0-609"></a>    <span class="n">CATALOG_ACCESS_POLICY</span><span class="p">:</span> <span class="nb">str</span>
+<span class="normal"><a href="#__codelineno-0-609">609</a></span>
+<span class="normal"><a href="#__codelineno-0-610">610</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-579"><a id="__codelineno-0-579" name="__codelineno-0-579"></a><span class="k">class</span><span class="w"> </span><span class="nc">Manifest</span><span class="p">(</span><span class="n">_ManifestRequired</span><span class="p">,</span> <span class="n">total</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+</span><span id="__span-0-580"><a id="__codelineno-0-580" name="__codelineno-0-580"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Shape of a ``__pyvelm__.py`` manifest&#39;s module-level globals.</span>
+</span><span id="__span-0-581"><a id="__codelineno-0-581" name="__codelineno-0-581"></a>
+</span><span id="__span-0-582"><a id="__codelineno-0-582" name="__codelineno-0-582"></a><span class="sd">    The loader reads these as individual attributes, so a manifest</span>
+</span><span id="__span-0-583"><a id="__codelineno-0-583" name="__codelineno-0-583"></a><span class="sd">    declares them at module scope rather than building a dict named</span>
+</span><span id="__span-0-584"><a id="__codelineno-0-584" name="__codelineno-0-584"></a><span class="sd">    Manifest. This TypedDict exists for tooling that wants to</span>
+</span><span id="__span-0-585"><a id="__codelineno-0-585" name="__codelineno-0-585"></a><span class="sd">    validate a manifest as a single shape.</span>
+</span><span id="__span-0-586"><a id="__codelineno-0-586" name="__codelineno-0-586"></a>
+</span><span id="__span-0-587"><a id="__codelineno-0-587" name="__codelineno-0-587"></a><span class="sd">    Only ``NAME`` and ``VERSION`` are strictly required by the loader;</span>
+</span><span id="__span-0-588"><a id="__codelineno-0-588" name="__codelineno-0-588"></a><span class="sd">    everything else (the install hook, model package, dependencies,</span>
+</span><span id="__span-0-589"><a id="__codelineno-0-589" name="__codelineno-0-589"></a><span class="sd">    catalog metadata) has sensible defaults.</span>
+</span><span id="__span-0-590"><a id="__codelineno-0-590" name="__codelineno-0-590"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-591"><a id="__codelineno-0-591" name="__codelineno-0-591"></a>
+</span><span id="__span-0-592"><a id="__codelineno-0-592" name="__codelineno-0-592"></a>    <span class="n">DEPENDS</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+</span><span id="__span-0-593"><a id="__codelineno-0-593" name="__codelineno-0-593"></a>    <span class="n">DATA</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+</span><span id="__span-0-594"><a id="__codelineno-0-594" name="__codelineno-0-594"></a>    <span class="n">MODELS_PACKAGE</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-0-595"><a id="__codelineno-0-595" name="__codelineno-0-595"></a>    <span class="n">MIGRATIONS_PACKAGE</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-0-596"><a id="__codelineno-0-596" name="__codelineno-0-596"></a>    <span class="n">INSTALL_HOOK</span><span class="p">:</span> <span class="nb">str</span>            <span class="c1"># dotted reference, e.g. &quot;pkg.mod:fn&quot;</span>
+</span><span id="__span-0-597"><a id="__codelineno-0-597" name="__codelineno-0-597"></a>    <span class="n">SYNC_HOOK</span><span class="p">:</span> <span class="nb">str</span>               <span class="c1"># runs on Apps Sync (installed, same version)</span>
+</span><span id="__span-0-598"><a id="__codelineno-0-598" name="__codelineno-0-598"></a>    <span class="n">WEB_ROUTES</span><span class="p">:</span> <span class="nb">str</span>              <span class="c1"># dotted ``register_routes(app)`` hook</span>
+</span><span id="__span-0-599"><a id="__codelineno-0-599" name="__codelineno-0-599"></a>    <span class="n">COMMANDS</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>         <span class="c1"># dotted Command classes, e.g. &quot;pkg.cmd:MyCommand&quot;</span>
+</span><span id="__span-0-600"><a id="__codelineno-0-600" name="__codelineno-0-600"></a>    <span class="c1"># Apps catalog metadata — purely informational, drives /web/apps.</span>
+</span><span id="__span-0-601"><a id="__codelineno-0-601" name="__codelineno-0-601"></a>    <span class="n">DISPLAY_NAME</span><span class="p">:</span> <span class="nb">str</span>            <span class="c1"># human label; NAME is the technical id</span>
+</span><span id="__span-0-602"><a id="__codelineno-0-602" name="__codelineno-0-602"></a>    <span class="n">SUMMARY</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-0-603"><a id="__codelineno-0-603" name="__codelineno-0-603"></a>    <span class="n">DESCRIPTION</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-0-604"><a id="__codelineno-0-604" name="__codelineno-0-604"></a>    <span class="n">CATEGORY</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-0-605"><a id="__codelineno-0-605" name="__codelineno-0-605"></a>    <span class="n">AUTHOR</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-0-606"><a id="__codelineno-0-606" name="__codelineno-0-606"></a>    <span class="n">ICON</span><span class="p">:</span> <span class="nb">str</span>                    <span class="c1"># raw inline SVG markup</span>
+</span><span id="__span-0-607"><a id="__codelineno-0-607" name="__codelineno-0-607"></a>    <span class="c1"># Optional Apps catalog visibility gate (UI only):</span>
+</span><span id="__span-0-608"><a id="__codelineno-0-608" name="__codelineno-0-608"></a>    <span class="n">CATALOG_ACCESS_MODEL</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-0-609"><a id="__codelineno-0-609" name="__codelineno-0-609"></a>    <span class="n">CATALOG_ACCESS_PERM</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-0-610"><a id="__codelineno-0-610" name="__codelineno-0-610"></a>    <span class="n">CATALOG_ACCESS_POLICY</span><span class="p">:</span> <span class="nb">str</span>
 </span></code></pre></div></td></tr></table></div>
               </details>
 
