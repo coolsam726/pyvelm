@@ -64,16 +64,18 @@ class DomainCompiler:
         self.registry = registry
         self.cap = cap or dialect_capabilities("postgresql")
         self.base_name = model_cls._table
-        from .database.sa_ddl import core_table
+        from .database.sa_ddl import core_table, stored_column_names
 
+        base_cols = stored_column_names(model_cls)
         self.base = core_table(
             self.base_name,
             self.cap,
-            "id",
+            *base_cols,
             registry=registry,
             model_cls=model_cls,
         )
         self._base_alias = self.base_name
+        self._alias_tables: dict[str, Any] = {self._base_alias: self.base}
         self._shared_joins = shared_joins
         self._join_aliases = join_aliases if join_aliases is not None else {}
         self._join_counter = join_counter if join_counter is not None else [0]
@@ -87,17 +89,28 @@ class DomainCompiler:
         return f"{prefix}{self._join_counter[0]}"
 
     def _aliased_table(self, table_name: str, alias: str):
-        from .database.sa_ddl import core_table
+        from .database.sa_ddl import core_table, model_cls_for_table, stored_column_names
 
-        return core_table(
+        model_cls = model_cls_for_table(self.registry, table_name)
+        cols = stored_column_names(model_cls) if model_cls is not None else ("id",)
+        tbl = core_table(
             table_name,
             self.cap,
-            "id",
+            *cols,
             registry=self.registry,
+            model_cls=model_cls,
         ).alias(alias)
+        self._alias_tables[alias] = tbl
+        return tbl
 
     def _qcol(self, alias: str, col_name: str) -> ColumnElement:
         return literal_column(f'"{alias}"."{col_name}"')
+
+    def _col(self, alias: str, col_name: str) -> ColumnElement:
+        tbl = self._alias_tables.get(alias)
+        if tbl is not None and col_name in tbl.c:
+            return tbl.c[col_name]
+        return self._qcol(alias, col_name)
 
     def _text_predicate(
         self, col: ColumnElement, op: str, value: Any, field_obj: Any | None
@@ -141,9 +154,8 @@ class DomainCompiler:
                 continue
             alias = self._next_alias()
             target = self.registry[hop.target_model]
-            onclause = self._qcol(alias, "id") == self._qcol(
-                current_alias, hop.field.column
-            )
+            hop_tbl = self._aliased_table(target._table, alias)
+            onclause = hop_tbl.c.id == self._col(current_alias, hop.field.column)
             self._join_aliases[key] = alias
             join_sql = (
                 f'LEFT JOIN "{target._table}" {alias} ON '
@@ -197,15 +209,15 @@ class DomainCompiler:
                 hop_tbl = self._aliased_table(tgt._table, alias)
                 if i == 0:
                     inner.append(
-                        self._qcol(alias, inverse_col) == self._qcol(
+                        self._col(alias, inverse_col) == self._col(
                             self._base_alias, "id"
                         )
                     )
                     from_clause = hop_tbl
                 else:
                     inner.append(
-                        self._qcol(alias, inverse_col)
-                        == self._qcol(prev_alias, "id")
+                        self._col(alias, inverse_col)
+                        == self._col(prev_alias, "id")
                     )
                     from_clause = from_clause.join(hop_tbl, inner[-1])
                 prev_alias = alias
@@ -222,21 +234,22 @@ class DomainCompiler:
                     hop.col2,
                     registry=self.registry,
                 ).alias(j_alias)
+                self._alias_tables[j_alias] = rel_tbl
                 tgt_tbl = self._aliased_table(tgt._table, t_alias)
                 if i == 0:
                     inner.append(
-                        self._qcol(j_alias, hop.col1)
-                        == self._qcol(self._base_alias, "id")
+                        self._col(j_alias, hop.col1)
+                        == self._col(self._base_alias, "id")
                     )
                     from_clause = rel_tbl
                 else:
                     inner.append(
-                        self._qcol(j_alias, hop.col1) == self._qcol(prev_alias, "id")
+                        self._col(j_alias, hop.col1) == self._col(prev_alias, "id")
                     )
                     from_clause = from_clause.join(rel_tbl, inner[-1])
-                inner.append(self._qcol(t_alias, "id") == self._qcol(j_alias, hop.col2))
+                inner.append(self._col(t_alias, "id") == self._col(j_alias, hop.col2))
                 from_clause = from_clause.join(
-                    tgt_tbl, self._qcol(t_alias, "id") == self._qcol(j_alias, hop.col2)
+                    tgt_tbl, self._col(t_alias, "id") == self._col(j_alias, hop.col2)
                 )
                 prev_alias = t_alias
             elif isinstance(hop, M2oHop):
@@ -245,21 +258,21 @@ class DomainCompiler:
                 hop_tbl = self._aliased_table(tgt._table, alias)
                 if i == 0:
                     inner.append(
-                        self._qcol(alias, "id")
-                        == self._qcol(self._base_alias, hop.field.column)
+                        self._col(alias, "id")
+                        == self._col(self._base_alias, hop.field.column)
                     )
                     from_clause = hop_tbl
                 else:
                     inner.append(
-                        self._qcol(alias, "id")
-                        == self._qcol(prev_alias, hop.field.column)
+                        self._col(alias, "id")
+                        == self._col(prev_alias, hop.field.column)
                     )
                     from_clause = from_clause.join(hop_tbl, inner[-1])
                 prev_alias = alias
 
         leaf_field = self._resolve_leaf_field(path)
         leaf_col = "id" if leaf_field is None else leaf_field.column
-        col = self._qcol(prev_alias, leaf_col)
+        col = self._col(prev_alias, leaf_col)
         inner.append(
             self._compile_leaf_predicate(
                 col, leaf_op, value, leaf_field, universal=universal, raw_op=op
@@ -313,17 +326,17 @@ class DomainCompiler:
     def _leaf_col(self, attr: str) -> tuple[ColumnElement, Any | None]:
         if "." not in attr:
             col_name, field = _resolve_simple(self.model_cls, attr)
-            return self._qcol(self._base_alias, col_name), field
+            return self._col(self._base_alias, col_name), field
         path = parse_path(self.model_cls, attr, self.registry)
         leaf_alias = self._emit_m2o_chain(path.hops)
         if path.leaf_attr == "id":
-            return self._qcol(leaf_alias, "id"), None
+            return self._col(leaf_alias, "id"), None
         leaf_field = self.registry[path.leaf_model]._fields.get(path.leaf_attr)
         if leaf_field is None:
             raise ValueError(
                 f"Path {attr!r}: {path.leaf_model} has no field {path.leaf_attr!r}"
             )
-        return self._qcol(leaf_alias, leaf_field.column), leaf_field
+        return self._col(leaf_alias, leaf_field.column), leaf_field
 
     def _compile_leaf(self, leaf) -> ColumnElement:
         attr, op, value, universal = _parse_leaf(leaf)
@@ -364,7 +377,9 @@ class DomainCompiler:
     def from_clause(self) -> FromClause:
         from_clause: FromClause = self.base
         for j in self._joins:
-            target = self._aliased_table(j.target_table, j.alias)
+            target = self._alias_tables.get(j.alias)
+            if target is None:
+                target = self._aliased_table(j.target_table, j.alias)
             from_clause = from_clause.join(target, j.onclause, isouter=True)
         return from_clause
 

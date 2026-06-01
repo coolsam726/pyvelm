@@ -6,7 +6,8 @@ import unittest
 from pyvelm import BaseModel, Char, Many2many, Registry
 from pyvelm.database import dialect_capabilities
 from pyvelm.domain import domain_to_sql
-from pyvelm.domain_sa import domain_search_select
+from pyvelm.domain_sa import _sa_dialect, domain_search_select
+from pyvelm.fields import Integer, Many2one
 
 
 def _partner_registry():
@@ -44,6 +45,37 @@ class DomainSACompileTests(unittest.TestCase):
             reg,
         )
         self.assertIn("test_partner", str(stmt))
+
+    def test_oracle_m2o_filter_uses_table_bound_bind_params(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Currency(BaseModel):
+                _name = "res.currency"
+                _table = "res_currency"
+                name = Char()
+
+            class Rate(BaseModel):
+                _name = "res.currency.rate"
+                _table = "res_currency_rate"
+                currency_id = Many2one("res.currency")
+                rate = Integer()
+
+        cap = dialect_capabilities("oracle")
+        stmt = domain_search_select(
+            Rate,
+            [("currency_id", "=", 1)],
+            reg,
+            capabilities=cap,
+            limit=1,
+        )
+        compiled = stmt.compile(
+            dialect=_sa_dialect(cap), compile_kwargs={"render_postcompile": True}
+        )
+        sql = str(compiled)
+        self.assertIn("currency_id_1", sql)
+        self.assertNotIn('""res_currency_rate"', sql)
+        self.assertIn("currency_id_1", compiled.params)
 
     def test_oracle_text_equality_uses_dbms_lob_compare(self):
         reg, Partner = _partner_registry()

@@ -119,6 +119,15 @@ def model_cls_for_table(registry, table_name: str):
     return None
 
 
+def stored_column_names(model_cls) -> tuple[str, ...]:
+    """Physical column names for Core DML / domain search on *model_cls*."""
+    names = ["id"]
+    for field in model_cls._fields.values():
+        if field.is_stored and field.column and field.column != "id":
+            names.append(field.column)
+    return tuple(dict.fromkeys(names))
+
+
 def _core_column_type(
     col_name: str,
     cap: DialectCapabilities,
