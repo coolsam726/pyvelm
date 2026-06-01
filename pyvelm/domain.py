@@ -197,6 +197,25 @@ def domain_to_sql(
 
     cap = capabilities or dialect_capabilities("postgresql")
 
+    def _oracle_clob_cmp_sql(
+        column_sql: str, op: str, field_obj: Any | None
+    ) -> str | None:
+        """Oracle cannot compare CLOB columns with =/!= directly.
+
+        Char/Text currently map to ``text`` at the field layer; Oracle maps this
+        to CLOB, which raises ORA-22848 on direct equality predicates. Use
+        DBMS_LOB.COMPARE for these fields when compiling domains.
+        """
+        if cap.name != "oracle":
+            return None
+        if field_obj is None or getattr(field_obj, "sql_type", None) != "text":
+            return None
+        if op == "=":
+            return f"DBMS_LOB.COMPARE({column_sql}, TO_CLOB(%s)) = 0"
+        if op == "!=":
+            return f"DBMS_LOB.COMPARE({column_sql}, TO_CLOB(%s)) != 0"
+        return None
+
     domain_norm = normalize_domain(expand_or_groups(list(domain)))
     tree, end = _parse_polish(domain_norm, 0)
     if end != len(domain_norm):
@@ -333,7 +352,8 @@ def domain_to_sql(
             elif v is None and leaf_op == "!=":
                 inner_clauses.append(f"{leaf_ref} IS NOT NULL")
             else:
-                inner_clauses.append(f"{leaf_ref} {leaf_op} %s")
+                oracle_cmp = _oracle_clob_cmp_sql(leaf_ref, leaf_op, leaf_field)
+                inner_clauses.append(oracle_cmp or f"{leaf_ref} {leaf_op} %s")
                 inner_params.append(v)
         elif leaf_op == "in":
             values = [_coerce(leaf_field, v) for v in value]
@@ -414,7 +434,8 @@ def domain_to_sql(
             if v is None and op == "!=":
                 return f"{col_sql} IS NOT NULL", leaf_params
             leaf_params.append(v)
-            return f"{col_sql} {op} %s", leaf_params
+            oracle_cmp = _oracle_clob_cmp_sql(col_sql, op, field)
+            return oracle_cmp or f"{col_sql} {op} %s", leaf_params
         if op == "in":
             values = [_coerce(field, v) for v in value]
             if not values:

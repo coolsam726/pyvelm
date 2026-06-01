@@ -4,6 +4,7 @@ from __future__ import annotations
 import unittest
 
 from pyvelm import BaseModel, Char, Integer, Many2one, One2many, Registry
+from pyvelm.database import dialect_capabilities
 from pyvelm.domain import (
     domain_to_sql,
     expand_or_groups,
@@ -112,6 +113,16 @@ class DomainOperatorTests(unittest.TestCase):
     def test_leaf_opts_must_be_dict(self):
         with self.assertRaises(ValueError):
             domain_to_sql([("name", "=", "x", "bad")], self.Partner, self.reg)
+
+    def test_oracle_text_equality_uses_dbms_lob_compare(self):
+        where, params, _ = domain_to_sql(
+            [("name", "=", "Admin")],
+            self.Partner,
+            self.reg,
+            capabilities=dialect_capabilities("oracle"),
+        )
+        self.assertIn("DBMS_LOB.COMPARE", where)
+        self.assertEqual(params, ["Admin"])
 
 
 class DomainPathTests(unittest.TestCase):
