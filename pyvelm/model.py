@@ -340,7 +340,8 @@ class BaseModel(metaclass=MetaModel):
         existed = table_exists(conn, cls._table, cap)
         cols = [serial_primary_key(cap)]
         for f in cls._fields.values():
-            if not f.is_stored or f.name == "id":
+            # Some inherited descriptors can alias to column "id"; never emit twice.
+            if not f.is_stored or f.name == "id" or f.column == "id":
                 continue
             cols.append(normalize_column_ddl(f.column_ddl(), cap))
         if not existed or supports_create_table_if_not_exists(cap):
@@ -348,7 +349,7 @@ class BaseModel(metaclass=MetaModel):
         if not existed:
             return
         for f in cls._fields.values():
-            if not f.is_stored or f.name == "id":
+            if not f.is_stored or f.name == "id" or f.column == "id":
                 continue
             sql_type = normalize_sql_type(f.sql_type, cap)
             add_column_if_missing(conn, cls._table, f.column, sql_type, cap)
