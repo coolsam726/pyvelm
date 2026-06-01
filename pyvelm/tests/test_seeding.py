@@ -4,7 +4,17 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from pyvelm.seeding import Seeder, run_seeders
+from pyvelm.seeding import (
+    Seeder,
+    bulk_insert_stored,
+    discover_seeders,
+    fetch_column_map,
+    fetch_int_column_set,
+    normalize_seeder_ref,
+    resolve_module_seeders,
+    resolve_seeder,
+    run_seeders,
+)
 
 
 class _AlphaSeeder(Seeder):
@@ -168,6 +178,219 @@ class DiscoverSeedersTests(unittest.TestCase):
                 sys.path.insert(0, tmp_str)
             discovered = discover_seeders("demo_pkg", pkg)
         self.assertEqual(discovered, ["demo_pkg.seeders:DatabaseSeeder"])
+
+
+class SeederHelperTests(unittest.TestCase):
+    def test_disabled_seeder_logs_and_returns_none(self):
+        class _Off(Seeder):
+            enabled = False
+
+            def run_instance(self, env, **context):
+                raise AssertionError("disabled")
+
+        self.assertIsNone(_Off.run(MagicMock()))
+
+    def test_normalize_seeder_ref_variants(self):
+        self.assertEqual(
+            normalize_seeder_ref("DemoSeeder", package="pkg"),
+            "pkg.seeders:DemoSeeder",
+        )
+        self.assertEqual(
+            normalize_seeder_ref("pkg.seeders:DemoSeeder", package="pkg"),
+            "pkg.seeders:DemoSeeder",
+        )
+        self.assertEqual(
+            normalize_seeder_ref(_AlphaSeeder, package="pkg"),
+            f"{__name__}:_AlphaSeeder",
+        )
+        with self.assertRaises(ValueError):
+            normalize_seeder_ref("  ", package="pkg")
+        with self.assertRaises(TypeError):
+            normalize_seeder_ref(42, package="pkg")
+
+    def test_discover_seeders_empty_paths(self):
+        self.assertEqual(discover_seeders("pkg", None), [])
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / "nopkg"
+            pkg.mkdir()
+            self.assertEqual(discover_seeders("nopkg", pkg), [])
+
+    def test_resolve_module_seeders_manifest_wins(self):
+        refs = resolve_module_seeders("pkg", None, ["CustomSeeder"])
+        self.assertEqual(refs, ["pkg.seeders:CustomSeeder"])
+
+    def test_resolve_seeder_dot_path_and_invalid(self):
+        dotted = f"{__name__}._AlphaSeeder"
+        self.assertIs(resolve_seeder(dotted), _AlphaSeeder)
+        with self.assertRaises(TypeError):
+            resolve_seeder(f"{__name__}:SeederTests")
+
+    def test_fetch_column_map_and_int_set(self):
+        from pyvelm import BaseModel, Char, Integer, Registry
+        from pyvelm.env import Environment
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        reg = Registry()
+        with reg.activate():
+
+            class Country(BaseModel):
+                _name = "res.country"
+                _table = "res_country"
+                code = Char()
+                geoname_id = Integer()
+
+        executed: list[str] = []
+        conn = MagicMock()
+        wire_sa_conn(
+            conn,
+            executed,
+            dialect_name="postgresql",
+            base_execute=lambda sql, params=None: _rows_result(
+                [("US", 1), ("CA", 2)]
+            ),
+        )
+        env = Environment(conn, registry=reg, uid=1)
+
+        mapping = fetch_column_map(env, "res_country", "code", model_cls=Country)
+        self.assertEqual(mapping, {"US": 1, "CA": 2})
+
+        wire_sa_conn(
+            conn,
+            executed,
+            dialect_name="postgresql",
+            base_execute=lambda sql, params=None: _rows_result([(10,), (20,)]),
+        )
+        ids = fetch_int_column_set(env, "res_country", "geoname_id", model_cls=Country)
+        self.assertEqual(ids, {10, 20})
+
+    def test_field_row_to_sql_skips_computed_and_adds_timestamps(self):
+        from pyvelm import BaseModel, Char, Registry
+        from pyvelm.seeding import _field_row_to_sql
+
+        reg = Registry()
+        with reg.activate():
+
+            class Row(BaseModel):
+                _name = "demo.row"
+                _table = "demo_row"
+                name = Char(required=True)
+
+            ghost = Char()
+            ghost.name = "ghost"
+            ghost.column = "ghost"
+            ghost.is_stored = True
+            ghost.compute = "_ghost"
+            Row._fields["ghost"] = ghost
+
+        sql = _field_row_to_sql(Row, {"name": "A", "ghost": 1})
+        self.assertIn("name", sql)
+        self.assertNotIn("ghost", sql)
+
+    def test_fetch_int_column_set_uses_registry(self):
+        from pyvelm import BaseModel, Integer, Registry
+        from pyvelm.env import Environment
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        reg = Registry()
+        with reg.activate():
+
+            class Thing(BaseModel):
+                _name = "demo.thing"
+                _table = "demo_thing"
+                geoname_id = Integer()
+
+        conn = MagicMock()
+        wire_sa_conn(
+            conn,
+            [],
+            dialect_name="postgresql",
+            base_execute=lambda sql, params=None: _rows_result([(99,)]),
+        )
+        env = Environment(conn, registry=reg, uid=1)
+        self.assertEqual(
+            fetch_int_column_set(env, "demo_thing", "geoname_id", registry=reg),
+            {99},
+        )
+
+    def test_bulk_insert_stored_batches(self):
+        from pyvelm import BaseModel, Char, Registry
+        from pyvelm.env import Environment
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        reg = Registry()
+        with reg.activate():
+
+            class Tag(BaseModel):
+                _name = "res.tag"
+                _table = "res_tag"
+                name = Char(required=True)
+
+        conn = MagicMock()
+        wire_sa_conn(conn, [], dialect_name="postgresql")
+        env = Environment(conn, registry=reg, uid=1)
+        rows = [{"name": f"T{i}"} for i in range(3)]
+        count = bulk_insert_stored(env, Tag, rows, chunk_size=2)
+        self.assertEqual(count, 3)
+        self.assertEqual(bulk_insert_stored(env, Tag, []), 0)
+
+    def test_run_instance_not_implemented(self):
+        with self.assertRaises(NotImplementedError):
+            Seeder().run_instance(MagicMock())
+
+    def test_discover_seeders_empty_when_no_entry_class(self):
+        import sys
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / "empty_pkg"
+            seeders = pkg / "seeders"
+            seeders.mkdir(parents=True)
+            (seeders / "__init__.py").write_text("# no DatabaseSeeder\n", encoding="utf-8")
+            tmp_str = str(tmp)
+            if tmp_str not in sys.path:
+                sys.path.insert(0, tmp_str)
+            self.assertEqual(discover_seeders("empty_pkg", pkg), [])
+
+    def test_fetch_column_map_skips_null_keys_and_no_normalize(self):
+        from pyvelm import BaseModel, Char, Registry
+        from pyvelm.env import Environment
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        reg = Registry()
+        with reg.activate():
+
+            class Country(BaseModel):
+                _name = "res.country"
+                _table = "res_country"
+                code = Char()
+
+        conn = MagicMock()
+        wire_sa_conn(
+            conn,
+            [],
+            dialect_name="postgresql",
+            base_execute=lambda sql, params=None: _rows_result([(None, 1), ("fr", 2)]),
+        )
+        env = Environment(conn, registry=reg, uid=1)
+        mapping = fetch_column_map(
+            env,
+            "res_country",
+            "code",
+            registry=reg,
+            normalize_key=None,
+        )
+        self.assertEqual(mapping, {"fr": 2})
+
+
+def _rows_result(rows):
+    result = MagicMock()
+    result.fetchall.return_value = rows
+    result.fetchone.return_value = rows[0] if rows else None
+    return result
 
 
 class LoaderSeederIntegrationTests(unittest.TestCase):

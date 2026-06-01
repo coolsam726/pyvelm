@@ -9,11 +9,14 @@ from pyvelm.db_autogen import (
     Diff,
     SchemaAlteration,
     _field_type_spec,
+    _fetch_table_columns_inspector,
+    _normalize_inspector_type,
     _normalize_pg_column,
     _normalize_type_name,
     _q,
     _summary,
     _types_match,
+    _varchar_family,
     apply_schema_diff,
     compute_diff,
     count_null_rows,
@@ -207,6 +210,51 @@ class ApplySchemaDiffDropNotNullTests(unittest.TestCase):
         _apply_nullability(env, diff, r)
         self.assertEqual(r.skipped_not_null, 1)
         self.assertIn("res_partner.code", r.skipped_not_null_cols[0])
+
+
+class InspectorHelperTests(unittest.TestCase):
+    def test_normalize_pg_column_fallback(self):
+        self.assertEqual(
+            _normalize_pg_column("", "character varying"),
+            "character varying",
+        )
+        self.assertEqual(_normalize_pg_column("int4", "integer"), "integer")
+
+    def test_varchar_family_and_inspector_normalization(self):
+        self.assertTrue(_varchar_family("varchar(64)"))
+        self.assertTrue(_types_match("text", "varchar(255)"))
+        self.assertEqual(_normalize_inspector_type("SomethingWeird"), "text")
+        class _FloatType:
+            __name__ = "Float"
+
+        self.assertEqual(_normalize_inspector_type(_FloatType()), "double precision")
+
+    def test_fetch_table_columns_inspector_sqlite(self):
+        from pyvelm.database.dialects import dialect_capabilities
+
+        conn = MagicMock()
+        conn.capabilities = dialect_capabilities("sqlite")
+        exists = MagicMock()
+        exists.fetchone.return_value = (1,)
+        pragma = MagicMock()
+        pragma.fetchall.return_value = [
+            (0, "id", "INTEGER", 1, None, 1),
+            (1, "code", "TEXT", 0, None, 0),
+        ]
+        conn.execute.side_effect = [exists, pragma]
+        cols = _fetch_table_columns_inspector(conn, "res_partner")
+        self.assertIsNotNone(cols)
+        assert cols is not None
+        self.assertTrue(cols["code"].nullable)
+
+    def test_compute_diff_without_conn_capabilities(self):
+        env = _mock_env(
+            [("id", "NO", "int4", "integer"), ("code", "NO", "text", "text")],
+            _partner_cls(required=True),
+        )
+        env.conn.capabilities = None
+        diff = compute_diff(env, "partners")
+        self.assertIsInstance(diff, Diff)
 
 
 class ComputeDiffOrphanAndTypeTests(unittest.TestCase):
