@@ -344,9 +344,23 @@ class BaseModel(metaclass=MetaModel):
             if not f.is_stored or f.name == "id" or f.column == "id":
                 continue
             cols.append(normalize_column_ddl(f.column_ddl(), cap))
+        created_now = False
         if not existed or supports_create_table_if_not_exists(cap):
-            conn.execute(create_table_sql(cls._table, ", ".join(cols), cap))
-        if not existed:
+            try:
+                conn.execute(create_table_sql(cls._table, ", ".join(cols), cap))
+                created_now = not existed
+            except Exception as exc:
+                # Non-IF-NOT-EXISTS backends can race inspector/table checks.
+                msg = str(getattr(exc, "orig", exc)).lower()
+                if (
+                    "already exists" in msg
+                    or "already an object named" in msg
+                    or "name is already used by an existing object" in msg
+                ):
+                    existed = True
+                else:
+                    raise
+        if created_now:
             return
         for f in cls._fields.values():
             if not f.is_stored or f.name == "id" or f.column == "id":
