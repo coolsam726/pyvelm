@@ -556,7 +556,8 @@ class Menu(_MenuRequired, total=False):
     ``partners``) and an ``href`` (typically ``/web/views/<module>/<view>``).
 
     Prefer :class:`~pyvelm.builders.Menus` so ``parent`` and ``href`` are
-    derived from short group names and view names.
+    derived from short group names and view names. Nested trees use
+    :class:`~pyvelm.builders.MenuBranch` (``m.group(...).children([...])``).
     """
 
     icon: str

@@ -68,16 +68,18 @@ Quick-start
     m = Menus("partners")  # same string as NAME in __pyvelm__.py
 
     MENUS = [
-        m.group("business", "Business", icon="square-3-stack-3d", sequence=50),
-        m.item("business.partners", "Partners",
-               parent="business", view="partner.list", sequence=10),
-        # Cross-module parent (admin owns the group):
-        m.item("business.tags", "Tags",
-               parent=("admin", "settings.reference"), view="tag.list", sequence=40),
+        m.group("business", "Business", icon="square-3-stack-3d", sequence=50).children([
+            m.item("business.partners", "Partners",
+                   view="partner.list", sequence=10),
+            # Cross-module parent (admin owns the group):
+            m.item("business.tags", "Tags",
+                   parent=("admin", "settings.reference"), view="tag.list", sequence=40),
+        ]),
     ]
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from pyvelm.types import (
@@ -136,7 +138,9 @@ __all__ = [
     "op_set",
     "op_update",
     # menu helpers
+    "MenuBranch",
     "Menus",
+    "flatten_menus",
     "menu_group",
     "menu_item",
     "menu_ref",
@@ -970,6 +974,78 @@ def _resolve_menu_href(
     return view_href(mod, view)
 
 
+def _set_menu_parent_if_missing(
+    entry: Menu | MenuBranch,
+    parent_name: str,
+    *,
+    menu_module: str,
+) -> None:
+    parent_ref = _resolve_menu_parent(parent_name, menu_module=menu_module)
+    if isinstance(entry, MenuBranch):
+        if "parent" not in entry.menu:
+            entry.menu["parent"] = parent_ref
+    elif "parent" not in entry:
+        entry["parent"] = parent_ref
+
+
+class MenuBranch:
+    """A menu group with optional nested children.
+
+    Returned by :meth:`Menus.group`. Call :meth:`children` to nest items and
+    sub-groups; :func:`flatten_menus` expands the tree for sync.
+    """
+
+    __slots__ = ("menu", "_children", "_menu_module")
+
+    def __init__(
+        self,
+        menu: Menu,
+        *,
+        menu_module: str,
+        children: Sequence[Menu | MenuBranch] | None = None,
+    ) -> None:
+        self.menu = menu
+        self._menu_module = menu_module
+        self._children: list[Menu | MenuBranch] = []
+        if children:
+            self.children(children)
+
+    def children(
+        self,
+        entries: Sequence[Menu | MenuBranch],
+    ) -> MenuBranch:
+        """Attach entries under this group (``parent`` set when omitted)."""
+        parent_name = self.menu["name"]
+        for entry in entries:
+            _set_menu_parent_if_missing(
+                entry, parent_name, menu_module=self._menu_module
+            )
+            self._children.append(entry)
+        return self
+
+    def flatten(self) -> list[Menu]:
+        out: list[Menu] = [self.menu]
+        for child in self._children:
+            if isinstance(child, MenuBranch):
+                out.extend(child.flatten())
+            else:
+                out.append(child)
+        return out
+
+
+def flatten_menus(
+    entries: Sequence[Menu | MenuBranch],
+) -> list[Menu]:
+    """Expand :class:`MenuBranch` trees into a flat list of menu dicts."""
+    out: list[Menu] = []
+    for entry in entries:
+        if isinstance(entry, MenuBranch):
+            out.extend(entry.flatten())
+        else:
+            out.append(entry)
+    return out
+
+
 class Menus:
     """Fluent builder for a module's ``MENUS`` list.
 
@@ -1010,8 +1086,17 @@ class Menus:
         sequence: int = 10,
         parent: str | tuple[str, str] | None = None,
         dev_only: bool = False,
-    ) -> Menu:
+    ) -> MenuBranch:
         """Menu group. Top-level groups take ``icon``; nested groups use ``parent``.
+
+        Chain :meth:`MenuBranch.children` to nest items and sub-groups without
+        repeating ``parent=`` on every entry::
+
+            m.group("business", "Business", icon="home").children([
+                m.group("business.directory", "Directory").children([
+                    m.item("business.partners", "Partners", view="partner.list"),
+                ]),
+            ])
 
         ``dev_only=True`` hides the group (and its children, via the
         recursive visibility prune) outside ``PYVELM_ENV=development``.
@@ -1021,7 +1106,7 @@ class Menus:
             result["parent"] = _resolve_menu_parent(
                 parent, menu_module=self.module
             )
-        return result
+        return MenuBranch(result, menu_module=self.module)
 
     def item(
         self,

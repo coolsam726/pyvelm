@@ -276,6 +276,66 @@ class MenuNodeVisibleDeepTests(unittest.TestCase):
         self.assertEqual(out, [])
 
 
+class MenuBranchTests(unittest.TestCase):
+    def test_children_sets_parent_on_items(self):
+        from pyvelm.builders import Menus, flatten_menus
+
+        m = Menus("partners")
+        menus = flatten_menus(
+            [
+                m.group("business", "Business", icon="home", sequence=50).children(
+                    [
+                        m.group("business.directory", "Directory", sequence=10).children(
+                            [
+                                m.item(
+                                    "business.partners",
+                                    "Partners",
+                                    view="partner.list",
+                                    sequence=10,
+                                ),
+                            ]
+                        ),
+                    ]
+                ),
+            ]
+        )
+        by_name = {entry["name"]: entry for entry in menus}
+        self.assertEqual(by_name["business"]["parent"], None)
+        self.assertEqual(
+            by_name["business.directory"]["parent"],
+            "partners.business",
+        )
+        self.assertEqual(
+            by_name["business.partners"]["parent"],
+            "partners.business.directory",
+        )
+        self.assertEqual(
+            by_name["business.partners"]["href"],
+            "/web/views/partners/partner.list",
+        )
+
+    def test_explicit_parent_not_overwritten(self):
+        from pyvelm.builders import Menus, flatten_menus
+
+        m = Menus("partners")
+        menus = flatten_menus(
+            [
+                m.group("business", "Business").children(
+                    [
+                        m.item(
+                            "business.tags",
+                            "Tags",
+                            parent=("admin", "settings.reference"),
+                            view="tag.list",
+                        ),
+                    ]
+                ),
+            ]
+        )
+        tags = next(m for m in menus if m["name"] == "business.tags")
+        self.assertEqual(tags["parent"], "admin.settings.reference")
+
+
 class MenuParentResolutionTests(unittest.TestCase):
     def test_dotted_menu_name_scoped_to_module(self):
         from pyvelm.builders import _resolve_menu_parent
