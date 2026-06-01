@@ -8,12 +8,12 @@ dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
 bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on a
 portable **SQLAlchemy Core** database layer (PostgreSQL or SQLite), FastAPI, and Jinja2.
 
-**Latest release:** [v1.0.0](releases/v1.0.0.md) — SQLAlchemy database layer, SQLite
-portability, Laravel-style seeders, declarative Schema migrations. Docs are
-[versioned](versioning.md) (use the header picker for older lines).
+**Latest release:** [v1.0.1](releases/v1.0.1.md) — nested menu groups, versioned
+docs (mike), MySQL/MariaDB portability (WIP). Use the header picker for older
+doc versions ([versioning](versioning.md)).
 
 ```bash
-pip install pyvelm==1.0.0
+pip install pyvelm==1.0.1
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
@@ -60,6 +60,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v1.0.1](releases/v1.0.1.md) | **Nested menu groups**; **mike** doc versions; MySQL/MariaDB WIP |
 | [v1.0.0](releases/v1.0.0.md) | **Database layer** (Postgres + SQLite), **seeders**, **Schema** migrations, multi-DB routing preview |
 | [v0.26.2](releases/v0.26.2.md) | **Workflow** sidebar links — ``view_module="workflow"`` fixes 404 on Instances/Approvals/Tasks |
 | [v0.26.1](releases/v0.26.1.md) | **`WEB_ROUTES`** mount on **Apps** install — no restart for [document layout](document-layout.md) designer / PDF routes |
