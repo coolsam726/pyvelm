@@ -566,8 +566,18 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
         new_tables=len(diff.new_tables),
         new_columns=len(diff.new_columns),
     )
+    from pyvelm.database import is_duplicate_object_error
+
     for _, ddl in diff.new_tables:
-        env.conn.execute(ddl)
+        try:
+            env.conn.execute(ddl)
+        except Exception as exc:
+            # Backends without CREATE TABLE IF NOT EXISTS (Oracle, MSSQL) raise
+            # when the table already exists and their inspectors can disagree
+            # with the live schema; treat a duplicate as already-applied and
+            # let the column-sync pass below reconcile any drift.
+            if not is_duplicate_object_error(exc):
+                raise
     from pyvelm.database import add_column_if_missing, _conn_capabilities, normalize_sql_type
 
     cap = _conn_capabilities(env.conn)

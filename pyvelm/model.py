@@ -329,6 +329,7 @@ class BaseModel(metaclass=MetaModel):
             _conn_capabilities,
             add_column_if_missing,
             create_table_sql,
+            is_duplicate_object_error,
             normalize_column_ddl,
             normalize_sql_type,
             serial_primary_key,
@@ -351,12 +352,7 @@ class BaseModel(metaclass=MetaModel):
                 created_now = not existed
             except Exception as exc:
                 # Non-IF-NOT-EXISTS backends can race inspector/table checks.
-                msg = str(getattr(exc, "orig", exc)).lower()
-                if (
-                    "already exists" in msg
-                    or "already an object named" in msg
-                    or "name is already used by an existing object" in msg
-                ):
+                if is_duplicate_object_error(exc):
                     existed = True
                 else:
                     raise
@@ -374,8 +370,10 @@ class BaseModel(metaclass=MetaModel):
 
         cap = _conn_capabilities(conn)
         if cap.name == "oracle":
+            # PURGE so the table is truly gone instead of being parked in the
+            # recyclebin, where it later collides with a fresh CREATE TABLE.
             try:
-                conn.execute(f'DROP TABLE "{cls._table}"')
+                conn.execute(f'DROP TABLE "{cls._table}" PURGE')
             except Exception as exc:
                 msg = str(getattr(exc, "orig", exc)).lower()
                 if "does not exist" in msg or "ora-00942" in msg:

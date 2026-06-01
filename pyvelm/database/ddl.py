@@ -8,6 +8,28 @@ from .capabilities import DialectCapabilities, SchemaResetStrategy
 from .dialects import get_backend
 
 
+# Substrings emitted by the various drivers when a CREATE collides with an
+# object that already exists. Keep this list in one place so every CREATE path
+# (model setup, autogen schema diff, …) treats the collision identically.
+_DUPLICATE_OBJECT_MARKERS = (
+    "already exists",  # postgres / mysql / sqlite
+    "already an object named",  # mssql
+    "name is already used by an existing object",  # oracle ORA-00955
+    "ora-00955",  # oracle (numeric form, in case the message is localized)
+)
+
+
+def is_duplicate_object_error(exc: BaseException) -> bool:
+    """True when *exc* means "CREATE failed because the object already exists".
+
+    Backends without ``CREATE TABLE IF NOT EXISTS`` (Oracle, SQL Server) raise
+    instead of no-oping, and their inspectors can briefly disagree with the live
+    schema. Callers use this to treat a duplicate as success and continue.
+    """
+    msg = str(getattr(exc, "orig", exc)).lower()
+    return any(marker in msg for marker in _DUPLICATE_OBJECT_MARKERS)
+
+
 def serial_primary_key(cap: DialectCapabilities) -> str:
     return get_backend(cap.name).serial_primary_key()
 
@@ -115,6 +137,13 @@ def reset_schema(conn: ConnectionAdapter, cap: DialectCapabilities) -> None:
 
     if cap.schema_reset == SchemaResetStrategy.DROP_ALL_TABLES:
         backend = get_backend(cap.name)
+        # A backend may provide an authoritative wipe (e.g. Oracle, where the
+        # SQLAlchemy inspector hides recyclebin/phantom objects and a plain
+        # DROP leaves state behind that resurfaces as ORA-00955). Prefer it.
+        reset_all_tables = getattr(backend, "reset_all_tables", None)
+        if reset_all_tables is not None:
+            reset_all_tables(conn)
+            return
         backend.before_reset_all_tables(conn)
         sa_conn = sqlalchemy_connection(conn)
         if sa_conn is not None:

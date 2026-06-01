@@ -570,6 +570,30 @@ class DdlRemainingGapsTests(unittest.TestCase):
         self.assertTrue(any("DROP SCHEMA" in s for s in calls))
         self.assertTrue(any("CREATE SCHEMA" in s for s in calls))
 
+    def test_reset_schema_oracle_uses_user_tables_and_purges(self):
+        """Oracle reset must not rely on the inspector (it hides recyclebin
+        objects). It queries user_tables, drops with CASCADE CONSTRAINTS PURGE,
+        then empties the recyclebin so nothing resurfaces as ORA-00955."""
+        conn = MagicMock()
+
+        def execute(sql, params=None):
+            r = MagicMock()
+            if "user_tables" in sql.lower():
+                r.fetchall.return_value = [("base_automation",), ("res_partner",)]
+            else:
+                r.fetchall.return_value = []
+            return r
+
+        conn.execute.side_effect = execute
+        reset_schema(conn, dialect_caps("oracle"))
+        calls = [c.args[0] for c in conn.execute.call_args_list]
+        self.assertTrue(any("user_tables" in s.lower() for s in calls))
+        self.assertIn(
+            'DROP TABLE "base_automation" CASCADE CONSTRAINTS PURGE', calls
+        )
+        self.assertIn('DROP TABLE "res_partner" CASCADE CONSTRAINTS PURGE', calls)
+        self.assertIn("PURGE RECYCLEBIN", calls)
+
     def test_normalize_helpers_empty_map(self):
         cap = dialect_caps("postgresql")
         self.assertEqual(normalize_sql_type("text", cap), "text")

@@ -191,6 +191,49 @@ class ApplySchemaDiffTests(unittest.TestCase):
         self.assertIn("2 NOT NULL", r.summary())
         self.assertIn("pending", r.summary())
 
+    def test_duplicate_table_on_create_is_swallowed(self):
+        """Oracle/MSSQL can raise ORA-00955 when the table already exists.
+
+        ``apply_schema_diff`` must treat a duplicate-object error on CREATE as
+        already-applied and continue with column sync instead of crashing.
+        """
+        env = _mock_env_dialect([], _partner_cls(required=True), dialect_name="oracle")
+
+        def execute(sql, params=None):
+            env._executed.append(sql)
+            if sql.upper().startswith("CREATE TABLE"):
+                raise Exception(
+                    "ORA-00955: name is already used by an existing object"
+                )
+            r = MagicMock()
+            r.fetchall.return_value = []
+            r.fetchone.return_value = None
+            return r
+
+        env.conn.execute = execute
+        with patch("pyvelm.db_autogen._fetch_table_columns", return_value=None):
+            # Must not raise even though the CREATE fails with a duplicate error.
+            apply_schema_diff(env, "partners")
+        self.assertTrue(
+            any(s.upper().startswith("CREATE TABLE") for s in env._executed)
+        )
+
+    def test_non_duplicate_create_error_propagates(self):
+        env = _mock_env_dialect([], _partner_cls(required=True), dialect_name="oracle")
+
+        def execute(sql, params=None):
+            if sql.upper().startswith("CREATE TABLE"):
+                raise Exception("ORA-00904: invalid identifier")
+            r = MagicMock()
+            r.fetchall.return_value = []
+            r.fetchone.return_value = None
+            return r
+
+        env.conn.execute = execute
+        with patch("pyvelm.db_autogen._fetch_table_columns", return_value=None):
+            with self.assertRaises(Exception):
+                apply_schema_diff(env, "partners")
+
 
 class InspectorEdgeCaseTests(unittest.TestCase):
     def test_fetch_table_columns_inspector_missing_table_returns_none(self):
