@@ -1,0 +1,3012 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Odoo semantics, Laravel ergonomics, Filament craft — a Tailwind-native Python ERP shell built only for PyVELM.">
+      
+      
+      
+        <link rel="canonical" href="https://coolsam726.github.io/pyvelm/1.0/architecture/">
+      
+      
+        <link rel="prev" href="../ide-typing/">
+      
+      
+        <link rel="next" href="../versioning/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Architecture - PyVELM</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architecture" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="PyVELM" class="md-header__button md-logo" aria-label="PyVELM" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            PyVELM
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/coolsam726/pyvelm" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../getting-started/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+  API reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="PyVELM" class="md-nav__button md-logo" aria-label="PyVELM" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    PyVELM
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/coolsam726/pyvelm" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-database/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Database layer (v1.0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declaring models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vellum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vellum (optional ORM)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building UIs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../form-ux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Form UX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../one2many-forms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    One2many on forms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inheritance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extending views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../report-builder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Report Builder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mail-compose/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Email composer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../file-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    File library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../document-layout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Document layouts & PDF
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../navigation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shell navigation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../geo-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geo data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../branding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    White-label branding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../console/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ide-typing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE typing stubs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-abstractions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core abstractions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core abstractions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recordset-is-the-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recordset-is-the-model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-keyed-by-model-id-field" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache keyed by (model, id, field)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#field-descriptors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field descriptors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#access-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access control
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#web-layer-views-as-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web layer: views as data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-pass-database-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-pass database init
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#domain-compiler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Domain compiler
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#computed-fields-with-depends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Computed fields with @depends
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Computed fields with @depends">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#field-declaration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field declaration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-dependency-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The dependency graph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cycle-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cycle detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#topological-order-for-stored-compute-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Topological order for stored compute fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notify_changed-propagation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        notify_changed propagation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rejecting-external-writes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rejecting external writes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deliberately-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deliberately deferred
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-the-design-holds-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the design holds up
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../versioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Doc versions (mike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recordsets & fields
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recordsets & fields
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/depends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.depends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/env/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.env
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/domain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.domain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/vellum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.vellum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules & loader
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Modules & loader
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/loader/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.loader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/builders/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.builders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Views & rendering
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Views & rendering
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/render/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.render
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Workflows
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/actions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.actions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/automation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.automation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cron/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.cron
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP & CLI
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    HTTP & CLI
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/web/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.web
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.cli
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-abstractions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core abstractions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core abstractions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recordset-is-the-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recordset-is-the-model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-keyed-by-model-id-field" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache keyed by (model, id, field)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#field-descriptors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field descriptors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#access-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access control
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#web-layer-views-as-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web layer: views as data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-pass-database-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-pass database init
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#domain-compiler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Domain compiler
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#computed-fields-with-depends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Computed fields with @depends
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Computed fields with @depends">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#field-declaration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field declaration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-dependency-graph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The dependency graph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cycle-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cycle detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#topological-order-for-stored-compute-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Topological order for stored compute fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notify_changed-propagation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        notify_changed propagation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rejecting-external-writes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rejecting external writes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deliberately-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deliberately deferred
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-the-design-holds-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the design holds up
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h1>
+<p>This page explains the design decisions that shape pyvelm — the
+"why" behind the public API. The other guides (Models, Views,
+Modules) cover the "how". Read this when you want to know what
+the framework is doing under the hood.</p>
+<h2 id="core-abstractions">Core abstractions<a class="headerlink" href="#core-abstractions" title="Permanent link">&para;</a></h2>
+<h3 id="recordset-is-the-model">Recordset-is-the-model<a class="headerlink" href="#recordset-is-the-model" title="Permanent link">&para;</a></h3>
+<p>A <code>BaseModel</code> instance carries an <code>Environment</code> and a tuple of ids. Length 0
+is an empty recordset, 1 is a singleton, more than 1 is a multi-record set.
+There is no separate "record" type — every operation, including <code>create</code>,
+returns a recordset. Singleton invariants are enforced explicitly at the
+boundaries where they matter:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">ensure_one</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ids</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Field descriptors call <code>ensure_one()</code> on read because returning "the field of
+one of two records" has no useful meaning.</p>
+<h3 id="environment">Environment<a class="headerlink" href="#environment" title="Permanent link">&para;</a></h3>
+<p>The <code>Environment</code> is the only thing recordsets carry around besides their
+ids. It bundles:</p>
+<ul>
+<li><code>conn</code> — a database connection from <code>pyvelm.database</code> (SQLAlchemy-backed;
+  psycopg-compatible API on PostgreSQL). See <a href="../multi-database/">Database layer (v1.0)</a>.</li>
+<li><code>uid</code> — the acting user id (or <code>None</code> for anonymous).</li>
+<li><code>company_id</code> — the active company for multi-company-scoped models.</li>
+<li><code>context</code> — an ad-hoc dict for per-request state.</li>
+<li><code>registry</code> — the model registry.</li>
+<li><code>cache</code> — the field-value cache (see below).</li>
+<li><code>_in_compute</code> — a flag the compute-field orchestrator flips.</li>
+</ul>
+<p>Every recordset constructor takes an <code>Environment</code>. New environments share
+the same cache if forked via <code>with_context</code> — cache invalidation is
+env-scoped, not per-recordset.</p>
+<h3 id="cache-keyed-by-model-id-field">Cache keyed by (model, id, field)<a class="headerlink" href="#cache-keyed-by-model-id-field" title="Permanent link">&para;</a></h3>
+<p>Field values do <strong>not</strong> live on instances. They live in <code>env.cache</code> under
+keys of shape <code>(model_name, record_id, attr_name)</code>. This is the single most
+important design decision in pyvelm and it pays off in three ways:</p>
+<ol>
+<li><strong>Recordsets become cheap views.</strong> Creating <code>Partner.browse([1, 2, 3])</code> is
+   a tuple-of-ids assignment — no field data is touched.</li>
+<li><strong>Computed-field invalidation is tractable.</strong> Dropping a field value is
+   <code>del cache[(model, id, field)]</code>. Cascading through a dependency graph is
+   a series of key deletions; there is no graph walk over instance state.</li>
+<li><strong>Multi-environment is natural.</strong> A fresh <code>Environment</code> starts with a
+   fresh cache. State doesn't leak between requests/test runs unless you
+   deliberately share the env.</li>
+</ol>
+<p>The cache is a plain dict today. No LRU, no eviction — the working set
+per request is bounded, so it's not yet a problem.</p>
+<h3 id="field-descriptors">Field descriptors<a class="headerlink" href="#field-descriptors" title="Permanent link">&para;</a></h3>
+<p>Every field is a descriptor on its model class. The class attribute <em>is</em>
+the field instance:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Partner</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">name</span> <span class="o">=</span> <span class="n">Char</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>        <span class="c1"># descriptor lives on Partner.__dict__</span>
+</span></code></pre></div>
+<p><code>__get__</code> routes to <code>env.cache</code>, loads from SQL on miss, and wraps the value
+through <code>to_python</code>. <code>__set__</code> routes to <code>record.write({attr: value})</code> for
+plain fields, or special-cases for relational/computed fields. The
+descriptor protocol is what makes <code>alice.name</code> look like attribute access
+while doing cache-aware reads under the hood.</p>
+<p>Field instances also carry their <code>column</code> (the SQL column name, defaulted to
+<code>name</code>). The two can diverge — see the <code>column=</code> kwarg on <code>Field.__init__</code> —
+but Odoo-style projects keep them equal.</p>
+<h2 id="access-control">Access control<a class="headerlink" href="#access-control" title="Permanent link">&para;</a></h2>
+<p>Four models in the base module — <code>res.groups</code>, <code>res.users</code>,
+<code>ir.model.access</code>, <code>ir.rule</code> — plus a thin enforcement layer at the
+ORM and HTTP boundaries.</p>
+<ul>
+<li><code>env.uid</code> carries the active user's id; <code>uid=1</code> is the hard-coded
+  superuser and bypasses every check (Odoo's <code>SUPERUSER_ID</code>).</li>
+<li><code>BaseModel.search</code> / <code>search_count</code> / <code>_read</code> call
+  <code>env.check_access(model, perm)</code> and <code>env.collect_record_rules(model,
+  perm)</code>. The latter returns domain leaves that get AND-injected into
+  the search's WHERE — that's how row-level filters happen.</li>
+<li><code>BaseModel.create</code> / <code>write</code> / <code>unlink</code> only check the perm bit; no
+  rule injection — write paths don't restrict to rows the user
+  already can see (yet).</li>
+<li>The HTTP layer's <code>get_env</code> dependency reads HTTP Basic auth or the
+  session cookie, validates against <code>res.users</code> + bcrypt, and sets
+  <code>env.uid</code> per request. Failures raise <code>PermissionError</code>; the
+  exception handler maps anonymous to 401 + <code>WWW-Authenticate</code>,
+  authenticated to 403.</li>
+<li>Passwords are bcrypt-hashed on assignment via a <code>Password(Char)</code>
+  field subclass.</li>
+<li>Record-rule domains are stored as JSON, with <code>{"placeholder":
+  "uid"}</code> dicts substituted at query time. All applicable rules
+  (global + user's group rules) are <strong>AND-ed</strong> — stricter than
+  Odoo's per-group OR semantics, chosen for simplicity.</li>
+</ul>
+<h2 id="web-layer-views-as-data">Web layer: views as data<a class="headerlink" href="#web-layer-views-as-data" title="Permanent link">&para;</a></h2>
+<p>Views are records. <code>ir.ui.view</code> stores <code>(module, name, model,
+view_type, arch)</code>; a module declares views in its <code>__pyvelm__.py</code>
+under a <code>VIEWS = [...]</code> list, and the loader upserts them by
+<code>(module, name)</code> on every install pass. There is no separate "view
+migration" — re-declaring rewrites the record.</p>
+<p>The HTTP surface (<code>pyvelm/web.py</code>) is a thin FastAPI app parameterized
+by a loaded <code>Registry</code> and a psycopg connection pool. Each request
+checks out a connection, wraps it in a fresh <code>Environment</code>, runs the
+handler synchronously, and returns the connection to the pool. The
+async wrapping happens entirely at FastAPI's level; the ORM stays
+sync. Modules may add routes via manifest <strong><code>WEB_ROUTES</code></strong> (see
+<a href="../modules/#custom-http-routes">Modules → Custom HTTP routes</a>).</p>
+<p>JSON serialization is one shape: Many2one as <code>[id, display_value]</code>,
+collections as id lists, scalars pass through. <code>display_value</code> reads
+<code>display_name</code> then <code>name</code> then falls back to <code>str(id)</code>. Frontends
+fetch related details with a follow-up <code>/api/records?model=...</code>.</p>
+<p><strong>UI stack: Tailwind v4 + Flowbite, compiled locally.</strong> The
+bundled HTMX renderer ships templates that load
+<code>pyvelm/static/dist/pyvelm.css</code>, built by <code>npm run build</code> against
+<code>pyvelm/static/tailwind.css</code>. The dist file is checked into git so
+the framework boots without requiring <code>npm install</code> first. This is
+the major UI-stack deviation from Odoo (Bootstrap).</p>
+<p><strong>View inheritance</strong> is dict-merge on the arch with addressable paths
+(no XPath, no XML). An extension view declares <code>inherit_id</code> and an
+<code>operations</code> list; the resolver walks the chain in ascending
+<code>priority</code> order and applies each level's ops to a deepcopy of the
+root arch. Six op kinds cover the full Odoo XPath-position vocabulary
+(<code>set</code> / <code>replace</code> / <code>update</code> / <code>remove</code> / <code>before</code> / <code>after</code>); see
+<a href="../inheritance/">Extending views</a> for the user-facing reference.</p>
+<p>Targets are lists of segments. Strings address dict keys or by-<code>name</code>
+matches in list-of-dicts; ints address positional indices; dict
+predicates match list entries by any attribute; <code>"**"</code> as a prefix
+finds the next segment anywhere in the tree. Authoring sugar
+(<code>"fields": ["name", "age"]</code>) is normalized at load time to the
+list-of-dicts form so inheritance always works against stable
+addresses.</p>
+<h2 id="module-lifecycle">Module lifecycle<a class="headerlink" href="#module-lifecycle" title="Permanent link">&para;</a></h2>
+<p>A pyvelm app is a set of modules, each a Python package with a
+<code>__pyvelm__.py</code> manifest declaring <code>NAME</code>, <code>VERSION</code>, and <code>DEPENDS</code>. The
+loader (<code>pyvelm/loader.py</code>) discovers them under one or more roots,
+topo-sorts by <code>DEPENDS</code>, and installs each module's schema and
+migrations into a <code>Registry</code>.</p>
+<p>There is <strong>no module-global registry</strong>. Models register into whichever
+<code>Registry</code> is "active" at class-creation time, set via
+<code>with registry.activate():</code>. The loader brackets each module's models
+import in that context. Defining a model outside any active registry
+raises — silent fallbacks make multi-registry bugs hard to find.</p>
+<p>The loader walks specs in topo order and, for each module:</p>
+<ul>
+<li>If absent from <code>ir_module</code>: create its tables and FKs, run the install
+  hook, record the version.</li>
+<li>If present with an older version: run every script under
+  <code>&lt;module&gt;/migrations/</code> sorted by filename; bump the version.</li>
+<li>If present with the same version: no-op.</li>
+</ul>
+<p>Each per-module step runs inside <code>env.transaction()</code>. The compute graph
+(<code>_build_compute_graph</code>) and relational validation
+(<code>_validate_relations</code>) run <em>after</em> all modules are loaded so cross-module
+references (e.g. <code>partners.Partner.display_name</code> depending on
+<code>base.Region.name</code>) resolve.</p>
+<p>See <a href="../modules/">Modules</a> for the user-facing guide.</p>
+<h2 id="multi-pass-database-init">Multi-pass database init<a class="headerlink" href="#multi-pass-database-init" title="Permanent link">&para;</a></h2>
+<p><code>registry.init_db(conn)</code> is now the "install everything at once" shortcut
+used by tests and the legacy <code>reset_db</code>. Production goes through
+<code>loader.install</code> which runs the same passes scoped to one module at a
+time, transaction-wrapped. The pass list is the same either way:</p>
+<ol>
+<li><strong>CREATE TABLE for each model.</strong> Stored fields contribute columns;
+   non-stored fields (One2many, Many2many, non-stored computes) don't.</li>
+<li><strong>ALTER TABLE ADD CONSTRAINT for Many2one FKs.</strong> Done in a second pass
+   so target tables exist and self-referential FKs work.</li>
+<li><strong>CREATE TABLE for Many2many junction tables.</strong> Symmetric M2M pairs
+   dedupe via a <code>created</code> set keyed by relation name.</li>
+<li><strong>Validate non-stored relational fields and build the compute graph.</strong>
+   One2many inverses are checked, Many2many comodels are checked, then the
+   <code>@depends</code> paths are parsed into <code>_direct_deps</code> and <code>_m2o_deps</code>, cycles
+   are detected, and <code>_stored_compute_order</code> is computed per model.</li>
+</ol>
+<p><code>reset_db</code> drops M2M relation tables explicitly <em>before</em> dropping model
+tables. This protects against stale schema where the junction exists
+without FK constraints — <code>CREATE TABLE IF NOT EXISTS</code> would otherwise
+silently skip recreation.</p>
+<h2 id="domain-compiler">Domain compiler<a class="headerlink" href="#domain-compiler" title="Permanent link">&para;</a></h2>
+<p><code>domain_to_sql(domain, model_cls)</code> translates a list of <code>(attr, op, value)</code>
+leaves into a <code>WHERE</code> clause. Three notable behaviors:</p>
+<ul>
+<li><strong>Attr names are validated against <code>model_cls._fields</code>.</strong> Typos raise
+  <code>ValueError: Unknown field 'contry_id' on res.partner in domain</code> instead
+  of hitting Postgres as <code>column does not exist</code>.</li>
+<li><strong><code>id</code> is a pseudo-field</strong> — not in <code>_fields</code>, but always queryable.</li>
+<li><strong>Values flow through <code>field.to_sql_param</code>.</strong> A <code>Many2one</code> leaf accepts
+  a recordset as its value; the compiler coerces it to the id.</li>
+</ul>
+<p>Operators supported: <code>=</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>in</code>, <code>not in</code>,
+<code>like</code>, <code>ilike</code>. Top-level leaves without operators are <strong>AND</strong>ed
+(<code>normalize_domain</code> makes this explicit).</p>
+<p><strong>Prefix operators</strong> (Odoo-compatible): <code>&amp;</code> (AND), <code>|</code> (OR), <code>!</code> (NOT).
+Example: <code>['&amp;', ('state', '=', 'posted'), '|', ('name', 'ilike', 'a'), ('ref', 'ilike', 'a')]</code>.</p>
+<p>The legacy <code>("__or__", "=", [sub_leaves…])</code> leaf is expanded to <code>|</code> groups
+before compilation. See <a href="../models/#search-domains">Declaring models → Search domains</a>.</p>
+<p><strong>Path traversal in domains.</strong> A dotted attr (<code>country_id.region_id.name</code>)
+is parsed against the model into a <code>Path</code>. Two emission strategies:</p>
+<ul>
+<li><strong>Pure-M2o chains</strong> emit <code>LEFT JOIN</code>s with generated aliases (<code>_j1</code>,
+  <code>_j2</code>, ...) and qualify the leaf reference against the last-join alias.
+  Aliases are memoized per <code>(base, ...attr_chain)</code> so multiple leaves on
+  the same chain share JOINs.</li>
+<li><strong>Paths containing any O2m or M2m hop</strong> emit an <code>EXISTS (SELECT 1 ...)</code>
+  subquery instead. Each such leaf gets its <em>own</em> subquery, with aliases
+  in its own <code>_e&lt;n&gt;_&lt;i&gt;</code> namespace, anchored to the outer base via the
+  hop's linkage column (<code>junction.col1 = base.id</code> for M2m;
+  <code>child.inverse_fk = base.id</code> for O2m).</li>
+</ul>
+<p>The per-leaf EXISTS rule is the semantically correct one for collections:
+<code>[("tag_ids.name", "=", "EU"), ("tag_ids.name", "=", "Asia")]</code> reads as
+"has an EU-named tag AND has an Asia-named tag" — possibly different
+tags. Two separate <code>EXISTS</code> clauses say exactly that. Merging them into
+one body would silently mean "has a single tag that is both EU and
+Asia," which is rarely what anyone wants.</p>
+<p>Negated operators in collection paths (<code>!=</code>, <code>not in</code>) keep their natural
+existential read: "has at least one member whose value doesn't match."</p>
+<p><strong>Universal quantification</strong> — add a fourth leaf element <code>{"all": True}</code> on
+collection paths only:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># every tag is non-VIP (including partners with no tags)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">Partner</span><span class="o">.</span><span class="n">search</span><span class="p">([(</span><span class="s2">&quot;tag_ids.name&quot;</span><span class="p">,</span> <span class="s2">&quot;!=&quot;</span><span class="p">,</span> <span class="s2">&quot;VIP&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;all&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})])</span>
+</span></code></pre></div>
+<p>Implemented as <code>NOT EXISTS</code> over members that fail the condition.</p>
+<h2 id="computed-fields-with-depends">Computed fields with <code>@depends</code><a class="headerlink" href="#computed-fields-with-depends" title="Permanent link">&para;</a></h2>
+<p>A computed field is a method whose result is cached under
+<code>(model, id, field)</code>. Read paths cache-miss into the compute method; the
+method writes via <code>__set__</code>, which detects <code>env._in_compute</code> and routes
+to cache only.</p>
+<h3 id="field-declaration">Field declaration<a class="headerlink" href="#field-declaration" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">display_name</span> <span class="o">=</span> <span class="n">Char</span><span class="p">(</span><span class="n">compute</span><span class="o">=</span><span class="s2">&quot;_compute_display_name&quot;</span><span class="p">)</span>          <span class="c1"># non-stored</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">age_bucket</span>   <span class="o">=</span> <span class="n">Char</span><span class="p">(</span><span class="n">compute</span><span class="o">=</span><span class="s2">&quot;_compute_age_bucket&quot;</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># stored</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nd">@depends</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;country_id.code&quot;</span><span class="p">)</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">_compute_display_name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>        <span class="n">r</span><span class="o">.</span><span class="n">display_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> [</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">country_id</span><span class="o">.</span><span class="n">code</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;-&#39;</span><span class="si">}</span><span class="s2">]&quot;</span>
+</span></code></pre></div>
+<ul>
+<li><code>compute=</code> names a method on the same class.</li>
+<li><code>store=False</code> (default for compute fields) means no SQL column; cache
+  is the only home.</li>
+<li><code>store=True</code> adds a real SQL column. Cached values are flushed to SQL
+  after the compute method returns.</li>
+<li><code>@depends</code> is required on the compute method. The metaclass copies the
+  paths onto <code>field.depends_on</code>. A method with <code>@depends</code> but no field
+  referencing it raises at class-creation time.</li>
+</ul>
+<h3 id="the-dependency-graph">The dependency graph<a class="headerlink" href="#the-dependency-graph" title="Permanent link">&para;</a></h3>
+<p>Built once at <code>registry.init_db()</code> via the path parser (see <code>paths.py</code>).
+A single index:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>_edge_index[(listen_model, listen_attr)] -&gt; [(dep_model, dep_field, HopEdge), ...]
+</span></code></pre></div>
+<p>Each <code>@depends</code> path is parsed into a <code>Path</code> with zero or more relational
+<code>Hop</code> objects. The path emits one <code>HopEdge</code> per hop <em>and</em> one for the
+leaf — these are the listening points whose changes should invalidate the
+dependent compute field. When a change fires at <code>(model, attr)</code>,
+<code>notify_changed</code> looks up the matching edges and calls
+<code>edge.find_source_ids(env, ids)</code>, which:</p>
+<ol>
+<li>Runs the edge's <code>to_source</code> transform (identity for M2o/M2m, or a
+   read-the-inverse-FK lookup for O2m hops).</li>
+<li>Reverse-walks any remaining hops back toward the source model.</li>
+</ol>
+<p>Concretely, <code>@depends("country_id.region_id.name")</code> on
+<code>res.partner.display_name</code> registers three edges:</p>
+<table>
+<thead>
+<tr>
+<th>Listening at</th>
+<th>Hops to reverse-walk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>(res.partner, country_id)</code></td>
+<td>none — partner is already on the source side</td>
+</tr>
+<tr>
+<td><code>(res.country, region_id)</code></td>
+<td>walk <code>country_id</code> reverse (countries → partners)</td>
+</tr>
+<tr>
+<td><code>(res.region, name)</code></td>
+<td>walk <code>region_id</code> reverse, then <code>country_id</code> reverse</td>
+</tr>
+</tbody>
+</table>
+<p>The first handles "the FK on the partner changed." The second handles "a
+country's region_id changed — find all partners pointing at those
+countries." The third handles "a region's name changed — chase it back
+through countries to partners."</p>
+<p><code>HopEdge</code> is type-agnostic. The same machinery handles M2o, O2m, and M2m
+hops because each hop type implements <code>reverse_walk(env, ids) -&gt; ids</code>.
+O2m hops listen on the comodel's inverse-FK attr; M2m hops listen on the
+source-side M2m attr (which fires when the junction is mutated through
+<code>write</code>/<code>_apply_m2m</code>).</p>
+<h3 id="cycle-detection">Cycle detection<a class="headerlink" href="#cycle-detection" title="Permanent link">&para;</a></h3>
+<p>A separate read-edge map is built only for compute-field nodes
+<code>(model, field)</code>. DFS coloring detects cycles; the error message names the
+cycle path.</p>
+<h3 id="topological-order-for-stored-compute-fields">Topological order for stored compute fields<a class="headerlink" href="#topological-order-for-stored-compute-fields" title="Permanent link">&para;</a></h3>
+<p>After cycle detection, per-model topological order of stored compute fields
+is computed and cached on <code>_stored_compute_order</code>. <code>create()</code> runs them in
+that order so dependent computes see their inputs already populated.</p>
+<h3 id="notify_changed-propagation"><code>notify_changed</code> propagation<a class="headerlink" href="#notify_changed-propagation" title="Permanent link">&para;</a></h3>
+<p>After <code>create()</code> or <code>write()</code>, the model calls
+<code>env.notify_changed(model_name, ids, fields)</code>. The algorithm is BFS over
+the dep graph:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>queue = direct + m2o-traversal dependents of (model, fields)
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>while queue:
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    (m, f, idset) = pop
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    if (m, f) already processed: merge idset; continue if empty
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    invalidate cache for (m, idset, f)
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    if f is stored: recompute via compute_field and UPDATE the column
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    enqueue dependents of (m, f)
+</span></code></pre></div>
+<p>The reason recomputation is eager for stored fields and lazy for non-stored
+is correctness across sessions: a stored field's SQL column is queried by
+other sessions, so it must be up-to-date. A non-stored field's cache is
+session-local — the next read in this session will recompute it on miss.</p>
+<h3 id="rejecting-external-writes">Rejecting external writes<a class="headerlink" href="#rejecting-external-writes" title="Permanent link">&para;</a></h3>
+<p><code>__set__</code> on a compute field raises <code>ValueError</code> unless
+<code>env._in_compute</code> is truthy. This forces the data flow to be: deps change
+→ invalidation → recompute. There is no "set it directly and hope for the
+best" path.</p>
+<h2 id="deliberately-deferred">Deliberately deferred<a class="headerlink" href="#deliberately-deferred" title="Permanent link">&para;</a></h2>
+<p>Each of these is a known gap; the trade-off is documented to keep the gap
+visible.</p>
+<table>
+<thead>
+<tr>
+<th>Gap</th>
+<th>Why deferred</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LRU / eviction on <code>env.cache</code></td>
+<td>Single env per request, ids are bounded by the working set. Premature optimization until proven a problem.</td>
+</tr>
+<tr>
+<td>Universal-quantifier edge cases</td>
+<td>Vacuous truth when a partner has no tags; <code>like</code>/<code>ilike</code> with <code>all</code> use <code>NOT ILIKE</code> failure rows.</td>
+</tr>
+<tr>
+<td>O2m/M2m caching (full dep graph)</td>
+<td>Tuple cache + invalidation on inverse FK / M2M writes, comodel unlink, and symmetric M2M fields sharing a junction table. Remaining gap: raw SQL junction edits.</td>
+</tr>
+<tr>
+<td>M2M command tuples</td>
+<td>Replace-only writes work for everything in the example; <code>[(0,_,vals), (4,id)]</code> are an API ergonomics layer, not a capability layer.</td>
+</tr>
+<tr>
+<td>Transaction boundaries beyond autocommit</td>
+<td>Adds a real unit-of-work concept. Right when multi-statement consistency matters, not before.</td>
+</tr>
+<tr>
+<td>Stored compute backfill on schema add</td>
+<td>The bulk-recompute step is hand-written when needed — the auto-diff story would have to ship first.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="why-the-design-holds-up">Why the design holds up<a class="headerlink" href="#why-the-design-holds-up" title="Permanent link">&para;</a></h2>
+<p>Three invariants do most of the structural work:</p>
+<ol>
+<li><strong>Cache is keyed by <code>(model, id, attr)</code></strong> — every layer (CRUD, descriptors,
+   computed fields, the dep graph) speaks the same coordinate.</li>
+<li><strong>Recordsets are tuples of ids over an env</strong> — operations naturally
+   bulk-scale; singletons are special cases enforced explicitly.</li>
+<li><strong>Init is multi-pass</strong> — schema, constraints, relations, and
+   validation each run when their prerequisites are met. Module
+   loading slots in as another pass; future additions (a new view
+   type, a new dep-graph hop kind) work the same way.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/sponsors/coolsam726" target="_blank" rel="noopener" title="Sponsor on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="m241 87.1 15 20.7 15-20.7C296 52.5 336.2 32 378.9 32 452.4 32 512 91.6 512 165.1v2.6c0 112.2-139.9 242.5-212.9 298.2-12.4 9.4-27.6 14.1-43.1 14.1s-30.8-4.6-43.1-14.1C139.9 410.2 0 279.9 0 167.7v-2.6C0 91.6 59.6 32 133.1 32 175.8 32 216 52.5 241 87.1"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "navigation.instant", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest", "search.share"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
