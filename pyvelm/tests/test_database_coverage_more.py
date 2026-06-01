@@ -336,7 +336,7 @@ class DdlHelperTests(unittest.TestCase):
         wire_sa_conn(conn, [], dialect_name="mysql", base_execute=base_execute)
         with patch(
             "pyvelm.database.introspection.column_exists", return_value=False
-        ):
+        ), patch("pyvelm.database.introspection.table_exists", return_value=True):
             self.assertFalse(
                 add_column_if_missing(conn, "t", "c", "text", cap)
             )
