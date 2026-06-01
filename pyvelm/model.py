@@ -4,6 +4,7 @@ from copy import copy
 from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 from .domain import domain_to_sql
+from .domain_sa import domain_search_count_select, domain_search_select
 from .fields import Char, Field, Integer, Many2one, finalize_related_field
 from .registry import active_registry
 from .timestamps import (
@@ -1027,35 +1028,40 @@ class BaseModel(metaclass=MetaModel):
         offset: int = 0,
         order: str | None = None,
     ) -> "BaseModel":
-        full_domain = self._collect_search_domain(domain)
-        where, params, joins = self._domain_to_sql(full_domain)
-        base = f'"{self._table}"'
-        sql = f'SELECT {base}."id" FROM {base}{joins} WHERE {where}'
-        if order:
-            sql += f" ORDER BY {order}"
-        from .database import _conn_capabilities, append_search_pagination
+        from .database import _conn_capabilities
 
+        full_domain = self._collect_search_domain(domain)
         cap = getattr(self.env.conn, "capabilities", None) or _conn_capabilities(
             self.env.conn
         )
-        sql = append_search_pagination(
-            sql,
-            base_table_sql=base,
+        stmt = domain_search_select(
+            self.__class__,
+            full_domain,
+            self.env.registry,
+            capabilities=cap,
+            order=order,
             limit=limit,
             offset=offset,
-            order=order,
-            cap=cap,
         )
-        rows = self._execute_search_sql(sql, params)
-        return self.__class__(self.env, tuple(r[0] for r in rows))
+        sa_conn = _require_sa_connection(self.env.conn)
+        rows = sa_conn.execute(stmt).fetchall()
+        return self.__class__(self.env, tuple(int(r[0]) for r in rows))
 
     def search_count(self, domain: list[tuple] | None = None) -> int:
+        from .database import _conn_capabilities
+
         full_domain = self._collect_search_domain(domain)
-        where, params, joins = self._domain_to_sql(full_domain)
-        base = f'"{self._table}"'
-        sql = f'SELECT COUNT(*) FROM {base}{joins} WHERE {where}'
-        row = self._execute_search_sql(sql, params)[0]
-        return int(row[0])
+        cap = getattr(self.env.conn, "capabilities", None) or _conn_capabilities(
+            self.env.conn
+        )
+        stmt = domain_search_count_select(
+            self.__class__,
+            full_domain,
+            self.env.registry,
+            capabilities=cap,
+        )
+        sa_conn = _require_sa_connection(self.env.conn)
+        return int(sa_conn.execute(stmt).scalar_one())
 
     # ---- aggregated reads (read_group) ------------------------------
     #
