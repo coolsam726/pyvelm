@@ -90,10 +90,10 @@ class RenderMigrationTests(unittest.TestCase):
             orphan_columns=[("res_partner", "legacy")],
         )
         body = render_migration(diff, (0, 1, 0), (0, 2, 0))
-        self.assertIn("CREATE TABLE", body)
-        self.assertIn("ADD COLUMN", body)
-        self.assertIn("SET NOT NULL", body)
-        self.assertIn("DROP NOT NULL", body)
+        self.assertIn("schema.create", body)
+        self.assertIn("schema.table", body)
+        self.assertIn("drop_nullable", body)
+        self.assertIn("allow_null", body)
         self.assertIn("orphan", body.lower())
 
 

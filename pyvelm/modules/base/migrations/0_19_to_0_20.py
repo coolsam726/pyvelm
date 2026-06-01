@@ -1,22 +1,19 @@
-"""Migration 0.19.0 → 0.20.0 — white-label branding columns on ``res_company``."""
+"""White-label branding columns on res_company."""
+
+from pyvelm.migrations import Schema
 
 
+def upgrade(env):
+    schema = Schema(env)
 
+    def _alter(t):
+        t.string("app_name", nullable=True)
+        t.string("app_tagline", nullable=True)
+        t.string("logo_url", nullable=True)
+        t.string("favicon_url", nullable=True)
+        t.string("copyright_text", nullable=True)
+        t.string("support_email", nullable=True)
+        t.string("support_url", nullable=True)
+        t.boolean("show_powered_by", nullable=True).default(True)
 
-from pyvelm.database import execute_migration_sql
-
-def migrate(env):
-    cols = [
-        ("app_name", "text"),
-        ("app_tagline", "text"),
-        ("logo_url", "text"),
-        ("favicon_url", "text"),
-        ("copyright_text", "text"),
-        ("support_email", "text"),
-        ("support_url", "text"),
-        ("show_powered_by", "boolean DEFAULT true"),
-    ]
-    for name, ddl in cols:
-        execute_migration_sql(env.conn, 
-            f'ALTER TABLE "res_company" ADD COLUMN IF NOT EXISTS "{name}" {ddl}'
-        )
+    schema.table("res_company", _alter)

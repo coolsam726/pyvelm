@@ -323,65 +323,125 @@ def render_migration(
     out.append("Type / NOT NULL / DROP changes are commented — review first.")
     out.append('"""')
     out.append("")
+    out.append("from pyvelm.migrations import Schema")
     out.append("")
-    out.append("from pyvelm.database import execute_migration_sql")
     out.append("")
-    out.append("")
-    out.append("def migrate(env):")
+    out.append("def upgrade(env):")
     if diff.is_empty:
         out.append("    pass  # nothing to do")
         return "\n".join(out) + "\n"
-    from pyvelm.database import create_table_sql
-    from pyvelm.database.dialects import dialect_capabilities
-    from pyvelm.database.sa_ddl import compile_add_column
-
-    mig_cap = dialect_capabilities("postgresql")
+    out.append("    schema = Schema(env)")
     for table, columns in diff.new_tables:
-        ddl = create_table_sql(table, columns, mig_cap)
-        out.append(f"    execute_migration_sql(env.conn, {_q(ddl)})")
+        fn_name = f"_{table}"
+        out.append("")
+        lines = _blueprint_lines_from_columns(columns)
+        out.append(f"    def {fn_name}(t):")
+        if lines:
+            for line in lines:
+                out.append(f"        {line}")
+        else:
+            out.append("        pass")
+        out.append(f"    schema.create({table!r}, {fn_name})")
     for table, col, field_obj, was_required, _sql_type in diff.new_columns:
-        col_obj = field_obj.sa_column(
-            type("_R", (), {"_models": {table: object}})(),
-            mig_cap,
-        )
-        stmt = compile_add_column(table, col_obj, mig_cap)
-        out.append(f"    execute_migration_sql(env.conn, {_q(stmt)})")
+        fn_name = f"_{table}_add_{col}"
+        line = _blueprint_line_from_field(field_obj, col, required=was_required)
+        out.append("")
+        out.append(f"    def {fn_name}(t):")
+        out.append(f"        {line}")
+        out.append(f"    schema.table({table!r}, {fn_name})")
         if was_required:
             out.append(
-                f"    # TODO: required field — backfill {table}.{col} "
-                f"then issue:"
+                f"    # TODO: backfill {table}.{col} then "
+                f"schema.table({table!r}, lambda t: t.drop_nullable({col!r}))"
             )
-            tighten = (
-                f'ALTER TABLE "{table}" ALTER COLUMN "{col}" SET NOT NULL'
-            )
-            out.append(f"    # execute_migration_sql(env.conn, {_q(tighten)})")
     for alt in diff.alterations:
         out.append("")
         out.append(f"    # {alt.table}.{alt.column}: {alt.kind} — {alt.detail}")
         if alt.kind == "set_not_null":
-            stmt = (
-                f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" '
-                f"SET NOT NULL"
+            out.append(
+                f"    # schema.table({alt.table!r}, "
+                f"lambda t: t.drop_nullable({alt.column!r}))"
             )
-            out.append(f"    # execute_migration_sql(env.conn, {_q(stmt)})")
         elif alt.kind == "drop_not_null":
-            stmt = (
-                f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" '
-                f"DROP NOT NULL"
+            out.append(
+                f"    # schema.table({alt.table!r}, "
+                f"lambda t: t.allow_null({alt.column!r}))"
             )
-            out.append(f"    # execute_migration_sql(env.conn, {_q(stmt)})")
         elif alt.kind == "type":
             out.append(
-                f"    # e.g. ALTER TABLE \"{alt.table}\" ALTER COLUMN "
-                f"\"{alt.column}\" TYPE <new_type> USING ..."
+                f"    # Review type change on {alt.table}.{alt.column} manually"
             )
     if diff.orphan_columns:
         out.append("")
         out.append("    # Orphan columns — review before uncommenting:")
         for table, col in diff.orphan_columns:
-            drop = f'ALTER TABLE "{table}" DROP COLUMN IF EXISTS "{col}"'
-            out.append(f"    # env.conn.execute({_q(drop)})")
+            out.append(
+                f"    # schema.table({table!r}, lambda t: t.drop_column({col!r}))"
+            )
     return "\n".join(out) + "\n"
+
+
+def _blueprint_lines_from_columns(columns) -> list[str]:
+    from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
+    from sqlalchemy import Column as SAColumn
+
+    lines: list[str] = []
+    for col in columns:
+        if not isinstance(col, SAColumn):
+            continue
+        if col.primary_key:
+            continue
+        name = col.name
+        if col.foreign_keys:
+            ref = next(iter(col.foreign_keys)).column.table.name
+            ondelete = next(iter(col.foreign_keys)).ondelete or "CASCADE"
+            lines.append(
+                f"t.foreign_id({name!r}, {ref!r}, ondelete={ondelete!r}, "
+                f"nullable={col.nullable})"
+            )
+            continue
+        nullable = col.nullable
+        if isinstance(col.type, String):
+            lines.append(f"t.string({name!r}, nullable={nullable})")
+        elif isinstance(col.type, Text):
+            lines.append(f"t.text({name!r}, nullable={nullable})")
+        elif isinstance(col.type, Integer):
+            lines.append(f"t.integer({name!r}, nullable={nullable})")
+        elif isinstance(col.type, Boolean):
+            lines.append(f"t.boolean({name!r}, nullable={nullable})")
+        elif isinstance(col.type, DateTime):
+            lines.append(f"t.timestamp({name!r}, nullable={nullable})")
+        elif isinstance(col.type, Float):
+            lines.append(f"t.float({name!r}, nullable={nullable})")
+        else:
+            lines.append(f"t.text({name!r}, nullable={nullable})")
+    return lines
+
+
+def _blueprint_line_from_field(field: Field, col_name: str, *, required: bool) -> str:
+    from .fields import Boolean as BoolField
+    from .fields import Char, Float, Integer, Many2one, Text
+
+    nullable = not required
+    if isinstance(field, Char):
+        return f"t.string({col_name!r}, nullable={nullable})"
+    if isinstance(field, Text):
+        return f"t.text({col_name!r}, nullable={nullable})"
+    if isinstance(field, Integer):
+        return f"t.integer({col_name!r}, nullable={nullable})"
+    if isinstance(field, BoolField):
+        return f"t.boolean({col_name!r}, nullable={nullable})"
+    if isinstance(field, Float):
+        return f"t.float({col_name!r}, nullable={nullable})"
+    if isinstance(field, Many2one):
+        comodel = getattr(field, "comodel", "unknown")
+        table = comodel.replace(".", "_")
+        ondelete = getattr(field, "ondelete", "SET NULL") or "SET NULL"
+        return (
+            f"t.foreign_id({col_name!r}, {table!r}, ondelete={ondelete!r}, "
+            f"nullable={nullable})"
+        )
+    return f"t.text({col_name!r}, nullable={nullable})"
 
 
 def _summary(diff: Diff) -> str:

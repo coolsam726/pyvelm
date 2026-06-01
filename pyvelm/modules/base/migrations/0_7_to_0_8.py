@@ -1,53 +1,33 @@
-"""Introduce the `ir.ui.menu` model.
+"""Introduce the ir.ui.menu model."""
 
-The sidebar in 0.7.0 was hard-coded inside the renderer. 0.8.0 moves
-navigation into a data model so each module contributes its own entries
-via a `MENUS` data file, mirroring how `ir.ui.view` handles views.
-
-Fresh installs get the table via `_setup_module_schema`. Upgraded
-installs need it created here so the `_sync_menus` pass at the end of
-the install cycle has somewhere to write to.
-
-Idempotent: every DDL uses `IF NOT EXISTS`.
-"""
+from pyvelm.migrations import Schema
 
 
+def upgrade(env):
+    schema = Schema(env)
 
+    def _menu(t):
+        t.string("module", nullable=False)
+        t.string("name", nullable=False)
+        t.string("label", nullable=False)
+        t.integer("parent_id", nullable=True)
+        t.integer("sequence", nullable=True).default(10)
+        t.string("href")
+        t.string("icon")
+        t.boolean("active", nullable=True).default(True)
 
-from pyvelm.database import execute_migration_sql
+    schema.create("ir_ui_menu", _menu)
 
-def migrate(env):
-    execute_migration_sql(env.conn, 
-        'CREATE TABLE IF NOT EXISTS "ir_ui_menu" ('
-        '"id" SERIAL PRIMARY KEY, '
-        '"module" text NOT NULL, '
-        '"name" text NOT NULL, '
-        '"label" text NOT NULL, '
-        '"parent_id" integer, '
-        '"sequence" integer DEFAULT 10, '
-        '"href" text, '
-        '"icon" text, '
-        '"active" boolean DEFAULT TRUE)'
-    )
-    execute_migration_sql(env.conn, 
-        'ALTER TABLE "ir_ui_menu" '
-        'DROP CONSTRAINT IF EXISTS "ir_ui_menu_parent_id_fkey"'
-    )
-    execute_migration_sql(env.conn, 
-        'ALTER TABLE "ir_ui_menu" '
-        'ADD CONSTRAINT "ir_ui_menu_parent_id_fkey" '
-        'FOREIGN KEY ("parent_id") REFERENCES "ir_ui_menu"("id") '
-        'ON DELETE CASCADE'
-    )
-    execute_migration_sql(env.conn, 
-        'ALTER TABLE "ir_ui_menu" '
-        'ADD COLUMN IF NOT EXISTS "access_model" text'
-    )
-    execute_migration_sql(env.conn, 
-        'ALTER TABLE "ir_ui_menu" '
-        'ADD COLUMN IF NOT EXISTS "access_perm" text'
-    )
-    execute_migration_sql(env.conn, 
-        'ALTER TABLE "ir_ui_menu" '
-        'ADD COLUMN IF NOT EXISTS "access_policy" text'
-    )
+    def _alter(t):
+        t.drop_constraint("ir_ui_menu_parent_id_fkey")
+        t.foreign_key(
+            "parent_id",
+            "ir_ui_menu",
+            ondelete="CASCADE",
+            name="ir_ui_menu_parent_id_fkey",
+        )
+        t.string("access_model")
+        t.string("access_perm")
+        t.string("access_policy")
+
+    schema.table("ir_ui_menu", _alter)

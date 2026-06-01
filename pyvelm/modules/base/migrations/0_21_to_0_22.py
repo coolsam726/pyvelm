@@ -1,18 +1,9 @@
-"""Migration 0.21.0 → 0.22.0 — read access on ``ir.ui.view`` for all users.
+"""Read access on ir.ui.view for all users."""
 
-Non-admin web sessions load view arch via ``ir.ui.view.search``; without
-a global read grant they raise ``PermissionError``. Fresh installs get
-the same row from ``base.hooks:install``; this backfills existing DBs.
-"""
+from base import hooks
 
 
-
-
-from pyvelm.database import execute_migration_sql
-
-def migrate(env):
-    from base import hooks
-
+def upgrade(env):
     hooks._seed_ui_view_read_access(env)
     if "ir.model.access" not in env.registry or "res.groups" not in env.registry:
         return

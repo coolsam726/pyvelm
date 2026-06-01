@@ -1,12 +1,8 @@
-"""Migration 0.20.0 → 0.21.0 — dark-mode logo URL on ``res_company``."""
+"""Add res_company.logo_url_dark."""
+
+from pyvelm.migrations import Schema
 
 
-
-
-from pyvelm.database import execute_migration_sql
-
-def migrate(env):
-    execute_migration_sql(env.conn, 
-        'ALTER TABLE "res_company" '
-        'ADD COLUMN IF NOT EXISTS "logo_url_dark" text'
-    )
+def upgrade(env):
+    schema = Schema(env)
+    schema.table("res_company", lambda t: t.string("logo_url_dark", nullable=True))

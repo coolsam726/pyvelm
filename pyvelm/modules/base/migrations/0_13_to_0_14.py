@@ -1,21 +1,8 @@
-"""Add ir_cron.lastcall column.
+"""Add ir_cron.lastcall column."""
 
-Records the timestamp of each job's most recent execution (set by
-``CronJob.run_due`` and by the on-demand ``CronJob.run_now``). The
-admin list view displays it next to ``nextcall`` so operators can
-confirm at a glance that a job is actually firing.
-
-Idempotent: ``ADD COLUMN IF NOT EXISTS``. Existing rows stay NULL
-until their next run.
-"""
+from pyvelm.migrations import Schema
 
 
-
-
-from pyvelm.database import execute_migration_sql
-
-def migrate(env):
-    execute_migration_sql(env.conn, 
-        'ALTER TABLE "ir_cron" '
-        'ADD COLUMN IF NOT EXISTS "lastcall" timestamp'
-    )
+def upgrade(env):
+    schema = Schema(env)
+    schema.table("ir_cron", lambda t: t.timestamp("lastcall", nullable=True))

@@ -476,7 +476,7 @@ def _run_migrations(spec: ModuleSpec, env: Environment,
     falls strictly between `from_version` (exclusive) and `to_version`
     (inclusive). Convention: `<from>_to_<to>.py` with `_`-separated
     version parts (e.g. `0_1_to_0_2.py`). Each module must export
-    `migrate(env)`. Files that don't match the convention raise."""
+    `upgrade(env)`. Files that don't match the convention raise."""
     if spec.migrations_package is None:
         return
     try:
@@ -516,13 +516,13 @@ def _run_migrations(spec: ModuleSpec, env: Environment,
     for _, _, p in applicable:
         mod_name = f"{spec.migrations_package}.{p.stem}"
         m = importlib.import_module(mod_name)
-        if hasattr(m, "migrate"):
-            from pyvelm.database import migration_supported
-
-            supported = getattr(m, "supported_backends", ("postgresql",))
-            if not migration_supported(env.conn, supported):
-                continue
-            m.migrate(env)
+        if hasattr(m, "upgrade"):
+            m.upgrade(env)
+        elif hasattr(m, "migrate"):
+            raise RuntimeError(
+                f"Migration {mod_name} still defines migrate(); "
+                "use upgrade(env) with pyvelm.migrations.Schema instead."
+            )
 
 
 def _load_data_files(spec: ModuleSpec) -> None:

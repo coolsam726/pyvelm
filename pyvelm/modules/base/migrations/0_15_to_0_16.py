@@ -1,25 +1,17 @@
-"""Rename "ECB rate fetcher" → "Currency Rate Sync from ECB".
+"""Rename ECB rate fetcher cron/action to Currency Rate Sync from ECB."""
 
-The bundled ECB rate-fetcher server action + cron were originally
-seeded under the developer-y name "ECB rate fetcher". A more
-descriptive label fits the admin UI better.
-
-Idempotent: matches the old name only — re-running this migration
-or running it after a fresh install (which already seeds the new
-name) is a no-op.
-"""
+from pyvelm.migrations import Schema
 
 
-
-
-from pyvelm.database import execute_migration_sql
-
-def migrate(env):
-    execute_migration_sql(env.conn, 
-        'UPDATE "ir_cron" SET "name" = %s WHERE "name" = %s',
-        ("Currency Rate Sync from ECB", "ECB rate fetcher"),
+def upgrade(env):
+    schema = Schema(env)
+    schema.update_rows(
+        "ir_cron",
+        {"name": "Currency Rate Sync from ECB"},
+        name="ECB rate fetcher",
     )
-    execute_migration_sql(env.conn, 
-        'UPDATE "ir_actions_server" SET "name" = %s WHERE "name" = %s',
-        ("Currency Rate Sync from ECB", "ECB rate fetcher"),
+    schema.update_rows(
+        "ir_actions_server",
+        {"name": "Currency Rate Sync from ECB"},
+        name="ECB rate fetcher",
     )

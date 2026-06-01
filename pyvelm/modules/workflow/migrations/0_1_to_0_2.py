@@ -1,12 +1,10 @@
-"""Migration 0.1.0 → 0.2.0 — approval deadlines + escalation cron."""
+"""Approval deadlines + escalation cron."""
+
+from pyvelm.migrations import Schema
 
 
-
-
-from pyvelm.database import execute_migration_sql
-
-def migrate(env):
-    execute_migration_sql(env.conn, 
-        'ALTER TABLE "workflow_approval" '
-        'ADD COLUMN IF NOT EXISTS "deadline_at" timestamp'
+def upgrade(env):
+    schema = Schema(env)
+    schema.table(
+        "workflow_approval", lambda t: t.timestamp("deadline_at", nullable=True)
     )

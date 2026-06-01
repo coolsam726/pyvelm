@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pyvelm.database import execute_migration_sql, fetchone_migration
+from pyvelm.migrations import Schema
 
 
 def install(env):
@@ -15,39 +15,27 @@ def sync(env):
 
 
 def _adopt_legacy_module(env) -> None:
-    """Rename ``ir_module`` row ``report_layout`` → ``document_layout`` when upgrading."""
-    cur = fetchone_migration(env.conn, 'SELECT 1 FROM "ir_module" WHERE "name" = %s', ("report_layout",),)
-    if not cur:
-        return
-    newer = fetchone_migration(env.conn, 'SELECT 1 FROM "ir_module" WHERE "name" = %s', ("document_layout",),)
-    if newer:
-        execute_migration_sql(env.conn, 'DELETE FROM "ir_module" WHERE "name" = %s', ("report_layout",))
-    else:
-        execute_migration_sql(env.conn, 
-            'UPDATE "ir_module" SET "name" = %s WHERE "name" = %s',
-            ("document_layout", "report_layout"),
-        )
+    """Rename ir_module row report_layout → document_layout when upgrading."""
+    Schema(env).rename_module("report_layout", "document_layout")
 
 
 def _migrate_company_field(env) -> None:
-    """Move data from legacy ``report_layout`` column to ``document_layout``."""
+    """Move data from legacy report_layout column to document_layout."""
     from pyvelm.database import column_exists
 
+    schema = Schema(env)
     conn = env.conn
-    cols: set[str] = set()
-    for name in ("report_layout", "document_layout"):
-        if column_exists(conn, "res_company", name):
-            cols.add(name)
-    if "report_layout" in cols and "document_layout" in cols:
-        execute_migration_sql(conn, 
-            'UPDATE "res_company" SET "document_layout" = "report_layout" '
-            'WHERE ("document_layout" IS NULL OR "document_layout" = \'\') '
-            'AND "report_layout" IS NOT NULL AND "report_layout" != \'\'',
+    has_old = column_exists(conn, "res_company", "report_layout")
+    has_new = column_exists(conn, "res_company", "document_layout")
+    if has_old and has_new:
+        schema.copy_column_if_dest_empty(
+            "res_company", "document_layout", "report_layout"
         )
-        execute_migration_sql(conn, 'ALTER TABLE "res_company" DROP COLUMN IF EXISTS "report_layout"')
-    elif "report_layout" in cols:
-        execute_migration_sql(conn, 
-            'ALTER TABLE "res_company" RENAME COLUMN "report_layout" TO "document_layout"',
+        schema.table("res_company", lambda t: t.drop_column("report_layout"))
+    elif has_old:
+        schema.table(
+            "res_company",
+            lambda t: t.rename_column("report_layout", "document_layout"),
         )
 
 

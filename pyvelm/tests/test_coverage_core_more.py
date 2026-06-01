@@ -509,7 +509,7 @@ class LoaderHelperTests(unittest.TestCase):
             mig.mkdir()
             (mig / "__init__.py").write_text("", encoding="utf-8")
             (mig / "0_1_to_0_2.py").write_text(
-                "def migrate(env):\n    pass\n", encoding="utf-8",
+                "def upgrade(env):\n    pass\n", encoding="utf-8",
             )
             spec = ModuleSpec(
                 name="m",

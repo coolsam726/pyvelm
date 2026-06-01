@@ -1,21 +1,11 @@
-"""Migration 0.29.0 → 0.30.0 — company stamp on ``ir.attachment``.
+"""Company stamp on ir.attachment."""
 
-Adds the nullable ``company_id`` column the file_manager library uses
-to scope its view per company. Fresh installs get it through
-``_setup_table``; this explicit ``ALTER`` is the safety net for
-databases that update base before re-installing file_manager. No
-backfill — existing attachments stay company-less (they simply don't
-appear in a company-scoped library, which is the intended behaviour
-for system attachments like avatars / mail).
-"""
+from pyvelm.migrations import Schema
 
 
-
-
-from pyvelm.database import execute_migration_sql
-
-def migrate(env):
-    execute_migration_sql(env.conn, 
-        'ALTER TABLE "ir_attachment" '
-        'ADD COLUMN IF NOT EXISTS "company_id" INTEGER NULL'
+def upgrade(env):
+    schema = Schema(env)
+    schema.table(
+        "ir_attachment",
+        lambda t: t.foreign_id("company_id", "res_company", ondelete="SET NULL"),
     )

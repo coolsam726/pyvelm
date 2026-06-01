@@ -1,15 +1,7 @@
-"""Migration 0.25.0 → 0.26.0 — email templates (``mail.template``).
+"""Email templates — Admin ACL backfill."""
 
-Schema sync adds ``mail.template`` and new ``mail.message`` columns.
-This backfills Admin ACL on existing databases.
-"""
+from pyvelm.security import grant_model_access
 
 
-
-
-from pyvelm.database import execute_migration_sql
-
-def migrate(env):
-    from pyvelm.security import grant_model_access
-
+def upgrade(env):
     grant_model_access(env, "mail.template", admin="crud", user=None, public=None)

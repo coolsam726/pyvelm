@@ -1,12 +1,8 @@
-"""Add session_token column to res_users (Slice B: session login)."""
+"""Add session_token column to res_users."""
+
+from pyvelm.migrations import Schema
 
 
-
-
-from pyvelm.database import execute_migration_sql
-
-def migrate(env):
-    execute_migration_sql(env.conn, """
-        ALTER TABLE "res_users"
-        ADD COLUMN IF NOT EXISTS "session_token" text
-    """)
+def upgrade(env):
+    schema = Schema(env)
+    schema.table("res_users", lambda t: t.string("session_token", nullable=True))

@@ -298,71 +298,36 @@ class PdfModuleTests(unittest.TestCase):
 
 
 class HooksTests(unittest.TestCase):
-    def test_adopt_legacy_no_report_layout(self):
+    def test_adopt_legacy_delegates_to_schema(self):
         env = MagicMock()
-        with patch(
-            "document_layout.hooks.fetchone_migration",
-            return_value=None,
-        ) as fetchone:
+        schema = MagicMock()
+        with patch("document_layout.hooks.Schema", return_value=schema) as schema_cls:
             dl_hooks._adopt_legacy_module(env)
-        fetchone.assert_called_once()
-
-    def test_adopt_legacy_rename(self):
-        env = MagicMock()
-        with (
-            patch(
-                "document_layout.hooks.fetchone_migration",
-                side_effect=[(1,), None],
-            ),
-            patch(
-                "document_layout.hooks.execute_migration_sql",
-            ) as execute,
-        ):
-            dl_hooks._adopt_legacy_module(env)
-        self.assertEqual(execute.call_count, 1)
-
-    def test_adopt_legacy_delete_duplicate(self):
-        env = MagicMock()
-        with (
-            patch(
-                "document_layout.hooks.fetchone_migration",
-                side_effect=[(1,), (1,)],
-            ),
-            patch(
-                "document_layout.hooks.execute_migration_sql",
-            ) as execute,
-        ):
-            dl_hooks._adopt_legacy_module(env)
-        execute.assert_called_with(
-            env.conn,
-            'DELETE FROM "ir_module" WHERE "name" = %s',
-            ("report_layout",),
+        schema_cls.assert_called_once_with(env)
+        schema.rename_module.assert_called_once_with(
+            "report_layout", "document_layout"
         )
 
     def test_migrate_both_columns(self):
         env = MagicMock()
+        schema = MagicMock()
         with (
             patch("pyvelm.database.column_exists", side_effect=[True, True]),
-            patch(
-                "document_layout.hooks.execute_migration_sql",
-            ) as execute,
+            patch("document_layout.hooks.Schema", return_value=schema),
         ):
             dl_hooks._migrate_company_field(env)
-        self.assertGreaterEqual(execute.call_count, 2)
+        schema.copy_column_if_dest_empty.assert_called_once()
+        schema.table.assert_called_once()
 
     def test_migrate_rename_only(self):
         env = MagicMock()
+        schema = MagicMock()
         with (
             patch("pyvelm.database.column_exists", side_effect=[True, False]),
-            patch(
-                "document_layout.hooks.execute_migration_sql",
-            ) as execute,
+            patch("document_layout.hooks.Schema", return_value=schema),
         ):
             dl_hooks._migrate_company_field(env)
-        execute.assert_called_with(
-            env.conn,
-            'ALTER TABLE "res_company" RENAME COLUMN "report_layout" TO "document_layout"',
-        )
+        schema.table.assert_called_once()
 
     def test_seed_defaults_skips_without_model(self):
         env = MagicMock()
