@@ -72,6 +72,7 @@ All CLI commands (`pyvelm migrate`, `pyvelm serve`, cron) read the same variable
 - Use `mssql+pyodbc://` (install `pip install pyvelm[mssql]` and [ODBC Driver 18](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)).
 - `CREATE TABLE IF NOT EXISTS` is not used — tables are created only when absent.
 - Parameter placeholders use `?` (pyodbc); the connection adapter rewrites portable `%s` SQL.
+- `ALTER TABLE` uses `ADD col type` (not `ADD COLUMN`) for new columns on upgrade.
 - `QUOTED_IDENTIFIER ON` is set on connect (double-quoted identifiers match other backends).
 - Pagination uses `OFFSET … ROWS FETCH NEXT … ROWS ONLY` (SQL Server 2012+).
 - Insert IDs use `SCOPE_IDENTITY()` (no `RETURNING` dependency).

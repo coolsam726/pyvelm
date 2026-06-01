@@ -60,6 +60,14 @@ def ilike_sql(column_sql: str, cap: DialectCapabilities) -> str:
     return f"LOWER({column_sql}) LIKE LOWER(%s)"
 
 
+def add_column_sql(
+    table: str, column: str, sql_type: str, cap: DialectCapabilities
+) -> str:
+    """Portable ``ALTER TABLE … ADD …`` (SQL Server/Oracle omit ``COLUMN``)."""
+    add_kw = "ADD" if cap.name in ("mssql", "oracle") else "ADD COLUMN"
+    return f'ALTER TABLE "{table}" {add_kw} "{column}" {sql_type}'
+
+
 def add_column_if_not_exists_sql(
     table: str, column: str, sql_type: str, cap: DialectCapabilities
 ) -> str | None:
@@ -85,7 +93,7 @@ def add_column_if_missing(
         return False
     stmt = add_column_if_not_exists_sql(table, column, sql_type, cap)
     if stmt is None:
-        stmt = f'ALTER TABLE "{table}" ADD COLUMN "{column}" {sql_type}'
+        stmt = add_column_sql(table, column, sql_type, cap)
     try:
         conn.execute(stmt)
     except Exception as exc:

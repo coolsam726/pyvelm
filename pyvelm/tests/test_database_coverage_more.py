@@ -541,6 +541,15 @@ class DdlRemainingGapsTests(unittest.TestCase):
         sql = add_column_if_not_exists_sql("t", "c", "text", cap)
         self.assertIn("IF NOT EXISTS", sql or "")
 
+    def test_add_column_sql_mssql_oracle_omit_column_keyword(self):
+        from pyvelm.database.ddl import add_column_sql
+
+        mssql_sql = add_column_sql("t", "c", "BIT", dialect_caps("mssql"))
+        self.assertEqual(mssql_sql, 'ALTER TABLE "t" ADD "c" BIT')
+        self.assertNotIn("ADD COLUMN", mssql_sql)
+        oracle_sql = add_column_sql("t", "c", "INTEGER", dialect_caps("oracle"))
+        self.assertEqual(oracle_sql, 'ALTER TABLE "t" ADD "c" INTEGER')
+
     def test_reset_schema_drop_schema_path(self):
         conn = MagicMock()
         cap = dialect_caps("postgresql")
