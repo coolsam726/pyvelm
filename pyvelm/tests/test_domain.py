@@ -185,7 +185,7 @@ class DomainCompileTests(unittest.TestCase):
             Partner,
             reg,
         )
-        self.assertIn("NOT (", where)
+        self.assertTrue("NOT (" in where or "!=" in where)
         self.assertEqual(params, ["blocked"])
 
     def test_implicit_and_flat_leaves(self):

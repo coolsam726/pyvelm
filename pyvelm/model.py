@@ -1118,13 +1118,22 @@ class BaseModel(metaclass=MetaModel):
             measures = [measures]
         measures = list(measures or [])
 
+        from sqlalchemy import func
+        from sqlalchemy.sql.expression import literal_column
+
+        from .database import _conn_capabilities
+        from .domain_sa import domain_grouped_select
+
         cls = self.__class__
-        base = f'"{self._table}"'
         _VALID_TRUNCS = ("day", "week", "month", "quarter", "year")
         _VALID_AGGS = ("sum", "avg", "min", "max", "count")
 
-        select_parts: list[str] = []
-        group_sql_parts: list[str] = []
+        cap = getattr(self.env.conn, "capabilities", None) or _conn_capabilities(
+            self.env.conn
+        )
+
+        select_cols: list = []
+        group_by_cols: list = []
         # group_keys: list of (output_key, field_name, trunc_or_None,
         #                     is_m2o, comodel_name_or_None)
         group_keys: list[tuple[str, str, str | None, bool, str | None]] = []
@@ -1142,7 +1151,7 @@ class BaseModel(metaclass=MetaModel):
                 raise ValueError(
                     f"read_group: cannot group by non-stored field {fname!r}"
                 )
-            col_sql = f'{base}."{field.column}"'
+            col_expr = literal_column(f'"{cls._table}"."{field.column}"')
             if trunc:
                 if not isinstance(field, (Date, Datetime)):
                     raise ValueError(
@@ -1154,17 +1163,21 @@ class BaseModel(metaclass=MetaModel):
                         f"read_group: bad trunc {trunc!r}, "
                         f"expected one of {_VALID_TRUNCS}"
                     )
-                expr = f"date_trunc('{trunc}', {col_sql})"
-                # The output key is the original spec so callers can
-                # round-trip it (and the front-end can index by it).
+                if cap.name == "postgresql":
+                    expr = func.date_trunc(trunc, col_expr)
+                else:
+                    expr = literal_column(
+                        f"date_trunc('{trunc}', \"{cls._table}\"."
+                        f'"{field.column}")'
+                    )
                 alias = f"g_{len(group_keys)}"
-                select_parts.append(f'{expr} AS "{alias}"')
-                group_sql_parts.append(expr)
+                select_cols.append(expr.label(alias))
+                group_by_cols.append(expr)
                 group_keys.append((spec, fname, trunc, False, None))
             else:
                 alias = f"g_{len(group_keys)}"
-                select_parts.append(f'{col_sql} AS "{alias}"')
-                group_sql_parts.append(col_sql)
+                select_cols.append(col_expr.label(alias))
+                group_by_cols.append(col_expr)
                 is_m2o = isinstance(field, Many2one)
                 comodel = field.comodel_name if is_m2o else None
                 group_keys.append((spec, fname, None, is_m2o, comodel))
@@ -1177,7 +1190,7 @@ class BaseModel(metaclass=MetaModel):
                 if seen_count:
                     continue
                 seen_count = True
-                select_parts.append('COUNT(*) AS "__count"')
+                select_cols.append(func.count().label("__count"))
                 measure_keys.append(("__count", "count_star", None))
                 continue
             if ":" in spec:
@@ -1202,42 +1215,29 @@ class BaseModel(metaclass=MetaModel):
                 )
             out_key = f"{mfield}:{agg}"
             alias = f"m_{len(measure_keys)}"
-            col = f'{base}."{mf.column}"'
-            select_parts.append(f'{agg.upper()}({col}) AS "{alias}"')
+            col_expr = literal_column(f'"{cls._table}"."{mf.column}"')
+            agg_func = getattr(func, agg)
+            select_cols.append(agg_func(col_expr).label(alias))
             measure_keys.append((out_key, agg, mfield))
         if not seen_count:
             # `__count` is always present so consumers can rely on it
             # without conditional logic — matches Odoo's read_group.
-            select_parts.append('COUNT(*) AS "__count"')
+            select_cols.append(func.count().label("__count"))
             measure_keys.append(("__count", "count_star", None))
 
-        where, params, joins = self._domain_to_sql(full_domain)
-        sql = (
-            f"SELECT {', '.join(select_parts)} "
-            f"FROM {base}{joins} WHERE {where}"
-        )
-        if group_sql_parts:
-            sql += " GROUP BY " + ", ".join(group_sql_parts)
-        if order:
-            sql += f" ORDER BY {order}"
-        elif group_sql_parts:
-            # Default: stable order on the group keys themselves.
-            sql += " ORDER BY " + ", ".join(group_sql_parts)
-        from .database import _conn_capabilities, append_search_pagination
-
-        cap = getattr(self.env.conn, "capabilities", None) or _conn_capabilities(
-            self.env.conn
-        )
-        sql = append_search_pagination(
-            sql,
-            base_table_sql=base,
+        stmt = domain_grouped_select(
+            cls,
+            full_domain,
+            self.env.registry,
+            select_cols,
+            group_by_cols or None,
+            capabilities=cap,
+            order=order,
             limit=limit,
             offset=offset,
-            order=order,
-            cap=cap,
         )
-
-        raw_rows = self._execute_search_sql(sql, params)
+        sa_conn = _require_sa_connection(self.env.conn)
+        raw_rows = sa_conn.execute(stmt).fetchall()
         # We aliased every output column and unpack by position below
         # — group columns first, then measures — so the SELECT order
         # is the contract. ``cur.description`` isn't consulted to

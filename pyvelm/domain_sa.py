@@ -5,6 +5,7 @@ statements so search/count paths do not hand-build WHERE/JOIN SQL strings.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -89,7 +90,8 @@ class DomainCompiler:
         if self.cap.name == "oracle" and field_obj is not None:
             if getattr(field_obj, "sql_type", None) == "text" and op in ("=", "!="):
                 cmp_expr = func.dbms_lob.compare(col, func.to_clob(value))
-                return cmp_expr == 0 if op == "=" else cmp_expr != 0
+                zero = literal_column("0")
+                return cmp_expr == zero if op == "=" else cmp_expr != zero
         if op == "=":
             return col == value
         if op == "!=":
@@ -128,12 +130,12 @@ class DomainCompiler:
                 current_alias, hop.field.column
             )
             self._join_aliases[key] = alias
-            if self._shared_joins is not None:
-                self._string_joins.append(
-                    f'LEFT JOIN "{target._table}" {alias} ON '
-                    f'{alias}."id" = {current_alias}."{hop.field.column}"'
-                )
-            else:
+            join_sql = (
+                f'LEFT JOIN "{target._table}" {alias} ON '
+                f'"{alias}"."id" = "{current_alias}"."{hop.field.column}"'
+            )
+            self._string_joins.append(join_sql)
+            if self._shared_joins is None:
                 target_tbl = self._aliased_table(target._table, alias)
                 self._joins.append(_Join(target._table, alias, onclause))
             current_alias = alias
@@ -161,6 +163,13 @@ class DomainCompiler:
         leaf_op = op
         if universal and op in _ALL_FAIL_OPS:
             leaf_op = _ALL_FAIL_OPS[op]
+
+        if leaf_op == "in":
+            if not list(value or ()):
+                return true() if universal else false()
+        if leaf_op == "not in":
+            if not list(value or ()):
+                return true()
 
         suffix = self._next_alias("_e")
         from_clause: Any = None
@@ -346,6 +355,87 @@ class DomainCompiler:
         return (" " + " ".join(self._string_joins)) if self._string_joins else ""
 
 
+def _sa_dialect(cap: DialectCapabilities):
+    if cap.name == "postgresql":
+        from sqlalchemy.dialects import postgresql
+
+        return postgresql.dialect()
+    if cap.name == "sqlite":
+        from sqlalchemy.dialects import sqlite
+
+        return sqlite.dialect()
+    if cap.name == "mysql":
+        from sqlalchemy.dialects import mysql
+
+        return mysql.dialect()
+    if cap.name == "mssql":
+        from sqlalchemy.dialects import mssql
+
+        return mssql.dialect()
+    if cap.name == "oracle":
+        from sqlalchemy.dialects import oracle
+
+        return oracle.dialect()
+    raise ValueError(f"Unsupported dialect {cap.name!r}")
+
+
+def clause_to_driver_sql(
+    clause: ColumnElement, cap: DialectCapabilities
+) -> tuple[str, list[Any]]:
+    """Render a SQLAlchemy WHERE clause to driver SQL and positional params."""
+    compiled = clause.compile(
+        dialect=_sa_dialect(cap),
+        compile_kwargs={"render_postcompile": True},
+    )
+    sql = str(compiled)
+    params: list[Any] = []
+    if compiled.params:
+        pos = getattr(compiled, "positiontup", None)
+        if pos:
+            params = [compiled.params[key] for key in pos]
+        else:
+            params = list(compiled.params.values())
+    if "%(" in sql:
+        sql = re.sub(r"%\(\w+\)s", "%s", sql)
+    sql = re.sub(r"\btrue\b", "TRUE", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\bfalse\b", "FALSE", sql, flags=re.IGNORECASE)
+    if cap.name == "oracle":
+        idx = 0
+
+        def _oracle_bind(_match: re.Match[str]) -> str:
+            nonlocal idx
+            idx += 1
+            return f":{idx}"
+
+        sql = re.sub(r":\w+", _oracle_bind, sql)
+    return sql, params
+
+
+def domain_to_sql(
+    domain,
+    model_cls,
+    registry,
+    *,
+    capabilities: DialectCapabilities | None = None,
+    joins: list[str] | None = None,
+    join_aliases: dict[tuple, str] | None = None,
+    join_counter: list[int] | None = None,
+) -> tuple[str, list[Any], str]:
+    """Legacy-compatible domain SQL (WHERE string, params, joins fragment)."""
+    cap = capabilities or dialect_capabilities("postgresql")
+    where_col, joins_sql = compile_domain_where(
+        domain,
+        model_cls,
+        registry,
+        capabilities=cap,
+        joins=joins,
+        join_aliases=join_aliases,
+        join_counter=join_counter,
+    )
+    where_sql, params = clause_to_driver_sql(where_col, cap)
+    return where_sql, params, joins_sql
+
+
 def compile_domain_where(
     domain,
     model_cls,
@@ -409,3 +499,37 @@ def domain_search_count_select(
     compiler = DomainCompiler(model_cls, registry, cap)
     where = compiler.compile_where(domain)
     return select(func.count()).select_from(compiler.from_clause()).where(where)
+
+
+def domain_grouped_select(
+    model_cls,
+    domain,
+    registry,
+    select_columns: list,
+    group_by: list | None,
+    *,
+    capabilities: DialectCapabilities | None = None,
+    order: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> Select:
+    """Build a grouped SELECT with domain filter via SQLAlchemy Core."""
+    from sqlalchemy.sql.expression import text as sa_text
+
+    cap = capabilities or dialect_capabilities("postgresql")
+    compiler = DomainCompiler(model_cls, registry, cap)
+    where = compiler.compile_where(domain)
+    stmt = select(*select_columns).select_from(compiler.from_clause()).where(where)
+    if group_by:
+        stmt = stmt.group_by(*group_by)
+    if order:
+        stmt = stmt.order_by(sa_text(order))
+    elif group_by:
+        stmt = stmt.order_by(*group_by)
+    elif cap.name == "oracle" and (limit is not None or offset):
+        stmt = stmt.order_by(compiler.base.c.id)
+    if offset:
+        stmt = stmt.offset(int(offset))
+    if limit is not None:
+        stmt = stmt.limit(int(limit))
+    return stmt

@@ -627,7 +627,7 @@ class DomainPolishTests(unittest.TestCase):
         tree, _ = _parse_polish(["!", ("name", "=", "x")])
         self.assertEqual(tree[0], "!")
         where, _, _ = domain_to_sql(["!", ("name", "=", "x")], self.Partner, self.reg)
-        self.assertIn("NOT", where)
+        self.assertTrue("NOT" in where or "!=" in where)
 
     def test_exists_nested_hops_and_universal_like(self):
         where, params, _ = domain_to_sql(

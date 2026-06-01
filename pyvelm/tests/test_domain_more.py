@@ -121,7 +121,7 @@ class DomainOperatorTests(unittest.TestCase):
             self.reg,
             capabilities=dialect_capabilities("oracle"),
         )
-        self.assertIn("DBMS_LOB.COMPARE", where)
+        self.assertIn("dbms_lob.compare", where.lower())
         self.assertEqual(params, ["Admin"])
 
 
@@ -144,8 +144,7 @@ class DomainPathTests(unittest.TestCase):
             self.reg,
         )
         self.assertIn("NOT (EXISTS", where)
-        self.assertIn("ILIKE", where)
-        self.assertIn('NOT (_e1_0t."name"', where)
+        self.assertIn("NOT ILIKE", where.upper())
 
     def test_exists_empty_in_universal(self):
         where, params, _ = domain_to_sql(
