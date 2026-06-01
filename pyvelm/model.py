@@ -753,19 +753,49 @@ class BaseModel(metaclass=MetaModel):
             cap = dialect_capabilities("postgresql")
         else:
             from .database import fetch_lastrowid, returning_id_clause
-        ret = returning_id_clause(cap)
-        if cols:
-            sql = (
-                f'INSERT INTO "{self._table}" ({", ".join(cols)}) '
-                f'VALUES ({", ".join(["%s"] * len(cols))}){ret}'
+        sa_conn = getattr(self.env.conn, "_sa", None)
+        # Prefer SQLAlchemy Core for INSERT so backend-specific SQL details
+        # (bind styles, quoting, RETURNING syntax) come from the dialect.
+        if sa_conn is not None and cols:
+            from sqlalchemy import bindparam, column, insert, table
+
+            sql_cols: dict[str, Any] = {}
+            for fname, value in column_vals.items():
+                field = self._fields[fname]
+                sql_cols[field.column] = field.to_sql_param(value)
+            tbl = table(
+                self._table,
+                *[column(col_name) for col_name in sql_cols.keys()],
+                column("id"),
             )
+            stmt = insert(tbl).values(
+                {col_name: bindparam(col_name) for col_name in sql_cols}
+            )
+            if cap.supports_returning and cap.name != "oracle":
+                stmt = stmt.returning(column("id"))
+                res = sa_conn.execute(stmt, sql_cols)
+                new_id = int(res.scalar_one())
+            else:
+                res = sa_conn.execute(stmt, sql_cols)
+                inserted = getattr(res, "inserted_primary_key", None)
+                if inserted and inserted[0] is not None:
+                    new_id = int(inserted[0])
+                else:
+                    new_id = fetch_lastrowid(self.env.conn, self._table)
         else:
-            sql = f'INSERT INTO "{self._table}" DEFAULT VALUES{ret}'
-        cur = self.env.conn.execute(sql, params)
-        if ret:
-            new_id = cur.fetchone()[0]
-        else:
-            new_id = fetch_lastrowid(self.env.conn, self._table)
+            ret = returning_id_clause(cap)
+            if cols:
+                sql = (
+                    f'INSERT INTO "{self._table}" ({", ".join(cols)}) '
+                    f'VALUES ({", ".join(["%s"] * len(cols))}){ret}'
+                )
+            else:
+                sql = f'INSERT INTO "{self._table}" DEFAULT VALUES{ret}'
+            cur = self.env.conn.execute(sql, params)
+            if ret:
+                new_id = cur.fetchone()[0]
+            else:
+                new_id = fetch_lastrowid(self.env.conn, self._table)
         # Seed cache with the normalized (SQL-shape) value, so Many2one
         # caches the int FK, not whatever the user passed in.
         for fname, value in column_vals.items():
