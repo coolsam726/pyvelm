@@ -951,8 +951,10 @@ class ReportsExecuteMoreTests(unittest.TestCase):
             columns=[col],
             row_key_order=[("data", "name"), ("ccy", "amount")],
             is_aggregate=False,
+            stmt=MagicMock(),
         )
-        env.conn.execute.return_value.fetchall.return_value = [("Alice", 99)]
+        env.conn._sa = MagicMock()
+        env.conn._sa.execute.return_value.fetchall.return_value = [("Alice", 99)]
         with (
             patch("pyvelm.reports.execute.compile_report", return_value=compiled),
             patch("pyvelm.reports.fields_api.check_definition_access"),

@@ -664,14 +664,17 @@ class ReportExecuteUnitTests(unittest.TestCase):
     def test_run_report_maps_rows(self, compile_mock):
         from pyvelm.reports.compile import ColumnMeta, CompiledReport
 
+        mock_stmt = MagicMock()
         compile_mock.return_value = CompiledReport(
             sql="SELECT 1",
             params=[],
             columns=[ColumnMeta(key="name", label="Name", expr="name")],
             row_key_order=None,
+            stmt=mock_stmt,
         )
         conn = MagicMock()
-        conn.execute.return_value.fetchall.return_value = [("Alice",)]
+        conn._sa = MagicMock()
+        conn._sa.execute.return_value.fetchall.return_value = [("Alice",)]
         env = MagicMock()
         env.registry = _partner_registry()
         env.conn = conn

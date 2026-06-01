@@ -5,7 +5,6 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..domain import domain_to_sql
 from ..fields import Date, Datetime, Float, Integer, Many2one
 from ..paths import M2oHop, parse_path
 from .compile_collections import column_sql_for_path
@@ -35,6 +34,7 @@ class CompiledReport:
     columns: list[ColumnMeta]
     is_aggregate: bool = False
     row_key_order: list[tuple[str, str]] | None = None
+    stmt: Any = None
 
 
 def _column_sql(
@@ -80,6 +80,25 @@ def _substitute_param_leaf(leaf, params: dict[str, Any]):
     if opts is not None:
         return (attr, op, value, opts)
     return (attr, op, value)
+
+
+def _labeled_sql(sql_expr: str, alias: str):
+    from sqlalchemy.sql.expression import literal_column
+
+    return literal_column(sql_expr).label(alias)
+
+
+def _parse_select_part(part: str) -> Any:
+    import re
+
+    m = re.match(
+        r"^(.+?)\s+AS\s+\"([^\"]+)\"\s*$",
+        part.strip(),
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not m:
+        raise ValueError(f"Invalid SELECT fragment: {part!r}")
+    return _labeled_sql(m.group(1).strip(), m.group(2))
 
 
 def _compact_domain(domain: list) -> list:
@@ -218,15 +237,36 @@ def compile_report(
                 )
             )
 
+    from sqlalchemy import func, select
+    from sqlalchemy.sql.expression import literal_column, text as sa_text
+
+    from ..database.dialects import dialect_capabilities
+    from ..domain_sa import (
+        DomainCompiler,
+        apply_search_pagination,
+        statement_to_driver_sql,
+    )
+
+    cap = capabilities if capabilities is not None else dialect_capabilities("postgresql")
     domain = _compact_domain(_merge_domain(defn, params))
-    where, bind_params, _domain_joins = domain_to_sql(
-        domain,
+    compiler = DomainCompiler(
         root_cls,
         registry,
-        joins=joins,
+        cap,
+        shared_joins=joins,
         join_aliases=join_aliases,
         join_counter=join_counter,
     )
+    where = compiler.compile_where(domain)
+
+    select_cols = [_parse_select_part(part) for part in select_parts]
+    join_clause = " ".join(joins)
+    from_sql = f"{base_alias} {join_clause}" if join_clause else base_alias
+    from_src = sa_text(from_sql)
+    stmt = select(*select_cols).select_from(from_src).where(where)
+    if group_sql_parts:
+        group_cols = [literal_column(expr) for expr in group_sql_parts]
+        stmt = stmt.group_by(*group_cols)
 
     order_specs = list(defn.get("order") or [])
     order_sql_cache: dict[str, str] = {}
@@ -244,13 +284,6 @@ def compile_report(
                 order_sql_cache[fname] = sql
             except (ValueError, KeyError):
                 continue
-
-    extra_joins = " ".join(joins)
-    join_clause = f" {extra_joins}" if extra_joins else ""
-
-    sql = f'SELECT {", ".join(select_parts)} FROM {base_alias}{join_clause} WHERE {where}'
-    if group_sql_parts:
-        sql += " GROUP BY " + ", ".join(group_sql_parts)
 
     order_parts: list[str] = []
     if is_aggregate:
@@ -270,19 +303,17 @@ def compile_report(
             elif fname in order_sql_cache:
                 order_parts.append(f'{order_sql_cache[fname]} {direction}')
     if order_parts:
-        sql += " ORDER BY " + ", ".join(order_parts)
+        stmt = stmt.order_by(sa_text(", ".join(order_parts)))
 
-    from ..database import append_search_pagination, dialect_capabilities
-
-    cap = capabilities if capabilities is not None else dialect_capabilities("postgresql")
-    sql = append_search_pagination(
-        sql,
-        base_table_sql=base_alias,
+    stmt = apply_search_pagination(
+        stmt,
+        cap,
+        base_table=root_cls._table,
         limit=limit,
         offset=offset,
-        order=None,
-        cap=cap,
+        has_order=bool(order_parts),
     )
+    sql, bind_params = statement_to_driver_sql(stmt, cap)
 
     return CompiledReport(
         sql=sql,
@@ -290,6 +321,7 @@ def compile_report(
         columns=columns_meta,
         is_aggregate=is_aggregate,
         row_key_order=row_key_order,
+        stmt=stmt,
     )
 
 

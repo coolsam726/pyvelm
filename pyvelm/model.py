@@ -3,7 +3,6 @@ from __future__ import annotations
 from copy import copy
 from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
-from .domain import domain_to_sql
 from .domain_sa import domain_search_count_select, domain_search_select
 from .fields import Char, Field, Integer, Many2one, finalize_related_field
 from .registry import active_registry
@@ -1004,22 +1003,6 @@ class BaseModel(metaclass=MetaModel):
         ):
             full_domain.append(("company_id", "=", self.env.company_id))
         return full_domain
-
-    def _domain_to_sql(
-        self, full_domain: list[tuple]
-    ) -> tuple[str, list[Any], str]:
-        where, params, joins = domain_to_sql(
-            full_domain,
-            self.__class__,
-            self.env.registry,
-            capabilities=getattr(self.env.conn, "capabilities", None),
-        )
-        return where, params, joins
-
-    def _execute_search_sql(self, sql: str, params: list[Any]) -> list[tuple]:
-        """Run a compiled search/read_group SELECT via SQLAlchemy ``text()``."""
-        _require_sa_connection(self.env.conn)
-        return self.env.conn.execute(sql, params).fetchall()
 
     def search(
         self,

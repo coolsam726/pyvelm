@@ -86,7 +86,8 @@ class ReportCompileTests(unittest.TestCase):
         self.assertIn('"res_partner"', compiled.sql)
         self.assertIn("LEFT JOIN", compiled.sql)
         self.assertEqual(len(compiled.columns), 2)
-        self.assertIn("LIMIT 50", compiled.sql)
+        self.assertIn("LIMIT", compiled.sql.upper())
+        self.assertIn(50, compiled.params)
 
     def test_compiles_order_by_non_column_field(self):
         defn = {

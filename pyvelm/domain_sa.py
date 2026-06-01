@@ -379,22 +379,16 @@ def _sa_dialect(cap: DialectCapabilities):
     raise ValueError(f"Unsupported dialect {cap.name!r}")
 
 
-def clause_to_driver_sql(
-    clause: ColumnElement, cap: DialectCapabilities
-) -> tuple[str, list[Any]]:
-    """Render a SQLAlchemy WHERE clause to driver SQL and positional params."""
-    compiled = clause.compile(
-        dialect=_sa_dialect(cap),
-        compile_kwargs={"render_postcompile": True},
-    )
-    sql = str(compiled)
-    params: list[Any] = []
-    if compiled.params:
-        pos = getattr(compiled, "positiontup", None)
-        if pos:
-            params = [compiled.params[key] for key in pos]
-        else:
-            params = list(compiled.params.values())
+def _compiled_params(compiled) -> list[Any]:
+    if not compiled.params:
+        return []
+    pos = getattr(compiled, "positiontup", None)
+    if pos:
+        return [compiled.params[key] for key in pos]
+    return list(compiled.params.values())
+
+
+def _normalize_compiled_sql(sql: str, cap: DialectCapabilities) -> str:
     if "%(" in sql:
         sql = re.sub(r"%\(\w+\)s", "%s", sql)
     sql = re.sub(r"\btrue\b", "TRUE", sql, flags=re.IGNORECASE)
@@ -408,7 +402,50 @@ def clause_to_driver_sql(
             return f":{idx}"
 
         sql = re.sub(r":\w+", _oracle_bind, sql)
-    return sql, params
+    return sql
+
+
+def clause_to_driver_sql(
+    clause: ColumnElement, cap: DialectCapabilities
+) -> tuple[str, list[Any]]:
+    """Render a SQLAlchemy WHERE clause to driver SQL and positional params."""
+    compiled = clause.compile(
+        dialect=_sa_dialect(cap),
+        compile_kwargs={"render_postcompile": True},
+    )
+    return _normalize_compiled_sql(str(compiled), cap), _compiled_params(compiled)
+
+
+def statement_to_driver_sql(
+    stmt: Select, cap: DialectCapabilities
+) -> tuple[str, list[Any]]:
+    """Render a SQLAlchemy SELECT to driver SQL and positional params."""
+    compiled = stmt.compile(
+        dialect=_sa_dialect(cap),
+        compile_kwargs={"render_postcompile": True},
+    )
+    return _normalize_compiled_sql(str(compiled), cap), _compiled_params(compiled)
+
+
+def apply_search_pagination(
+    stmt: Select,
+    cap: DialectCapabilities,
+    *,
+    base_table: str,
+    limit: int | None,
+    offset: int,
+    has_order: bool,
+) -> Select:
+    """Apply offset/limit with Oracle/MSSQL stable-order requirements."""
+    if limit is None and not offset:
+        return stmt
+    if cap.name in ("oracle", "mssql") and not has_order:
+        stmt = stmt.order_by(literal_column(f'"{base_table}"."id"'))
+    if offset:
+        stmt = stmt.offset(int(offset))
+    if limit is not None:
+        stmt = stmt.limit(int(limit))
+    return stmt
 
 
 def domain_to_sql(
