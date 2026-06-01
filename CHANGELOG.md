@@ -7,8 +7,14 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.0.1] — 2026-06-01
+
 ### Added
 
+- **Nested menu groups** — `m.group(...).children([...])` nests items and
+  sub-groups under a parent; `parent=` is set automatically (explicit
+  `parent=` still works for cross-module groups). The loader flattens
+  `MenuBranch` trees via `flatten_menus()`.
 - **Versioned docs (mike)** — GitHub Pages hosts per-release trees (`/latest/`,
   `/1.0/`, …) with a Material version picker. See [docs/versioning.md](docs/versioning.md).
 
@@ -24,15 +30,6 @@ out of the 0.x line.
 - **Roadmap** — v1.1 targets **MySQL/MariaDB** portability; multi-DB routing
   (``PYVELM_DATABASES`` preview) moves to **v1.3+** after Oracle and additional
   backends pass install/smoke. See [multi-database.md](docs/multi-database.md).
-
-## [1.1.0] — 2026-06-01
-
-### Added
-
-- **Nested menu groups** — `m.group(...).children([...])` nests items and
-  sub-groups under a parent; `parent=` is set automatically (explicit
-  `parent=` still works for cross-module groups). The loader flattens
-  `MenuBranch` trees via `flatten_menus()`.
 
 ## [1.0.0] — 2026-05-30
 
