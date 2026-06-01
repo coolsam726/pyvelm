@@ -42,6 +42,9 @@ theme:
     repo: fontawesome/brands/github
 
 extra:
+  version:
+    provider: mike
+    alias: true
   social:
     - icon: fontawesome/solid/heart
       link: https://github.com/sponsors/coolsam726
@@ -49,6 +52,10 @@ extra:
 
 plugins:
   - search
+  - mike:
+      version_selector: true
+      css_dir: assets
+      javascript_dir: assets
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -85,6 +92,7 @@ nav:
   - Home: index.md
   - Guides:
       - Getting started: getting-started.md
+      - Database layer (v1.0): multi-database.md
       - Declaring models: models.md
       - Vellum (optional ORM): vellum.md
       - Building UIs: views.md
@@ -107,6 +115,7 @@ nav:
       - Console commands: console.md
       - IDE typing stubs: ide-typing.md
       - Architecture: architecture.md
+      - Doc versions (mike): versioning.md
   - API reference:
       - Overview: api/index.md
       - Recordsets & fields:

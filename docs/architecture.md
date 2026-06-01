@@ -29,7 +29,8 @@ one of two records" has no useful meaning.
 The `Environment` is the only thing recordsets carry around besides their
 ids. It bundles:
 
-- `conn` — the psycopg connection.
+- `conn` — a database connection from `pyvelm.database` (SQLAlchemy-backed;
+  psycopg-compatible API on PostgreSQL). See [Database layer (v1.0)](multi-database.md).
 - `uid` — the acting user id (or `None` for anonymous).
 - `company_id` — the active company for multi-company-scoped models.
 - `context` — an ad-hoc dict for per-request state.

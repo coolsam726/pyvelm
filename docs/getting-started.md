@@ -31,8 +31,9 @@ for the full tree.
 
 ## 2. Boot the app
 
-Two paths, pick whichever fits your machine. Docker is the easiest
-on a clean system because it provides Postgres too.
+Three paths — pick whichever fits your machine. Docker is the easiest on a clean
+system because it provides Postgres. **SQLite** needs no database server (good for
+a quick try or CI).
 
 ### Path A — Docker
 
@@ -64,6 +65,24 @@ OpenAPI docs at `/docs`, debug logging, no `Secure` cookies (works on plain HTTP
 
 For **production** locally: `PYVELM_ENV=production python -m app.serve --host 0.0.0.0`
 or use gunicorn as in [Deployment](deployment.md).
+
+### Path C — SQLite (no Postgres)
+
+```bash
+cp .env.example .env
+# Example:
+#   PYVELM_DSN=sqlite:////absolute/path/to/var/app.db
+#   PYVELM_DSN_TEST=sqlite:////tmp/pyvelm-test.db
+
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+pyvelm db migrate --all    # model-driven schema; skips Postgres-only SQL scripts
+python -m app.serve --reload
+```
+
+SQLite suits local development and tests. Use **PostgreSQL** for production
+multi-worker deployments. See [Database layer (v1.0)](multi-database.md).
 
 ### What you'll see
 
