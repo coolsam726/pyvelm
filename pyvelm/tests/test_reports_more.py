@@ -173,7 +173,7 @@ class ReportCompileMoreTests(unittest.TestCase):
         compiled = compile_report(defn, _partner_registry())
         self.assertTrue(compiled.is_aggregate)
         self.assertIn("GROUP BY", compiled.sql)
-        self.assertIn("COUNT(*)", compiled.sql)
+        self.assertIn("count(*)", compiled.sql.lower())
 
     def test_compiles_o2m_subaggregate_column(self):
         defn = _detail_defn(
@@ -222,7 +222,7 @@ class ReportCollectionsTests(unittest.TestCase):
 
         path = parse_path(reg["res.partner"], "child_ids.id", reg)
         sql = collection_subquery_sql(path, reg["res.partner"], '"res_partner"', reg, "count")
-        self.assertIn("COUNT(DISTINCT", sql)
+        self.assertIn("count(distinct", sql.lower())
         self.assertIn("res_partner", sql)
 
     def test_column_sql_root_o2m_without_path(self):

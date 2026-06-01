@@ -1036,7 +1036,7 @@ class ReportsCollectionsMoreTests(unittest.TestCase):
 
         path = parse_path(reg["res.partner"], "tag_ids.country_id.code", reg)
         sql = collection_subquery_sql(path, reg["res.partner"], '"res_partner"', reg, "sum")
-        self.assertIn("SUM", sql)
+        self.assertIn("sum", sql.lower())
         joins: list[str] = []
         aliases: dict = {}
         counter = [0]

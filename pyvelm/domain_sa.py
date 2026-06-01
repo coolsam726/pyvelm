@@ -416,6 +416,20 @@ def clause_to_driver_sql(
     return _normalize_compiled_sql(str(compiled), cap), _compiled_params(compiled)
 
 
+def column_element_to_sql(
+    expr: ColumnElement, cap: DialectCapabilities
+) -> str:
+    """Render a single SELECT-list expression to SQL (no alias)."""
+    compiled = select(expr).compile(
+        dialect=_sa_dialect(cap),
+        compile_kwargs={"render_postcompile": True},
+    )
+    sql = str(compiled).strip()
+    if sql.upper().startswith("SELECT "):
+        sql = sql[7:].strip()
+    return _normalize_compiled_sql(sql, cap)
+
+
 def statement_to_driver_sql(
     stmt: Select, cap: DialectCapabilities
 ) -> tuple[str, list[Any]]:

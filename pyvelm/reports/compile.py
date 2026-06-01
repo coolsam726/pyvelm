@@ -5,9 +5,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..fields import Date, Datetime, Float, Integer, Many2one
-from ..paths import M2oHop, parse_path
-from .compile_collections import column_sql_for_path
+from ..fields import Many2one
+from .compile_collections import column_expr_for_path
 from .fields_api import monetary_currency_path
 from .format import normalize_column_format
 from .schema import validate_definition
@@ -37,22 +36,6 @@ class CompiledReport:
     stmt: Any = None
 
 
-def _column_sql(
-    expr: str,
-    root_cls,
-    registry,
-    base_alias: str,
-    joins: list[str],
-    join_aliases: dict[tuple, str],
-    join_counter: list[int],
-    subaggregate: str | None = None,
-) -> tuple[str, bool, str | None]:
-    return column_sql_for_path(
-        expr, root_cls, base_alias, registry,
-        joins, join_aliases, join_counter, subaggregate,
-    )
-
-
 def _merge_domain(defn: dict, params: dict[str, Any]) -> list:
     domain: list = list(defn.get("filters") or [])
     for leaf in defn.get("parameter_filters") or []:
@@ -80,25 +63,6 @@ def _substitute_param_leaf(leaf, params: dict[str, Any]):
     if opts is not None:
         return (attr, op, value, opts)
     return (attr, op, value)
-
-
-def _labeled_sql(sql_expr: str, alias: str):
-    from sqlalchemy.sql.expression import literal_column
-
-    return literal_column(sql_expr).label(alias)
-
-
-def _parse_select_part(part: str) -> Any:
-    import re
-
-    m = re.match(
-        r"^(.+?)\s+AS\s+\"([^\"]+)\"\s*$",
-        part.strip(),
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    if not m:
-        raise ValueError(f"Invalid SELECT fragment: {part!r}")
-    return _labeled_sql(m.group(1).strip(), m.group(2))
 
 
 def _compact_domain(domain: list) -> list:
@@ -138,9 +102,22 @@ def compile_report(
     measures = list(defn.get("measures") or [])
     is_aggregate = bool(groupby and measures)
 
+    from sqlalchemy import func, select
+    from sqlalchemy.sql.expression import literal_column, text as sa_text
+
+    from ..database.dialects import dialect_capabilities
+    from ..domain_sa import (
+        DomainCompiler,
+        apply_search_pagination,
+        column_element_to_sql,
+        statement_to_driver_sql,
+    )
+
+    cap = capabilities if capabilities is not None else dialect_capabilities("postgresql")
+
     columns_meta: list[ColumnMeta] = []
-    select_parts: list[str] = []
-    group_sql_parts: list[str] = []
+    select_cols: list = []
+    group_by_cols: list = []
     row_key_order: list[tuple[str, str]] | None = None
 
     if is_aggregate:
@@ -154,16 +131,22 @@ def compile_report(
             else:
                 fname, trunc = spec, None
             field = root_cls._fields[fname]
-            col_sql = f'{base_alias}."{field.column}"'
+            col_expr = literal_column(f'"{root_cls._table}"."{field.column}"')
             if trunc:
                 if trunc not in _VALID_TRUNCS:
                     raise ValueError(f"Bad trunc {trunc!r}")
-                expr = f"date_trunc('{trunc}', {col_sql})"
+                if cap.name == "postgresql":
+                    expr = func.date_trunc(trunc, col_expr)
+                else:
+                    expr = literal_column(
+                        f"date_trunc('{trunc}', \"{root_cls._table}\"."
+                        f'"{field.column}")'
+                    )
             else:
-                expr = col_sql
+                expr = col_expr
             alias = f"g_{len(group_keys)}"
-            select_parts.append(f'{expr} AS "{alias}"')
-            group_sql_parts.append(expr)
+            select_cols.append(expr.label(alias))
+            group_by_cols.append(expr)
             is_m2o = isinstance(field, Many2one)
             comodel = field.comodel_name if is_m2o else None
             group_keys.append((spec, fname, trunc, is_m2o, comodel))
@@ -171,11 +154,9 @@ def compile_report(
                 ColumnMeta(key=spec, label=spec, expr=spec, is_m2o=is_m2o, comodel=comodel)
             )
 
-        measure_keys: list[tuple[str, str, str | None]] = []
         for spec in measures:
             if spec == "__count":
-                select_parts.append('COUNT(*) AS "__count"')
-                measure_keys.append(("__count", "count", None))
+                select_cols.append(func.count().label("__count"))
                 columns_meta.append(
                     ColumnMeta(key="__count", label="Count", expr="__count")
                 )
@@ -187,24 +168,29 @@ def compile_report(
             if agg not in _VALID_AGGS:
                 raise ValueError(f"Bad aggregate {agg!r}")
             mf = root_cls._fields[mfield]
-            alias = f"m_{len(measure_keys)}"
-            col = f'{base_alias}."{mf.column}"'
-            select_parts.append(f'{agg.upper()}({col}) AS "{alias}"')
-            measure_keys.append((spec, agg, mfield))
+            alias = f"m_{len(columns_meta)}"
+            col_expr = literal_column(f'"{root_cls._table}"."{mf.column}"')
+            select_cols.append(getattr(func, agg)(col_expr).label(alias))
             columns_meta.append(
                 ColumnMeta(key=spec, label=spec, expr=spec)
             )
     else:
-        row_key_order: list[tuple[str, str]] = []
+        row_key_order = []
         for i, col in enumerate(defn["columns"]):
             expr = col["expr"]
             subagg = col.get("subaggregate")
-            sql_expr, is_m2o, comodel = _column_sql(
-                expr, root_cls, registry, base_alias, joins, join_aliases, join_counter,
+            col_expr, is_m2o, comodel = column_expr_for_path(
+                expr,
+                root_cls,
+                base_alias,
+                registry,
+                joins,
+                join_aliases,
+                join_counter,
                 subagg,
             )
             alias = f"c_{i}"
-            select_parts.append(f'{sql_expr} AS "{alias}"')
+            select_cols.append(col_expr.label(alias))
             row_key_order.append(("data", expr))
 
             currency_id_key = None
@@ -214,12 +200,17 @@ def compile_report(
                 if src == "field" and fmt.get("currency_field"):
                     ccy_path = monetary_currency_path(expr, fmt["currency_field"])
                     try:
-                        ccy_sql, _, _ = _column_sql(
-                            ccy_path, root_cls, registry, base_alias, joins,
-                            join_aliases, join_counter, None,
+                        ccy_expr, _, _ = column_expr_for_path(
+                            ccy_path,
+                            root_cls,
+                            base_alias,
+                            registry,
+                            joins,
+                            join_aliases,
+                            join_counter,
+                            None,
                         )
-                        ccy_alias = f"__ccy_{i}"
-                        select_parts.append(f'{ccy_sql} AS "{ccy_alias}"')
+                        select_cols.append(ccy_expr.label(f"__ccy_{i}"))
                         currency_id_key = f"{expr}__currency_id"
                         row_key_order.append(("ccy", expr))
                     except (ValueError, KeyError):
@@ -236,18 +227,6 @@ def compile_report(
                     currency_id_key=currency_id_key,
                 )
             )
-
-    from sqlalchemy import func, select
-    from sqlalchemy.sql.expression import literal_column, text as sa_text
-
-    from ..database.dialects import dialect_capabilities
-    from ..domain_sa import (
-        DomainCompiler,
-        apply_search_pagination,
-        statement_to_driver_sql,
-    )
-
-    cap = capabilities if capabilities is not None else dialect_capabilities("postgresql")
     domain = _compact_domain(_merge_domain(defn, params))
     compiler = DomainCompiler(
         root_cls,
@@ -259,14 +238,12 @@ def compile_report(
     )
     where = compiler.compile_where(domain)
 
-    select_cols = [_parse_select_part(part) for part in select_parts]
     join_clause = " ".join(joins)
     from_sql = f"{base_alias} {join_clause}" if join_clause else base_alias
     from_src = sa_text(from_sql)
     stmt = select(*select_cols).select_from(from_src).where(where)
-    if group_sql_parts:
-        group_cols = [literal_column(expr) for expr in group_sql_parts]
-        stmt = stmt.group_by(*group_cols)
+    if group_by_cols:
+        stmt = stmt.group_by(*group_by_cols)
 
     order_specs = list(defn.get("order") or [])
     order_sql_cache: dict[str, str] = {}
@@ -277,11 +254,17 @@ def compile_report(
             if fname in column_exprs:
                 continue
             try:
-                sql, _, _ = _column_sql(
-                    fname, root_cls, registry, base_alias, joins, join_aliases, join_counter,
+                order_expr, _, _ = column_expr_for_path(
+                    fname,
+                    root_cls,
+                    base_alias,
+                    registry,
+                    joins,
+                    join_aliases,
+                    join_counter,
                     None,
                 )
-                order_sql_cache[fname] = sql
+                order_sql_cache[fname] = column_element_to_sql(order_expr, cap)
             except (ValueError, KeyError):
                 continue
 
