@@ -135,21 +135,26 @@ def compute_diff(env: "Environment", module: str) -> Diff:
     for model_name in owned:
         cls = reg[model_name]
         table = cls._table
+        cap = getattr(env.conn, "capabilities", None)
+        if cap is None:
+            from .database import dialect_capabilities
+
+            cap = dialect_capabilities("postgresql")
         expected: dict[str, tuple[Field, str]] = {}
         for f in cls._fields.values():
             if not f.is_stored:
                 continue
             if isinstance(f, (One2many, Many2many)):
                 continue
-            expected[f.column] = (f, f.column_ddl())
+            if f.name == "id" or f.column == "id":
+                continue
+            from .database import normalize_column_ddl
+
+            expected[f.column] = (f, normalize_column_ddl(f.column_ddl(), cap))
         actual = _fetch_table_columns(env, table)
         if actual is None:
             from .database import create_table_sql, serial_primary_key
 
-            cap = getattr(env.conn, "capabilities", None)
-            if cap is None:
-                from .database import dialect_capabilities
-                cap = dialect_capabilities("postgresql")
             col_ddls = [serial_primary_key(cap)] + [
                 ddl for _, ddl in expected.values()
             ]

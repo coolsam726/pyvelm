@@ -126,6 +126,15 @@ class SchemaDiffTests(unittest.TestCase):
         kinds = {a.column: a.kind for a in diff.alterations}
         self.assertNotIn("id", kinds)
 
+    def test_new_table_ddl_emits_single_id_column(self):
+        env = _mock_env([], _partner_cls(required=True, include_id=True))
+        with patch("pyvelm.db_autogen._fetch_table_columns", return_value=None):
+            diff = compute_diff(env, "partners")
+        self.assertEqual(len(diff.new_tables), 1)
+        _table, ddl = diff.new_tables[0]
+        self.assertIn('PRIMARY KEY', ddl)
+        self.assertEqual(ddl.count('"id"'), 1)
+
 
 class ApplySchemaDiffTests(unittest.TestCase):
     def test_applies_set_not_null_when_no_null_rows(self):
