@@ -123,6 +123,63 @@ class DomainSACompileTests(unittest.TestCase):
         )
         self.assertIn("DBMS_LOB.COMPARE", str(stmt).upper())
 
+    def test_text_comparison_operators(self):
+        from pyvelm.domain_sa import DomainCompiler, clause_to_driver_sql
+
+        reg, Partner = _partner_registry()
+        cap = dialect_capabilities("postgresql")
+        compiler = DomainCompiler(Partner, reg, cap)
+        col = compiler._col(compiler._base_alias, "name")
+        for op, py_op in (("<", "<"), (">", ">"), ("<=", "<="), (">=", ">=")):
+            pred = compiler._text_predicate(col, op, "x", Partner._fields["name"])
+            sql, _ = clause_to_driver_sql(pred, cap)
+            self.assertIn(py_op, sql)
+        ne = compiler._text_predicate(col, "!=", "x", Partner._fields["name"])
+        sql, _ = clause_to_driver_sql(ne, cap)
+        self.assertIn("!=", sql)
+
+    def test_sqlite_ilike_uses_lower_like(self):
+        reg, Partner = _partner_registry()
+        cap = dialect_capabilities("sqlite")
+        stmt = domain_search_select(
+            Partner, [("name", "ilike", "%a%")], reg, capabilities=cap
+        )
+        self.assertIn("lower", str(stmt).lower())
+
+    def test_sa_dialect_mysql_and_mssql(self):
+        from pyvelm.domain_sa import _sa_dialect
+
+        self.assertEqual(_sa_dialect(dialect_capabilities("mysql")).name, "mysql")
+        self.assertEqual(_sa_dialect(dialect_capabilities("mssql")).name, "mssql")
+
+    def test_apply_search_pagination_adds_order_on_mssql(self):
+        from pyvelm.domain_sa import apply_search_pagination, domain_search_select
+
+        reg, Partner = _partner_registry()
+        cap = dialect_capabilities("mssql")
+        stmt = domain_search_select(Partner, [], reg, capabilities=cap, limit=5)
+        paginated = apply_search_pagination(
+            stmt, cap, base_table="test_partner", limit=5, offset=0, has_order=False
+        )
+        self.assertIn("ORDER BY", str(paginated).upper())
+
+    def test_domain_grouped_select_oracle_order(self):
+        from pyvelm.domain_sa import domain_grouped_select
+        from sqlalchemy import func
+
+        reg, Partner = _partner_registry()
+        cap = dialect_capabilities("oracle")
+        stmt = domain_grouped_select(
+            Partner,
+            [],
+            reg,
+            [func.count()],
+            ["name"],
+            capabilities=cap,
+            limit=10,
+        )
+        self.assertIn("ORDER BY", str(stmt).upper())
+
     def test_matches_legacy_sql_shape_for_simple_domain(self):
         reg, Partner = _partner_registry()
         domain = [("name", "ilike", "%vip%")]
