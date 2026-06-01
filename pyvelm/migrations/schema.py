@@ -347,8 +347,14 @@ class Blueprint:
         ondelete: str = "CASCADE",
         name: str | None = None,
     ) -> None:
-        from pyvelm.database.sa_ddl import uses_inline_foreign_keys
+        from pyvelm.database.sa_ddl import effective_fk_ondelete, uses_inline_foreign_keys
 
+        ondelete = effective_fk_ondelete(
+            ondelete,
+            local_table=self.table,
+            ref_table=ref_table,
+            cap=self._cap,
+        )
         cname = name or f"{self.table}_{local_column}_fkey"
         if self._create:
             if uses_inline_foreign_keys(self._cap):
@@ -423,6 +429,14 @@ class Blueprint:
         ondelete: str,
         use_big: bool,
     ) -> _ColumnSpec:
+        from pyvelm.database.sa_ddl import effective_fk_ondelete
+
+        ondelete = effective_fk_ondelete(
+            ondelete,
+            local_table=self.table,
+            ref_table=ref_table,
+            cap=self._cap,
+        )
         col_type = BigInteger() if use_big else Integer()
         spec = (
             _ColumnSpec(name, col_type, cap=self._cap)

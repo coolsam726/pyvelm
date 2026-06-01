@@ -702,20 +702,20 @@ class One2many(Field):
             return comodel_cls(record.env, cached_ids)
         if record.env.conn is None:
             return comodel_cls(record.env, ())
-        from .database.sa_ddl import require_sa_connection
-        from sqlalchemy import column, select, table
+        from .database import dialect_capabilities
+        from .database.sa_ddl import core_table, require_sa_connection
+        from sqlalchemy import select
 
-        inverse = comodel_cls._fields[self.inverse_name]
-        tbl = table(
-            comodel_cls._table,
-            column("id"),
-            column(inverse.column),
+        cap = getattr(record.env.conn, "capabilities", None) or dialect_capabilities(
+            "postgresql"
         )
+        inverse = comodel_cls._fields[self.inverse_name]
+        tbl = core_table(comodel_cls._table, cap, "id", inverse.column)
         stmt = (
-            select(column("id"))
+            select(tbl.c.id)
             .select_from(tbl)
-            .where(column(inverse.column) == rid)
-            .order_by(column("id"))
+            .where(tbl.c[inverse.column] == rid)
+            .order_by(tbl.c.id)
         )
         rows = require_sa_connection(record.env.conn).execute(stmt).fetchall()
         child_ids = tuple(r[0] for r in rows)

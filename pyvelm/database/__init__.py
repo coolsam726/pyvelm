@@ -58,7 +58,13 @@ from .migration_sql import (
     fetchall_migration,
     fetchone_migration,
 )
-from .sa_ddl import compile_create_table, execute_create_table, execute_sql
+from .sa_ddl import (
+    compile_create_table,
+    core_table,
+    effective_fk_ondelete,
+    execute_create_table,
+    execute_sql,
+)
 from .postgres_admin import (
     prepare_postgres_schema_drop,
     release_postgres_schema_drop_lock,
@@ -92,6 +98,8 @@ __all__ = [
     "clear_reflection_cache",
     "column_exists",
     "compile_create_table",
+    "core_table",
+    "effective_fk_ondelete",
     "configure_engine",
     "conn_capabilities",
     "create_database_from_dsn",

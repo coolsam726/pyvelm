@@ -90,6 +90,50 @@ def _column_quote_kw(cap: DialectCapabilities) -> dict[str, bool]:
     return {"quote": True} if columns_use_quoted_identifiers(cap) else {}
 
 
+def effective_fk_ondelete(
+    ondelete: str,
+    *,
+    local_table: str,
+    ref_table: str,
+    cap: DialectCapabilities,
+) -> str:
+    """Dialect-adjusted ON DELETE for inline / ALTER foreign keys.
+
+    SQL Server rejects self-referential ``ON DELETE CASCADE`` (error 1785).
+    Use ``NO ACTION`` at the database and cascade in ``BaseModel.unlink``.
+    """
+    action = (ondelete or "CASCADE").upper().replace("_", " ")
+    if cap.name == "mssql" and local_table == ref_table and action == "CASCADE":
+        return "NO ACTION"
+    return action
+
+
+def core_table(
+    table_name: str,
+    cap: DialectCapabilities,
+    *column_names: str,
+) -> Table:
+    """MetaData-bound table for SQLAlchemy Core DML (matches DDL quoting).
+
+    ``TableClause`` (``table("t", column("c"))``) emits unquoted names on
+    Oracle/MSSQL, which do not match quoted CREATE TABLE identifiers.
+    """
+    from sqlalchemy import Column, Integer, MetaData, Table, Text
+
+    names = tuple(dict.fromkeys(column_names or ("id",)))
+    quote_kw = _column_quote_kw(cap)
+    metadata = MetaData()
+    cols = [
+        Column(
+            name,
+            Integer() if name == "id" else Text(),
+            **quote_kw,
+        )
+        for name in names
+    ]
+    return Table(table_name, metadata, *cols, quote=True)
+
+
 def sa_type_for_field(field: "Field", cap: DialectCapabilities):
     sql_type = normalize_sql_type(field.sql_type, cap)
     upper = sql_type.upper()
@@ -144,7 +188,13 @@ def primary_key_column(cap: DialectCapabilities) -> Column:
     return Column("id", Integer, primary_key=True, autoincrement=True, **quote_kw)
 
 
-def field_to_column(field: "Field", registry, cap: DialectCapabilities) -> Column:
+def field_to_column(
+    field: "Field",
+    registry,
+    cap: DialectCapabilities,
+    *,
+    local_table: str | None = None,
+) -> Column:
     """Build a SQLAlchemy column for a stored field."""
     from ..fields import Many2one
 
@@ -159,10 +209,18 @@ def field_to_column(field: "Field", registry, cap: DialectCapabilities) -> Colum
                 **quote_kw,
             )
         target = registry[field.comodel_name]
+        ondelete = field.ondelete
+        if local_table is not None:
+            ondelete = effective_fk_ondelete(
+                ondelete,
+                local_table=local_table,
+                ref_table=target._table,
+                cap=cap,
+            )
         return Column(
             field.column,
             Integer(),
-            ForeignKey(f"{target._table}.id", ondelete=field.ondelete),
+            ForeignKey(f"{target._table}.id", ondelete=ondelete),
             nullable=not field.required,
             **quote_kw,
         )
@@ -179,7 +237,7 @@ def model_table_columns(model_cls, registry, cap: DialectCapabilities) -> list[C
     for field in model_cls._fields.values():
         if not field.is_stored or field.name == "id" or field.column == "id":
             continue
-        cols.append(field_to_column(field, registry, cap))
+        cols.append(field_to_column(field, registry, cap, local_table=model_cls._table))
     return cols
 
 

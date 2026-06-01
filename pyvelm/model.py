@@ -20,6 +20,13 @@ def _require_sa_connection(conn) -> Any:
     return require_sa_connection(conn)
 
 
+def _conn_cap(conn) -> Any:
+    from .database import dialect_capabilities
+
+    cap = getattr(conn, "capabilities", None)
+    return cap or dialect_capabilities("postgresql")
+
+
 def _rec_name_field(cls) -> str | None:
     """Return the Char/Text (etc.) field used for the default display_name."""
     raw = getattr(cls, "_rec_name", "name")
@@ -671,6 +678,44 @@ class BaseModel(metaclass=MetaModel):
                     fields=[field_name],
                 )
 
+    def _ids_with_m2o_pointing_to(
+        self, ref_cls: type, column: str, parent_ids: list[int]
+    ) -> list[int]:
+        if not parent_ids:
+            return []
+        from sqlalchemy import bindparam, select
+
+        from .database.sa_ddl import core_table
+
+        cap = _conn_cap(self.env.conn)
+        tbl = core_table(ref_cls._table, cap, "id", column)
+        stmt = select(tbl.c.id).where(
+            tbl.c[column].in_(bindparam("ids", expanding=True))
+        )
+        rows = _require_sa_connection(self.env.conn).execute(
+            stmt, {"ids": list(parent_ids)}
+        ).fetchall()
+        return [int(r[0]) for r in rows]
+
+    def _cascade_unlink_m2o_referrers(self) -> None:
+        """Unlink CASCADE Many2one children before us (required on MSSQL)."""
+        cap = _conn_cap(self.env.conn)
+        if cap.name != "mssql":
+            return
+        referrers = self.env.registry._m2o_referrers_index.get(self._name, [])
+        if not referrers or not self._ids:
+            return
+        for ref_model, ref_fname, ondelete in referrers:
+            if ondelete != "CASCADE":
+                continue
+            ref_cls = self.env.registry[ref_model]
+            col = ref_cls._fields[ref_fname].column
+            child_ids = self._ids_with_m2o_pointing_to(
+                ref_cls, col, list(self._ids)
+            )
+            if child_ids:
+                self.env[ref_model].browse(child_ids).unlink()
+
     def _invalidate_m2o_referrers(self) -> None:
         """Drop stale Many2one (and related O2M) cache on rows pointing at us."""
         referrers = self.env.registry._m2o_referrers_index.get(self._name, [])
@@ -731,19 +776,22 @@ class BaseModel(metaclass=MetaModel):
 
     def _apply_m2m(self, parent_ids: list[int], m2m_vals: dict[str, Any]) -> None:
         """Replace junction-table rows for each (field, parent_id) pair."""
-        from sqlalchemy import bindparam, column, delete, insert, table
+        from sqlalchemy import bindparam, delete, insert
+
+        from .database.sa_ddl import core_table
 
         sa_conn = _require_sa_connection(self.env.conn)
+        cap = _conn_cap(self.env.conn)
         for fname, value in m2m_vals.items():
             field = self._fields[fname]
             relation, col1, col2, _, _ = field.resolve_spec(
                 type(self), self.env.registry
             )
             target_ids = field.normalize_ids(value)
-            rel_tbl = table(relation, column(col1), column(col2))
+            rel_tbl = core_table(relation, cap, col1, col2)
             for parent_id in parent_ids:
                 del_stmt = delete(rel_tbl).where(
-                    column(col1) == bindparam("parent_id")
+                    rel_tbl.c[col1] == bindparam("parent_id")
                 )
                 sa_conn.execute(del_stmt, {"parent_id": parent_id})
                 if not target_ids:
@@ -776,31 +824,24 @@ class BaseModel(metaclass=MetaModel):
             if field.default is None:
                 continue
             column_vals[fname] = field.default
-        cap = getattr(self.env.conn, "capabilities", None)
-        if cap is None:
-            from .database import dialect_capabilities, fetch_lastrowid
+        from .database import fetch_lastrowid
+        from .database.sa_ddl import core_table
 
-            cap = dialect_capabilities("postgresql")
-        else:
-            from .database import fetch_lastrowid
-
+        cap = _conn_cap(self.env.conn)
         sa_conn = _require_sa_connection(self.env.conn)
-        from sqlalchemy import bindparam, column, insert, table
+        from sqlalchemy import bindparam, insert
 
         sql_cols: dict[str, Any] = {}
         for fname, value in column_vals.items():
             field = self._fields[fname]
             sql_cols[field.column] = field.to_sql_param(value)
-        tbl = table(
-            self._table,
-            *[column(col_name) for col_name in sql_cols.keys()],
-            column("id"),
-        )
+        col_names = tuple(dict.fromkeys((*sql_cols.keys(), "id")))
+        tbl = core_table(self._table, cap, *col_names)
         stmt = insert(tbl)
         if sql_cols:
             stmt = stmt.values({col_name: bindparam(col_name) for col_name in sql_cols})
         if cap.supports_returning and cap.name != "oracle":
-            stmt = stmt.returning(column("id"))
+            stmt = stmt.returning(tbl.c.id)
             res = sa_conn.execute(stmt, sql_cols)
             new_id = int(res.scalar_one())
         else:
@@ -882,21 +923,22 @@ class BaseModel(metaclass=MetaModel):
         if related_vals:
             self._apply_related_vals(related_vals)
         if column_vals:
-            from sqlalchemy import bindparam, column, table, update
+            from sqlalchemy import bindparam, update
 
+            from .database.sa_ddl import core_table
+
+            cap = _conn_cap(self.env.conn)
             sa_conn = _require_sa_connection(self.env.conn)
             sql_cols: dict[str, Any] = {}
             for fname, value in column_vals.items():
                 field = self._fields[fname]
                 sql_cols[field.column] = field.to_sql_param(value)
-            tbl = table(
-                self._table,
-                column("id"),
-                *[column(col_name) for col_name in sql_cols],
+            tbl = core_table(
+                self._table, cap, *tuple(dict.fromkeys(("id", *sql_cols.keys())))
             )
             stmt = (
                 update(tbl)
-                .where(column("id").in_(bindparam("ids", expanding=True)))
+                .where(tbl.c.id.in_(bindparam("ids", expanding=True)))
                 .values({col_name: bindparam(col_name) for col_name in sql_cols})
             )
             sa_conn.execute(stmt, {**sql_cols, "ids": list(self._ids)})
@@ -931,17 +973,21 @@ class BaseModel(metaclass=MetaModel):
         if not self._ids:
             return
         self.env.check_access(self._name, "unlink")
+        self._cascade_unlink_m2o_referrers()
         self._invalidate_before_unlink()
         self._invalidate_m2o_referrers()
         # Fire on_unlink automation rules before the records are deleted.
         from .automation import AutomationEngine
         AutomationEngine.fire(self.env, self._name, "on_unlink", self)
-        from sqlalchemy import bindparam, column, delete, table
+        from sqlalchemy import bindparam, delete
 
+        from .database.sa_ddl import core_table
+
+        cap = _conn_cap(self.env.conn)
         sa_conn = _require_sa_connection(self.env.conn)
-        tbl = table(self._table, column("id"))
+        tbl = core_table(self._table, cap, "id")
         stmt = delete(tbl).where(
-            column("id").in_(bindparam("ids", expanding=True))
+            tbl.c.id.in_(bindparam("ids", expanding=True))
         )
         sa_conn.execute(stmt, {"ids": list(self._ids)})
         self.env.cache.invalidate(model_name=self._name, ids=list(self._ids))
@@ -965,21 +1011,31 @@ class BaseModel(metaclass=MetaModel):
             return
         if self.env.conn is None:
             return
+        from .database.sa_ddl import core_table
+
+        cap = _conn_cap(self.env.conn)
         sa_conn = _require_sa_connection(self.env.conn)
         # Select by column, but cache under attr name.
-        from sqlalchemy import bindparam, column, select, table
-        sa_cols = [column("id")] + [
-            column(self._fields[f].column) for f in fields
-        ]
-        tbl = table(self._table, *sa_cols)
-        stmt = select(*sa_cols).where(
-            column("id").in_(bindparam("ids", expanding=True))
+        from sqlalchemy import bindparam, select
+
+        seen_cols: list[str] = []
+        col_index: dict[str, int] = {}
+        for col in ("id",) + tuple(self._fields[f].column for f in fields):
+            if col not in col_index:
+                col_index[col] = len(seen_cols)
+                seen_cols.append(col)
+        tbl = core_table(self._table, cap, *seen_cols)
+        stmt = select(*(tbl.c[c] for c in seen_cols)).where(
+            tbl.c.id.in_(bindparam("ids", expanding=True))
         )
         rows = sa_conn.execute(stmt, {"ids": missing_ids}).fetchall()
         for row in rows:
-            rid = row[0]
-            for i, fname in enumerate(fields, start=1):
-                self.env.cache.set(self._name, rid, fname, row[i])
+            rid = row[col_index["id"]]
+            for fname in fields:
+                col = self._fields[fname].column
+                self.env.cache.set(
+                    self._name, rid, fname, row[col_index[col]]
+                )
 
     def read(self, fields: list[str] | None = None) -> list[dict[str, Any]]:
         # Default: stored fields only. Non-stored (One2many, future computes)

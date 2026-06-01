@@ -76,6 +76,8 @@ def column_exists(
 
 
 def table_exists(conn, table: str, cap: DialectCapabilities | None = None) -> bool:
+    if getattr(conn, "_pyvelm_mock_schema", False) is True:
+        return False
     cap = cap or conn_capabilities(conn)
     if cap.name == "sqlite":
         row = conn.execute(

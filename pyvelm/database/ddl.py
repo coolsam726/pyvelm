@@ -131,7 +131,7 @@ def add_column_if_missing(
     if column_exists(conn, table, column, cap):
         return False
     if field is not None and registry is not None:
-        col = field_to_column(field, registry, cap)
+        col = field_to_column(field, registry, cap, local_table=table)
     else:
         from .sa_ddl import sa_type_for_field
         from ..fields import Field

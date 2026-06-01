@@ -3,9 +3,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import column, func, select, table
+from sqlalchemy import func, select
 from sqlalchemy.sql.expression import ColumnElement, literal_column
 
+from ..database.capabilities import DialectCapabilities
+from ..database.dialects import dialect_capabilities
+from ..database.sa_ddl import core_table
 from ..fields import Float, Integer, Many2one, Many2many, One2many
 from ..paths import M2mHop, M2oHop, O2mHop, Path, parse_path
 
@@ -70,6 +73,8 @@ def collection_subquery_expr(
     root_alias: str,
     registry,
     subaggregate: str | None,
+    *,
+    capabilities: DialectCapabilities | None = None,
 ) -> ColumnElement:
     """Correlated scalar subquery for paths through O2m/M2m."""
     if not path.hops:
@@ -82,6 +87,7 @@ def collection_subquery_expr(
     if coll_idx is None:
         raise ValueError("collection_subquery_expr called on m2o-only path")
 
+    cap = capabilities or dialect_capabilities("postgresql")
     coll_hop = path.hops[coll_idx]
     target = registry[coll_hop.target_model]
     coll_alias = "_sqc"
@@ -89,16 +95,16 @@ def collection_subquery_expr(
 
     if isinstance(coll_hop, O2mHop):
         inv_field = registry[coll_hop.target_model]._fields[coll_hop.inverse_attr]
-        coll_tbl = table(
-            target._table, column("id"), column(inv_field.column)
+        coll_tbl = core_table(
+            target._table, cap, "id", inv_field.column
         ).alias(coll_alias)
         from_clause = coll_tbl
         correlate_where = _qcol(coll_alias, inv_field.column) == root_ref
     else:
         source_cls = registry[coll_hop.source_model]
         rel, col1, col2, _, _ = _resolve_m2m_spec(coll_hop, source_cls, registry)
-        rel_tbl = table(rel, column(col1), column(col2)).alias("_sqrel")
-        coll_tbl = table(target._table, column("id")).alias(coll_alias)
+        rel_tbl = core_table(rel, cap, col1, col2).alias("_sqrel")
+        coll_tbl = core_table(target._table, cap, "id").alias(coll_alias)
         from_clause = rel_tbl.join(
             coll_tbl,
             _qcol(coll_alias, "id") == _qcol("_sqrel", col2),
@@ -117,8 +123,8 @@ def collection_subquery_expr(
         j += 1
         new_alias = f"_sqj{j}"
         tgt = registry[hop.target_model]
-        hop_tbl = table(
-            tgt._table, column("id"), column(hop.field.column)
+        hop_tbl = core_table(
+            tgt._table, cap, "id", hop.field.column
         ).alias(new_alias)
         current_from = current_from.join(
             hop_tbl,
@@ -173,7 +179,12 @@ def column_expr_for_path(
         if isinstance(fld, (One2many, Many2many)):
             path = parse_path(root_cls, f"{expr}.id", registry)
             subq = collection_subquery_expr(
-                path, root_cls, root_alias, registry, subaggregate or "count"
+                path,
+                root_cls,
+                root_alias,
+                registry,
+                subaggregate or "count",
+                capabilities=compiler.cap,
             )
             return subq, False, None
         is_m2o = isinstance(fld, Many2one)
@@ -188,6 +199,11 @@ def column_expr_for_path(
         comodel = leaf_field.comodel_name if is_m2o else None
         return compiler._qcol(alias, leaf_field.column), is_m2o, comodel
     subq = collection_subquery_expr(
-        path, root_cls, root_alias, registry, subaggregate
+        path,
+        root_cls,
+        root_alias,
+        registry,
+        subaggregate,
+        capabilities=compiler.cap,
     )
     return subq, False, None

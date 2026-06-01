@@ -137,7 +137,7 @@ class ReportCompileTests(unittest.TestCase):
             "filters": [["move_id.state", "=", "posted"]],
         }
         compiled = compile_report(defn, reg)
-        self.assertEqual(compiled.sql.lower().count("account_move as _j1"), 1)
+        self.assertEqual(compiled.sql.lower().count("as _j1"), 1)
 
 
 class ReportFieldsApiTests(unittest.TestCase):

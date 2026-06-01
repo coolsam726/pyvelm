@@ -586,6 +586,50 @@ class DdlRemainingGapsTests(unittest.TestCase):
         oracle_sql = add_column_sql("t", "c", "INTEGER", dialect_caps("oracle"))
         self.assertEqual(oracle_sql, 'ALTER TABLE "t" ADD "c" INTEGER')
 
+    def test_effective_fk_ondelete_mssql_self_ref_cascade(self):
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import effective_fk_ondelete
+
+        cap = dialect_capabilities("mssql")
+        self.assertEqual(
+            effective_fk_ondelete(
+                "CASCADE",
+                local_table="ir_ui_view",
+                ref_table="ir_ui_view",
+                cap=cap,
+            ),
+            "NO ACTION",
+        )
+        self.assertEqual(
+            effective_fk_ondelete(
+                "CASCADE",
+                local_table="ir_ui_view",
+                ref_table="res_users",
+                cap=cap,
+            ),
+            "CASCADE",
+        )
+
+    def test_core_table_dml_matches_ddl_quoting(self):
+        from sqlalchemy import insert
+
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import _sqlalchemy_dialect, core_table
+
+        for dialect, needle in (
+            ("oracle", '"res_groups"'),
+            ("mssql", "[res_groups]"),
+        ):
+            with self.subTest(dialect=dialect):
+                cap = dialect_capabilities(dialect)
+                tbl = core_table("res_groups", cap, "id", "name")
+                sql = str(
+                    insert(tbl)
+                    .values(name="Admin")
+                    .compile(dialect=_sqlalchemy_dialect(cap))
+                )
+                self.assertIn(needle, sql)
+
     def test_execute_create_table_skips_existing_fk_stub(self):
         """Oracle has no CREATE IF NOT EXISTS; stub targets may already exist."""
         from unittest.mock import MagicMock, patch

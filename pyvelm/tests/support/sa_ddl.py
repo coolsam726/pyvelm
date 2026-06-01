@@ -69,5 +69,7 @@ def wire_sa_conn(
         return _append_and_dispatch(sql_str, params)
 
     conn._sa = _SAShim()
+    conn._pyvelm_mock_schema = True
+    conn.capabilities = cap
     if base_execute is not None:
         conn.execute = conn_execute

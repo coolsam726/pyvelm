@@ -90,7 +90,10 @@ class MigrationSchemaCompileTests(unittest.TestCase):
                 Schema(env).table("demo_ledger", _alter)
                 joined = "\n".join(executed).lower()
                 self.assertIn("ledger_id", joined)
-                self.assertIn("bigint", joined)
+                if dialect == "oracle":
+                    self.assertIn("number", joined)
+                else:
+                    self.assertIn("bigint", joined)
 
     def test_big_integer_column_compiles(self):
         env, executed = self._env("postgresql")
