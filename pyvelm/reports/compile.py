@@ -94,7 +94,6 @@ def compile_report(
     root = defn["root"]
     root_cls = registry[root]
     base_alias = f'"{root_cls._table}"'
-    joins: list[str] = []
     join_aliases: dict[tuple, str] = {}
     join_counter = [0]
 
@@ -114,6 +113,13 @@ def compile_report(
     )
 
     cap = capabilities if capabilities is not None else dialect_capabilities("postgresql")
+    compiler = DomainCompiler(
+        root_cls,
+        registry,
+        cap,
+        join_aliases=join_aliases,
+        join_counter=join_counter,
+    )
 
     columns_meta: list[ColumnMeta] = []
     select_cols: list = []
@@ -184,10 +190,11 @@ def compile_report(
                 root_cls,
                 base_alias,
                 registry,
-                joins,
+                [],
                 join_aliases,
                 join_counter,
                 subagg,
+                compiler=compiler,
             )
             alias = f"c_{i}"
             select_cols.append(col_expr.label(alias))
@@ -205,10 +212,11 @@ def compile_report(
                             root_cls,
                             base_alias,
                             registry,
-                            joins,
+                            [],
                             join_aliases,
                             join_counter,
                             None,
+                            compiler=compiler,
                         )
                         select_cols.append(ccy_expr.label(f"__ccy_{i}"))
                         currency_id_key = f"{expr}__currency_id"
@@ -228,20 +236,8 @@ def compile_report(
                 )
             )
     domain = _compact_domain(_merge_domain(defn, params))
-    compiler = DomainCompiler(
-        root_cls,
-        registry,
-        cap,
-        shared_joins=joins,
-        join_aliases=join_aliases,
-        join_counter=join_counter,
-    )
     where = compiler.compile_where(domain)
-
-    join_clause = " ".join(joins)
-    from_sql = f"{base_alias} {join_clause}" if join_clause else base_alias
-    from_src = sa_text(from_sql)
-    stmt = select(*select_cols).select_from(from_src).where(where)
+    stmt = select(*select_cols).select_from(compiler.from_clause()).where(where)
     if group_by_cols:
         stmt = stmt.group_by(*group_by_cols)
 
@@ -259,10 +255,11 @@ def compile_report(
                     root_cls,
                     base_alias,
                     registry,
-                    joins,
+                    [],
                     join_aliases,
                     join_counter,
                     None,
+                    compiler=compiler,
                 )
                 order_sql_cache[fname] = column_element_to_sql(order_expr, cap)
             except (ValueError, KeyError):

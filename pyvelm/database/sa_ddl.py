@@ -276,6 +276,23 @@ def execute_create_table(
     sa_conn.execute(stmt)
 
 
+def execute_sql(
+    conn,
+    sql: str,
+    params: list | tuple | None = None,
+) -> None:
+    """Execute DDL/DML SQL via the SQLAlchemy connection when available."""
+    sa_conn = sqlalchemy_connection(conn)
+    if sa_conn is None:
+        conn.execute(sql, params)
+        return
+    bind_params = tuple(params) if params is not None else ()
+    if bind_params:
+        conn.execute(sql, bind_params)
+        return
+    sa_conn.execute(text(sql))
+
+
 def execute_add_column(
     conn,
     table: str,

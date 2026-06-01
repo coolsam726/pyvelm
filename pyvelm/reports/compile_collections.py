@@ -1,13 +1,16 @@
 """Report column expressions — SQLAlchemy Core (with legacy SQL helpers)."""
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import column, func, select, table
 from sqlalchemy.sql.expression import ColumnElement, literal_column
 
 from ..fields import Float, Integer, Many2one, Many2many, One2many
 from ..paths import M2mHop, M2oHop, O2mHop, Path, parse_path
+
+if TYPE_CHECKING:
+    from ..domain_sa import DomainCompiler
 
 
 def default_subaggregate(leaf_field) -> str:
@@ -205,8 +208,37 @@ def column_expr_for_path(
     join_aliases: dict,
     join_counter: list[int],
     subaggregate: str | None,
+    *,
+    compiler: "DomainCompiler | None" = None,
 ) -> tuple[ColumnElement, bool, str | None]:
     """Return a SELECT-list column expression for a report path."""
+    if compiler is not None:
+        if expr == "id":
+            return compiler._qcol(compiler._base_alias, "id"), False, None
+        if "." not in expr:
+            fld = root_cls._fields[expr]
+            if isinstance(fld, (One2many, Many2many)):
+                path = parse_path(root_cls, f"{expr}.id", registry)
+                subq = collection_subquery_expr(
+                    path, root_cls, root_alias, registry, subaggregate or "count"
+                )
+                return subq, False, None
+            is_m2o = isinstance(fld, Many2one)
+            comodel = fld.comodel_name if is_m2o else None
+            return compiler._qcol(compiler._base_alias, fld.column), is_m2o, comodel
+        path = parse_path(root_cls, expr, registry)
+        if path.is_m2o_only():
+            alias = compiler._emit_m2o_chain(path.hops)
+            leaf_cls = registry[path.leaf_model]
+            leaf_field = leaf_cls._fields[path.leaf_attr]
+            is_m2o = isinstance(leaf_field, Many2one)
+            comodel = leaf_field.comodel_name if is_m2o else None
+            return compiler._qcol(alias, leaf_field.column), is_m2o, comodel
+        subq = collection_subquery_expr(
+            path, root_cls, root_alias, registry, subaggregate
+        )
+        return subq, False, None
+
     if expr == "id":
         return _root_id_col(root_alias), False, None
     if "." not in expr:

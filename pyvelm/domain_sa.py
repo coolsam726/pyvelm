@@ -135,9 +135,7 @@ class DomainCompiler:
                 f'"{alias}"."id" = "{current_alias}"."{hop.field.column}"'
             )
             self._string_joins.append(join_sql)
-            if self._shared_joins is None:
-                target_tbl = self._aliased_table(target._table, alias)
-                self._joins.append(_Join(target._table, alias, onclause))
+            self._joins.append(_Join(target._table, alias, onclause))
             current_alias = alias
         return current_alias
 

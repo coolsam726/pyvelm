@@ -507,6 +507,7 @@ def _apply_nullability(
     env: "Environment", diff: Diff, result: ApplyResult
 ) -> None:
     from pyvelm.database import _conn_capabilities, normalize_sql_type
+    from pyvelm.database.sa_ddl import execute_sql
 
     cap = _conn_capabilities(env.conn)
     if cap.name in ("sqlite", "mysql"):
@@ -521,38 +522,44 @@ def _apply_nullability(
                 )
                 continue
             if cap.name == "oracle":
-                env.conn.execute(
-                    f'ALTER TABLE "{alt.table}" MODIFY ("{alt.column}" NOT NULL)'
+                execute_sql(
+                    env.conn,
+                    f'ALTER TABLE "{alt.table}" MODIFY ("{alt.column}" NOT NULL)',
                 )
             elif cap.name == "mssql":
                 cols = _fetch_table_columns(env, alt.table) or {}
                 col_schema = cols.get(alt.column)
                 type_spec = col_schema.type_spec if col_schema is not None else "text"
                 sql_type = normalize_sql_type(type_spec, cap)
-                env.conn.execute(
-                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" {sql_type} NOT NULL'
+                execute_sql(
+                    env.conn,
+                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" {sql_type} NOT NULL',
                 )
             else:
-                env.conn.execute(
-                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" SET NOT NULL'
+                execute_sql(
+                    env.conn,
+                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" SET NOT NULL',
                 )
             result.set_not_null += 1
         elif alt.kind == "drop_not_null":
             if cap.name == "oracle":
-                env.conn.execute(
-                    f'ALTER TABLE "{alt.table}" MODIFY ("{alt.column}" NULL)'
+                execute_sql(
+                    env.conn,
+                    f'ALTER TABLE "{alt.table}" MODIFY ("{alt.column}" NULL)',
                 )
             elif cap.name == "mssql":
                 cols = _fetch_table_columns(env, alt.table) or {}
                 col_schema = cols.get(alt.column)
                 type_spec = col_schema.type_spec if col_schema is not None else "text"
                 sql_type = normalize_sql_type(type_spec, cap)
-                env.conn.execute(
-                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" {sql_type} NULL'
+                execute_sql(
+                    env.conn,
+                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" {sql_type} NULL',
                 )
             else:
-                env.conn.execute(
-                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" DROP NOT NULL'
+                execute_sql(
+                    env.conn,
+                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" DROP NOT NULL',
                 )
             result.drop_not_null += 1
 
@@ -590,13 +597,14 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
     # diff is required so we still add any columns that are genuinely missing.
     diff = compute_diff(env, module)
     from pyvelm.database import add_column_if_missing, _conn_capabilities, normalize_sql_type
+    from pyvelm.database.sa_ddl import execute_sql
 
     cap = _conn_capabilities(env.conn)
     for table, col, stmt, _was_required, sql_type in diff.new_columns:
         if _column_exists(env, table, col):
             continue
         if cap.supports_add_column_if_not_exists:
-            env.conn.execute(stmt)
+            execute_sql(env.conn, stmt)
         else:
             add_column_if_missing(
                 env.conn,
