@@ -58,14 +58,16 @@ jobs:
               print(tomllib.load(f)['project']['version'])
           ")
           PKG_VERSION=$(python -c "
-          import importlib.util, pathlib
-          spec = importlib.util.spec_from_file_location(
-              'pyvelm', pathlib.Path('pyvelm/__init__.py'),
-              submodule_search_locations=['pyvelm'],
-          )
-          mod = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(mod)
-          print(mod.__version__)
+          import ast, pathlib
+          tree = ast.parse(pathlib.Path('pyvelm/__init__.py').read_text(encoding='utf-8'))
+          for node in tree.body:
+              if not isinstance(node, ast.Assign):
+                  continue
+              for target in node.targets:
+                  if isinstance(target, ast.Name) and target.id == '__version__':
+                      print(ast.literal_eval(node.value))
+                      raise SystemExit(0)
+          raise SystemExit('__version__ not found in pyvelm/__init__.py')
           ")
           if [[ "$TAG_VERSION" != "$PYPROJ_VERSION" ]]; then
             echo "::error::Tag v${TAG_VERSION} != pyproject.version ${PYPROJ_VERSION}"
