@@ -171,6 +171,148 @@ class SessionAuthTests(unittest.TestCase):
             revoke_session(env, "anything")
         conn.execute.assert_not_called()
 
+    def test_stateless_sessions_disabled_explicitly(self):
+        with mock.patch.dict(
+            os.environ,
+            {"PYVELM_STATELESS_SESSIONS": "0", "VERCEL": "1"},
+            clear=False,
+        ):
+            uses_stateless_sessions.cache_clear()
+            self.assertFalse(uses_stateless_sessions())
+
+    def test_sqlite_tmp_dsn_uses_stateless(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "PYVELM_DSN": "sqlite:////tmp/pyvelm-demo.db",
+                "VERCEL": "1",
+            },
+            clear=False,
+        ):
+            uses_stateless_sessions.cache_clear()
+            self.assertTrue(uses_stateless_sessions())
+
+    def test_verify_returns_none_when_db_sessions(self):
+        clean = {
+            k: v
+            for k, v in os.environ.items()
+            if k
+            not in (
+                "PYVELM_DSN",
+                "PYVELM_STATELESS_SESSIONS",
+                "VERCEL",
+                "AWS_LAMBDA_FUNCTION_NAME",
+                "LAMBDA_TASK_ROOT",
+            )
+        }
+        with mock.patch.dict(os.environ, clean, clear=True):
+            uses_stateless_sessions.cache_clear()
+            self.assertFalse(uses_stateless_sessions())
+            self.assertIsNone(verify_session_cookie("v1.payload.sig"))
+
+    def test_resolve_session_uid_empty_token(self):
+        reg = Registry()
+        env = Environment(mock.Mock(), reg, uid=None)
+        self.assertIsNone(resolve_session_uid(env, None))
+
+    def test_revoke_session_db_mode(self):
+        clean = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("PYVELM_DSN", "PYVELM_STATELESS_SESSIONS", "VERCEL")
+        }
+        with mock.patch.dict(os.environ, clean, clear=True):
+            uses_stateless_sessions.cache_clear()
+            reg = Registry()
+            with reg.activate():
+
+                class Users(BaseModel):
+                    _name = "res.users"
+
+            env = Environment(mock.Mock(), reg, uid=None)
+            rs = mock.Mock()
+            rs.__bool__ = mock.Mock(return_value=True)
+            model = mock.Mock()
+            model.search = mock.Mock(return_value=rs)
+            sudo_env = mock.Mock()
+            sudo_env.__getitem__ = mock.Mock(return_value=model)
+            env.sudo = mock.Mock(return_value=sudo_env)
+            env.transaction = mock.Mock(
+                return_value=mock.MagicMock(
+                    __enter__=mock.Mock(return_value=None),
+                    __exit__=mock.Mock(return_value=None),
+                )
+            )
+            revoke_session(env, "db-token")
+        rs.write.assert_called_once_with({"session_token": None})
+
+    def test_session_signing_key_derived_without_secret(self):
+        with mock.patch.dict(os.environ, {"VERCEL_URL": "demo.vercel.app"}, clear=True):
+            from pyvelm.session_auth import session_signing_key
+
+            key = session_signing_key()
+            self.assertIsInstance(key, bytes)
+            self.assertGreater(len(key), 0)
+
+    def test_verify_malformed_cookie_parts(self):
+        with _vercel_env():
+            self.assertIsNone(verify_session_cookie("v1.only-two-parts"))
+            self.assertIsNone(verify_session_cookie("v2.payload.sig"))
+
+    def test_verify_bad_base64(self):
+        with _vercel_env():
+            self.assertIsNone(verify_session_cookie("v1.!!!.!!!"))
+
+    def test_verify_invalid_uid_or_expiry(self):
+        with _vercel_env():
+            token = mint_session_cookie(0, now=0)
+            self.assertIsNone(verify_session_cookie(token))
+
+    def test_resolve_without_users_model(self):
+        reg = Registry()
+        env = Environment(mock.Mock(), reg, uid=None)
+        with _vercel_env():
+            token = mint_session_cookie(1)
+            self.assertIsNone(resolve_session_uid(env, token))
+
+    def test_establish_session_db_writes_token(self):
+        clean = {k: v for k, v in os.environ.items() if k not in ("VERCEL", "PYVELM_DSN", "PYVELM_STATELESS_SESSIONS")}
+        with mock.patch.dict(os.environ, clean, clear=True):
+            uses_stateless_sessions.cache_clear()
+            reg = Registry()
+            with reg.activate():
+
+                class Users(BaseModel):
+                    _name = "res.users"
+
+            env = Environment(mock.Mock(), reg, uid=1)
+            rs = mock.Mock()
+            rs.write = mock.Mock()
+            model = mock.Mock()
+            model.browse.return_value = rs
+            sudo_env = mock.Mock()
+            sudo_env.__getitem__ = mock.Mock(return_value=model)
+            env.sudo = mock.Mock(return_value=sudo_env)
+            env.transaction = mock.Mock(
+                return_value=mock.MagicMock(
+                    __enter__=mock.Mock(return_value=None),
+                    __exit__=mock.Mock(return_value=None),
+                )
+            )
+            token = establish_session(env, 1)
+        self.assertTrue(len(token) > 10)
+        rs.write.assert_called_once()
+
+    def test_postgres_dsn_exception_in_stateless_check(self):
+        with mock.patch.dict(
+            os.environ,
+            {"PYVELM_DSN": "!!!not-a-url!!!"},
+            clear=False,
+        ):
+            uses_stateless_sessions.cache_clear()
+            # Should fall through without raising
+            uses_stateless_sessions()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -35,6 +35,21 @@ class AdminManagementPolicyTests(unittest.TestCase):
             eval_policy(env, model_name="res.users", action="view_any")
         )
 
+    @patch("pyvelm.policies.management.user_in_group", return_value=True)
+    def test_crud_allows_admin(self, _mock):
+        env = _FakeEnv()
+        rec = MagicMock()
+        self.assertTrue(eval_policy(env, model_name="res.users", action="create"))
+        self.assertTrue(
+            eval_policy(env, model_name="res.users", action="view", record=rec)
+        )
+        self.assertTrue(
+            eval_policy(env, model_name="res.users", action="write", record=rec)
+        )
+        self.assertTrue(
+            eval_policy(env, model_name="res.users", action="unlink", record=rec)
+        )
+
 
 class WorkflowPolicyTests(unittest.TestCase):
     def setUp(self):
@@ -52,6 +67,16 @@ class WorkflowPolicyTests(unittest.TestCase):
         env = _FakeEnv()
         self.assertFalse(
             eval_policy(env, model_name="workflow.approval", action="view_any")
+        )
+
+    @patch("pyvelm.policies.workflow.user_in_group", return_value=True)
+    def test_definition_design_admin_only(self, _mock):
+        env = _FakeEnv()
+        self.assertTrue(
+            eval_policy(env, model_name="workflow.definition", action="design")
+        )
+        self.assertTrue(
+            eval_policy(env, model_name="workflow.definition", action="create")
         )
 
 

@@ -109,6 +109,7 @@ PYVELM_DSN
     └── sqlalchemy.create_engine
             ├── pool (checkout per request / CLI command)
             ├── DialectCapabilities (backend flags)
+            ├── dialects/ (per-backend helpers: mysql, mssql, oracle, …)
             └── ConnectionAdapter → Environment.conn
                     ├── model.py (DML / DDL via Core)
                     ├── domain.py (Core boolean expressions)

@@ -23,6 +23,7 @@ from pyvelm.storage import (
     reset_backend_cache,
 )
 from pyvelm.workflow import runtime as workflow_runtime
+from pyvelm import BaseModel, Registry
 
 
 class ConsoleSignatureTests(unittest.TestCase):
@@ -82,10 +83,15 @@ class StorageTests(unittest.TestCase):
             b.load("")
 
     def test_get_backend_local(self):
-        with patch.dict(os.environ, {"PYVELM_ATTACHMENT_BACKEND": "local"}, clear=False):
-            reset_backend_cache()
-            b = get_backend()
-            self.assertIsInstance(b, LocalStorageBackend)
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {"PYVELM_ATTACHMENT_BACKEND": "local", "PYVELM_ATTACHMENT_DIR": tmp},
+                clear=False,
+            ):
+                reset_backend_cache()
+                b = get_backend()
+                self.assertIsInstance(b, LocalStorageBackend)
 
     def test_serverless_postgres_defaults_to_db_backend(self):
         with patch.dict(
@@ -102,10 +108,16 @@ class StorageTests(unittest.TestCase):
             self.assertIsInstance(b, DbStorageBackend)
 
     def test_serverless_local_backend_uses_tmp_dir(self):
-        with patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
-            os.environ.pop("PYVELM_ATTACHMENT_DIR", None)
+        with patch.dict(
+            os.environ,
+            {"VERCEL": "1", "PYVELM_ATTACHMENT_DIR": "/var/data/attachments"},
+            clear=True,
+        ):
             backend = LocalStorageBackend()
-            self.assertTrue(str(backend.root).startswith("/tmp/"))
+            self.assertEqual(
+                backend.root,
+                Path("/tmp/pyvelm-attachments").resolve(),
+            )
 
 
 class ServerHelperTests(unittest.TestCase):
@@ -160,7 +172,7 @@ class ConsoleSignatureTestsExtra(unittest.TestCase):
             parse_signature("   ")
 
 
-class WorkflowRuntimeTests(unittest.TestCase):
+class WorkflowRuntimeMoreTests(unittest.TestCase):
     def test_maybe_auto_start_no_schema(self):
         env = MagicMock()
         env.registry = {}
@@ -173,3 +185,40 @@ class WorkflowRuntimeTests(unittest.TestCase):
         env = MagicMock()
         env._acl_bypass = True
         workflow_runtime.maybe_auto_start_workflow(env, MagicMock())
+
+    @patch("pyvelm.workflow.engine.WorkflowEngine")
+    @patch("pyvelm.workflow.engine.parse_definition")
+    @patch("pyvelm.database.table_exists", return_value=True)
+    def test_auto_start_when_definition_auto(self, _tbl, parse_def, Engine):
+        reg = Registry()
+        with reg.activate():
+
+            class Defn(BaseModel):
+                _name = "workflow.definition"
+                _table = "wf_defn"
+
+        env = MagicMock()
+        env._acl_bypass = False
+        env.registry = {"workflow.definition": Defn}
+        env.transaction = MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=None),
+                __exit__=MagicMock(return_value=None),
+            )
+        )
+        parse_def.return_value = {"auto_start": True}
+        Engine.active_definition.return_value = MagicMock(definition="{}")
+        Engine.instance_for_record.return_value = None
+        record = MagicMock()
+        record._name = "wf.target"
+        record.id = 1
+        workflow_runtime.maybe_auto_start_workflow(env, record)
+        Engine.start.assert_called_once()
+
+    @patch("pyvelm.database.table_exists", return_value=True)
+    def test_auto_start_swallows_engine_errors(self, _tbl):
+        env = MagicMock()
+        env._acl_bypass = False
+        env.registry = {"workflow.definition": MagicMock(_table="wf_defn")}
+        env.transaction.side_effect = RuntimeError("boom")
+        workflow_runtime.maybe_auto_start_workflow(env, MagicMock(_name="x", id=1))
