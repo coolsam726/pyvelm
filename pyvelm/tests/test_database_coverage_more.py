@@ -239,9 +239,11 @@ class DdlHelperTests(unittest.TestCase):
         pg = dialect_caps("postgresql")
         sq = dialect_caps("sqlite")
         my = dialect_caps("mysql")
+        ora = dialect_caps("oracle")
         self.assertIn("RETURNING", returning_id_clause(pg))
         self.assertIn("RETURNING", returning_id_clause(sq))
         self.assertEqual(returning_id_clause(my), "")
+        self.assertEqual(returning_id_clause(ora), "")
 
     def test_append_search_pagination_noop(self):
         cap = dialect_caps("postgresql")

@@ -35,6 +35,11 @@ def serial_primary_key(cap: DialectCapabilities) -> str:
 
 
 def returning_id_clause(cap: DialectCapabilities) -> str:
+    # Oracle RETURNING requires an INTO target/bind variable. Our generic
+    # exec_driver_sql path appends only `RETURNING "id"` so it fails with
+    # ORA-00925. Fall back to dialect fetch_lastrowid() for Oracle.
+    if cap.name == "oracle":
+        return ""
     if cap.name == "sqlite" and cap.supports_returning:
         return ' RETURNING "id"'
     if cap.supports_returning:
