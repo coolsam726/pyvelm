@@ -300,7 +300,7 @@ class MenuBranchTests(unittest.TestCase):
             ]
         )
         by_name = {entry["name"]: entry for entry in menus}
-        self.assertEqual(by_name["business"]["parent"], None)
+        self.assertNotIn("parent", by_name["business"])
         self.assertEqual(
             by_name["business.directory"]["parent"],
             "partners.business",
