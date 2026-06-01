@@ -256,17 +256,22 @@ class DdlHelperTests(unittest.TestCase):
         )
 
     def test_create_table_sql(self):
+        from pyvelm.database.sa_ddl import primary_key_column
+
         cap = dialect_caps("sqlite")
-        self.assertIn("IF NOT EXISTS", create_table_sql("t", '"id" int', cap))
+        self.assertIn(
+            "IF NOT EXISTS",
+            create_table_sql("t", [primary_key_column(cap)], cap),
+        )
         cap_oracle = dialect_caps("oracle")
         self.assertNotIn(
             "IF NOT EXISTS",
-            create_table_sql("t", '"id" int', cap_oracle),
+            create_table_sql("t", [primary_key_column(cap_oracle)], cap_oracle),
         )
         cap_mssql = dialect_caps("mssql")
         self.assertNotIn(
             "IF NOT EXISTS",
-            create_table_sql("t", '"id" int', cap_mssql),
+            create_table_sql("t", [primary_key_column(cap_mssql)], cap_mssql),
         )
 
     def test_reset_schema_unsupported(self):
@@ -312,8 +317,11 @@ class DdlHelperTests(unittest.TestCase):
             db.dispose()
 
     def test_add_column_duplicate_error_swallowed(self):
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
         conn = MagicMock()
         cap = dialect_caps("mysql")
+        wire_sa_conn(conn, [], dialect_name="mysql")
         with patch(
             "pyvelm.database.introspection.column_exists", return_value=False
         ):
@@ -444,9 +452,9 @@ class IntrospectionMockTests(unittest.TestCase):
     def test_column_exists_via_sqlalchemy_inspector(self):
         conn = MagicMock()
         conn.capabilities = dialect_caps("postgresql")
-        sa_conn = MagicMock()
+        sa_conn = object()
         with patch(
-            "pyvelm.database.introspection.sqlalchemy_connection",
+            "pyvelm.database.introspection._inspector_sa_connection",
             return_value=sa_conn,
         ), patch(
             "pyvelm.database.introspection.table_exists",

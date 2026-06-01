@@ -362,10 +362,12 @@ def reload_installed_models(env: Environment, specs: dict[str, ModuleSpec]) -> N
 def _ensure_ir_module(env: Environment) -> None:
     from pyvelm.database import (
         _conn_capabilities,
-        ir_module_create_sql,
+        ir_module_table,
+        is_duplicate_object_error,
         supports_create_table_if_not_exists,
         table_exists,
     )
+    from pyvelm.database.sa_ddl import execute_create_table
 
     cap = _conn_capabilities(env.conn)
     if table_exists(env.conn, IR_MODULE_TABLE, cap) and not supports_create_table_if_not_exists(
@@ -373,15 +375,9 @@ def _ensure_ir_module(env: Environment) -> None:
     ):
         return
     try:
-        env.conn.execute(ir_module_create_sql(cap))
+        execute_create_table(env.conn, ir_module_table(cap), cap=cap)
     except Exception as exc:
-        # Non-IF-NOT-EXISTS backends can race on bootstrap checks.
-        msg = str(getattr(exc, "orig", exc)).lower()
-        if (
-            "already exists" in msg
-            or "already an object named" in msg
-            or "name is already used by an existing object" in msg
-        ):
+        if is_duplicate_object_error(exc):
             return
         raise
 
@@ -443,7 +439,7 @@ def _setup_module_schema(spec: ModuleSpec, env: Environment) -> None:
     ]
     all_cls = models + extended
     for cls in all_cls:
-        cls._setup_table(env.conn)
+        cls._setup_table(env.conn, registry=registry)
     for cls in all_cls:
         cls._setup_foreign_keys(env.conn, registry)
     created: set[str] = set()

@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 from pyvelm import BaseModel, Char, Date, Float, Integer, Many2many, Many2one, One2many, Registry
 from pyvelm.reports.compile import compile_report, parse_definition
 from pyvelm.reports.compile_collections import (
-    collection_subquery_sql,
-    column_sql_for_path,
+    collection_subquery_expr,
+    column_expr_for_path,
     default_subaggregate,
 )
 from pyvelm.reports.execute import ReportResult, _secured_definition, run_report
@@ -218,28 +218,38 @@ class ReportCollectionsTests(unittest.TestCase):
 
     def test_collection_subquery_o2m_count(self):
         reg = _partner_registry()
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.domain_sa import column_element_to_sql
         from pyvelm.paths import parse_path
 
+        cap = dialect_capabilities("postgresql")
         path = parse_path(reg["res.partner"], "child_ids.id", reg)
-        sql = collection_subquery_sql(path, reg["res.partner"], '"res_partner"', reg, "count")
+        expr = collection_subquery_expr(
+            path, reg["res.partner"], '"res_partner"', reg, "count"
+        )
+        sql = column_element_to_sql(expr, cap)
         self.assertIn("count(distinct", sql.lower())
         self.assertIn("res_partner", sql)
 
-    def test_column_sql_root_o2m_without_path(self):
+    def test_column_expr_root_o2m_without_path(self):
         reg = _partner_registry()
-        joins: list[str] = []
-        join_aliases: dict = {}
-        join_counter = [0]
-        sql, is_m2o, comodel = column_sql_for_path(
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.domain_sa import DomainCompiler, column_element_to_sql
+
+        cap = dialect_capabilities("postgresql")
+        compiler = DomainCompiler(reg["res.partner"], reg, cap)
+        col_expr, is_m2o, comodel = column_expr_for_path(
             "child_ids",
             reg["res.partner"],
             '"res_partner"',
             reg,
-            joins,
-            join_aliases,
-            join_counter,
+            [],
+            {},
+            [0],
             "count",
+            compiler=compiler,
         )
+        sql = column_element_to_sql(col_expr, cap)
         self.assertIn("SELECT", sql)
         self.assertFalse(is_m2o)
 
@@ -672,9 +682,13 @@ class ReportExecuteUnitTests(unittest.TestCase):
             row_key_order=None,
             stmt=mock_stmt,
         )
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
         conn = MagicMock()
-        conn._sa = MagicMock()
-        conn._sa.execute.return_value.fetchall.return_value = [("Alice",)]
+        wire_sa_conn(conn, [])
+        row_result = MagicMock()
+        row_result.fetchall.return_value = [("Alice",)]
+        conn._sa.execute = lambda stmt, params=None: row_result
         env = MagicMock()
         env.registry = _partner_registry()
         env.conn = conn

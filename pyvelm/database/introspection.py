@@ -1,8 +1,16 @@
 """Schema introspection helpers."""
 from __future__ import annotations
 
+from sqlalchemy.engine import Connection as SAConnection
+
 from .adapter import conn_capabilities, sqlalchemy_connection
 from .capabilities import DialectCapabilities
+
+
+def _inspector_sa_connection(sa_conn) -> SAConnection | None:
+    if isinstance(sa_conn, SAConnection):
+        return sa_conn
+    return None
 
 
 def column_exists(
@@ -14,7 +22,7 @@ def column_exists(
     if cap.name == "sqlite":
         rows = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
         return column in {r[1] for r in rows}
-    sa_conn = sqlalchemy_connection(conn)
+    sa_conn = _inspector_sa_connection(sqlalchemy_connection(conn))
     if sa_conn is not None:
         from sqlalchemy import inspect as sa_inspect
 
@@ -36,7 +44,7 @@ def table_exists(conn, table: str, cap: DialectCapabilities | None = None) -> bo
             (table,),
         ).fetchone()
         return row is not None
-    sa_conn = sqlalchemy_connection(conn)
+    sa_conn = _inspector_sa_connection(sqlalchemy_connection(conn))
     if sa_conn is not None:
         from sqlalchemy import inspect as sa_inspect
         from sqlalchemy.exc import NoSuchTableError

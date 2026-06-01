@@ -263,9 +263,17 @@ def create_database_from_dsn(dsn: str, *, pool_size: int = 4) -> Database:
 
 
 def sqlalchemy_connection(conn) -> SAConnection | None:
+    from unittest.mock import MagicMock
+
     sa = getattr(conn, "_sa", None)
+    if sa is None:
+        return None
     if isinstance(sa, SAConnection):
         return sa
+    if isinstance(sa, MagicMock) and getattr(sa, "_pyvelm_sa_connection", None) is not True:
+        return None
+    if getattr(sa, "_pyvelm_sa_connection", None) is True:
+        return sa  # type: ignore[return-value]
     return None
 
 

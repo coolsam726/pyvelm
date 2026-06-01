@@ -43,9 +43,8 @@ from pyvelm.loader import (
 )
 from pyvelm.reports.compile import ColumnMeta, CompiledReport
 from pyvelm.reports.compile_collections import (
-    _emit_m2o_joins,
-    collection_subquery_sql,
-    column_sql_for_path,
+    collection_subquery_expr,
+    column_expr_for_path,
 )
 from pyvelm.reports.execute import (
     ReportResult,
@@ -187,21 +186,23 @@ class EnvironmentUnitTests(unittest.TestCase):
                 _table = "res_groups"
                 name = Char()
 
-        env = Environment(MagicMock(), reg, uid=1)
-        UsersM = MagicMock()
-        UsersM.search.return_value = []
-        env.__getitem__ = lambda _s, n: UsersM if n == "res.users" else MagicMock()
-        env.prime_current_user_cache()
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
 
-        user = MagicMock()
-        user.name = "A"
-        user.login = "a"
-        user.company_id = 1
+        conn = MagicMock()
+        wire_sa_conn(conn, [])
+        env = Environment(conn, reg, uid=1)
+        Users = reg["res.users"]
+        user_rs = MagicMock()
+        user_rs.ensure_one = MagicMock()
+        user_rs.name = "A"
+        user_rs.login = "a"
+        user_rs.company_id = 1
         grp = MagicMock()
         grp.name = "Admin"
-        user.group_ids = [grp]
-        UsersM.search.return_value = [user]
-        env.prime_current_user_cache()
+        user_rs.group_ids = [grp]
+        with patch.object(Users, "search", side_effect=[Users(env, ()), user_rs]):
+            env.prime_current_user_cache()
+            env.prime_current_user_cache()
 
     def test_access_and_policy_helpers(self):
         reg = Registry()
@@ -227,7 +228,11 @@ class EnvironmentUnitTests(unittest.TestCase):
                 _table = "res_partner"
                 name = Char()
 
-        env = Environment(MagicMock(), reg, uid=5)
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        conn = MagicMock()
+        wire_sa_conn(conn, [])
+        env = Environment(conn, reg, uid=5)
         AccessCls = reg["ir.model.access"]
         RuleCls = reg["ir.rule"]
         env._user_groups_cache = {3}
@@ -534,7 +539,7 @@ class LoaderHelperTests(unittest.TestCase):
         app = MagicMock()
         with patch("pyvelm.loader.discover", return_value={}), patch(
             "pyvelm.loader.resolve_order", return_value=[],
-        ):
+        ), patch("pyvelm.loader._ensure_ir_module"):
             register_web_routes(app, [])
 
     def test_import_attr_and_discover_commands(self):
@@ -953,8 +958,12 @@ class ReportsExecuteMoreTests(unittest.TestCase):
             is_aggregate=False,
             stmt=MagicMock(),
         )
-        env.conn._sa = MagicMock()
-        env.conn._sa.execute.return_value.fetchall.return_value = [("Alice", 99)]
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        wire_sa_conn(env.conn, [])
+        row_result = MagicMock()
+        row_result.fetchall.return_value = [("Alice", 99)]
+        env.conn._sa.execute = lambda stmt, params=None: row_result
         with (
             patch("pyvelm.reports.execute.compile_report", return_value=compiled),
             patch("pyvelm.reports.fields_api.check_definition_access"),
@@ -1032,26 +1041,23 @@ def _detail_defn():
 class ReportsCollectionsMoreTests(unittest.TestCase):
     def test_m2m_subquery_and_emit_joins(self):
         reg = _partner_reg()
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.domain_sa import DomainCompiler, column_element_to_sql
         from pyvelm.paths import parse_path
 
+        cap = dialect_capabilities("postgresql")
         path = parse_path(reg["res.partner"], "tag_ids.country_id.code", reg)
-        sql = collection_subquery_sql(path, reg["res.partner"], '"res_partner"', reg, "sum")
-        self.assertIn("sum", sql.lower())
-        joins: list[str] = []
-        aliases: dict = {}
-        counter = [0]
-        m2o_path = parse_path(reg["res.partner"], "country_id.code", reg)
-        alias = _emit_m2o_joins(
-            m2o_path.hops,
-            '"res_partner"',
-            reg,
-            joins,
-            aliases,
-            counter,
+        expr = collection_subquery_expr(
+            path, reg["res.partner"], '"res_partner"', reg, "sum"
         )
-        self.assertTrue(alias.startswith("_j"))
+        sql = column_element_to_sql(expr, cap)
+        self.assertIn("sum", sql.lower())
+        compiler = DomainCompiler(reg["res.partner"], reg, cap)
+        m2o_path = parse_path(reg["res.partner"], "country_id.code", reg)
+        alias = compiler._emit_m2o_chain(m2o_path.hops)
+        self.assertTrue(str(alias).startswith("_j"))
         with self.assertRaises(ValueError):
-            collection_subquery_sql(
+            collection_subquery_expr(
                 parse_path(reg["res.partner"], "name", reg),
                 reg["res.partner"],
                 '"res_partner"',

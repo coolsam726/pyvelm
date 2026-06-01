@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import copy
 from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
+from .database.sa_ddl import require_sa_connection
 from .domain_sa import domain_search_count_select, domain_search_select
 from .fields import Char, Field, Integer, Many2one, finalize_related_field
 from .registry import active_registry
@@ -16,10 +17,7 @@ from .timestamps import (
 
 def _require_sa_connection(conn) -> Any:
     """Return the underlying SQLAlchemy connection (required for DML)."""
-    sa_conn = getattr(conn, "_sa", None)
-    if sa_conn is None:
-        raise RuntimeError("SQLAlchemy connection is required.")
-    return sa_conn
+    return require_sa_connection(conn)
 
 
 def _rec_name_field(cls) -> str | None:
@@ -332,31 +330,37 @@ class BaseModel(metaclass=MetaModel):
     # ------ DDL ------
 
     @classmethod
-    def _setup_table(cls, conn) -> None:
+    def _setup_table(cls, conn, registry=None) -> None:
         from .database import (
             _conn_capabilities,
             add_column_if_missing,
             is_duplicate_object_error,
-            normalize_column_ddl,
             normalize_sql_type,
-            serial_primary_key,
             supports_create_table_if_not_exists,
             table_exists,
         )
-        from .database.sa_ddl import execute_create_table
+        from .database.sa_ddl import (
+            execute_create_table,
+            model_table_columns,
+            referenced_tables_from_columns,
+            table_from_columns,
+        )
 
+        reg = registry or active_registry()
+        if reg is None:
+            raise RuntimeError("Registry must be active during _setup_table")
         cap = _conn_capabilities(conn)
         existed = table_exists(conn, cls._table, cap)
-        cols = [serial_primary_key(cap)]
-        for f in cls._fields.values():
-            # Some inherited descriptors can alias to column "id"; never emit twice.
-            if not f.is_stored or f.name == "id" or f.column == "id":
-                continue
-            cols.append(normalize_column_ddl(f.column_ddl(), cap))
+        columns = model_table_columns(cls, reg, cap)
         created_now = False
         if not existed or supports_create_table_if_not_exists(cap):
             try:
-                execute_create_table(conn, cls._table, cols, cap)
+                tbl = table_from_columns(
+                    cls._table,
+                    columns,
+                    referenced_tables=referenced_tables_from_columns(columns),
+                )
+                execute_create_table(conn, tbl, cap=cap)
                 created_now = not existed
             except Exception as exc:
                 # Non-IF-NOT-EXISTS backends can race inspector/table checks.
@@ -370,7 +374,15 @@ class BaseModel(metaclass=MetaModel):
             if not f.is_stored or f.name == "id" or f.column == "id":
                 continue
             sql_type = normalize_sql_type(f.sql_type, cap)
-            add_column_if_missing(conn, cls._table, f.column, sql_type, cap)
+            add_column_if_missing(
+                conn,
+                cls._table,
+                f.column,
+                sql_type,
+                cap,
+                registry=reg,
+                field=f,
+            )
 
     @classmethod
     def _drop_table(cls, conn) -> None:
@@ -426,7 +438,7 @@ class BaseModel(metaclass=MetaModel):
         """Create junction tables for Many2many fields. Symmetric pairs dedupe."""
         from .fields import Many2many
         from .database import _conn_capabilities, table_exists
-        from .database.sa_ddl import execute_create_table
+        from .database.sa_ddl import execute_create_table, m2m_relation_table
 
         cap = _conn_capabilities(conn)
         for f in cls._fields.values():
@@ -436,15 +448,13 @@ class BaseModel(metaclass=MetaModel):
             if relation in created:
                 continue
             target = registry[f.comodel_name]
-            ddl = (
-                f'"{col1}" integer NOT NULL REFERENCES "{this_table}"("id") ON DELETE CASCADE, '
-                f'"{col2}" integer NOT NULL REFERENCES "{target._table}"("id") ON DELETE CASCADE, '
-                f'PRIMARY KEY ("{col1}", "{col2}")'
-            )
             if table_exists(conn, relation, cap):
                 created.add(relation)
                 continue
-            execute_create_table(conn, relation, ddl, cap)
+            tbl = m2m_relation_table(
+                relation, col1, col2, this_table, target._table, cap
+            )
+            execute_create_table(conn, tbl, cap=cap)
             created.add(relation)
 
     @classmethod
@@ -939,10 +949,9 @@ class BaseModel(metaclass=MetaModel):
         ]
         if not missing_ids:
             return
-        sa_conn = getattr(self.env.conn, "_sa", None)
-        if sa_conn is None:
-            # No database attached (unit tests with cache-only environments).
+        if self.env.conn is None:
             return
+        sa_conn = _require_sa_connection(self.env.conn)
         # Select by column, but cache under attr name.
         from sqlalchemy import bindparam, column, select, table
         sa_cols = [column("id")] + [

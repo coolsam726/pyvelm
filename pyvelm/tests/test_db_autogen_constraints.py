@@ -44,7 +44,7 @@ def _partner_cls(*, required: bool, include_id: bool = False):
     return cls
 
 
-def _mock_env(rows, cls, *, null_check_returns=None):
+def _mock_env(rows, cls, *, null_check_returns=None, dialect_name: str = "postgresql"):
     reg = MagicMock()
     reg._model_module = {"res.partner": "partners"}
     reg.__getitem__ = lambda _s, n: cls
@@ -60,7 +60,7 @@ def _mock_env(rows, cls, *, null_check_returns=None):
     executed: list[str] = []
     # conn_capabilities() should fall back to dialect_name in these tests.
     conn.capabilities = None
-    conn.dialect_name = "postgresql"
+    conn.dialect_name = dialect_name
 
     def execute(sql, params=None):
         executed.append(sql)
@@ -74,15 +74,19 @@ def _mock_env(rows, cls, *, null_check_returns=None):
         return _cursor([])
 
     conn.execute = execute
+    null_scalar = int(null_check_returns[0][0]) if null_check_returns else 0
+    from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+    wire_sa_conn(conn, executed, dialect_name=dialect_name, null_scalar=null_scalar)
     env = MagicMock(registry=reg, conn=conn)
     env._executed = executed
     return env
 
 
 def _mock_env_dialect(rows, cls, *, dialect_name: str, null_check_returns=None):
-    env = _mock_env(rows, cls, null_check_returns=null_check_returns)
-    env.conn.dialect_name = dialect_name
-    return env
+    return _mock_env(
+        rows, cls, null_check_returns=null_check_returns, dialect_name=dialect_name
+    )
 
 
 class SchemaDiffTests(unittest.TestCase):
@@ -131,10 +135,10 @@ class SchemaDiffTests(unittest.TestCase):
         with patch("pyvelm.db_autogen._fetch_table_columns", return_value=None):
             diff = compute_diff(env, "partners")
         self.assertEqual(len(diff.new_tables), 1)
-        _table, col_ddls = diff.new_tables[0]
-        joined = " ".join(col_ddls)
-        self.assertIn("PRIMARY KEY", joined)
-        self.assertEqual(joined.count('"id"'), 1)
+        _table, columns = diff.new_tables[0]
+        id_cols = [c for c in columns if c.name == "id"]
+        self.assertEqual(len(id_cols), 1)
+        self.assertTrue(id_cols[0].primary_key)
 
 
 class ApplySchemaDiffTests(unittest.TestCase):
@@ -202,7 +206,7 @@ class ApplySchemaDiffTests(unittest.TestCase):
 
         def execute(sql, params=None):
             env._executed.append(sql)
-            if sql.upper().startswith("CREATE TABLE"):
+            if "CREATE TABLE" in sql.upper():
                 raise Exception(
                     "ORA-00955: name is already used by an existing object"
                 )
@@ -211,26 +215,46 @@ class ApplySchemaDiffTests(unittest.TestCase):
             r.fetchone.return_value = None
             return r
 
+        def sa_execute(stmt, params=None):
+            from pyvelm.database.dialects import dialect_capabilities
+            from pyvelm.database.sa_ddl import _sqlalchemy_dialect
+
+            sql = str(
+                stmt.compile(dialect=_sqlalchemy_dialect(dialect_capabilities("oracle")))
+            )
+            return execute(sql, params)
+
         env.conn.execute = execute
+        env.conn._sa.execute = sa_execute
         with patch("pyvelm.db_autogen._fetch_table_columns", return_value=None):
             # Must not raise even though the CREATE fails with a duplicate error.
             apply_schema_diff(env, "partners")
         self.assertTrue(
-            any(s.upper().startswith("CREATE TABLE") for s in env._executed)
+            any("CREATE TABLE" in s.upper() for s in env._executed)
         )
 
     def test_non_duplicate_create_error_propagates(self):
         env = _mock_env_dialect([], _partner_cls(required=True), dialect_name="oracle")
 
         def execute(sql, params=None):
-            if sql.upper().startswith("CREATE TABLE"):
+            if "CREATE TABLE" in sql.upper():
                 raise Exception("ORA-00904: invalid identifier")
             r = MagicMock()
             r.fetchall.return_value = []
             r.fetchone.return_value = None
             return r
 
+        def sa_execute(stmt, params=None):
+            from pyvelm.database.dialects import dialect_capabilities
+            from pyvelm.database.sa_ddl import _sqlalchemy_dialect
+
+            sql = str(
+                stmt.compile(dialect=_sqlalchemy_dialect(dialect_capabilities("oracle")))
+            )
+            return execute(sql, params)
+
         env.conn.execute = execute
+        env.conn._sa.execute = sa_execute
         with patch("pyvelm.db_autogen._fetch_table_columns", return_value=None):
             with self.assertRaises(Exception):
                 apply_schema_diff(env, "partners")
@@ -238,17 +262,14 @@ class ApplySchemaDiffTests(unittest.TestCase):
     def test_duplicate_create_re_diffs_and_adds_missing_columns(self):
         """If CREATE TABLE collides (ORA-00955), we must re-diff for columns."""
         env = _mock_env_dialect([], _partner_cls(required=True), dialect_name="oracle")
-        first = Diff(new_tables=[("res_partner", ['"id" INTEGER PRIMARY KEY'])])
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import primary_key_column
+
+        cap = dialect_capabilities("oracle")
+        code_f = _code_field(required=True)
+        first = Diff(new_tables=[("res_partner", [primary_key_column(cap)])])
         second = Diff(
-            new_columns=[
-                (
-                    "res_partner",
-                    "code",
-                    'ALTER TABLE "res_partner" ADD COLUMN "code" text',
-                    True,
-                    "text",
-                )
-            ]
+            new_columns=[("res_partner", "code", code_f, True, "text")]
         )
         third = Diff()
 
@@ -256,20 +277,29 @@ class ApplySchemaDiffTests(unittest.TestCase):
 
         def execute(sql, params=None):
             executed.append(sql)
-            if sql.upper().startswith("CREATE TABLE"):
+            if "CREATE TABLE" in sql.upper():
                 raise Exception("ORA-00955: name is already used by an existing object")
             r = MagicMock()
             r.fetchall.return_value = []
             r.fetchone.return_value = None
             return r
 
+        def sa_execute(stmt, params=None):
+            from pyvelm.database.sa_ddl import _sqlalchemy_dialect
+
+            sql = str(stmt.compile(dialect=_sqlalchemy_dialect(cap)))
+            return execute(sql, params)
+
         env.conn.execute = execute
+        env.conn._sa.execute = sa_execute
         with patch("pyvelm.db_autogen.compute_diff", side_effect=[first, second, third]):
             with patch("pyvelm.db_autogen._column_exists", return_value=False):
                 apply_schema_diff(env, "partners")
 
-        self.assertTrue(any(s.upper().startswith("CREATE TABLE") for s in executed))
-        self.assertTrue(any('ALTER TABLE "res_partner" ADD "code"' in s for s in executed))
+        self.assertTrue(any("CREATE TABLE" in s.upper() for s in executed))
+        self.assertTrue(
+            any('ALTER TABLE "res_partner"' in s and "code" in s for s in executed)
+        )
 
 
 class InspectorEdgeCaseTests(unittest.TestCase):

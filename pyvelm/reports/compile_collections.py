@@ -1,4 +1,4 @@
-"""Report column expressions — SQLAlchemy Core (with legacy SQL helpers)."""
+"""Report column expressions — SQLAlchemy Core."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -151,54 +151,6 @@ def collection_subquery_expr(
     return select(agg).select_from(current_from).where(correlate_where).scalar_subquery()
 
 
-def collection_subquery_sql(
-    path: Path,
-    root_cls,
-    root_alias: str,
-    registry,
-    subaggregate: str | None,
-) -> str:
-    """Legacy SQL string for a collection scalar subquery."""
-    from ..database.dialects import dialect_capabilities
-    from ..domain_sa import column_element_to_sql
-
-    cap = dialect_capabilities("postgresql")
-    expr = collection_subquery_expr(path, root_cls, root_alias, registry, subaggregate)
-    return column_element_to_sql(expr, cap)
-
-
-def _emit_m2o_joins(
-    hops,
-    base_alias: str,
-    registry,
-    joins: list[str],
-    join_aliases: dict[tuple, str],
-    join_counter: list[int],
-) -> str:
-    current_alias = base_alias
-    key: tuple = (base_alias,)
-    for hop in hops:
-        if not isinstance(hop, M2oHop):
-            raise ValueError(
-                f"Report joins only support Many2one chains, got {type(hop).__name__}"
-            )
-        key = key + (hop.attr,)
-        if key in join_aliases:
-            current_alias = join_aliases[key]
-            continue
-        join_counter[0] += 1
-        new_alias = f"_j{join_counter[0]}"
-        target = registry[hop.target_model]
-        parent = current_alias.strip('"')
-        joins.append(
-            f'LEFT JOIN "{target._table}" {new_alias} ON '
-            f'"{new_alias}"."id" = "{parent}"."{hop.field.column}"'
-        )
-        join_aliases[key] = new_alias
-        current_alias = new_alias
-    return current_alias
-
-
 def column_expr_for_path(
     expr: str,
     root_cls,
@@ -212,35 +164,10 @@ def column_expr_for_path(
     compiler: "DomainCompiler | None" = None,
 ) -> tuple[ColumnElement, bool, str | None]:
     """Return a SELECT-list column expression for a report path."""
-    if compiler is not None:
-        if expr == "id":
-            return compiler._qcol(compiler._base_alias, "id"), False, None
-        if "." not in expr:
-            fld = root_cls._fields[expr]
-            if isinstance(fld, (One2many, Many2many)):
-                path = parse_path(root_cls, f"{expr}.id", registry)
-                subq = collection_subquery_expr(
-                    path, root_cls, root_alias, registry, subaggregate or "count"
-                )
-                return subq, False, None
-            is_m2o = isinstance(fld, Many2one)
-            comodel = fld.comodel_name if is_m2o else None
-            return compiler._qcol(compiler._base_alias, fld.column), is_m2o, comodel
-        path = parse_path(root_cls, expr, registry)
-        if path.is_m2o_only():
-            alias = compiler._emit_m2o_chain(path.hops)
-            leaf_cls = registry[path.leaf_model]
-            leaf_field = leaf_cls._fields[path.leaf_attr]
-            is_m2o = isinstance(leaf_field, Many2one)
-            comodel = leaf_field.comodel_name if is_m2o else None
-            return compiler._qcol(alias, leaf_field.column), is_m2o, comodel
-        subq = collection_subquery_expr(
-            path, root_cls, root_alias, registry, subaggregate
-        )
-        return subq, False, None
-
+    if compiler is None:
+        raise ValueError("column_expr_for_path requires a DomainCompiler")
     if expr == "id":
-        return _root_id_col(root_alias), False, None
+        return compiler._qcol(compiler._base_alias, "id"), False, None
     if "." not in expr:
         fld = root_cls._fields[expr]
         if isinstance(fld, (One2many, Many2many)):
@@ -251,46 +178,16 @@ def column_expr_for_path(
             return subq, False, None
         is_m2o = isinstance(fld, Many2one)
         comodel = fld.comodel_name if is_m2o else None
-        return _qcol(root_alias.strip('"'), fld.column), is_m2o, comodel
-
+        return compiler._qcol(compiler._base_alias, fld.column), is_m2o, comodel
     path = parse_path(root_cls, expr, registry)
     if path.is_m2o_only():
-        alias = _emit_m2o_joins(
-            path.hops, root_alias, registry, joins, join_aliases, join_counter
-        )
+        alias = compiler._emit_m2o_chain(path.hops)
         leaf_cls = registry[path.leaf_model]
         leaf_field = leaf_cls._fields[path.leaf_attr]
         is_m2o = isinstance(leaf_field, Many2one)
         comodel = leaf_field.comodel_name if is_m2o else None
-        return _qcol(alias, leaf_field.column), is_m2o, comodel
-
-    subq = collection_subquery_expr(path, root_cls, root_alias, registry, subaggregate)
-    return subq, False, None
-
-
-def column_sql_for_path(
-    expr: str,
-    root_cls,
-    root_alias: str,
-    registry,
-    joins: list[str],
-    join_aliases: dict,
-    join_counter: list[int],
-    subaggregate: str | None,
-) -> tuple[str, bool, str | None]:
-    """Legacy SQL string for a report column expression."""
-    from ..database.dialects import dialect_capabilities
-    from ..domain_sa import column_element_to_sql
-
-    cap = dialect_capabilities("postgresql")
-    col_expr, is_m2o, comodel = column_expr_for_path(
-        expr,
-        root_cls,
-        root_alias,
-        registry,
-        joins,
-        join_aliases,
-        join_counter,
-        subaggregate,
+        return compiler._qcol(alias, leaf_field.column), is_m2o, comodel
+    subq = collection_subquery_expr(
+        path, root_cls, root_alias, registry, subaggregate
     )
-    return column_element_to_sql(col_expr, cap), is_m2o, comodel
+    return subq, False, None

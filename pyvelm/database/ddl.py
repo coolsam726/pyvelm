@@ -1,7 +1,7 @@
 """Portable DDL/DML helpers — dispatch to dialect modules."""
 from __future__ import annotations
 
-from sqlalchemy import inspect
+from sqlalchemy import Column, Table, inspect, text
 
 from .adapter import ConnectionAdapter, conn_capabilities, sqlalchemy_connection
 from .capabilities import DialectCapabilities, SchemaResetStrategy
@@ -112,44 +112,41 @@ def add_column_if_missing(
     column: str,
     sql_type: str,
     cap: DialectCapabilities | None = None,
+    *,
+    registry=None,
+    field=None,
 ) -> bool:
     from .introspection import column_exists
+    from .sa_ddl import execute_add_column, field_to_column
+    from sqlalchemy import Column
 
     cap = cap or conn_capabilities(conn)
     if column_exists(conn, table, column, cap):
         return False
-    null = ""
-    ddl = f'"{column}" {sql_type} {null}'.strip()
-    if sqlalchemy_connection(conn) is not None:
-        from .sa_ddl import execute_add_column
+    if field is not None and registry is not None:
+        col = field_to_column(field, registry, cap)
+    else:
+        from .sa_ddl import sa_type_for_field
+        from ..fields import Field
 
-        try:
-            execute_add_column(
-                conn,
-                table,
-                ddl,
-                cap,
-                if_not_exists=cap.supports_add_column_if_not_exists,
-            )
-            return True
-        except Exception as exc:
-            orig = getattr(exc, "orig", exc)
-            msg = str(orig).lower()
-            if get_backend(cap.name).is_duplicate_column_error(msg):
-                return False
-            raise
-    stmt = add_column_if_not_exists_sql(table, column, sql_type, cap)
-    if stmt is None:
-        stmt = add_column_sql(table, column, sql_type, cap)
+        stub = Field(column=column)
+        stub.sql_type = sql_type
+        col = Column(column, sa_type_for_field(stub, cap), nullable=True)
     try:
-        conn.execute(stmt)
+        execute_add_column(
+            conn,
+            table,
+            col,
+            cap,
+            if_not_exists=cap.supports_add_column_if_not_exists,
+        )
+        return True
     except Exception as exc:
         orig = getattr(exc, "orig", exc)
         msg = str(orig).lower()
         if get_backend(cap.name).is_duplicate_column_error(msg):
             return False
         raise
-    return True
 
 
 def reset_schema(conn: ConnectionAdapter, cap: DialectCapabilities) -> None:
@@ -192,10 +189,19 @@ def supports_create_table_if_not_exists(cap: DialectCapabilities) -> bool:
     return get_backend(cap.name).supports_create_table_if_not_exists()
 
 
-def create_table_sql(table: str, column_ddl: str, cap: DialectCapabilities) -> str:
-    from .sa_ddl import compile_create_table
+def create_table_sql(
+    table: str, columns: list, cap: DialectCapabilities
+) -> str:
+    from .sa_ddl import (
+        compile_create_table,
+        referenced_tables_from_columns,
+        table_from_columns,
+    )
 
-    return compile_create_table(table, column_ddl, cap)
+    tbl = table_from_columns(
+        table, columns, referenced_tables=referenced_tables_from_columns(columns)
+    )
+    return compile_create_table(tbl, cap)
 
 
 def migration_supported(
@@ -238,22 +244,30 @@ def string_sql_type(cap: DialectCapabilities, *, primary_key: bool = False) -> s
     return get_backend(cap.name).string_sql_type(primary_key=primary_key)
 
 
-def ir_module_create_sql(cap: DialectCapabilities) -> str:
-    ts = timestamp_sql_type(cap)
-    name_type = string_sql_type(cap, primary_key=True)
-    version_type = string_sql_type(cap)
+def ir_module_table(cap: DialectCapabilities) -> Table:
+    from .sa_ddl import sa_type_for_field, table_from_columns
+    from ..fields import Field
+
+    name_f = Field(column="name", required=True)
+    name_f.sql_type = string_sql_type(cap, primary_key=True)
+    version_f = Field(column="version", required=True)
+    version_f.sql_type = string_sql_type(cap)
+    installed_f = Field(column="installed_at", required=True)
+    installed_f.sql_type = timestamp_sql_type(cap)
+    cols = [
+        Column("name", sa_type_for_field(name_f, cap), primary_key=True, nullable=False),
+        Column("version", sa_type_for_field(version_f, cap), nullable=False),
+    ]
+    installed_col = Column(
+        "installed_at", sa_type_for_field(installed_f, cap), nullable=False
+    )
     if cap.name in ("postgresql", "sqlite"):
-        default = now_sql(cap)
-        column_ddl = (
-            f'"name" {name_type} PRIMARY KEY, '
-            f'"version" {version_type} NOT NULL, '
-            f'"installed_at" {ts} NOT NULL DEFAULT {default}'
-        )
-    else:
-        # Oracle and some MySQL/MSSQL modes reject expression defaults here.
-        column_ddl = (
-            f'"name" {name_type} PRIMARY KEY, '
-            f'"version" {version_type} NOT NULL, '
-            f'"installed_at" {ts} NOT NULL'
-        )
-    return create_table_sql("ir_module", column_ddl, cap)
+        installed_col.server_default = text(now_sql(cap))
+    cols.append(installed_col)
+    return table_from_columns("ir_module", cols)
+
+
+def ir_module_create_sql(cap: DialectCapabilities) -> str:
+    from .sa_ddl import compile_create_table
+
+    return compile_create_table(ir_module_table(cap), cap)

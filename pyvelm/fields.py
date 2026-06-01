@@ -123,9 +123,10 @@ class Field:
     def to_sql_param(self, value: Any) -> Any:
         return value
 
-    def column_ddl(self) -> str:
-        null = "NOT NULL" if self.required else ""
-        return f'"{self.column}" {self.sql_type} {null}'.strip()
+    def sa_column(self, registry, cap) -> Any:
+        from .database.sa_ddl import field_to_column
+
+        return field_to_column(self, registry, cap)
 
     def __get__(self, record, owner):
         if record is None:
@@ -475,10 +476,6 @@ class Datetime(Field):
     sql_type = "timestamp"
     python_type = _datetime
 
-    def column_ddl(self) -> str:
-        null = "" if self.required else " NULL"
-        return f'"{self.column}" timestamp{null}'
-
     def to_sql_param(self, value):
         if value is None or value is False or value == "":
             return None
@@ -501,10 +498,6 @@ class Date(Field):
     sql_type = "date"
     python_type = _date
 
-    def column_ddl(self) -> str:
-        null = "" if self.required else " NULL"
-        return f'"{self.column}" date{null}'
-
     def to_sql_param(self, value):
         if value is None or value is False or value == "":
             return None
@@ -525,10 +518,6 @@ class Time(Field):
 
     sql_type = "time"
     python_type = _time
-
-    def column_ddl(self) -> str:
-        null = "" if self.required else " NULL"
-        return f'"{self.column}" time{null}'
 
     def to_sql_param(self, value):
         if value is None or value is False or value == "":
@@ -688,7 +677,7 @@ class One2many(Field):
             return _pluralize_label(_title_words(name[:-4]))
         return super()._default_string(name)
 
-    def column_ddl(self) -> str:
+    def sa_column(self, registry, cap):
         raise RuntimeError("One2many has no column")
 
     def to_sql_param(self, value):
@@ -711,12 +700,24 @@ class One2many(Field):
         )
         if cached_ids is not None:
             return comodel_cls(record.env, cached_ids)
+        if record.env.conn is None:
+            return comodel_cls(record.env, ())
+        from .database.sa_ddl import require_sa_connection
+        from sqlalchemy import column, select, table
+
         inverse = comodel_cls._fields[self.inverse_name]
-        sql = (
-            f'SELECT "id" FROM "{comodel_cls._table}" '
-            f'WHERE "{inverse.column}" = %s ORDER BY "id"'
+        tbl = table(
+            comodel_cls._table,
+            column("id"),
+            column(inverse.column),
         )
-        rows = record.env.conn.execute(sql, [rid]).fetchall()
+        stmt = (
+            select(column("id"))
+            .select_from(tbl)
+            .where(column(inverse.column) == rid)
+            .order_by(column("id"))
+        )
+        rows = require_sa_connection(record.env.conn).execute(stmt).fetchall()
         child_ids = tuple(r[0] for r in rows)
         _store_collection_cache(cache, record._name, rid, self.name, child_ids)
         return comodel_cls(record.env, child_ids)

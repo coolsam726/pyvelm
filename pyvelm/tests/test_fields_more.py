@@ -58,7 +58,14 @@ def _stack_registry():
 
 
 def _env(reg: Registry) -> Environment:
-    return Environment(MagicMock(), registry=reg, uid=1)
+    from pyvelm.database.dialects import dialect_capabilities
+    from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+    conn = MagicMock()
+    conn.dialect_name = "postgresql"
+    conn.capabilities = dialect_capabilities("postgresql")
+    wire_sa_conn(conn, [], dialect_name="postgresql")
+    return Environment(conn, registry=reg, uid=1)
 
 
 class LabelHelperTests(unittest.TestCase):
@@ -89,10 +96,19 @@ class FieldBaseTests(unittest.TestCase):
         self.assertFalse(f.is_stored)
         self.assertIsNone(f.column)
 
-    def test_column_ddl_required(self):
-        f = Char(required=True)
-        f.bind("m", "code")
-        self.assertIn("NOT NULL", f.column_ddl())
+    def test_sa_column_required(self):
+        from pyvelm.tests.support.sa_ddl import compiled_column_ddl
+
+        reg = Registry()
+        with reg.activate():
+
+            class M(BaseModel):
+                _name = "test.m"
+                code = Char(required=True)
+
+        f = M._fields["code"]
+        ddl = compiled_column_ddl(f, reg)
+        self.assertIn("NOT NULL", ddl)
 
     def test_empty_recordset_get_returns_default(self):
         reg = Registry()
@@ -294,16 +310,26 @@ class ScalarFieldCoercionTests(unittest.TestCase):
         self.assertEqual(Monetary.round_with(2.5, cur), 2.5)
 
     def test_datetime_date_time_ddl_and_to_python(self):
-        dt = Datetime()
-        dt.bind("m", "when")
-        self.assertIn("timestamp", dt.column_ddl())
+        from pyvelm.tests.support.sa_ddl import compiled_column_ddl
+
+        reg = Registry()
+        with reg.activate():
+
+            class M(BaseModel):
+                _name = "test.m"
+                when = Datetime()
+                day = Date(required=True)
+                optional_day = Date()
+                at = Time()
+                optional_at = Time()
+
+        dt = M._fields["when"]
+        self.assertIn("TIMESTAMP", compiled_column_ddl(dt, reg).upper())
         self.assertEqual(dt.to_python(datetime(2026, 1, 1)), datetime(2026, 1, 1))
-        d = Date(required=True)
-        d.bind("m", "day")
-        self.assertIn('"day" date', d.column_ddl())
-        d2 = Date()
-        d2.bind("m", "optional_day")
-        self.assertIn(" NULL", d2.column_ddl())
+        d = M._fields["day"]
+        self.assertIn("DATE", compiled_column_ddl(d, reg).upper())
+        d2 = M._fields["optional_day"]
+        self.assertNotIn("NOT NULL", compiled_column_ddl(d2, reg).upper())
         self.assertEqual(d.to_python(date(2026, 1, 2)), date(2026, 1, 2))
         self.assertEqual(d.to_sql_param(date(2026, 1, 2)), date(2026, 1, 2))
         self.assertEqual(
@@ -311,12 +337,10 @@ class ScalarFieldCoercionTests(unittest.TestCase):
             date(2026, 1, 2),
         )
         self.assertEqual(d.to_sql_param("2026-01-03"), date(2026, 1, 3))
-        t = Time()
-        t.bind("m", "at")
-        self.assertIn("time", t.column_ddl())
-        t2 = Time()
-        t2.bind("m", "optional_at")
-        self.assertIn(" NULL", t2.column_ddl())
+        t = M._fields["at"]
+        self.assertIn("TIME", compiled_column_ddl(t, reg).upper())
+        t2 = M._fields["optional_at"]
+        self.assertNotIn("NOT NULL", compiled_column_ddl(t2, reg).upper())
         self.assertEqual(t.to_python(time(9, 0)), time(9, 0))
         self.assertIsNone(t.to_sql_param(""))
         self.assertEqual(t.to_sql_param(time(10, 0)), time(10, 0))
@@ -527,7 +551,7 @@ class One2manyMany2manyTests(unittest.TestCase):
         f2.bind("test.partner", "lines")
         self.assertEqual(f2.string, "Lines")
         with self.assertRaises(RuntimeError):
-            f.column_ddl()
+            f.sa_column(self.env.registry, self.env.conn.capabilities)
         with self.assertRaises(NotImplementedError):
             f.to_sql_param([])
         self.assertIs(One2many.__get__(f, None, object), f)

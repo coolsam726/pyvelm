@@ -1,8 +1,7 @@
-"""DDL via SQLAlchemy Core (CreateTable, AddColumn)."""
+"""DDL via SQLAlchemy Core — no string-built SQL."""
 from __future__ import annotations
 
-import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     Boolean,
@@ -18,19 +17,27 @@ from sqlalchemy import (
     Table,
     Text,
     Time,
+    select,
+    text,
 )
-from sqlalchemy import text
-from sqlalchemy.schema import CreateTable
+from sqlalchemy.schema import CreateColumn, CreateTable
+from sqlalchemy.sql.expression import func
 
 from .adapter import sqlalchemy_connection
 from .capabilities import DialectCapabilities
 from .dialects import dialect_capabilities, get_backend
+from .ddl import normalize_sql_type
 
-_FK_RE = re.compile(
-    r'REFERENCES\s+"([^"]+)"\("([^"]+)"\)'
-    r"(?:\s+ON\s+DELETE\s+(CASCADE|SET NULL|RESTRICT))?",
-    re.IGNORECASE,
-)
+if TYPE_CHECKING:
+    from ..fields import Field
+
+
+def require_sa_connection(conn):
+    """Return the SQLAlchemy connection (required for all DDL/DML paths)."""
+    sa_conn = sqlalchemy_connection(conn)
+    if sa_conn is None:
+        raise RuntimeError("SQLAlchemy connection is required.")
+    return sa_conn
 
 
 def _sqlalchemy_dialect(cap: DialectCapabilities):
@@ -61,60 +68,16 @@ def _supports_create_if_not_exists(cap: DialectCapabilities) -> bool:
     return get_backend(cap.name).supports_create_table_if_not_exists()
 
 
-def _split_column_ddls(columns_ddl: str) -> list[str]:
-    """Split a CREATE TABLE column list on commas between quoted columns."""
-    pk_clause = ""
-    body = columns_ddl.strip()
-    pk_match = re.search(
-        r",\s*(PRIMARY KEY\s*\([^)]+\))\s*$", body, re.IGNORECASE
-    )
-    if pk_match:
-        pk_clause = pk_match.group(1)
-        body = body[: pk_match.start()].strip()
-    parts = [part.strip() for part in re.split(r",\s*(?=\")", body) if part.strip()]
-    if pk_clause:
-        parts.append(pk_clause)
-    return parts
-
-
-def _parse_column_ddl(
-    ddl: str,
-) -> tuple[str, str, bool, bool, str | None]:
-    ddl = ddl.strip()
-    not_null = False
-    primary_key = False
-    default_sql: str | None = None
-    upper = ddl.upper()
-    if upper.endswith(" NOT NULL"):
-        not_null = True
-        ddl = ddl[: upper.rfind(" NOT NULL")].strip()
-        upper = ddl.upper()
-    match = re.match(r'^"([^"]+)"\s+(.+)$', ddl, re.DOTALL)
-    if not match:
-        raise ValueError(f"Invalid column DDL: {ddl!r}")
-    name, type_rest = match.group(1), match.group(2).strip()
-    if type_rest.upper().endswith(" PRIMARY KEY"):
-        primary_key = True
-        type_rest = type_rest[: -len(" PRIMARY KEY")].strip()
-    default_match = re.search(r"\s+DEFAULT\s+(.+)$", type_rest, re.IGNORECASE)
-    if default_match:
-        default_sql = default_match.group(1).strip()
-        type_rest = type_rest[: default_match.start()].strip()
-    return name, type_rest, not_null, primary_key, default_sql
-
-
-def _is_primary_key_ddl(ddl: str) -> bool:
-    return '"id"' in ddl.lower() and "PRIMARY KEY" in ddl.upper()
-
-
-def _sa_type_from_spec(type_spec: str, cap: DialectCapabilities):
-    spec = type_spec.strip()
-    upper = spec.upper()
+def sa_type_for_field(field: "Field", cap: DialectCapabilities):
+    sql_type = normalize_sql_type(field.sql_type, cap)
+    upper = sql_type.upper()
     if cap.name == "mssql":
         if "NVARCHAR" in upper or "VARCHAR" in upper or upper == "TEXT":
             from sqlalchemy.dialects.mssql import NVARCHAR
 
-            m = re.search(r"\((\d+)\)", spec)
+            import re
+
+            m = re.search(r"\((\d+)\)", sql_type)
             length = int(m.group(1)) if m else 255
             return NVARCHAR(length)
         if "DATETIMEOFFSET" in upper or "TIMESTAMP" in upper or "DATETIME" in upper:
@@ -125,8 +88,10 @@ def _sa_type_from_spec(type_spec: str, cap: DialectCapabilities):
         return Integer()
     if upper in ("TEXT", "CLOB"):
         return Text()
-    if "VARCHAR" in upper or "NVARCHAR" in upper or "CHAR" in upper:
-        m = re.search(r"\((\d+)\)", spec)
+    if "VARCHAR" in upper or "CHAR" in upper:
+        import re
+
+        m = re.search(r"\((\d+)\)", sql_type)
         length = int(m.group(1)) if m else 255
         return String(length)
     if "DOUBLE" in upper or upper == "FLOAT":
@@ -135,16 +100,12 @@ def _sa_type_from_spec(type_spec: str, cap: DialectCapabilities):
         return Boolean()
     if "TIMESTAMP WITH TIME ZONE" in upper or upper == "TIMESTAMPTZ":
         return DateTime(timezone=True)
-    if "TIMESTAMP" in upper or "DATETIMEOFFSET" in upper:
+    if "TIMESTAMP" in upper:
         return DateTime()
     if upper == "DATE":
         return Date()
     if upper == "TIME":
         return Time()
-    if upper.startswith("JSON"):
-        from sqlalchemy.dialects.postgresql import JSONB
-
-        return JSONB()
     return Text()
 
 
@@ -158,122 +119,144 @@ def primary_key_column(cap: DialectCapabilities) -> Column:
     return Column("id", Integer, primary_key=True, autoincrement=True)
 
 
-def column_from_ddl(ddl: str, cap: DialectCapabilities) -> Column:
-    """Build a SQLAlchemy column from a normalized ``column_ddl()`` string."""
-    if _is_primary_key_ddl(ddl):
-        return primary_key_column(cap)
-    name, type_rest, not_null, primary_key, default_sql = _parse_column_ddl(ddl)
-    fk_match = _FK_RE.search(type_rest)
-    ondelete = None
-    if fk_match:
-        type_spec = type_rest[: fk_match.start()].strip()
-        ref_table, ref_col = fk_match.group(1), fk_match.group(2)
-        ondelete = (fk_match.group(3) or "").upper() or None
-    else:
-        type_spec = type_rest
-        ref_table = ref_col = None
-    col_type = _sa_type_from_spec(type_spec, cap)
-    col_kw: dict[str, Any] = {
-        "nullable": not (not_null or primary_key),
-        "primary_key": primary_key,
-    }
-    if default_sql is not None:
-        col_kw["server_default"] = text(default_sql)
-    if ref_table:
-        fk_kw: dict[str, Any] = {}
-        if ondelete:
-            fk_kw["ondelete"] = ondelete
+def field_to_column(field: "Field", registry, cap: DialectCapabilities) -> Column:
+    """Build a SQLAlchemy column for a stored field."""
+    from ..fields import Many2one
+
+    assert field.column is not None
+    if isinstance(field, Many2one):
+        target = registry[field.comodel_name]
         return Column(
-            name,
+            field.column,
             Integer(),
-            ForeignKey(f"{ref_table}.{ref_col}", **fk_kw),
-            **col_kw,
+            ForeignKey(f"{target._table}.id", ondelete=field.ondelete),
+            nullable=not field.required,
         )
-    return Column(name, col_type, **col_kw)
+    return Column(
+        field.column,
+        sa_type_for_field(field, cap),
+        nullable=not field.required,
+    )
 
 
-def _create_table_sql_legacy(
-    table: str, columns_ddl: str | list[str], cap: DialectCapabilities
-) -> str:
-    if isinstance(columns_ddl, list):
-        body = ", ".join(columns_ddl)
-    else:
-        body = columns_ddl
-    if _supports_create_if_not_exists(cap):
-        return f'CREATE TABLE IF NOT EXISTS "{table}" ({body})'
-    return f'CREATE TABLE "{table}" ({body})'
+def model_table_columns(model_cls, registry, cap: DialectCapabilities) -> list[Column]:
+    cols = [primary_key_column(cap)]
+    for field in model_cls._fields.values():
+        if not field.is_stored or field.name == "id" or field.column == "id":
+            continue
+        cols.append(field_to_column(field, registry, cap))
+    return cols
 
 
-def _column_spec_list(columns_ddl: str | list[str]) -> list[str]:
-    if isinstance(columns_ddl, list):
-        return list(columns_ddl)
-    return _split_column_ddls(columns_ddl)
+def _metadata_with_tables(*table_names: str) -> MetaData:
+    metadata = MetaData()
+    for name in table_names:
+        if name not in metadata.tables:
+            Table(name, metadata, Column("id", Integer, primary_key=True), quote=True)
+    return metadata
 
 
-def _needs_legacy_ddl(specs: list[str]) -> bool:
-    return any("REFERENCES" in spec.upper() for spec in specs)
+def m2m_relation_table(
+    relation: str,
+    col1: str,
+    col2: str,
+    this_table: str,
+    other_table: str,
+    cap: DialectCapabilities,
+) -> Table:
+    metadata = _metadata_with_tables(this_table, other_table)
+    return Table(
+        relation,
+        metadata,
+        Column(
+            col1,
+            Integer(),
+            ForeignKey(f"{this_table}.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        Column(
+            col2,
+            Integer(),
+            ForeignKey(f"{other_table}.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        PrimaryKeyConstraint(col1, col2),
+        quote=True,
+    )
 
 
-def _table_from_column_ddls(
-    table: str, columns_ddl: str | list[str], cap: DialectCapabilities
+def referenced_tables_from_columns(columns: list[Column]) -> set[str]:
+    refs: set[str] = set()
+    for col in columns:
+        for fk in col.foreign_keys:
+            target = fk.target_fullname or ""
+            if "." in target:
+                refs.add(target.split(".", 1)[0])
+    return refs
+
+
+def table_from_columns(
+    table_name: str,
+    columns: list[Column],
+    *,
+    referenced_tables: set[str] | None = None,
 ) -> Table:
     metadata = MetaData()
-    if isinstance(columns_ddl, str):
-        specs = _split_column_ddls(columns_ddl)
-    else:
-        specs = list(columns_ddl)
-    columns: list[Column] = []
-    pk_constraint: PrimaryKeyConstraint | None = None
-    for spec in specs:
-        if spec.upper().startswith("PRIMARY KEY"):
-            match = re.search(r"PRIMARY KEY\s*\(([^)]+)\)", spec, re.IGNORECASE)
-            if not match:
-                raise ValueError(f"Invalid PRIMARY KEY clause: {spec!r}")
-            pk_cols = [c.strip().strip('"') for c in match.group(1).split(",")]
-            pk_constraint = PrimaryKeyConstraint(*pk_cols)
+    for ref in referenced_tables or ():
+        if ref == table_name or ref in metadata.tables:
             continue
-        columns.append(column_from_ddl(spec, cap))
-    if pk_constraint is not None:
-        return Table(table, metadata, *columns, pk_constraint, quote=True)
-    return Table(table, metadata, *columns, quote=True)
+        Table(ref, metadata, Column("id", Integer, primary_key=True), quote=True)
+    return Table(table_name, metadata, *columns, quote=True)
 
 
-def compile_create_table(
-    table: str, columns_ddl: str | list[str], cap: DialectCapabilities
-) -> str:
-    """Compile CREATE TABLE DDL via SQLAlchemy."""
-    specs = _column_spec_list(columns_ddl)
-    if _needs_legacy_ddl(specs):
-        return _create_table_sql_legacy(table, specs, cap)
-    tbl = _table_from_column_ddls(table, specs, cap)
-    stmt = CreateTable(tbl, if_not_exists=_supports_create_if_not_exists(cap))
+def compile_create_table(table: Table, cap: DialectCapabilities) -> str:
+    stmt = CreateTable(table, if_not_exists=_supports_create_if_not_exists(cap))
     return str(stmt.compile(dialect=_sqlalchemy_dialect(cap)))
 
 
 def execute_create_table(
     conn,
-    table: str,
-    columns_ddl: str | list[str],
+    table: Table | str,
+    columns: list[Column] | None = None,
+    *,
     cap: DialectCapabilities | None = None,
+    referenced_tables: set[str] | None = None,
 ) -> None:
-    """Execute CREATE TABLE via SQLAlchemy Core (requires SA connection)."""
+    """Execute CREATE TABLE for a SQLAlchemy Table or table name + columns."""
     cap = cap or dialect_capabilities(getattr(conn, "dialect_name", "postgresql"))
-    specs = _column_spec_list(columns_ddl)
-    if _needs_legacy_ddl(specs):
-        ddl = _create_table_sql_legacy(table, specs, cap)
-        sa_conn = sqlalchemy_connection(conn)
-        if sa_conn is not None:
-            sa_conn.execute(text(ddl))
-        else:
-            conn.execute(ddl)
-        return
-    sa_conn = sqlalchemy_connection(conn)
-    if sa_conn is None:
-        conn.execute(_create_table_sql_legacy(table, specs, cap))
-        return
-    tbl = _table_from_column_ddls(table, specs, cap)
-    stmt = CreateTable(tbl, if_not_exists=_supports_create_if_not_exists(cap))
-    sa_conn.execute(stmt)
+    sa_conn = require_sa_connection(conn)
+    if isinstance(table, Table):
+        tbl = table
+    else:
+        assert columns is not None
+        tbl = table_from_columns(table, columns, referenced_tables=referenced_tables)
+    sa_conn.execute(CreateTable(tbl, if_not_exists=_supports_create_if_not_exists(cap)))
+
+
+def compile_add_column(table: str, column: Column, cap: DialectCapabilities) -> str:
+    col_sql = str(CreateColumn(column).compile(dialect=_sqlalchemy_dialect(cap)))
+    if cap.supports_add_column_if_not_exists:
+        return f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS {col_sql}'
+    add_kw = "ADD" if cap.name in ("mssql", "oracle") else "ADD COLUMN"
+    return f'ALTER TABLE "{table}" {add_kw} {col_sql}'
+
+
+def execute_add_column(
+    conn,
+    table: str,
+    column: Column,
+    cap: DialectCapabilities | None = None,
+    *,
+    if_not_exists: bool = False,
+) -> None:
+    cap = cap or dialect_capabilities(getattr(conn, "dialect_name", "postgresql"))
+    sa_conn = require_sa_connection(conn)
+    stmt = compile_add_column(table, column, cap)
+    if if_not_exists and not cap.supports_add_column_if_not_exists:
+        if_not_exists = False
+    if not if_not_exists and " IF NOT EXISTS" in stmt:
+        stmt = stmt.replace(" IF NOT EXISTS", "")
+    sa_conn.execute(text(stmt))
 
 
 def execute_sql(
@@ -281,39 +264,17 @@ def execute_sql(
     sql: str,
     params: list | tuple | None = None,
 ) -> None:
-    """Execute DDL/DML SQL via the SQLAlchemy connection when available."""
-    sa_conn = sqlalchemy_connection(conn)
-    if sa_conn is None:
-        conn.execute(sql, params)
-        return
-    bind_params = tuple(params) if params is not None else ()
-    if bind_params:
-        conn.execute(sql, bind_params)
-        return
-    sa_conn.execute(text(sql))
+    """Execute SQL via SQLAlchemy ``text()`` (requires SA connection)."""
+    require_sa_connection(conn)
+    conn.execute(sql, params)
 
 
-def execute_add_column(
-    conn,
-    table: str,
-    column_ddl: str,
-    cap: DialectCapabilities | None = None,
-    *,
-    if_not_exists: bool = False,
-) -> None:
-    """Execute ALTER TABLE ADD COLUMN via SQLAlchemy ``text()``."""
-    from .ddl import add_column_if_not_exists_sql, add_column_sql
+def count_null_rows(conn, table: str, column: str) -> int:
+    """Count NULL values in a column via SQLAlchemy Core."""
+    from sqlalchemy import column as sa_column
+    from sqlalchemy import table as sa_table
 
-    cap = cap or dialect_capabilities(getattr(conn, "dialect_name", "postgresql"))
-    sa_conn = sqlalchemy_connection(conn)
-    if sa_conn is None:
-        raise RuntimeError("SQLAlchemy connection is required for DDL.")
-    name, type_spec, _not_null, _pk, _default = _parse_column_ddl(column_ddl)
-    stmt = (
-        add_column_if_not_exists_sql(table, name, type_spec, cap)
-        if if_not_exists
-        else add_column_sql(table, name, type_spec, cap)
-    )
-    if stmt is None:
-        stmt = add_column_sql(table, name, type_spec, cap)
-    sa_conn.execute(text(stmt))
+    sa_conn = require_sa_connection(conn)
+    tbl = sa_table(table, sa_column(column))
+    stmt = select(func.count()).select_from(tbl).where(sa_column(column).is_(None))
+    return int(sa_conn.execute(stmt).scalar_one())

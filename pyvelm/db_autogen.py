@@ -82,8 +82,8 @@ class SchemaAlteration:
 class Diff:
     """Structured delta between declared models and the DB."""
 
-    new_tables: list[tuple[str, list[str]]] = _dc_field(default_factory=list)
-    new_columns: list[tuple[str, str, str, bool, str]] = _dc_field(default_factory=list)
+    new_tables: list[tuple[str, list]] = _dc_field(default_factory=list)
+    new_columns: list[tuple[str, str, Field, bool, str]] = _dc_field(default_factory=list)
     orphan_columns: list[tuple[str, str]] = _dc_field(default_factory=list)
     alterations: list[SchemaAlteration] = _dc_field(default_factory=list)
 
@@ -140,7 +140,9 @@ def compute_diff(env: "Environment", module: str) -> Diff:
             from .database import dialect_capabilities
 
             cap = dialect_capabilities("postgresql")
-        expected: dict[str, tuple[Field, str]] = {}
+        from .database.sa_ddl import model_table_columns
+
+        expected: dict[str, Field] = {}
         for f in cls._fields.values():
             if not f.is_stored:
                 continue
@@ -148,31 +150,16 @@ def compute_diff(env: "Environment", module: str) -> Diff:
                 continue
             if f.name == "id" or f.column == "id":
                 continue
-            from .database import normalize_column_ddl
-
-            expected[f.column] = (f, normalize_column_ddl(f.column_ddl(), cap))
+            expected[f.column] = f
         actual = _fetch_table_columns(env, table)
         if actual is None:
-            from .database import serial_primary_key
-
-            col_ddls = [serial_primary_key(cap)] + [
-                ddl for _, ddl in expected.values()
-            ]
-            diff.new_tables.append((table, col_ddls))
+            diff.new_tables.append((table, model_table_columns(cls, reg, cap)))
             continue
-        for col, (field_obj, col_ddl) in expected.items():
+        for col, field_obj in expected.items():
             if col not in actual:
-                was_required = bool(
-                    field_obj and getattr(field_obj, "required", False)
-                )
-                safe_ddl = col_ddl.rstrip()
-                if safe_ddl.upper().endswith("NOT NULL"):
-                    safe_ddl = safe_ddl[: -len("NOT NULL")].rstrip()
-                stmt = (
-                    f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS {safe_ddl}'
-                )
+                was_required = bool(getattr(field_obj, "required", False))
                 diff.new_columns.append(
-                    (table, col, stmt, was_required, _field_type_spec(field_obj))
+                    (table, col, field_obj, was_required, _field_type_spec(field_obj))
                 )
                 continue
             db_col = actual[col]
@@ -343,12 +330,18 @@ def render_migration(
         return "\n".join(out) + "\n"
     from pyvelm.database import create_table_sql
     from pyvelm.database.dialects import dialect_capabilities
+    from pyvelm.database.sa_ddl import compile_add_column
 
     mig_cap = dialect_capabilities("postgresql")
-    for table, col_ddls in diff.new_tables:
-        ddl = create_table_sql(table, ", ".join(col_ddls), mig_cap)
+    for table, columns in diff.new_tables:
+        ddl = create_table_sql(table, columns, mig_cap)
         out.append(f"    env.conn.execute({_q(ddl)})")
-    for table, col, stmt, was_required, _sql_type in diff.new_columns:
+    for table, col, field_obj, was_required, _sql_type in diff.new_columns:
+        col_obj = field_obj.sa_column(
+            type("_R", (), {"_models": {table: object}})(),
+            mig_cap,
+        )
+        stmt = compile_add_column(table, col_obj, mig_cap)
         out.append(f"    env.conn.execute({_q(stmt)})")
         if was_required:
             out.append(
@@ -493,10 +486,9 @@ class ApplyResult:
 
 def count_null_rows(env: "Environment", table: str, column: str) -> int:
     """How many rows have NULL in *column* (blocks ``SET NOT NULL``)."""
-    row = env.conn.execute(
-        f'SELECT COUNT(*) FROM "{table}" WHERE "{column}" IS NULL'
-    ).fetchone()
-    return int(row[0]) if row else 0
+    from pyvelm.database.sa_ddl import count_null_rows as _count_null_rows
+
+    return _count_null_rows(env.conn, table, column)
 
 
 def _column_has_nulls(env: "Environment", table: str, column: str) -> bool:
@@ -580,10 +572,21 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
     from pyvelm.database import _conn_capabilities, is_duplicate_object_error
     from pyvelm.database.sa_ddl import execute_create_table
 
+    from pyvelm.database.sa_ddl import (
+        execute_add_column,
+        referenced_tables_from_columns,
+        table_from_columns,
+    )
+
     cap = _conn_capabilities(env.conn)
-    for table, ddl in diff.new_tables:
+    for table, columns in diff.new_tables:
         try:
-            execute_create_table(env.conn, table, ddl, cap)
+            tbl = table_from_columns(
+                table,
+                columns,
+                referenced_tables=referenced_tables_from_columns(columns),
+            )
+            execute_create_table(env.conn, tbl, cap=cap)
         except Exception as exc:
             # Backends without CREATE TABLE IF NOT EXISTS (Oracle, MSSQL) raise
             # when the table already exists and their inspectors can disagree
@@ -596,23 +599,16 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
     # diff contains no new_columns (it short-circuits at new_tables). A fresh
     # diff is required so we still add any columns that are genuinely missing.
     diff = compute_diff(env, module)
-    from pyvelm.database import add_column_if_missing, _conn_capabilities, normalize_sql_type
-    from pyvelm.database.sa_ddl import execute_sql
-
-    cap = _conn_capabilities(env.conn)
-    for table, col, stmt, _was_required, sql_type in diff.new_columns:
+    for table, col, field_obj, _was_required, _sql_type in diff.new_columns:
         if _column_exists(env, table, col):
             continue
-        if cap.supports_add_column_if_not_exists:
-            execute_sql(env.conn, stmt)
-        else:
-            add_column_if_missing(
-                env.conn,
-                table,
-                col,
-                normalize_sql_type(sql_type, cap),
-                cap,
-            )
+        execute_add_column(
+            env.conn,
+            table,
+            field_obj.sa_column(env.registry, cap),
+            cap,
+            if_not_exists=cap.supports_add_column_if_not_exists,
+        )
     # Re-diff so new columns can receive SET NOT NULL in the same pass.
     diff = compute_diff(env, module)
     _apply_nullability(env, diff, result)
