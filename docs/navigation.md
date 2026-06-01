@@ -157,19 +157,20 @@ under a level-1 app clutters the top bar.
 m = Menus("admin")
 
 MENUS = [
-    m.group("settings", "Settings", icon="cog-6-tooth", sequence=80),
-    m.group("settings.organization", "Organization",
-            parent="settings", sequence=10),
-    m.item("settings.companies", "Companies",
-           parent="settings.organization", view="company.list", sequence=10),
-    m.item("settings.currencies", "Currencies",
-           parent="settings.organization", view="currency.list", sequence=20),
-    m.group("settings.access", "Users & access",
-            parent="settings", sequence=20),
-    m.item("settings.users", "Users",
-           parent="settings.access", view="user.list", sequence=10),
-    m.item("settings.groups", "Groups",
-           parent="settings.access", view="group.list", sequence=20),
+    m.group("settings", "Settings", icon="cog-6-tooth", sequence=80).children([
+        m.group("settings.organization", "Organization", sequence=10).children([
+            m.item("settings.companies", "Companies",
+                   view="company.list", sequence=10),
+            m.item("settings.currencies", "Currencies",
+                   view="currency.list", sequence=20),
+        ]),
+        m.group("settings.access", "Users & access", sequence=20).children([
+            m.item("settings.users", "Users",
+                   view="user.list", sequence=10),
+            m.item("settings.groups", "Groups",
+                   view="group.list", sequence=20),
+        ]),
+    ]),
 ]
 ```
 

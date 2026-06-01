@@ -175,12 +175,14 @@ from pyvelm.builders import Menus
 m = Menus("partners")
 
 MENUS = [
-    m.group("business", "Business", icon="square-3-stack-3d", sequence=50),
-    m.group("business.directory", "Directory", parent="business", sequence=10),
-    m.item("business.partners", "Partners",
-           parent="business.directory", view="partner.list", sequence=10),
-    m.item("business.tags", "Tags",
-           parent=("admin", "settings.reference"), view="tag.list", sequence=20),
+    m.group("business", "Business", icon="square-3-stack-3d", sequence=50).children([
+        m.group("business.directory", "Directory", sequence=10).children([
+            m.item("business.partners", "Partners",
+                   view="partner.list", sequence=10),
+        ]),
+        m.item("business.tags", "Tags",
+               parent=("admin", "settings.reference"), view="tag.list", sequence=20),
+    ]),
 ]
 ```
 
@@ -199,10 +201,11 @@ Pass a kebab-case name on groups and root-level items, e.g. `icon="chart-bar"`.
 Variants: `icon="solid:shield-check"`, `icon="mini:bell"`, `icon="micro:bell"`.
 Legacy inline SVG strings still work if they start with `<svg`.
 
-Nested groups pass `parent=` to `m.group()` (or `menu_group(..., parent=,
-menu_module=)`). Menu names may contain dots — use a short
-`parent="settings.organization"`, not a hand-written `admin.*` string;
-see [Navigation → Parent references](navigation.md#parent-references).
+Nested groups can use `m.group(...).children([...])` so `parent=` is set
+automatically, or pass `parent=` explicitly on each entry. Menu names may
+contain dots — use a short `parent="settings.organization"`, not a
+hand-written `admin.*` string; see
+[Navigation → Parent references](navigation.md#parent-references).
 
 Low-level `menu_item` still works with full `href` and tuple parents if
 you prefer raw dicts.

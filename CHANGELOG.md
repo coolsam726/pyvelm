@@ -9,6 +9,10 @@ out of the 0.x line.
 
 ### Added
 
+- **Nested menu groups** — `m.group(...).children([...])` nests items and
+  sub-groups under a parent; `parent=` is set automatically (explicit
+  `parent=` still works for cross-module groups). The loader flattens
+  `MenuBranch` trees via `flatten_menus()`.
 - **Versioned docs (mike)** — GitHub Pages hosts per-release trees (`/latest/`,
   `/1.0/`, …) with a Material version picker. See [docs/versioning.md](docs/versioning.md).
 

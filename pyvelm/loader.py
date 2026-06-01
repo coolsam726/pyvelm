@@ -33,6 +33,7 @@ from dataclasses import dataclass, field as dc_field
 from pathlib import Path
 from typing import Any, Callable
 
+from .builders import flatten_menus
 from .env import Environment
 from .registry import Registry
 
@@ -578,7 +579,7 @@ def _load_data_files(spec: ModuleSpec) -> None:
                 spec_obj.loader.exec_module(mod)
             views.extend(getattr(mod, "VIEWS", []))
             inherits.extend(getattr(mod, "VIEW_INHERITS", []))
-            menus.extend(getattr(mod, "MENUS", []))
+            menus.extend(flatten_menus(getattr(mod, "MENUS", [])))
         else:
             raise ValueError(
                 f"Module {spec.name!r}: data file {rel_path!r} has unsupported "
