@@ -651,6 +651,7 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
                 table,
                 columns,
                 referenced_tables=referenced_tables_from_columns(columns),
+                cap=cap,
             )
             execute_create_table(env.conn, tbl, cap=cap)
         except Exception as exc:

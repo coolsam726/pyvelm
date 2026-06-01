@@ -49,8 +49,10 @@ from pyvelm.database.sa_alter import (
     execute_set_column_nullable,
 )
 from pyvelm.database.sa_ddl import (
+    _column_quote_kw,
     execute_add_column,
     execute_create_table,
+    columns_use_quoted_identifiers,
     primary_key_column,
     referenced_tables_from_columns,
     require_sa_connection,
@@ -214,7 +216,10 @@ class _ColumnSpec:
 
         fk = None
         if self.fk_table and uses_inline_foreign_keys(self._cap):
-            fk = ForeignKey(f"{self.fk_table}.id", ondelete=self.fk_ondelete)
+            fk_target = f"{self.fk_table}.id"
+            if columns_use_quoted_identifiers(self._cap):
+                fk_target = f'"{self.fk_table}"."id"'
+            fk = ForeignKey(fk_target, ondelete=self.fk_ondelete)
         col = Column(
             self.name,
             self.col_type,
@@ -222,6 +227,7 @@ class _ColumnSpec:
             nullable=self.allows_null,
             default=self._client_default,
             server_default=self.server_default,
+            **_column_quote_kw(self._cap),
         )
         return col
 
@@ -431,14 +437,18 @@ class Blueprint:
 
         cname = f"{self.table}_{name}_fkey"
         if self._create and not uses_inline_foreign_keys(self._cap):
-            self._columns.append(Column(name, col_type, nullable=nullable))
+            self._columns.append(
+                Column(name, col_type, nullable=nullable, **_column_quote_kw(self._cap))
+            )
             self._deferred_fks.append((name, ref_table, cname, ondelete))
             return spec
         col = spec.build()
         if self._create:
             self._columns.append(col)
         else:
-            bare = Column(name, col_type, nullable=nullable)
+            bare = Column(
+                name, col_type, nullable=nullable, **_column_quote_kw(self._cap)
+            )
             self._alter_ops.append(
                 _AlterOp(
                     lambda t, c, cap, col=bare: _add_column_if_missing(c, t, col, cap)
@@ -503,6 +513,7 @@ class Schema:
             table,
             cols,
             referenced_tables=referenced_tables_from_columns(cols),
+            cap=self.cap,
         )
         for constraint in bp._constraints:
             tbl.append_constraint(constraint)

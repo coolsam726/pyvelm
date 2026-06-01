@@ -73,6 +73,15 @@ def uses_inline_foreign_keys(cap: DialectCapabilities) -> bool:
     return cap.name in ("sqlite", "mysql", "mssql", "oracle")
 
 
+def columns_use_quoted_identifiers(cap: DialectCapabilities) -> bool:
+    """Oracle uppercases unquoted DDL identifiers; pyvelm SQL uses ``"col"``."""
+    return cap.name == "oracle"
+
+
+def _column_quote_kw(cap: DialectCapabilities) -> dict[str, bool]:
+    return {"quote": True} if columns_use_quoted_identifiers(cap) else {}
+
+
 def sa_type_for_field(field: "Field", cap: DialectCapabilities):
     sql_type = normalize_sql_type(field.sql_type, cap)
     upper = sql_type.upper()
@@ -115,13 +124,16 @@ def sa_type_for_field(field: "Field", cap: DialectCapabilities):
 
 
 def primary_key_column(cap: DialectCapabilities) -> Column:
+    quote_kw = _column_quote_kw(cap)
     if cap.name == "sqlite":
-        return Column("id", Integer, primary_key=True, autoincrement=True)
+        return Column(
+            "id", Integer, primary_key=True, autoincrement=True, **quote_kw
+        )
     if cap.name in ("mssql", "oracle"):
         from sqlalchemy import Identity
 
-        return Column("id", Integer, Identity(), primary_key=True)
-    return Column("id", Integer, primary_key=True, autoincrement=True)
+        return Column("id", Integer, Identity(), primary_key=True, **quote_kw)
+    return Column("id", Integer, primary_key=True, autoincrement=True, **quote_kw)
 
 
 def field_to_column(field: "Field", registry, cap: DialectCapabilities) -> Column:
@@ -129,24 +141,31 @@ def field_to_column(field: "Field", registry, cap: DialectCapabilities) -> Colum
     from ..fields import Many2one
 
     assert field.column is not None
+    quote_kw = _column_quote_kw(cap)
     if isinstance(field, Many2one):
         if not uses_inline_foreign_keys(cap):
             return Column(
                 field.column,
                 Integer(),
                 nullable=not field.required,
+                **quote_kw,
             )
         target = registry[field.comodel_name]
+        fk_target = f"{target._table}.id"
+        if columns_use_quoted_identifiers(cap):
+            fk_target = f'"{target._table}"."id"'
         return Column(
             field.column,
             Integer(),
-            ForeignKey(f"{target._table}.id", ondelete=field.ondelete),
+            ForeignKey(fk_target, ondelete=field.ondelete),
             nullable=not field.required,
+            **quote_kw,
         )
     return Column(
         field.column,
         sa_type_for_field(field, cap),
         nullable=not field.required,
+        **quote_kw,
     )
 
 
@@ -159,11 +178,18 @@ def model_table_columns(model_cls, registry, cap: DialectCapabilities) -> list[C
     return cols
 
 
-def _metadata_with_tables(*table_names: str) -> MetaData:
+def _metadata_with_tables(*table_names: str, cap: DialectCapabilities | None = None) -> MetaData:
     metadata = MetaData()
+    cap = cap or dialect_capabilities("postgresql")
+    quote_kw = _column_quote_kw(cap)
     for name in table_names:
         if name not in metadata.tables:
-            Table(name, metadata, Column("id", Integer, primary_key=True), quote=True)
+            Table(
+                name,
+                metadata,
+                Column("id", Integer, primary_key=True, **quote_kw),
+                quote=True,
+            )
     return metadata
 
 
@@ -175,21 +201,30 @@ def m2m_relation_table(
     other_table: str,
     cap: DialectCapabilities,
 ) -> Table:
-    metadata = _metadata_with_tables(this_table, other_table)
+    quote_kw = _column_quote_kw(cap)
+    if columns_use_quoted_identifiers(cap):
+        this_fk = f'"{this_table}"."id"'
+        other_fk = f'"{other_table}"."id"'
+    else:
+        this_fk = f"{this_table}.id"
+        other_fk = f"{other_table}.id"
+    metadata = _metadata_with_tables(this_table, other_table, cap=cap)
     return Table(
         relation,
         metadata,
         Column(
             col1,
             Integer(),
-            ForeignKey(f"{this_table}.id", ondelete="CASCADE"),
+            ForeignKey(this_fk, ondelete="CASCADE"),
             nullable=False,
+            **quote_kw,
         ),
         Column(
             col2,
             Integer(),
-            ForeignKey(f"{other_table}.id", ondelete="CASCADE"),
+            ForeignKey(other_fk, ondelete="CASCADE"),
             nullable=False,
+            **quote_kw,
         ),
         PrimaryKeyConstraint(col1, col2),
         quote=True,
@@ -215,12 +250,20 @@ def table_from_columns(
     columns: list[Column],
     *,
     referenced_tables: set[str] | None = None,
+    cap: DialectCapabilities | None = None,
 ) -> Table:
+    cap = cap or dialect_capabilities("postgresql")
     metadata = MetaData()
+    quote_kw = _column_quote_kw(cap)
     for ref in referenced_tables or ():
         if ref == table_name or ref in metadata.tables:
             continue
-        Table(ref, metadata, Column("id", Integer, primary_key=True), quote=True)
+        Table(
+            ref,
+            metadata,
+            Column("id", Integer, primary_key=True, **quote_kw),
+            quote=True,
+        )
     return Table(table_name, metadata, *columns, quote=True)
 
 

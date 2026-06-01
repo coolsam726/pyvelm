@@ -359,6 +359,7 @@ class BaseModel(metaclass=MetaModel):
                     cls._table,
                     columns,
                     referenced_tables=referenced_tables_from_columns(columns),
+                    cap=cap,
                 )
                 execute_create_table(conn, tbl, cap=cap)
                 created_now = not had_table

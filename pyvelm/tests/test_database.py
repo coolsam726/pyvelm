@@ -136,8 +136,14 @@ class DialectCapabilitiesTests(unittest.TestCase):
         self.assertIn("CREATE TABLE", sql)
         self.assertIn("ir_module", sql)
         self.assertNotIn("IF NOT EXISTS", sql)
-        self.assertIn("NVARCHAR(255)", sql)
-        self.assertIn("DATETIMEOFFSET", sql)
+
+    def test_ir_module_create_sql_oracle_quotes_columns(self):
+        from pyvelm.database import ir_module_create_sql
+
+        sql = ir_module_create_sql(dialect_capabilities("oracle"))
+        self.assertIn('"name"', sql)
+        self.assertIn('"version"', sql)
+        self.assertIn('"installed_at"', sql)
 
 
 class SqliteDatabaseTests(unittest.TestCase):

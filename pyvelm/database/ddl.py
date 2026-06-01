@@ -201,7 +201,10 @@ def create_table_sql(
     )
 
     tbl = table_from_columns(
-        table, columns, referenced_tables=referenced_tables_from_columns(columns)
+        table,
+        columns,
+        referenced_tables=referenced_tables_from_columns(columns),
+        cap=cap,
     )
     return compile_create_table(tbl, cap)
 
@@ -247,9 +250,10 @@ def string_sql_type(cap: DialectCapabilities, *, primary_key: bool = False) -> s
 
 
 def ir_module_table(cap: DialectCapabilities) -> Table:
-    from .sa_ddl import sa_type_for_field, table_from_columns
+    from .sa_ddl import _column_quote_kw, sa_type_for_field, table_from_columns
     from ..fields import Field
 
+    quote_kw = _column_quote_kw(cap)
     name_f = Field(column="name", required=True)
     name_f.sql_type = string_sql_type(cap, primary_key=True)
     version_f = Field(column="version", required=True)
@@ -257,16 +261,30 @@ def ir_module_table(cap: DialectCapabilities) -> Table:
     installed_f = Field(column="installed_at", required=True)
     installed_f.sql_type = timestamp_sql_type(cap)
     cols = [
-        Column("name", sa_type_for_field(name_f, cap), primary_key=True, nullable=False),
-        Column("version", sa_type_for_field(version_f, cap), nullable=False),
+        Column(
+            "name",
+            sa_type_for_field(name_f, cap),
+            primary_key=True,
+            nullable=False,
+            **quote_kw,
+        ),
+        Column(
+            "version",
+            sa_type_for_field(version_f, cap),
+            nullable=False,
+            **quote_kw,
+        ),
     ]
     installed_col = Column(
-        "installed_at", sa_type_for_field(installed_f, cap), nullable=False
+        "installed_at",
+        sa_type_for_field(installed_f, cap),
+        nullable=False,
+        **quote_kw,
     )
     if cap.name in ("postgresql", "sqlite"):
         installed_col.server_default = text(now_sql(cap))
     cols.append(installed_col)
-    return table_from_columns("ir_module", cols)
+    return table_from_columns("ir_module", cols, cap=cap)
 
 
 def ir_module_create_sql(cap: DialectCapabilities) -> str:
