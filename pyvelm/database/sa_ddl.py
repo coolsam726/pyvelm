@@ -108,25 +108,59 @@ def effective_fk_ondelete(
     return action
 
 
+def model_cls_for_table(registry, table_name: str):
+    """Return the model class for a physical table name, if registered."""
+    if registry is None:
+        return None
+    for cls in registry:
+        if cls._table == table_name:
+            return cls
+    return None
+
+
+def _core_column_type(
+    col_name: str,
+    cap: DialectCapabilities,
+    registry,
+    model_cls,
+):
+    if col_name == "id":
+        return Integer()
+    if model_cls is not None and registry is not None:
+        for field in model_cls._fields.values():
+            if field.is_stored and field.column == col_name:
+                return sa_type_for_field(field, cap)
+    if col_name.endswith("_id"):
+        return Integer()
+    return Text()
+
+
 def core_table(
     table_name: str,
     cap: DialectCapabilities,
     *column_names: str,
+    registry=None,
+    model_cls=None,
 ) -> Table:
     """MetaData-bound table for SQLAlchemy Core DML (matches DDL quoting).
 
     ``TableClause`` (``table("t", column("c"))``) emits unquoted names on
     Oracle/MSSQL, which do not match quoted CREATE TABLE identifiers.
-    """
-    from sqlalchemy import Column, Integer, MetaData, Table, Text
 
+    Pass *registry* / *model_cls* (or rely on table lookup) so INSERT/UPDATE
+    bind parameters use real column types, not ``Text()`` for every column.
+    """
+    from sqlalchemy import Column, MetaData, Table
+
+    if model_cls is None and registry is not None:
+        model_cls = model_cls_for_table(registry, table_name)
     names = tuple(dict.fromkeys(column_names or ("id",)))
     quote_kw = _column_quote_kw(cap)
     metadata = MetaData()
     cols = [
         Column(
             name,
-            Integer() if name == "id" else Text(),
+            _core_column_type(name, cap, registry, model_cls),
             **quote_kw,
         )
         for name in names

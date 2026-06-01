@@ -96,7 +96,12 @@ def collection_subquery_expr(
     if isinstance(coll_hop, O2mHop):
         inv_field = registry[coll_hop.target_model]._fields[coll_hop.inverse_attr]
         coll_tbl = core_table(
-            target._table, cap, "id", inv_field.column
+            target._table,
+            cap,
+            "id",
+            inv_field.column,
+            registry=registry,
+            model_cls=target,
         ).alias(coll_alias)
         from_clause = coll_tbl
         correlate_where = _qcol(coll_alias, inv_field.column) == root_ref
@@ -124,7 +129,12 @@ def collection_subquery_expr(
         new_alias = f"_sqj{j}"
         tgt = registry[hop.target_model]
         hop_tbl = core_table(
-            tgt._table, cap, "id", hop.field.column
+            tgt._table,
+            cap,
+            "id",
+            hop.field.column,
+            registry=registry,
+            model_cls=tgt,
         ).alias(new_alias)
         current_from = current_from.join(
             hop_tbl,

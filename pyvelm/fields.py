@@ -710,7 +710,14 @@ class One2many(Field):
             "postgresql"
         )
         inverse = comodel_cls._fields[self.inverse_name]
-        tbl = core_table(comodel_cls._table, cap, "id", inverse.column)
+        tbl = core_table(
+            comodel_cls._table,
+            cap,
+            "id",
+            inverse.column,
+            registry=record.env.registry,
+            model_cls=comodel_cls,
+        )
         stmt = (
             select(tbl.c.id)
             .select_from(tbl)

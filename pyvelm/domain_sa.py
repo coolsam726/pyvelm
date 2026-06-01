@@ -66,7 +66,13 @@ class DomainCompiler:
         self.base_name = model_cls._table
         from .database.sa_ddl import core_table
 
-        self.base = core_table(self.base_name, self.cap, "id")
+        self.base = core_table(
+            self.base_name,
+            self.cap,
+            "id",
+            registry=registry,
+            model_cls=model_cls,
+        )
         self._base_alias = self.base_name
         self._shared_joins = shared_joins
         self._join_aliases = join_aliases if join_aliases is not None else {}
@@ -83,7 +89,12 @@ class DomainCompiler:
     def _aliased_table(self, table_name: str, alias: str):
         from .database.sa_ddl import core_table
 
-        return core_table(table_name, self.cap, "id").alias(alias)
+        return core_table(
+            table_name,
+            self.cap,
+            "id",
+            registry=self.registry,
+        ).alias(alias)
 
     def _qcol(self, alias: str, col_name: str) -> ColumnElement:
         return literal_column(f'"{alias}"."{col_name}"')
@@ -205,7 +216,11 @@ class DomainCompiler:
                 from .database.sa_ddl import core_table
 
                 rel_tbl = core_table(
-                    hop.relation, self.cap, hop.col1, hop.col2
+                    hop.relation,
+                    self.cap,
+                    hop.col1,
+                    hop.col2,
+                    registry=self.registry,
                 ).alias(j_alias)
                 tgt_tbl = self._aliased_table(tgt._table, t_alias)
                 if i == 0:

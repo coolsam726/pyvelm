@@ -638,6 +638,53 @@ class DdlRemainingGapsTests(unittest.TestCase):
             "CASCADE",
         )
 
+    def test_core_table_insert_uses_field_column_types(self):
+        from datetime import datetime
+
+        from sqlalchemy import bindparam, insert
+
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import _sqlalchemy_dialect, core_table
+        from pyvelm.fields import Char, Datetime
+        from pyvelm.model import BaseModel
+        from pyvelm.registry import Registry
+
+        cap = dialect_capabilities("postgresql")
+        reg = Registry()
+        with reg.activate():
+
+            class Group(BaseModel):
+                _name = "res.groups"
+                _table = "res_groups"
+                name = Char(required=True)
+                created_at = Datetime()
+                updated_at = Datetime()
+
+        tbl = core_table(
+            "res_groups",
+            cap,
+            "name",
+            "created_at",
+            "updated_at",
+            "id",
+            registry=reg,
+            model_cls=Group,
+        )
+        now = datetime(2026, 6, 1, 12, 0, 0)
+        stmt = insert(tbl).values(
+            name=bindparam("name"),
+            created_at=bindparam("created_at"),
+            updated_at=bindparam("updated_at"),
+        ).returning(tbl.c.id)
+        sql = str(
+            stmt.compile(
+                dialect=_sqlalchemy_dialect(cap),
+                compile_kwargs={"literal_binds": False},
+            )
+        )
+        self.assertNotIn("::VARCHAR", sql)
+        self.assertIn("created_at", sql)
+
     def test_core_table_dml_matches_ddl_quoting(self):
         from sqlalchemy import insert
 

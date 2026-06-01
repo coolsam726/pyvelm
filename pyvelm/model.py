@@ -688,7 +688,14 @@ class BaseModel(metaclass=MetaModel):
         from .database.sa_ddl import core_table
 
         cap = _conn_cap(self.env.conn)
-        tbl = core_table(ref_cls._table, cap, "id", column)
+        tbl = core_table(
+            ref_cls._table,
+            cap,
+            "id",
+            column,
+            registry=self.env.registry,
+            model_cls=ref_cls,
+        )
         stmt = select(tbl.c.id).where(
             tbl.c[column].in_(bindparam("ids", expanding=True))
         )
@@ -836,7 +843,13 @@ class BaseModel(metaclass=MetaModel):
             field = self._fields[fname]
             sql_cols[field.column] = field.to_sql_param(value)
         col_names = tuple(dict.fromkeys((*sql_cols.keys(), "id")))
-        tbl = core_table(self._table, cap, *col_names)
+        tbl = core_table(
+            self._table,
+            cap,
+            *col_names,
+            registry=self.env.registry,
+            model_cls=self.__class__,
+        )
         stmt = insert(tbl)
         if sql_cols:
             stmt = stmt.values({col_name: bindparam(col_name) for col_name in sql_cols})
@@ -934,7 +947,11 @@ class BaseModel(metaclass=MetaModel):
                 field = self._fields[fname]
                 sql_cols[field.column] = field.to_sql_param(value)
             tbl = core_table(
-                self._table, cap, *tuple(dict.fromkeys(("id", *sql_cols.keys())))
+                self._table,
+                cap,
+                *tuple(dict.fromkeys(("id", *sql_cols.keys()))),
+                registry=self.env.registry,
+                model_cls=self.__class__,
             )
             stmt = (
                 update(tbl)
@@ -985,7 +1002,13 @@ class BaseModel(metaclass=MetaModel):
 
         cap = _conn_cap(self.env.conn)
         sa_conn = _require_sa_connection(self.env.conn)
-        tbl = core_table(self._table, cap, "id")
+        tbl = core_table(
+            self._table,
+            cap,
+            "id",
+            registry=self.env.registry,
+            model_cls=self.__class__,
+        )
         stmt = delete(tbl).where(
             tbl.c.id.in_(bindparam("ids", expanding=True))
         )
@@ -1024,7 +1047,13 @@ class BaseModel(metaclass=MetaModel):
             if col not in col_index:
                 col_index[col] = len(seen_cols)
                 seen_cols.append(col)
-        tbl = core_table(self._table, cap, *seen_cols)
+        tbl = core_table(
+            self._table,
+            cap,
+            *seen_cols,
+            registry=self.env.registry,
+            model_cls=self.__class__,
+        )
         stmt = select(*(tbl.c[c] for c in seen_cols)).where(
             tbl.c.id.in_(bindparam("ids", expanding=True))
         )
