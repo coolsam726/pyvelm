@@ -61,7 +61,7 @@ def timestamp_sql_type() -> str:
 
 
 def now_sql() -> str:
-    return "CURRENT_TIMESTAMP"
+    return "CURRENT_TIMESTAMP(6)"
 
 
 def string_sql_type(*, primary_key: bool = False) -> str:
