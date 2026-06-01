@@ -143,9 +143,12 @@ def sa_type_for_field(field: "Field", cap: DialectCapabilities):
 
             import re
 
+            if "MAX" in upper:
+                return NVARCHAR(None)
             m = re.search(r"\((\d+)\)", sql_type)
-            length = int(m.group(1)) if m else 255
-            return NVARCHAR(length)
+            if m:
+                return NVARCHAR(int(m.group(1)))
+            return NVARCHAR(None)
         if "DATETIMEOFFSET" in upper or "TIMESTAMP" in upper or "DATETIME" in upper:
             from sqlalchemy.dialects.mssql import DATETIMEOFFSET
 

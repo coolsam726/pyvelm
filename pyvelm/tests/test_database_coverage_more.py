@@ -586,6 +586,34 @@ class DdlRemainingGapsTests(unittest.TestCase):
         oracle_sql = add_column_sql("t", "c", "INTEGER", dialect_caps("oracle"))
         self.assertEqual(oracle_sql, 'ALTER TABLE "t" ADD "c" INTEGER')
 
+    def test_sa_type_for_field_mssql_text_uses_nvarchar_max(self):
+        from sqlalchemy.dialects.mssql import NVARCHAR
+
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import compile_create_table, model_table_columns
+        from pyvelm.fields import Text
+        from pyvelm.model import BaseModel
+        from pyvelm.registry import Registry
+
+        cap = dialect_capabilities("mssql")
+        reg = Registry()
+        with reg.activate():
+
+            class Demo(BaseModel):
+                _name = "demo.arch"
+                _table = "demo_arch"
+                arch = Text()
+
+        cols = model_table_columns(Demo, reg, cap)
+        from pyvelm.database.sa_ddl import table_from_columns
+
+        tbl = table_from_columns("demo_arch", cols, cap=cap)
+        sql = compile_create_table(tbl, cap)
+        self.assertIn("NVARCHAR(MAX)", sql.upper().replace(" ", ""))
+        arch_col = next(c for c in cols if c.name == "arch")
+        self.assertIsInstance(arch_col.type, NVARCHAR)
+        self.assertIsNone(arch_col.type.length)
+
     def test_effective_fk_ondelete_mssql_self_ref_cascade(self):
         from pyvelm.database.dialects import dialect_capabilities
         from pyvelm.database.sa_ddl import effective_fk_ondelete
