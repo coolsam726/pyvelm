@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import re
 from typing import Any, Iterator
 
 from sqlalchemy import create_engine, inspect
@@ -78,19 +79,22 @@ class ConnectionAdapter:
             self._dbapi.autocommit = bool(value)
 
     def _convert_sql(self, sql: str) -> str:
-        if "%s" not in sql:
-            return sql
-        if self.capabilities.name == "oracle":
+        if self.capabilities.name == "oracle" and "%s" in sql:
             # oracledb expects numeric bind markers (:1, :2, ...).
             parts = sql.split("%s")
             out = [parts[0]]
             for idx, part in enumerate(parts[1:], start=1):
                 out.append(f":{idx}")
                 out.append(part)
-            return "".join(out)
-        if self.capabilities.placeholder == "%s":
-            return sql
-        return sql.replace("%s", "?")
+            sql = "".join(out)
+        elif self.capabilities.placeholder != "%s" and "%s" in sql:
+            sql = sql.replace("%s", "?")
+
+        if self.capabilities.name == "mssql":
+            # SQL Server rejects boolean literals in WHERE clauses.
+            sql = re.sub(r"\bTRUE\b", "1=1", sql)
+            sql = re.sub(r"\bFALSE\b", "1=0", sql)
+        return sql
 
     def execute(self, sql: str, params: list | tuple | None = None) -> ExecuteResult:
         sql = self._convert_sql(sql)

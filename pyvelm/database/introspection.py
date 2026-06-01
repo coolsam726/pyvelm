@@ -39,8 +39,12 @@ def table_exists(conn, table: str, cap: DialectCapabilities | None = None) -> bo
     sa_conn = sqlalchemy_connection(conn)
     if sa_conn is not None:
         from sqlalchemy import inspect as sa_inspect
+        from sqlalchemy.exc import NoSuchTableError
 
-        return sa_inspect(sa_conn).has_table(table)
+        try:
+            return sa_inspect(sa_conn).has_table(table)
+        except NoSuchTableError:
+            return False
     row = conn.execute(
         "SELECT 1 FROM information_schema.tables "
         "WHERE table_schema = current_schema() AND table_name = %s",

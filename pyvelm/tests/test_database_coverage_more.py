@@ -478,6 +478,10 @@ class ConnectionAdapterMoreTests(unittest.TestCase):
         adapter = ConnectionAdapter(MagicMock(), capabilities=cap)
         self.assertEqual(cap.placeholder, "?")
         self.assertEqual(adapter._convert_sql('WHERE "name" = %s'), 'WHERE "name" = ?')
+        self.assertEqual(
+            adapter._convert_sql('SELECT "id" FROM "t" WHERE TRUE'),
+            'SELECT "id" FROM "t" WHERE 1=1',
+        )
 
     def test_placeholder_conversion_oracle(self):
         cap = dialect_caps("oracle")
