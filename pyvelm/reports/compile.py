@@ -103,6 +103,7 @@ def compile_report(
     *,
     limit: int | None = None,
     offset: int = 0,
+    capabilities=None,
 ) -> CompiledReport:
     """Compile a validated definition to SQL."""
     validate_definition(defn, registry)
@@ -271,10 +272,17 @@ def compile_report(
     if order_parts:
         sql += " ORDER BY " + ", ".join(order_parts)
 
-    if limit is not None:
-        sql += f" LIMIT {int(limit)}"
-    if offset:
-        sql += f" OFFSET {int(offset)}"
+    from ..database import append_search_pagination, dialect_capabilities
+
+    cap = capabilities if capabilities is not None else dialect_capabilities("postgresql")
+    sql = append_search_pagination(
+        sql,
+        base_table_sql=base_alias,
+        limit=limit,
+        offset=offset,
+        order=None,
+        cap=cap,
+    )
 
     return CompiledReport(
         sql=sql,

@@ -55,6 +55,14 @@ def is_mysql(dsn: str | None = None) -> bool:
     return backend_name(dsn) == "mysql"
 
 
+def is_mssql(dsn: str | None = None) -> bool:
+    return backend_name(dsn) == "mssql"
+
+
+def is_oracle(dsn: str | None = None) -> bool:
+    return backend_name(dsn) == "oracle"
+
+
 def is_sqlite(dsn: str | None = None) -> bool:
     return backend_name(dsn) == "sqlite"
 
@@ -121,7 +129,7 @@ def reset_database(dsn: str | None = None) -> None:
     if cap.name == "sqlite":
         delete_sqlite_file(dsn)
         return
-    if cap.name == "mysql":
+    if cap.name in ("mysql", "mssql", "oracle"):
         from pyvelm.database import create_database_from_dsn, reset_schema
 
         db = create_database_from_dsn(dsn, pool_size=1)

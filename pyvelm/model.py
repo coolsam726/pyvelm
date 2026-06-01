@@ -328,9 +328,11 @@ class BaseModel(metaclass=MetaModel):
         from .database import (
             _conn_capabilities,
             add_column_if_missing,
+            create_table_sql,
             normalize_column_ddl,
             normalize_sql_type,
             serial_primary_key,
+            supports_create_table_if_not_exists,
             table_exists,
         )
 
@@ -341,9 +343,8 @@ class BaseModel(metaclass=MetaModel):
             if not f.is_stored or f.name == "id":
                 continue
             cols.append(normalize_column_ddl(f.column_ddl(), cap))
-        conn.execute(
-            f'CREATE TABLE IF NOT EXISTS "{cls._table}" ({", ".join(cols)})'
-        )
+        if not existed or supports_create_table_if_not_exists(cap):
+            conn.execute(create_table_sql(cls._table, ", ".join(cols), cap))
         if not existed:
             return
         for f in cls._fields.values():
@@ -357,7 +358,7 @@ class BaseModel(metaclass=MetaModel):
         from .database import _conn_capabilities
 
         cap = _conn_capabilities(conn)
-        cascade = "" if cap.name in ("sqlite", "mysql") else " CASCADE"
+        cascade = "" if cap.name in ("sqlite", "mysql", "mssql", "oracle") else " CASCADE"
         conn.execute(f'DROP TABLE IF EXISTS "{cls._table}"{cascade}')
 
     @classmethod
@@ -394,7 +395,9 @@ class BaseModel(metaclass=MetaModel):
     def _setup_relation_tables(cls, conn, registry, created: set[str]) -> None:
         """Create junction tables for Many2many fields. Symmetric pairs dedupe."""
         from .fields import Many2many
+        from .database import _conn_capabilities, create_table_sql, table_exists
 
+        cap = _conn_capabilities(conn)
         for f in cls._fields.values():
             if not isinstance(f, Many2many):
                 continue
@@ -403,12 +406,14 @@ class BaseModel(metaclass=MetaModel):
                 continue
             target = registry[f.comodel_name]
             ddl = (
-                f'CREATE TABLE IF NOT EXISTS "{relation}" ('
                 f'"{col1}" integer NOT NULL REFERENCES "{this_table}"("id") ON DELETE CASCADE, '
                 f'"{col2}" integer NOT NULL REFERENCES "{target._table}"("id") ON DELETE CASCADE, '
-                f'PRIMARY KEY ("{col1}", "{col2}"))'
+                f'PRIMARY KEY ("{col1}", "{col2}")'
             )
-            conn.execute(ddl)
+            if table_exists(conn, relation, cap):
+                created.add(relation)
+                continue
+            conn.execute(create_table_sql(relation, ddl, cap))
             created.add(relation)
 
     @classmethod
@@ -418,8 +423,8 @@ class BaseModel(metaclass=MetaModel):
         from .fields import Many2one
 
         cap = _conn_capabilities(conn)
-        if cap.name in ("sqlite", "mysql"):
-            # SQLite / MySQL: defer FK constraints to inline CREATE TABLE only.
+        if cap.name in ("sqlite", "mysql", "mssql", "oracle"):
+            # Inline FK constraints in CREATE TABLE only (no ALTER pass).
             return
 
         for f in cls._fields.values():
@@ -955,10 +960,19 @@ class BaseModel(metaclass=MetaModel):
         sql = f'SELECT {base}."id" FROM {base}{joins} WHERE {where}'
         if order:
             sql += f" ORDER BY {order}"
-        if limit is not None:
-            sql += f" LIMIT {int(limit)}"
-        if offset:
-            sql += f" OFFSET {int(offset)}"
+        from .database import _conn_capabilities, append_search_pagination
+
+        cap = getattr(self.env.conn, "capabilities", None) or _conn_capabilities(
+            self.env.conn
+        )
+        sql = append_search_pagination(
+            sql,
+            base_table_sql=base,
+            limit=limit,
+            offset=offset,
+            order=order,
+            cap=cap,
+        )
         rows = self.env.conn.execute(sql, params).fetchall()
         return self.__class__(self.env, tuple(r[0] for r in rows))
 
@@ -1159,10 +1173,19 @@ class BaseModel(metaclass=MetaModel):
         elif group_sql_parts:
             # Default: stable order on the group keys themselves.
             sql += " ORDER BY " + ", ".join(group_sql_parts)
-        if limit is not None:
-            sql += f" LIMIT {int(limit)}"
-        if offset:
-            sql += f" OFFSET {int(offset)}"
+        from .database import _conn_capabilities, append_search_pagination
+
+        cap = getattr(self.env.conn, "capabilities", None) or _conn_capabilities(
+            self.env.conn
+        )
+        sql = append_search_pagination(
+            sql,
+            base_table_sql=base,
+            limit=limit,
+            offset=offset,
+            order=order,
+            cap=cap,
+        )
 
         cur = self.env.conn.execute(sql, params)
         # We aliased every output column and unpack by position below

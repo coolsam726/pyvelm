@@ -144,6 +144,67 @@ class ServeImportTests(unittest.TestCase):
             self.assertIn(str(root / "app"), dirs)
             self.assertIn(str(root), sys.path)
 
+    def test_prepare_reload_import_examples(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "examples").mkdir()
+            with patch("pyvelm.scaffolder.find_project_root", return_value=root):
+                dirs = prepare_reload_import("examples.serve:app")
+            self.assertIn(str(root / "examples"), dirs)
+
+    def test_prepare_reload_import_generic(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch("pyvelm.scaffolder.find_project_root", return_value=root):
+                dirs = prepare_reload_import("custom.module:app")
+            self.assertEqual(dirs, [str(root)])
+
+    def test_guess_serve_import_none(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(guess_serve_import(project_root=Path(tmp)))
+
+
+class BuildServeAppTests(unittest.TestCase):
+    @patch("pyvelm.web.create_app")
+    @patch("pyvelm.loader.load_and_install")
+    @patch("pyvelm.database.create_database_from_dsn")
+    @patch("pyvelm.database.require_dsn_from_env", return_value="sqlite:///tmp/x.db")
+    @patch("dotenv.load_dotenv")
+    @patch("dotenv.find_dotenv", return_value=".env")
+    def test_build_serve_app_boots_modules(
+        self,
+        _find,
+        _load_dotenv,
+        _require,
+        create_db,
+        load_install,
+        create_app,
+    ):
+        from pathlib import Path
+
+        from pyvelm.server import build_serve_app
+
+        db = MagicMock()
+        conn = MagicMock()
+        db.connect.return_value.__enter__ = MagicMock(return_value=conn)
+        db.connect.return_value.__exit__ = MagicMock(return_value=False)
+        create_db.return_value = db
+        load_install.return_value = [MagicMock(name="base")]
+        app = MagicMock()
+        create_app.return_value = app
+        out = build_serve_app([Path("/mods")], runtime_env="development")
+        self.assertIs(out, app)
+        create_app.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

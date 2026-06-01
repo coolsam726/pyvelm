@@ -264,6 +264,37 @@ class ReportFormatMoreTests(unittest.TestCase):
         )
         self.assertEqual(out, "$10.50")
 
+    def test_currency_fixed_and_field_sources(self):
+        fmt = normalize_column_format(
+            {
+                "type": "currency",
+                "currency_source": "fixed",
+                "currency_id": "5",
+                "symbol": " € ",
+            }
+        )
+        self.assertEqual(fmt["currency_source"], "fixed")
+        self.assertEqual(fmt["currency_id"], 5)
+        self.assertEqual(fmt["symbol"], "€")
+        field_fmt = normalize_column_format(
+            {"type": "currency", "currency_source": "field", "currency_field": ""}
+        )
+        self.assertEqual(field_fmt["currency_field"], "currency_id")
+
+    def test_integer_and_number_invalid_values(self):
+        self.assertEqual(
+            format_display_value("nope", fmt={"type": "integer"}),
+            "nope",
+        )
+        self.assertEqual(
+            format_display_value("nope", fmt={"type": "number", "decimals": 2}),
+            "nope",
+        )
+        self.assertEqual(
+            format_display_value(12.3, fmt={"type": "number", "decimals": 1}),
+            "12.3",
+        )
+
 
 class ReportFieldsApiMoreTests(unittest.TestCase):
     def test_monetary_currency_path(self):
@@ -448,6 +479,32 @@ class ReportServiceTests(unittest.TestCase):
         env.registry = {}
         log_run(env, MagicMock(), row_count=0, duration_ms=0, fmt="pdf")
 
+    def test_log_run_creates_row(self):
+        env = MagicMock()
+        env.registry = {"ir.report.run": object(), "res.users": object()}
+        Run = MagicMock()
+        Users = MagicMock()
+        user = MagicMock()
+        user.id = 2
+        Users.browse.return_value = user
+
+        def getter(name):
+            return {"ir.report.run": Run, "res.users": Users}[name]
+
+        env.__getitem__.side_effect = getter
+        env.uid = 2
+        log_run(env, MagicMock(), row_count=3, duration_ms=9, fmt="csv")
+        Run.create.assert_called_once()
+
+    def test_load_report_missing(self):
+        from pyvelm.reports.service import load_report
+
+        env = MagicMock()
+        Report = MagicMock()
+        Report.search.return_value = []
+        env.__getitem__.return_value = Report
+        self.assertIsNone(load_report(env, 99))
+
 
 class ReportSchedulerTests(unittest.TestCase):
     @patch("pyvelm.reports.scheduler.log_run")
@@ -537,6 +594,31 @@ class ReportSchedulerTests(unittest.TestCase):
         report = SimpleNamespace(cron_id=cron)
         disable_schedule(MagicMock(), report)
         cron.write.assert_called_once_with({"active": False})
+
+    def test_ensure_daily_cron_updates_existing(self):
+        Action = MagicMock()
+        Cron = MagicMock()
+        action = MagicMock()
+        cron = MagicMock()
+        cron.action_id = action
+        env = MagicMock()
+        env.registry = {"ir.cron": object(), "ir.actions.server": object()}
+
+        def getter(name):
+            return {"ir.actions.server": Action, "ir.cron": Cron}[name]
+
+        env.__getitem__.side_effect = getter
+        report = MagicMock(id=3, name="Daily", cron_id=cron)
+        ensure_daily_cron(env, report)
+        action.write.assert_called_once()
+        cron.write.assert_called_once()
+        Action.create.assert_not_called()
+
+    def test_ensure_daily_cron_skips_without_models(self):
+        env = MagicMock()
+        env.registry = {}
+        ensure_daily_cron(env, MagicMock())
+        env.__getitem__.assert_not_called()
 
 
 class ReportSecureTests(unittest.TestCase):

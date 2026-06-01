@@ -180,6 +180,78 @@ class ServerActionMockedTests(unittest.TestCase):
         }.get(f, default)
         self.assertTrue(action.target_model_available())
 
+    def _mock_action(self, reg, **fields):
+        env = MagicMock()
+        env.registry = reg
+        action = reg["ir.actions.server"](env, (1,))
+        row = {
+            "name": "Mock",
+            "model": "test.action.target",
+            "action_type": "write",
+            "vals_json": "{}",
+            "code": "",
+        }
+        row.update(fields)
+        env.cache = MagicMock()
+        env.cache.get.side_effect = lambda m, i, f, default=None: row.get(f, default)
+        return action, env
+
+    def test_run_write_with_vals(self):
+        reg = _registry()
+        action, env = self._mock_action(
+            reg,
+            action_type="write",
+            vals_json='{"label": "updated"}',
+        )
+        records = MagicMock()
+        records.__bool__ = MagicMock(return_value=True)
+        action.run(records)
+        records.write.assert_called_once_with({"label": "updated"})
+
+    def test_run_create_ignores_recordset(self):
+        reg = _registry()
+        action, env = self._mock_action(
+            reg,
+            action_type="create",
+            vals_json='{"label": "new"}',
+        )
+        model = MagicMock()
+        env.__getitem__ = MagicMock(return_value=model)
+        action.run(MagicMock())
+        model.create.assert_called_once_with({"label": "new"})
+
+    def test_run_unlink_deletes(self):
+        reg = _registry()
+        action, _env = self._mock_action(reg, action_type="unlink")
+        records = MagicMock()
+        records.__bool__ = MagicMock(return_value=True)
+        action.run(records)
+        records.unlink.assert_called_once()
+
+    def test_run_code_executes(self):
+        reg = _registry()
+        action, env = self._mock_action(
+            reg,
+            action_type="code",
+            code="records.write({'label': 'from-code'})",
+        )
+        records = MagicMock()
+        action.run(records)
+        records.write.assert_called_once_with({"label": "from-code"})
+
+    def test_run_none_uses_model_recordset(self):
+        reg = _registry()
+        action, env = self._mock_action(
+            reg,
+            action_type="write",
+            vals_json='{"label": "all"}',
+        )
+        model = MagicMock()
+        model.__bool__ = MagicMock(return_value=True)
+        env.__getitem__ = MagicMock(return_value=model)
+        action.run(None)
+        model.write.assert_called_once_with({"label": "all"})
+
 
 if __name__ == "__main__":
     unittest.main()
