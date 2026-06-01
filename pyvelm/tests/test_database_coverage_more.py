@@ -586,6 +586,56 @@ class DdlRemainingGapsTests(unittest.TestCase):
         oracle_sql = add_column_sql("t", "c", "INTEGER", dialect_caps("oracle"))
         self.assertEqual(oracle_sql, 'ALTER TABLE "t" ADD "c" INTEGER')
 
+    def test_execute_create_table_skips_existing_fk_stub(self):
+        """Oracle has no CREATE IF NOT EXISTS; stub targets may already exist."""
+        from unittest.mock import MagicMock, patch
+
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import (
+            _execute_create_table_stmt,
+            primary_key_column,
+            table_from_columns,
+        )
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        cap = dialect_capabilities("oracle")
+        conn = MagicMock()
+        executed: list[str] = []
+        wire_sa_conn(conn, executed, dialect_name="oracle")
+        stub = table_from_columns("res_region", [primary_key_column(cap)], cap=cap)
+
+        with patch("pyvelm.database.introspection.table_exists", return_value=True):
+            _execute_create_table_stmt(
+                conn, conn._sa, stub, cap=cap, if_not_exists=False
+            )
+        self.assertEqual(executed, [])
+
+    def test_execute_create_table_swallows_duplicate_object(self):
+        from unittest.mock import MagicMock, patch
+
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import (
+            _execute_create_table_stmt,
+            primary_key_column,
+            table_from_columns,
+        )
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        cap = dialect_capabilities("oracle")
+        conn = MagicMock()
+        executed: list[str] = []
+        wire_sa_conn(conn, executed, dialect_name="oracle")
+        tbl = table_from_columns("res_region", [primary_key_column(cap)], cap=cap)
+
+        def boom(stmt, params=None):
+            raise Exception("ORA-00955: name is already used by an existing object")
+
+        conn._sa.execute = boom
+        with patch("pyvelm.database.introspection.table_exists", return_value=False):
+            _execute_create_table_stmt(
+                conn, conn._sa, tbl, cap=cap, if_not_exists=False
+            )
+
     def test_compile_add_column_mssql_requires_table_bound_column(self):
         from sqlalchemy import Column
         from sqlalchemy.dialects.mssql import NVARCHAR

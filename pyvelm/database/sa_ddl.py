@@ -286,6 +286,29 @@ def compile_create_table(table: Table, cap: DialectCapabilities) -> str:
     return str(stmt.compile(dialect=_sqlalchemy_dialect(cap)))
 
 
+def _execute_create_table_stmt(
+    conn,
+    sa_conn,
+    table: Table,
+    *,
+    cap: DialectCapabilities,
+    if_not_exists: bool,
+) -> None:
+    """Run ``CREATE TABLE`` when the table is missing; ignore duplicate-object races."""
+    from .ddl import is_duplicate_object_error
+    from .introspection import clear_reflection_cache, table_exists
+
+    if table_exists(conn, table.name, cap):
+        return
+    try:
+        sa_conn.execute(CreateTable(table, if_not_exists=if_not_exists))
+    except Exception as exc:
+        if is_duplicate_object_error(exc):
+            clear_reflection_cache(conn)
+            return
+        raise
+
+
 def execute_create_table(
     conn,
     table: Table | str,
@@ -301,14 +324,20 @@ def execute_create_table(
         tbl = table
     else:
         assert columns is not None
-        tbl = table_from_columns(table, columns, referenced_tables=referenced_tables)
+        tbl = table_from_columns(
+            table, columns, referenced_tables=referenced_tables, cap=cap
+        )
     if_not_exists = _supports_create_if_not_exists(cap)
     # Stub FK targets in ``tbl.metadata`` must exist before inline FOREIGN KEY
     # clauses are applied (MySQL/MSSQL/Oracle; Postgres uses ALTER for FKs).
     for dep_name, dep_tbl in sorted(tbl.metadata.tables.items()):
         if dep_name != tbl.name:
-            sa_conn.execute(CreateTable(dep_tbl, if_not_exists=if_not_exists))
-    sa_conn.execute(CreateTable(tbl, if_not_exists=if_not_exists))
+            _execute_create_table_stmt(
+                conn, sa_conn, dep_tbl, cap=cap, if_not_exists=if_not_exists
+            )
+    _execute_create_table_stmt(
+        conn, sa_conn, tbl, cap=cap, if_not_exists=if_not_exists
+    )
 
 
 def sort_models_for_table_setup(models: list[type], registry) -> list[type]:
