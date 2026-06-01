@@ -152,7 +152,7 @@ def compute_diff(env: "Environment", module: str) -> Diff:
                 continue
             expected[f.column] = f
         actual = _fetch_table_columns(env, table)
-        if actual is None:
+        if not actual:
             diff.new_tables.append((table, model_table_columns(cls, reg, cap)))
             continue
         for col, field_obj in expected.items():
@@ -624,6 +624,13 @@ def _column_exists(env, table: str, column: str) -> bool:
     return column_exists(env.conn, table, column)
 
 
+def _model_cls_for_table(registry, table: str):
+    for cls in registry._models.values():
+        if getattr(cls, "_table", None) == table:
+            return cls
+    return None
+
+
 def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
     """Apply model/DB drift: additive DDL plus safe nullability changes."""
     from pyvelm.database import _conn_capabilities, get_backend
@@ -636,10 +643,10 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
         new_columns=len(diff.new_columns),
     )
     from pyvelm.database import is_duplicate_object_error
-    from pyvelm.database.sa_ddl import execute_create_table
-
     from pyvelm.database.sa_ddl import (
         execute_add_column,
+        execute_create_table,
+        model_table_columns,
         referenced_tables_from_columns,
         table_from_columns,
     )
@@ -673,6 +680,21 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
         if _column_exists(env, table, col):
             continue
         if not table_exists(env.conn, table, cap):
+            cls = _model_cls_for_table(env.registry, table)
+            if cls is not None:
+                try:
+                    cols = model_table_columns(cls, env.registry, cap)
+                    tbl = table_from_columns(
+                        table,
+                        cols,
+                        referenced_tables=referenced_tables_from_columns(cols),
+                        cap=cap,
+                    )
+                    execute_create_table(env.conn, tbl, cap=cap)
+                    clear_reflection_cache(env.conn)
+                except Exception as exc:
+                    if not is_duplicate_object_error(exc):
+                        raise
             continue
         try:
             execute_add_column(
@@ -684,8 +706,14 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
             )
         except Exception as exc:
             orig = getattr(exc, "orig", exc)
-            if not get_backend(cap.name).is_duplicate_column_error(str(orig).lower()):
-                raise
+            msg = str(orig).lower()
+            backend = get_backend(cap.name)
+            if backend.is_duplicate_column_error(msg):
+                continue
+            missing = getattr(backend, "is_missing_table_error", None)
+            if missing is not None and missing(msg):
+                continue
+            raise
     clear_reflection_cache(env.conn)
     # Re-diff so new columns can receive SET NOT NULL in the same pass.
     diff = compute_diff(env, module)

@@ -93,6 +93,10 @@ def is_duplicate_column_error(msg: str) -> bool:
     return "already exists" in msg or "name is already used" in msg
 
 
+def is_missing_table_error(msg: str) -> bool:
+    return "ora-00942" in msg or "does not exist" in msg
+
+
 def before_reset_all_tables(conn: ConnectionAdapter) -> None:
     return None
 

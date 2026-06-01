@@ -366,6 +366,11 @@ class BaseModel(metaclass=MetaModel):
             except Exception as exc:
                 # Non-IF-NOT-EXISTS backends can race inspector/table checks.
                 if is_duplicate_object_error(exc):
+                    from .database.introspection import clear_reflection_cache
+
+                    clear_reflection_cache(conn)
+                    if not table_exists(conn, cls._table, cap):
+                        raise
                     had_table = True
                 else:
                     raise
@@ -374,10 +379,10 @@ class BaseModel(metaclass=MetaModel):
 
             clear_reflection_cache(conn)
             return
-        if not had_table:
-            from .database.introspection import clear_reflection_cache
+        from .database.introspection import clear_reflection_cache
 
-            clear_reflection_cache(conn)
+        clear_reflection_cache(conn)
+        if not table_exists(conn, cls._table, cap):
             return
         for f in cls._fields.values():
             if not f.is_stored or f.name == "id" or f.column == "id":
@@ -392,9 +397,6 @@ class BaseModel(metaclass=MetaModel):
                 registry=reg,
                 field=f,
             )
-        from .database.introspection import clear_reflection_cache
-
-        clear_reflection_cache(conn)
 
     @classmethod
     def _drop_table(cls, conn) -> None:

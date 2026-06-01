@@ -121,11 +121,13 @@ def add_column_if_missing(
     registry=None,
     field=None,
 ) -> bool:
-    from .introspection import column_exists
+    from .introspection import column_exists, table_exists
     from .sa_ddl import execute_add_column, field_to_column
     from sqlalchemy import Column
 
     cap = cap or conn_capabilities(conn)
+    if not table_exists(conn, table, cap):
+        return False
     if column_exists(conn, table, column, cap):
         return False
     if field is not None and registry is not None:
@@ -149,7 +151,11 @@ def add_column_if_missing(
     except Exception as exc:
         orig = getattr(exc, "orig", exc)
         msg = str(orig).lower()
-        if get_backend(cap.name).is_duplicate_column_error(msg):
+        backend = get_backend(cap.name)
+        if backend.is_duplicate_column_error(msg):
+            return False
+        missing = getattr(backend, "is_missing_table_error", None)
+        if missing is not None and missing(msg):
             return False
         raise
 
