@@ -586,6 +586,17 @@ class DdlRemainingGapsTests(unittest.TestCase):
         oracle_sql = add_column_sql("t", "c", "INTEGER", dialect_caps("oracle"))
         self.assertEqual(oracle_sql, 'ALTER TABLE "t" ADD "c" INTEGER')
 
+    def test_compile_add_column_mssql_requires_table_bound_column(self):
+        from sqlalchemy import Column
+        from sqlalchemy.dialects.mssql import NVARCHAR
+
+        from pyvelm.database.sa_ddl import compile_add_column
+
+        col = Column("name", NVARCHAR(255), nullable=False)
+        sql = compile_add_column("res_partner", col, dialect_caps("mssql"))
+        self.assertIn("NVARCHAR", sql)
+        self.assertIn("ADD", sql.upper())
+
     def test_reset_schema_drop_schema_path(self):
         from pyvelm.tests.support.sa_ddl import wire_sa_conn
 

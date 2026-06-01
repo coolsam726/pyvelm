@@ -6,12 +6,14 @@ from unittest.mock import MagicMock
 from sqlalchemy.schema import CreateColumn
 
 from pyvelm.database.dialects import dialect_capabilities
-from pyvelm.database.sa_ddl import _sqlalchemy_dialect
+from pyvelm.database.sa_ddl import _sqlalchemy_dialect, table_bound_column
 
 
-def compiled_column_ddl(field, registry, dialect: str = "postgresql") -> str:
+def compiled_column_ddl(
+    field, registry, dialect: str = "postgresql", table: str = "_ddl_probe"
+) -> str:
     cap = dialect_capabilities(dialect)
-    col = field.sa_column(registry, cap)
+    col = table_bound_column(table, field.sa_column(registry, cap))
     return str(CreateColumn(col).compile(dialect=_sqlalchemy_dialect(cap)))
 
 

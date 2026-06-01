@@ -359,8 +359,17 @@ def sort_models_for_table_setup(models: list[type], registry) -> list[type]:
     return ordered
 
 
+def table_bound_column(table_name: str, column: Column) -> Column:
+    """Return *column* bound to *table_name* (required by MSSQL DDL compilation)."""
+    if column.table is not None:
+        return column
+    tbl = Table(table_name, MetaData(), column, quote=True)
+    return tbl.c[column.key]
+
+
 def compile_add_column(table: str, column: Column, cap: DialectCapabilities) -> str:
-    col_sql = str(CreateColumn(column).compile(dialect=_sqlalchemy_dialect(cap)))
+    bound = table_bound_column(table, column)
+    col_sql = str(CreateColumn(bound).compile(dialect=_sqlalchemy_dialect(cap)))
     if cap.supports_add_column_if_not_exists:
         return f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS {col_sql}'
     add_kw = "ADD" if cap.name in ("mssql", "oracle") else "ADD COLUMN"
