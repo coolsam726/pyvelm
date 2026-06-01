@@ -45,6 +45,26 @@ class RegistryHelperTests(unittest.TestCase):
             reg.register(Plain)
         self.assertIn("test.plain", reg)
 
+    def test_init_db_without_active_registry(self):
+        """``init_db`` must pass the registry into DDL (no contextvar required)."""
+        from pyvelm.tests.support.db import open_database
+
+        db = open_database("sqlite:///:memory:")
+        conn = db.open_connection()
+        try:
+            reg = Registry()
+            with reg.activate():
+
+                class Item(BaseModel):
+                    _name = "test.init.item"
+                    _table = "test_init_item"
+                    label = Char()
+
+            reg.init_db(conn)
+        finally:
+            conn.close()
+            db.dispose()
+
     def test_reset_db_drops_m2m_and_reinits(self):
         from pyvelm.fields import Many2many
 
