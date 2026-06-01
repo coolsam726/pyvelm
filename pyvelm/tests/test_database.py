@@ -160,6 +160,70 @@ class SqliteDatabaseTests(unittest.TestCase):
         cap = dialect_capabilities("sqlite")
         self.assertIn("AUTOINCREMENT", serial_primary_key(cap))
 
+    def test_field_to_column_postgres_omits_inline_foreign_key(self):
+        from pyvelm.database.sa_ddl import dialect_capabilities, field_to_column
+        from pyvelm.fields import Many2one
+
+        company = type("Company", (), {"_table": "res_company"})()
+        reg = mock.MagicMock()
+        reg.__getitem__ = lambda _s, _n: company
+        field = Many2one("res.company", ondelete="SET NULL")
+        field.column = "company_id"
+        col = field_to_column(field, reg, dialect_capabilities("postgresql"))
+        self.assertFalse(col.foreign_keys)
+
+    def test_sort_models_for_table_setup_orders_fk_targets_first(self):
+        from pyvelm.database.sa_ddl import sort_models_for_table_setup
+        from pyvelm.fields import Char, Many2one
+
+        class Company:
+            _name = "res.company"
+            _table = "res_company"
+            _fields = {"name": Char()}
+
+        class User:
+            _name = "res.users"
+            _table = "res_users"
+            _fields = {
+                "name": Char(),
+                "company_id": Many2one("res.company", ondelete="SET NULL"),
+            }
+
+        reg = mock.MagicMock()
+        reg.__getitem__ = lambda _s, n: {"res.company": Company, "res.users": User}[n]
+        ordered = sort_models_for_table_setup([User, Company], reg)
+        self.assertEqual([m._name for m in ordered], ["res.company", "res.users"])
+
+    def test_sort_models_pulls_fk_targets_from_registry(self):
+        from pyvelm.database.sa_ddl import sort_models_for_table_setup
+        from pyvelm.fields import Char, Many2one
+
+        class Folder:
+            _name = "res.attachment.folder"
+            _table = "res_attachment_folder"
+            _fields = {"name": Char()}
+
+        class Attachment:
+            _name = "ir.attachment"
+            _table = "ir_attachment"
+            _fields = {
+                "name": Char(),
+                "folder_id": Many2one("res.attachment.folder", ondelete="SET NULL"),
+            }
+
+        models = {
+            "res.attachment.folder": Folder,
+            "ir.attachment": Attachment,
+        }
+        reg = mock.MagicMock()
+        reg.__contains__ = lambda _s, n: n in models
+        reg.__getitem__ = lambda _s, n: models[n]
+        ordered = sort_models_for_table_setup([Attachment], reg)
+        self.assertEqual(
+            [m._name for m in ordered],
+            ["res.attachment.folder", "ir.attachment"],
+        )
+
     def test_sqlite_datetime_insert_no_deprecation_warning(self):
         import warnings
         from datetime import datetime

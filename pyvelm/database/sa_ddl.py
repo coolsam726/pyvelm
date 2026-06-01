@@ -68,6 +68,11 @@ def _supports_create_if_not_exists(cap: DialectCapabilities) -> bool:
     return get_backend(cap.name).supports_create_table_if_not_exists()
 
 
+def uses_inline_foreign_keys(cap: DialectCapabilities) -> bool:
+    """Dialects that embed FOREIGN KEY in CREATE TABLE (not ALTER after)."""
+    return cap.name in ("sqlite", "mysql", "mssql", "oracle")
+
+
 def sa_type_for_field(field: "Field", cap: DialectCapabilities):
     sql_type = normalize_sql_type(field.sql_type, cap)
     upper = sql_type.upper()
@@ -125,6 +130,12 @@ def field_to_column(field: "Field", registry, cap: DialectCapabilities) -> Colum
 
     assert field.column is not None
     if isinstance(field, Many2one):
+        if not uses_inline_foreign_keys(cap):
+            return Column(
+                field.column,
+                Integer(),
+                nullable=not field.required,
+            )
         target = registry[field.comodel_name]
         return Column(
             field.column,
@@ -185,13 +196,17 @@ def m2m_relation_table(
     )
 
 
+def _fk_target_table_name(target: str) -> str:
+    return target.split(".", 1)[0].strip('"')
+
+
 def referenced_tables_from_columns(columns: list[Column]) -> set[str]:
     refs: set[str] = set()
     for col in columns:
         for fk in col.foreign_keys:
             target = fk.target_fullname or ""
             if "." in target:
-                refs.add(target.split(".", 1)[0])
+                refs.add(_fk_target_table_name(target))
     return refs
 
 
@@ -230,7 +245,75 @@ def execute_create_table(
     else:
         assert columns is not None
         tbl = table_from_columns(table, columns, referenced_tables=referenced_tables)
-    sa_conn.execute(CreateTable(tbl, if_not_exists=_supports_create_if_not_exists(cap)))
+    if_not_exists = _supports_create_if_not_exists(cap)
+    # Stub FK targets in ``tbl.metadata`` must exist before inline FOREIGN KEY
+    # clauses are applied (MySQL/MSSQL/Oracle; Postgres uses ALTER for FKs).
+    for dep_name, dep_tbl in sorted(tbl.metadata.tables.items()):
+        if dep_name != tbl.name:
+            sa_conn.execute(CreateTable(dep_tbl, if_not_exists=if_not_exists))
+    sa_conn.execute(CreateTable(tbl, if_not_exists=if_not_exists))
+
+
+def sort_models_for_table_setup(models: list[type], registry) -> list[type]:
+    """Order models so Many2one targets are created before dependents.
+
+    Pulls FK target models from the live registry (cross-module ``_inherit``).
+    """
+    from ..fields import Many2one
+
+    by_name: dict[str, type] = {}
+    model_list: list[type] = []
+
+    def include(cls: type) -> None:
+        if cls._name in by_name:
+            return
+        by_name[cls._name] = cls
+        model_list.append(cls)
+
+    for cls in models:
+        include(cls)
+
+    expanded = True
+    while expanded:
+        expanded = False
+        for cls in list(model_list):
+            for field in cls._fields.values():
+                if not isinstance(field, Many2one):
+                    continue
+                if field.related or not field.is_stored:
+                    continue
+                comodel = field.comodel_name
+                if comodel not in registry or comodel in by_name:
+                    continue
+                include(registry[comodel])
+                expanded = True
+
+    deps: dict[str, set[str]] = {name: set() for name in by_name}
+    for cls in model_list:
+        for field in cls._fields.values():
+            if not isinstance(field, Many2one):
+                continue
+            if field.related or not field.is_stored:
+                continue
+            if field.comodel_name not in by_name:
+                continue
+            if field.comodel_name != cls._name:
+                deps[cls._name].add(field.comodel_name)
+
+    ordered: list[type] = []
+    seen: set[str] = set()
+
+    def visit(name: str) -> None:
+        if name in seen:
+            return
+        for dep in deps.get(name, ()):
+            visit(dep)
+        seen.add(name)
+        ordered.append(by_name[name])
+
+    for cls in model_list:
+        visit(cls._name)
+    return ordered
 
 
 def compile_add_column(table: str, column: Column, cap: DialectCapabilities) -> str:

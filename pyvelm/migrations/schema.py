@@ -210,8 +210,10 @@ class _ColumnSpec:
         return self
 
     def build(self) -> Column:
+        from pyvelm.database.sa_ddl import uses_inline_foreign_keys
+
         fk = None
-        if self.fk_table:
+        if self.fk_table and uses_inline_foreign_keys(self._cap):
             fk = ForeignKey(f"{self.fk_table}.id", ondelete=self.fk_ondelete)
         col = Column(
             self.name,
@@ -253,6 +255,7 @@ class Blueprint:
         self._constraints: list = []
         self._indexes: list[tuple[str, tuple[str, ...]]] = []
         self._alter_ops: list[_AlterOp] = []
+        self._deferred_fks: list[tuple[str, str, str, str]] = []
 
     def id(self, name: str = "id") -> None:
         if not self._create:
@@ -342,16 +345,23 @@ class Blueprint:
         ondelete: str = "CASCADE",
         name: str | None = None,
     ) -> None:
+        from pyvelm.database.sa_ddl import uses_inline_foreign_keys
+
         cname = name or f"{self.table}_{local_column}_fkey"
         if self._create:
-            self._constraints.append(
-                ForeignKeyConstraint(
-                    [local_column],
-                    [f"{ref_table}.id"],
-                    ondelete=ondelete,
-                    name=cname,
+            if uses_inline_foreign_keys(self._cap):
+                self._constraints.append(
+                    ForeignKeyConstraint(
+                        [local_column],
+                        [f"{ref_table}.id"],
+                        ondelete=ondelete,
+                        name=cname,
+                    )
                 )
-            )
+            else:
+                self._deferred_fks.append(
+                    (local_column, ref_table, cname, ondelete)
+                )
         else:
             self._alter_ops.append(
                 _AlterOp(
@@ -417,12 +427,18 @@ class Blueprint:
             .nullable(nullable)
             .references(ref_table, ondelete=ondelete)
         )
+        from pyvelm.database.sa_ddl import uses_inline_foreign_keys
+
+        cname = f"{self.table}_{name}_fkey"
+        if self._create and not uses_inline_foreign_keys(self._cap):
+            self._columns.append(Column(name, col_type, nullable=nullable))
+            self._deferred_fks.append((name, ref_table, cname, ondelete))
+            return spec
         col = spec.build()
         if self._create:
             self._columns.append(col)
         else:
             bare = Column(name, col_type, nullable=nullable)
-            cname = f"{self.table}_{name}_fkey"
             self._alter_ops.append(
                 _AlterOp(
                     lambda t, c, cap, col=bare: _add_column_if_missing(c, t, col, cap)
@@ -491,6 +507,10 @@ class Schema:
         for constraint in bp._constraints:
             tbl.append_constraint(constraint)
         execute_create_table(self.conn, tbl, cap=self.cap)
+        for lc, rt, cn, od in bp._deferred_fks:
+            execute_add_foreign_key(
+                self.conn, table, cn, lc, rt, ondelete=od, cap=self.cap
+            )
         for iname, cols in bp._indexes:
             execute_create_index(self.conn, iname, table, cols, cap=self.cap)
 

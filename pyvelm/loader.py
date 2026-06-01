@@ -447,7 +447,9 @@ def _setup_module_schema(spec: ModuleSpec, env: Environment) -> None:
         for n in registry._model_extensions.get(spec.name, [])
         if n in registry
     ]
-    all_cls = models + extended
+    from pyvelm.database.sa_ddl import sort_models_for_table_setup
+
+    all_cls = sort_models_for_table_setup(models + extended, registry)
     for cls in all_cls:
         cls._setup_table(env.conn, registry=registry)
     for cls in all_cls:
