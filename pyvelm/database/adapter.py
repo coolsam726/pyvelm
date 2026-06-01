@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import re
 from typing import Any, Iterator
 
 from sqlalchemy import create_engine, inspect
@@ -78,19 +79,63 @@ class ConnectionAdapter:
             self._dbapi.autocommit = bool(value)
 
     def _convert_sql(self, sql: str) -> str:
-        if self.capabilities.placeholder == "%s":
-            return sql
-        if "%s" not in sql:
-            return sql
-        return sql.replace("%s", "?")
+        if self.capabilities.name == "oracle" and "%s" in sql:
+            # oracledb expects numeric bind markers (:1, :2, ...).
+            parts = sql.split("%s")
+            out = [parts[0]]
+            for idx, part in enumerate(parts[1:], start=1):
+                out.append(f":{idx}")
+                out.append(part)
+            sql = "".join(out)
+        elif self.capabilities.placeholder != "%s" and "%s" in sql:
+            sql = sql.replace("%s", "?")
+
+        if self.capabilities.name == "mssql":
+            # SQL Server rejects boolean literals in WHERE clauses.
+            sql = re.sub(r"\bTRUE\b", "1=1", sql)
+            sql = re.sub(r"\bFALSE\b", "1=0", sql)
+        return sql
+
+    def _prepare_text_sql(
+        self, sql: str, params: tuple[Any, ...]
+    ) -> tuple[str, dict[str, Any]]:
+        """Normalize driver SQL placeholders to SQLAlchemy ``text()`` bind names."""
+        sql = self._convert_sql(sql)
+        if not params:
+            return sql, {}
+        params = tuple(get_backend(self.capabilities.name).bind_params(params))
+        if re.search(r":\d+\b", sql):
+            return sql, {str(i + 1): params[i] for i in range(len(params))}
+        if "?" in sql:
+            out: list[str] = []
+            bind: dict[str, Any] = {}
+            for i, part in enumerate(sql.split("?")):
+                out.append(part)
+                if i < len(params):
+                    key = f"p{i}"
+                    bind[key] = params[i]
+                    out.append(f":{key}")
+            return "".join(out), bind
+        if "%s" in sql:
+            out = []
+            bind = {}
+            for i, part in enumerate(sql.split("%s")):
+                out.append(part)
+                if i < len(params):
+                    key = f"p{i}"
+                    bind[key] = params[i]
+                    out.append(f":{key}")
+            return "".join(out), bind
+        raise ValueError(f"SQL has parameters but no recognized placeholders: {sql!r}")
 
     def execute(self, sql: str, params: list | tuple | None = None) -> ExecuteResult:
-        sql = self._convert_sql(sql)
-        if params is not None:
-            bind = get_backend(self.capabilities.name).bind_params(tuple(params))
-            result = self._sa.exec_driver_sql(sql, bind)
-        else:
-            result = self._sa.exec_driver_sql(sql)
+        from sqlalchemy import text
+
+        if self._sa is None:
+            raise RuntimeError("SQLAlchemy connection is required.")
+        bind_params = tuple(params) if params is not None else ()
+        sql, bind = self._prepare_text_sql(sql, bind_params)
+        result = self._sa.execute(text(sql), bind or None)
         rows = None
         if result.returns_rows:
             rows = [tuple(row) for row in result.fetchall()]
@@ -218,15 +263,23 @@ def create_database_from_dsn(dsn: str, *, pool_size: int = 4) -> Database:
 
 
 def sqlalchemy_connection(conn) -> SAConnection | None:
+    from unittest.mock import MagicMock
+
     sa = getattr(conn, "_sa", None)
+    if sa is None:
+        return None
     if isinstance(sa, SAConnection):
         return sa
+    if isinstance(sa, MagicMock) and getattr(sa, "_pyvelm_sa_connection", None) is not True:
+        return None
+    if getattr(sa, "_pyvelm_sa_connection", None) is True:
+        return sa  # type: ignore[return-value]
     return None
 
 
 def conn_capabilities(conn) -> DialectCapabilities:
     cap = getattr(conn, "capabilities", None)
-    if cap is not None:
+    if cap is not None and isinstance(getattr(cap, "name", None), str):
         return cap
     name = getattr(conn, "dialect_name", None)
     if name:

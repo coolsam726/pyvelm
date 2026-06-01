@@ -1,23 +1,21 @@
-"""Migration 0.32.0 → 0.33.0 — header logo height + show brand text in chrome."""
+"""Header logo height + show brand text in chrome."""
 
-from __future__ import annotations
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
-def migrate(env):
-    conn = env.conn
-    conn.execute(
-        'ALTER TABLE "res_company" '
-        'ADD COLUMN IF NOT EXISTS "header_logo_height" integer DEFAULT 0'
+def upgrade(env):
+    schema = Schema(env)
+
+    def _alter(t: Table) -> None:
+        t.integer("header_logo_height", nullable=True).default(0)
+        t.boolean("show_header_brand_text", nullable=True).default(True)
+
+    schema.table("res_company", _alter)
+    schema.update_rows(
+        "res_company", {"header_logo_height": 0}, header_logo_height=None
     )
-    conn.execute(
-        'ALTER TABLE "res_company" '
-        'ADD COLUMN IF NOT EXISTS "show_header_brand_text" boolean DEFAULT true'
-    )
-    conn.execute(
-        'UPDATE "res_company" SET "header_logo_height" = 0 '
-        'WHERE "header_logo_height" IS NULL'
-    )
-    conn.execute(
-        'UPDATE "res_company" SET "show_header_brand_text" = true '
-        'WHERE "show_header_brand_text" IS NULL'
+    schema.update_rows(
+        "res_company",
+        {"show_header_brand_text": True},
+        show_header_brand_text=None,
     )

@@ -123,9 +123,10 @@ class Field:
     def to_sql_param(self, value: Any) -> Any:
         return value
 
-    def column_ddl(self) -> str:
-        null = "NOT NULL" if self.required else ""
-        return f'"{self.column}" {self.sql_type} {null}'.strip()
+    def sa_column(self, registry, cap) -> Any:
+        from .database.sa_ddl import field_to_column
+
+        return field_to_column(self, registry, cap)
 
     def __get__(self, record, owner):
         if record is None:
@@ -144,6 +145,8 @@ class Field:
                 record.env.compute_field(record, self)
             else:
                 record._read([self.name])
+            if not cache.contains(record._name, rid, self.name):
+                return self.default_value()
         return self.to_python(cache.get(record._name, rid, self.name))
 
     def __set__(self, record, value) -> None:
@@ -254,7 +257,7 @@ class Field:
 
 
 class Char(Field):
-    sql_type = "text"
+    sql_type = "varchar(255)"
     python_type = str
 
     def __init__(
@@ -283,6 +286,8 @@ class Char(Field):
             tracking=tracking,
         )
         self.size = size
+        if size is not None:
+            self.sql_type = f"varchar({int(size)})"
         # `choices` constrains the value to a small enumeration. Items
         # are either plain strings (label == value) or ``(value, label)``
         # tuples. When set, edit widgets render a ``<select>`` instead
@@ -307,7 +312,7 @@ class Char(Field):
 
 
 class Text(Char):
-    pass
+    sql_type = "text"
 
 
 class Code(Text):
@@ -473,10 +478,6 @@ class Datetime(Field):
     sql_type = "timestamp"
     python_type = _datetime
 
-    def column_ddl(self) -> str:
-        null = "" if self.required else " NULL"
-        return f'"{self.column}" timestamp{null}'
-
     def to_sql_param(self, value):
         if value is None or value is False or value == "":
             return None
@@ -499,10 +500,6 @@ class Date(Field):
     sql_type = "date"
     python_type = _date
 
-    def column_ddl(self) -> str:
-        null = "" if self.required else " NULL"
-        return f'"{self.column}" date{null}'
-
     def to_sql_param(self, value):
         if value is None or value is False or value == "":
             return None
@@ -523,10 +520,6 @@ class Time(Field):
 
     sql_type = "time"
     python_type = _time
-
-    def column_ddl(self) -> str:
-        null = "" if self.required else " NULL"
-        return f'"{self.column}" time{null}'
 
     def to_sql_param(self, value):
         if value is None or value is False or value == "":
@@ -686,7 +679,7 @@ class One2many(Field):
             return _pluralize_label(_title_words(name[:-4]))
         return super()._default_string(name)
 
-    def column_ddl(self) -> str:
+    def sa_column(self, registry, cap):
         raise RuntimeError("One2many has no column")
 
     def to_sql_param(self, value):
@@ -709,12 +702,31 @@ class One2many(Field):
         )
         if cached_ids is not None:
             return comodel_cls(record.env, cached_ids)
-        inverse = comodel_cls._fields[self.inverse_name]
-        sql = (
-            f'SELECT "id" FROM "{comodel_cls._table}" '
-            f'WHERE "{inverse.column}" = %s ORDER BY "id"'
+        if record.env.conn is None:
+            return comodel_cls(record.env, ())
+        from .database import dialect_capabilities
+        from .database.sa_ddl import core_table, require_sa_connection
+        from sqlalchemy import select
+
+        cap = getattr(record.env.conn, "capabilities", None) or dialect_capabilities(
+            "postgresql"
         )
-        rows = record.env.conn.execute(sql, [rid]).fetchall()
+        inverse = comodel_cls._fields[self.inverse_name]
+        tbl = core_table(
+            comodel_cls._table,
+            cap,
+            "id",
+            inverse.column,
+            registry=record.env.registry,
+            model_cls=comodel_cls,
+        )
+        stmt = (
+            select(tbl.c.id)
+            .select_from(tbl)
+            .where(tbl.c[inverse.column] == rid)
+            .order_by(tbl.c.id)
+        )
+        rows = require_sa_connection(record.env.conn).execute(stmt).fetchall()
         child_ids = tuple(r[0] for r in rows)
         _store_collection_cache(cache, record._name, rid, self.name, child_ids)
         return comodel_cls(record.env, child_ids)

@@ -194,12 +194,20 @@ class DialectHelperTests(unittest.TestCase):
         mssql.configure_engine(engine)
         # Listeners registered — no error means connect hook is wired.
         self.assertTrue(hasattr(engine, "dispatch"))
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
         conn = MagicMock()
+        executed: list[str] = []
+
+        wire_sa_conn(
+            conn,
+            executed,
+            base_execute=lambda sql, params=None: MagicMock(),
+        )
         mysql.before_reset_all_tables(conn)
         mysql.after_reset_all_tables(conn)
-        calls = [str(c.args[0]) for c in conn.execute.call_args_list]
-        self.assertIn("FOREIGN_KEY_CHECKS = 0", calls[0])
-        self.assertIn("FOREIGN_KEY_CHECKS = 1", calls[1])
+        self.assertIn("FOREIGN_KEY_CHECKS = 0", executed[0])
+        self.assertIn("FOREIGN_KEY_CHECKS = 1", executed[1])
 
     def test_mssql_before_reset_drops_fks(self):
         conn = MagicMock()
@@ -239,9 +247,11 @@ class DdlHelperTests(unittest.TestCase):
         pg = dialect_caps("postgresql")
         sq = dialect_caps("sqlite")
         my = dialect_caps("mysql")
+        ora = dialect_caps("oracle")
         self.assertIn("RETURNING", returning_id_clause(pg))
         self.assertIn("RETURNING", returning_id_clause(sq))
         self.assertEqual(returning_id_clause(my), "")
+        self.assertEqual(returning_id_clause(ora), "")
 
     def test_append_search_pagination_noop(self):
         cap = dialect_caps("postgresql")
@@ -254,12 +264,22 @@ class DdlHelperTests(unittest.TestCase):
         )
 
     def test_create_table_sql(self):
+        from pyvelm.database.sa_ddl import primary_key_column
+
         cap = dialect_caps("sqlite")
-        self.assertIn("IF NOT EXISTS", create_table_sql("t", '"id" int', cap))
+        self.assertIn(
+            "IF NOT EXISTS",
+            create_table_sql("t", [primary_key_column(cap)], cap),
+        )
         cap_oracle = dialect_caps("oracle")
         self.assertNotIn(
             "IF NOT EXISTS",
-            create_table_sql("t", '"id" int', cap_oracle),
+            create_table_sql("t", [primary_key_column(cap_oracle)], cap_oracle),
+        )
+        cap_mssql = dialect_caps("mssql")
+        self.assertNotIn(
+            "IF NOT EXISTS",
+            create_table_sql("t", [primary_key_column(cap_mssql)], cap_mssql),
         )
 
     def test_reset_schema_unsupported(self):
@@ -305,12 +325,18 @@ class DdlHelperTests(unittest.TestCase):
             db.dispose()
 
     def test_add_column_duplicate_error_swallowed(self):
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
         conn = MagicMock()
         cap = dialect_caps("mysql")
+
+        def base_execute(sql, params=None):
+            raise RuntimeError("duplicate column name")
+
+        wire_sa_conn(conn, [], dialect_name="mysql", base_execute=base_execute)
         with patch(
             "pyvelm.database.introspection.column_exists", return_value=False
-        ):
-            conn.execute.side_effect = RuntimeError("duplicate column name")
+        ), patch("pyvelm.database.introspection.table_exists", return_value=True):
             self.assertFalse(
                 add_column_if_missing(conn, "t", "c", "text", cap)
             )
@@ -437,19 +463,22 @@ class IntrospectionMockTests(unittest.TestCase):
     def test_column_exists_via_sqlalchemy_inspector(self):
         conn = MagicMock()
         conn.capabilities = dialect_caps("postgresql")
-        sa_conn = MagicMock()
+        sa_conn = object()
         with patch(
-            "pyvelm.database.introspection.sqlalchemy_connection",
+            "pyvelm.database.introspection._inspector_sa_connection",
             return_value=sa_conn,
         ), patch(
             "pyvelm.database.introspection.table_exists",
             return_value=True,
         ):
             inspector = MagicMock()
+            inspector.get_table_names.return_value = ["demo"]
             inspector.get_columns.return_value = [{"name": "id"}, {"name": "name"}]
             with patch("sqlalchemy.inspect", return_value=inspector):
                 self.assertTrue(column_exists(conn, "demo", "name"))
                 self.assertFalse(column_exists(conn, "demo", "missing"))
+                inspector.get_table_names.return_value = ["DEMO"]
+                self.assertTrue(column_exists(conn, "demo", "name"))
 
     def test_table_exists_information_schema_fallback(self):
         conn = MagicMock()
@@ -467,6 +496,24 @@ class ConnectionAdapterMoreTests(unittest.TestCase):
         cap = dialect_caps("sqlite")
         adapter = ConnectionAdapter(MagicMock(), capabilities=cap)
         self.assertEqual(adapter._convert_sql("WHERE x = %s"), "WHERE x = ?")
+
+    def test_placeholder_conversion_mssql(self):
+        cap = dialect_caps("mssql")
+        adapter = ConnectionAdapter(MagicMock(), capabilities=cap)
+        self.assertEqual(cap.placeholder, "?")
+        self.assertEqual(adapter._convert_sql('WHERE "name" = %s'), 'WHERE "name" = ?')
+        self.assertEqual(
+            adapter._convert_sql('SELECT "id" FROM "t" WHERE TRUE'),
+            'SELECT "id" FROM "t" WHERE 1=1',
+        )
+
+    def test_placeholder_conversion_oracle(self):
+        cap = dialect_caps("oracle")
+        adapter = ConnectionAdapter(MagicMock(), capabilities=cap)
+        self.assertEqual(
+            adapter._convert_sql('WHERE "name" = %s AND "version" = %s'),
+            'WHERE "name" = :1 AND "version" = :2',
+        )
 
     def test_commit_rollback_via_dbapi(self):
         dbapi = MagicMock()
@@ -530,13 +577,240 @@ class DdlRemainingGapsTests(unittest.TestCase):
         sql = add_column_if_not_exists_sql("t", "c", "text", cap)
         self.assertIn("IF NOT EXISTS", sql or "")
 
-    def test_reset_schema_drop_schema_path(self):
+    def test_add_column_sql_mssql_oracle_omit_column_keyword(self):
+        from pyvelm.database.ddl import add_column_sql
+
+        mssql_sql = add_column_sql("t", "c", "BIT", dialect_caps("mssql"))
+        self.assertEqual(mssql_sql, "ALTER TABLE [t] ADD [c] BIT")
+        self.assertNotIn("ADD COLUMN", mssql_sql)
+        oracle_sql = add_column_sql("t", "c", "INTEGER", dialect_caps("oracle"))
+        self.assertEqual(oracle_sql, 'ALTER TABLE "t" ADD "c" INTEGER')
+
+    def test_sa_type_for_field_mssql_text_uses_nvarchar_max(self):
+        from sqlalchemy.dialects.mssql import NVARCHAR
+
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import compile_create_table, model_table_columns
+        from pyvelm.fields import Text
+        from pyvelm.model import BaseModel
+        from pyvelm.registry import Registry
+
+        cap = dialect_capabilities("mssql")
+        reg = Registry()
+        with reg.activate():
+
+            class Demo(BaseModel):
+                _name = "demo.arch"
+                _table = "demo_arch"
+                arch = Text()
+
+        cols = model_table_columns(Demo, reg, cap)
+        from pyvelm.database.sa_ddl import table_from_columns
+
+        tbl = table_from_columns("demo_arch", cols, cap=cap)
+        sql = compile_create_table(tbl, cap)
+        self.assertIn("NVARCHAR(MAX)", sql.upper().replace(" ", ""))
+        arch_col = next(c for c in cols if c.name == "arch")
+        self.assertIsInstance(arch_col.type, NVARCHAR)
+        self.assertIsNone(arch_col.type.length)
+
+    def test_effective_fk_ondelete_mssql_maps_cascade_actions_to_no_action(self):
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import effective_fk_ondelete
+
+        cap = dialect_capabilities("mssql")
+        for action in ("CASCADE", "SET NULL", "set null"):
+            self.assertEqual(
+                effective_fk_ondelete(
+                    action,
+                    local_table="res_partner",
+                    ref_table="res_country",
+                    cap=cap,
+                ),
+                "NO ACTION",
+                action,
+            )
+        self.assertEqual(
+            effective_fk_ondelete(
+                "CASCADE",
+                local_table="res_partner",
+                ref_table="res_country",
+                cap=dialect_capabilities("postgresql"),
+            ),
+            "CASCADE",
+        )
+
+    def test_core_table_insert_uses_field_column_types(self):
+        from datetime import datetime
+
+        from sqlalchemy import bindparam, insert
+
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import _sqlalchemy_dialect, core_table
+        from pyvelm.fields import Char, Datetime
+        from pyvelm.model import BaseModel
+        from pyvelm.registry import Registry
+
+        cap = dialect_capabilities("postgresql")
+        reg = Registry()
+        with reg.activate():
+
+            class Group(BaseModel):
+                _name = "res.groups"
+                _table = "res_groups"
+                name = Char(required=True)
+                created_at = Datetime()
+                updated_at = Datetime()
+
+        tbl = core_table(
+            "res_groups",
+            cap,
+            "name",
+            "created_at",
+            "updated_at",
+            "id",
+            registry=reg,
+            model_cls=Group,
+        )
+        now = datetime(2026, 6, 1, 12, 0, 0)
+        stmt = insert(tbl).values(
+            name=bindparam("name"),
+            created_at=bindparam("created_at"),
+            updated_at=bindparam("updated_at"),
+        ).returning(tbl.c.id)
+        sql = str(
+            stmt.compile(
+                dialect=_sqlalchemy_dialect(cap),
+                compile_kwargs={"literal_binds": False},
+            )
+        )
+        self.assertNotIn("::VARCHAR", sql)
+        self.assertIn("created_at", sql)
+
+    def test_core_table_dml_matches_ddl_quoting(self):
+        from sqlalchemy import insert
+
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import _sqlalchemy_dialect, core_table
+
+        for dialect, needle in (
+            ("oracle", '"res_groups"'),
+            ("mssql", "[res_groups]"),
+        ):
+            with self.subTest(dialect=dialect):
+                cap = dialect_capabilities(dialect)
+                tbl = core_table("res_groups", cap, "id", "name")
+                sql = str(
+                    insert(tbl)
+                    .values(name="Admin")
+                    .compile(dialect=_sqlalchemy_dialect(cap))
+                )
+                self.assertIn(needle, sql)
+
+    def test_execute_create_table_skips_existing_fk_stub(self):
+        """Oracle has no CREATE IF NOT EXISTS; stub targets may already exist."""
+        from unittest.mock import MagicMock, patch
+
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import (
+            _execute_create_table_stmt,
+            primary_key_column,
+            table_from_columns,
+        )
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        cap = dialect_capabilities("oracle")
         conn = MagicMock()
+        executed: list[str] = []
+        wire_sa_conn(conn, executed, dialect_name="oracle")
+        stub = table_from_columns("res_region", [primary_key_column(cap)], cap=cap)
+
+        with patch("pyvelm.database.introspection.table_exists", return_value=True):
+            _execute_create_table_stmt(
+                conn, conn._sa, stub, cap=cap, if_not_exists=False
+            )
+        self.assertEqual(executed, [])
+
+    def test_execute_create_table_swallows_duplicate_object(self):
+        from unittest.mock import MagicMock, patch
+
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import (
+            _execute_create_table_stmt,
+            primary_key_column,
+            table_from_columns,
+        )
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        cap = dialect_capabilities("oracle")
+        conn = MagicMock()
+        executed: list[str] = []
+        wire_sa_conn(conn, executed, dialect_name="oracle")
+        tbl = table_from_columns("res_region", [primary_key_column(cap)], cap=cap)
+
+        def boom(stmt, params=None):
+            raise Exception("ORA-00955: name is already used by an existing object")
+
+        conn._sa.execute = boom
+        with patch("pyvelm.database.introspection.table_exists", return_value=False):
+            _execute_create_table_stmt(
+                conn, conn._sa, tbl, cap=cap, if_not_exists=False
+            )
+
+    def test_compile_add_column_mssql_requires_table_bound_column(self):
+        from sqlalchemy import Column
+        from sqlalchemy.dialects.mssql import NVARCHAR
+
+        from pyvelm.database.sa_ddl import compile_add_column
+
+        col = Column("name", NVARCHAR(255), nullable=False)
+        sql = compile_add_column("res_partner", col, dialect_caps("mssql"))
+        self.assertIn("NVARCHAR", sql)
+        self.assertIn("ADD", sql.upper())
+        self.assertIn("[res_partner]", sql)
+
+    def test_reset_schema_drop_schema_path(self):
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        conn = MagicMock()
+        executed: list[str] = []
+
+        wire_sa_conn(
+            conn,
+            executed,
+            base_execute=lambda sql, params=None: MagicMock(),
+        )
         cap = dialect_caps("postgresql")
         reset_schema(conn, cap)
-        calls = [str(c.args[0]) for c in conn.execute.call_args_list]
-        self.assertTrue(any("DROP SCHEMA" in s for s in calls))
-        self.assertTrue(any("CREATE SCHEMA" in s for s in calls))
+        self.assertTrue(any("DROP SCHEMA" in s for s in executed))
+        self.assertTrue(any("CREATE SCHEMA" in s for s in executed))
+
+    def test_reset_schema_oracle_uses_user_tables_and_purges(self):
+        """Oracle reset must not rely on the inspector (it hides recyclebin
+        objects). It queries user_tables, drops with CASCADE CONSTRAINTS PURGE,
+        then empties the recyclebin so nothing resurfaces as ORA-00955."""
+        conn = MagicMock()
+
+        def execute(sql, params=None):
+            r = MagicMock()
+            if "user_tables" in sql.lower():
+                r.fetchall.return_value = [("base_automation",), ("res_partner",)]
+            else:
+                r.fetchall.return_value = []
+            return r
+
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        executed: list[str] = []
+        wire_sa_conn(conn, executed, dialect_name="oracle", base_execute=execute)
+        reset_schema(conn, dialect_caps("oracle"))
+        calls = executed
+        self.assertTrue(any("user_tables" in s.lower() for s in calls))
+        self.assertIn(
+            'DROP TABLE "base_automation" CASCADE CONSTRAINTS PURGE', calls
+        )
+        self.assertIn('DROP TABLE "res_partner" CASCADE CONSTRAINTS PURGE', calls)
+        self.assertIn("PURGE RECYCLEBIN", calls)
 
     def test_normalize_helpers_empty_map(self):
         cap = dialect_caps("postgresql")
@@ -584,7 +858,7 @@ class DialectRemainingGapsTests(unittest.TestCase):
         self.assertIn("DATETIMEOFFSET", mssql.timestamp_sql_type())
         self.assertIn("SYSDATETIMEOFFSET", mssql.now_sql())
         self.assertIn("NVARCHAR(255)", mssql.string_sql_type(primary_key=True))
-        self.assertTrue(mssql.supports_create_table_if_not_exists())
+        self.assertFalse(mssql.supports_create_table_if_not_exists())
         self.assertEqual(mssql.bind_params((2,)), (2,))
 
     def test_mysql_bind_params(self):
@@ -592,7 +866,7 @@ class DialectRemainingGapsTests(unittest.TestCase):
 
     def test_oracle_helpers(self):
         self.assertIn("TIMESTAMP", oracle.timestamp_sql_type())
-        self.assertIn("CURRENT", oracle.now_sql())
+        self.assertIn("TIMESTAMP", oracle.now_sql())
         self.assertIn("VARCHAR2", oracle.string_sql_type(primary_key=True))
         self.assertEqual(oracle.bind_params((1,)), (1,))
         oracle.before_reset_all_tables(MagicMock())

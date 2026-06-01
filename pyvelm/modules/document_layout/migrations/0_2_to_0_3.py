@@ -1,14 +1,14 @@
-"""Migration 0.2.0 → 0.3.0 — configurable document header logo height."""
+"""Configurable document header logo height."""
 
-from __future__ import annotations
+from pyvelm.migrations import Blueprint, Schema
 
 
-def migrate(env):
-    env.conn.execute(
-        'ALTER TABLE "res_company" '
-        'ADD COLUMN IF NOT EXISTS "document_logo_height" integer DEFAULT 0'
+def upgrade(env):
+    schema = Schema(env)
+    schema.table(
+        "res_company",
+        lambda t: t.integer("document_logo_height", nullable=True).default(0),
     )
-    env.conn.execute(
-        'UPDATE "res_company" SET "document_logo_height" = 0 '
-        'WHERE "document_logo_height" IS NULL'
+    schema.update_rows(
+        "res_company", {"document_logo_height": 0}, document_logo_height=None
     )

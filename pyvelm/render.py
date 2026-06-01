@@ -5813,6 +5813,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
           "installed_version": str | None,
           "state": "installed" | "to_upgrade" | "uninstalled",
           "version_upgrade": bool,
+          "pending_migrations": bool,  # installed version < manifest
           "has_schema_diff": bool,
           "needs_upgrade": bool,
           "schema_diff_summary": str,
@@ -5854,6 +5855,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
                 continue
         inst = installed.get(name)
         version_upgrade = False
+        pending_migrations = False
         has_schema_diff = False
         schema_diff_summary = ""
         if inst is None:
@@ -5862,6 +5864,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
         else:
             installed_v = tuple(int(p) for p in inst.split("."))
             version_upgrade = spec.version > installed_v
+            pending_migrations = version_upgrade
             if not version_upgrade:
                 has_schema_diff, schema_diff_summary = _catalog_schema_diff_pending(
                     env, spec,
@@ -5883,6 +5886,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
                 "installed_version": inst,
                 "state": state,
                 "version_upgrade": version_upgrade,
+                "pending_migrations": pending_migrations,
                 "has_schema_diff": has_schema_diff,
                 "needs_upgrade": needs_upgrade,
                 "schema_diff_summary": schema_diff_summary,
@@ -5961,10 +5965,12 @@ def install_module_action(env, module_roots: list, target_name: str) -> dict:
 
 
 def upgrade_module_action(env, module_roots: list, target_name: str) -> dict:
-    """Re-sync an installed module: reload models + DATA from disk,
-    apply additive schema (``_setup_table`` + autogen diff), run
-    version-gap migrations when the manifest version increased, and
-    upsert views / menus.
+    """Apply version-gap migration scripts and bump ``ir_module.version``.
+
+    When the installed version already matches the manifest, this is a
+    no-op (use **Sync** for schema diff and view/menu reload). Only
+    migration files strictly between the recorded version and the
+    manifest target are executed — see ``loader._run_migrations``.
     """
     from . import loader as _loader
 
@@ -5977,6 +5983,16 @@ def upgrade_module_action(env, module_roots: list, target_name: str) -> dict:
         raise ValueError(
             f"Module {target_name!r} is not installed — use Install first."
         )
+    if current >= spec.version:
+        return {
+            "ok": True,
+            "upgraded": [],
+            "message": (
+                f"{target_name} is at {spec.version_str}; "
+                "no pending migrations. Use Sync for schema and views."
+            ),
+            "detail": {},
+        }
     _loader.reload_installed_models(env, specs)
     outcomes = _loader.install([spec], env)
     detail = outcomes[0] if outcomes else {}

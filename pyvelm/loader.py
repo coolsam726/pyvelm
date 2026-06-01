@@ -11,6 +11,7 @@ Optionally:
 
     MODELS_PACKAGE = "myapp.partners.models"   # defaults to <pkg>.models
     INSTALL_HOOK = "myapp.partners.hooks:install"
+    # Optional — default: discover seeders/SEEDERS from seeders/__init__.py
     SYNC_HOOK = "myapp.partners.hooks:sync"   # runs on Apps Sync (re-install path)
     WEB_ROUTES = "myapp.partners.web:register_routes"  # optional FastAPI routes
     MIGRATIONS_PACKAGE = "myapp.partners.migrations"  # defaults to <pkg>.migrations
@@ -76,6 +77,7 @@ class ModuleSpec:
     models_package: str
     migrations_package: str | None
     install_hook: Callable | None = None
+    seeders: list[str] = dc_field(default_factory=list)
     sync_hook: Callable | None = None
     web_routes: str | None = None
     package_path: Path | None = None
@@ -148,6 +150,13 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
     migrations_pkg = getattr(mod, "MIGRATIONS_PACKAGE", f"{package}.migrations")
     install_dotted = getattr(mod, "INSTALL_HOOK", None)
     install_hook = _import_attr(install_dotted) if install_dotted else None
+    from .seeding import resolve_module_seeders
+
+    seeders = resolve_module_seeders(
+        package,
+        pkg_path,
+        list(getattr(mod, "SEEDERS", [])),
+    )
     sync_dotted = getattr(mod, "SYNC_HOOK", None)
     sync_hook = _import_attr(sync_dotted) if sync_dotted else None
     web_routes = getattr(mod, "WEB_ROUTES", None)
@@ -164,6 +173,7 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
         models_package=models_pkg,
         migrations_package=migrations_pkg,
         install_hook=install_hook,
+        seeders=seeders,
         sync_hook=sync_hook,
         web_routes=web_routes,
         package_path=pkg_path,
@@ -360,10 +370,26 @@ def reload_installed_models(env: Environment, specs: dict[str, ModuleSpec]) -> N
 
 
 def _ensure_ir_module(env: Environment) -> None:
-    from pyvelm.database import _conn_capabilities, ir_module_create_sql
+    from pyvelm.database import (
+        _conn_capabilities,
+        ir_module_table,
+        is_duplicate_object_error,
+        supports_create_table_if_not_exists,
+        table_exists,
+    )
+    from pyvelm.database.sa_ddl import execute_create_table
 
     cap = _conn_capabilities(env.conn)
-    env.conn.execute(ir_module_create_sql(cap))
+    if table_exists(env.conn, IR_MODULE_TABLE, cap) and not supports_create_table_if_not_exists(
+        cap
+    ):
+        return
+    try:
+        execute_create_table(env.conn, ir_module_table(cap), cap=cap)
+    except Exception as exc:
+        if is_duplicate_object_error(exc):
+            return
+        raise
 
 
 def _installed_module_names(env: Environment) -> set[str]:
@@ -421,14 +447,19 @@ def _setup_module_schema(spec: ModuleSpec, env: Environment) -> None:
         for n in registry._model_extensions.get(spec.name, [])
         if n in registry
     ]
-    all_cls = models + extended
+    from pyvelm.database.sa_ddl import sort_models_for_table_setup
+
+    all_cls = sort_models_for_table_setup(models + extended, registry)
     for cls in all_cls:
-        cls._setup_table(env.conn)
+        cls._setup_table(env.conn, registry=registry)
     for cls in all_cls:
         cls._setup_foreign_keys(env.conn, registry)
     created: set[str] = set()
     for cls in all_cls:
         cls._setup_relation_tables(env.conn, registry, created)
+    from pyvelm.database.introspection import clear_reflection_cache
+
+    clear_reflection_cache(env.conn)
 
 
 def _pad(v: tuple[int, ...], width: int = 3) -> tuple[int, ...]:
@@ -460,7 +491,7 @@ def _run_migrations(spec: ModuleSpec, env: Environment,
     falls strictly between `from_version` (exclusive) and `to_version`
     (inclusive). Convention: `<from>_to_<to>.py` with `_`-separated
     version parts (e.g. `0_1_to_0_2.py`). Each module must export
-    `migrate(env)`. Files that don't match the convention raise."""
+    `upgrade(env)`. Files that don't match the convention raise."""
     if spec.migrations_package is None:
         return
     try:
@@ -500,13 +531,13 @@ def _run_migrations(spec: ModuleSpec, env: Environment,
     for _, _, p in applicable:
         mod_name = f"{spec.migrations_package}.{p.stem}"
         m = importlib.import_module(mod_name)
-        if hasattr(m, "migrate"):
-            from pyvelm.database import migration_supported
-
-            supported = getattr(m, "supported_backends", ("postgresql",))
-            if not migration_supported(env.conn, supported):
-                continue
-            m.migrate(env)
+        if hasattr(m, "upgrade"):
+            m.upgrade(env)
+        elif hasattr(m, "migrate"):
+            raise RuntimeError(
+                f"Migration {mod_name} still defines migrate(); "
+                "use upgrade(env) with pyvelm.migrations.Schema instead."
+            )
 
 
 def _load_data_files(spec: ModuleSpec) -> None:
@@ -761,6 +792,19 @@ def _sync_menus(spec: ModuleSpec, env: Environment) -> None:
             Menu.create(vals)
 
 
+def _run_module_seeders(spec: ModuleSpec, env: Environment) -> None:
+    """Run manifest ``SEEDERS`` (install, upgrade, and Apps Sync).
+
+    Seeders must be idempotent — match on natural keys, skip or patch
+    existing rows (see ``geo_data`` seeders).
+    """
+    if not spec.seeders:
+        return
+    from .seeding import run_seeders
+
+    run_seeders(env, spec.seeders, module=spec.name)
+
+
 def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
     """Install or upgrade each module, in `specs` order, atomically per
     module. Models must already be loaded into `env.registry`.
@@ -783,9 +827,13 @@ def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
                 schema_note = applied.summary()
                 if spec.install_hook is not None:
                     spec.install_hook(env)
+                from pyvelm.database import _conn_capabilities, now_sql
+
+                cap = _conn_capabilities(env.conn)
                 env.conn.execute(
                     f'INSERT INTO "{IR_MODULE_TABLE}" '
-                    f'("name", "version") VALUES (%s, %s)',
+                    f'("name", "version", "installed_at") '
+                    f'VALUES (%s, %s, {now_sql(cap)})',
                     [spec.name, spec.version_str],
                 )
             else:
@@ -806,6 +854,7 @@ def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
                     f'"installed_at" = {now_sql(cap)} WHERE "name" = %s',
                     [spec.version_str, spec.name],
                 )
+            _run_module_seeders(spec, env)
             # Load data files (views, menus) from disk — always reload
             # so Upgrade/Sync picks up new DATA without reinstall.
             _load_data_files(spec)

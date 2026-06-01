@@ -22,6 +22,8 @@ from .ddl import (
     fetch_lastrowid,
     ilike_sql,
     ir_module_create_sql,
+    ir_module_table,
+    is_duplicate_object_error,
     migration_supported,
     normalize_column_ddl,
     normalize_sql_type,
@@ -50,7 +52,19 @@ from .env import (
     uses_serverless_schema_wipe,
     warn_if_poor_nuke_dsn,
 )
-from .introspection import column_exists, table_exists
+from .introspection import clear_reflection_cache, column_exists, table_exists
+from .migration_sql import (
+    execute_migration_sql,
+    fetchall_migration,
+    fetchone_migration,
+)
+from .sa_ddl import (
+    compile_create_table,
+    core_table,
+    effective_fk_ondelete,
+    execute_create_table,
+    execute_sql,
+)
 from .postgres_admin import (
     prepare_postgres_schema_drop,
     release_postgres_schema_drop_lock,
@@ -81,11 +95,20 @@ __all__ = [
     "append_search_pagination",
     "app_dsn_from_env",
     "capabilities_from_dsn",
+    "clear_reflection_cache",
     "column_exists",
+    "compile_create_table",
+    "core_table",
+    "effective_fk_ondelete",
     "configure_engine",
     "conn_capabilities",
     "create_database_from_dsn",
     "create_table_sql",
+    "execute_create_table",
+    "execute_migration_sql",
+    "execute_sql",
+    "fetchall_migration",
+    "fetchone_migration",
     "delete_sqlite_file",
     "dialect_base_name",
     "dialect_capabilities",
@@ -94,6 +117,8 @@ __all__ = [
     "get_backend",
     "ilike_sql",
     "ir_module_create_sql",
+    "ir_module_table",
+    "is_duplicate_object_error",
     "is_serverless_runtime",
     "is_supabase_direct_host",
     "is_transaction_pooler_dsn",

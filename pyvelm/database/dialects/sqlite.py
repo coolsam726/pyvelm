@@ -28,7 +28,9 @@ PORTABLE_TYPE_MAP = {
 
 
 def configure_engine(engine) -> None:
-    return None
+    from ..sqlite3_adapters import register_sqlite3_datetime_adapters
+
+    register_sqlite3_datetime_adapters()
 
 
 def serial_primary_key() -> str:
@@ -74,14 +76,16 @@ def append_search_pagination(
 def bind_params(params: tuple) -> tuple:
     from datetime import date, datetime, time
 
+    from ..sqlite3_adapters import adapt_date_iso, adapt_datetime_iso, adapt_time_iso
+
     out: list[Any] = []
     for value in params:
         if isinstance(value, datetime):
-            out.append(value.isoformat(sep=" "))
+            out.append(adapt_datetime_iso(value))
         elif isinstance(value, date):
-            out.append(value.isoformat())
+            out.append(adapt_date_iso(value))
         elif isinstance(value, time):
-            out.append(value.isoformat())
+            out.append(adapt_time_iso(value))
         else:
             out.append(value)
     return tuple(out)

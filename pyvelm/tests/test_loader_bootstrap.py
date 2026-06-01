@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+import unittest.mock
 from unittest.mock import MagicMock
 
 import pytest
@@ -35,7 +36,8 @@ class SpecsToInstallTests(unittest.TestCase):
     def test_fresh_db_bootstraps_bundled_modules_only(self):
         env = self._env_with_installed(set())
         ordered = [_spec("base"), _spec("admin", ["base"]), _spec("partners", ["base"])]
-        result = specs_to_install(env, ordered)
+        with unittest.mock.patch("pyvelm.loader._ensure_ir_module"):
+            result = specs_to_install(env, ordered)
         self.assertEqual([s.name for s in result], ["base", "admin"])
         self.assertIn("base", BOOTSTRAP_MODULES)
         self.assertIn("admin", BOOTSTRAP_MODULES)
@@ -54,7 +56,8 @@ class SpecsToInstallTests(unittest.TestCase):
             _spec("partners", ["base"]),
             _spec("crm", ["partners"]),
         ]
-        result = specs_to_install(env, ordered)
+        with unittest.mock.patch("pyvelm.loader._ensure_ir_module"):
+            result = specs_to_install(env, ordered)
         self.assertEqual([s.name for s in result], ["base", "admin", "partners"])
 
     def test_install_all_returns_everything(self):

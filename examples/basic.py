@@ -115,11 +115,14 @@ def main():
         # ----- Migration demo -----
         # Simulate "an older install upgrading": downgrade the recorded module
         # version and null out a column that is now required, then re-run
-        # install. Since `code` is NOT NULL on fresh installs, drop the
-        # constraint first so the demo update succeeds.
-        conn.execute("UPDATE ir_module SET version = '0.1.0' WHERE name = 'partners'")
-        conn.execute('ALTER TABLE "res_partner" ALTER COLUMN "code" DROP NOT NULL')
-        conn.execute('UPDATE "res_partner" SET "code" = NULL')
+        # install. Relax NOT NULL on code so the demo update succeeds.
+        from pyvelm.migrations import Schema
+
+        schema = Schema(env)
+        schema.update_rows("ir_module", {"version": "0.1.0"}, name="partners")
+        schema.table("res_partner", lambda t: t.allow_null("code"))
+        for partner in env["res.partner"].search([]):
+            partner.write({"code": None})
         env.cache.invalidate(model_name="res.partner", fields=["code"])
 
         # Re-install. Models are already loaded; just kick off install.
@@ -134,9 +137,8 @@ def main():
         )
         assert dict(rows)["partners"] == expected_partners_version
 
-        codes = conn.execute(
-            'SELECT name, code FROM res_partner ORDER BY id'
-        ).fetchall()
+        partners = env["res.partner"].search([], order="id")
+        codes = [(p.name, p.code) for p in partners]
         print("backfilled codes:", codes)
         assert all(c is not None for _, c in codes), codes
         assert codes[0] == ("Alice", "ALI-1")
@@ -1312,11 +1314,13 @@ def main():
                 gbp_rate_id = gbp_rate.id
 
             # Update existing USD rate + add a new one in one save.
-            from datetime import datetime as _dt_e, timedelta as _td_e
-            new_date = (_dt_e.utcnow() - _td_e(days=2)).strftime(
+            from datetime import timedelta as _td_e
+
+            from pyvelm.timestamps import utc_now as _utc_now_e
+            new_date = (_utc_now_e() - _td_e(days=2)).strftime(
                 "%Y-%m-%dT%H:%M"
             )
-            old_date = (_dt_e.utcnow() - _td_e(days=10)).strftime(
+            old_date = (_utc_now_e() - _td_e(days=10)).strftime(
                 "%Y-%m-%dT%H:%M"
             )
             r_save = client.post(
@@ -1529,7 +1533,9 @@ def main():
 
                 # ----- Slice C: scheduled jobs -----
                 from datetime import datetime as _dt, timedelta as _td
+
                 from pyvelm.cron import CronJob
+                from pyvelm.timestamps import utc_now
 
                 tick_action = wf_env["ir.actions.server"].create({
                     "name": "Cron tick",
@@ -1537,7 +1543,7 @@ def main():
                     "action_type": "code",
                     "code": "pass",
                 })
-                past = _dt.utcnow() - _td(seconds=1)
+                past = utc_now() - _td(seconds=1)
                 cron = wf_env["ir.cron"].create({
                     "name": "Test cron",
                     "action_id": tick_action,
@@ -1550,10 +1556,10 @@ def main():
                 assert "Test cron" in ran, ran
                 wf_env.cache.invalidate(model_name="ir.cron", ids=[cron.id])
                 new_next = cron.nextcall
-                assert new_next > _dt.utcnow(), f"nextcall not advanced: {new_next}"
+                assert new_next > utc_now(), f"nextcall not advanced: {new_next}"
                 print("cron: due job runs and nextcall advances OK")
 
-                future = _dt.utcnow() + _td(hours=1)
+                future = utc_now() + _td(hours=1)
                 with wf_env.transaction():
                     cron.write({"nextcall": future})
                 wf_env.cache.invalidate(model_name="ir.cron", ids=[cron.id])
@@ -1574,7 +1580,7 @@ def main():
                 # shape to CronJob even though the loop itself can't
                 # be unit-tested without spawning a subprocess.
                 from pyvelm import cli as _cli
-                past = _dt.utcnow() - _td(seconds=1)
+                past = utc_now() - _td(seconds=1)
                 with wf_env.transaction():
                     cron.write({"nextcall": past})
                 wf_env.cache.invalidate(model_name="ir.cron", ids=[cron.id])
@@ -1584,7 +1590,7 @@ def main():
                         "SELECT nextcall FROM ir_cron WHERE id = %s",
                         [cron.id],
                     ).fetchone()
-                assert rows is not None and rows[0] > _dt.utcnow(), rows
+                assert rows is not None and rows[0] > utc_now(), rows
                 print("cron CLI: _tick advances nextcall via the pool path")
 
                 # ----- Slice D: mail threads -----
@@ -1684,6 +1690,8 @@ def main():
                 # opening rates; verify the convert helper picks the
                 # right rate for the requested date.
                 from datetime import datetime as _dt, timedelta as _td
+
+                from pyvelm.timestamps import utc_now
                 Currency = wf_env["res.currency"]
                 Rate = wf_env["res.currency.rate"]
                 seeded = {c.code: c for c in Currency.search([])}
@@ -1706,7 +1714,7 @@ def main():
                             old.unlink()
                         Rate.create({
                             "currency_id": seeded[code].id,
-                            "date": _dt.utcnow() - _td(days=1),
+                            "date": utc_now() - _td(days=1),
                             "rate": rate,
                         })
                 wf_env.cache.invalidate(model_name="res.currency.rate")
@@ -1724,7 +1732,7 @@ def main():
                 with wf_env.transaction():
                     Rate.create({
                         "currency_id": seeded["EUR"].id,
-                        "date": _dt.utcnow(),
+                        "date": utc_now(),
                         "rate": 0.85,
                     })
                 import time as _time

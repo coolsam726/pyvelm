@@ -358,6 +358,45 @@ def run_migrate_reset(
     print("Schema reset complete.")
 
 
+def run_db_seed(
+    roots: list[Path],
+    *,
+    only_module: str | None = None,
+) -> None:
+    """Run manifest ``SEEDERS`` for installed module(s) (e.g. ``geo_data``)."""
+    dsn = require_dsn()
+    if only_module is not None:
+        to_seed = ordered_specs_for_install(roots, only_module)
+    else:
+        all_specs = loader.discover(roots)
+        db = create_database_from_dsn(normalize_dsn(dsn))
+        with db.connect() as conn:
+            installed = set(read_installed_versions(conn))
+        to_seed = [
+            s
+            for s in loader.resolve_order(all_specs)
+            if s.name in installed and s.seeders
+        ]
+    if not to_seed:
+        print("Nothing to seed (no installed modules declare SEEDERS).")
+        return
+    with_seeders = [s for s in to_seed if s.seeders]
+    if not with_seeders:
+        print(f"No SEEDERS declared for {only_module or 'selected modules'}.")
+        return
+    db = create_database_from_dsn(normalize_dsn(dsn))
+    with db.connect() as conn:
+        reg = Registry()
+        env = Environment(conn, registry=reg)
+        for spec in to_seed:
+            loader._load_models(spec, reg)
+        for spec in with_seeders:
+            print(f"Seeding {spec.name}…")
+            with env.transaction():
+                loader._run_module_seeders(spec, env)
+    print(f"Seeded {len(with_seeders)} module(s).")
+
+
 def run_migrate_fresh(
     roots: list[Path],
     *,

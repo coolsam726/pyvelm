@@ -1,7 +1,9 @@
 """Overdue approval escalation (cron-driven)."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+from pyvelm.timestamps import utc_now
 
 from .engine import parse_definition, _transition_by_key
 
@@ -14,7 +16,7 @@ def process_overdue_approvals(env) -> int:
     if "workflow.approval" not in env.registry:
         return 0
     Approval = env["workflow.approval"]
-    now = datetime.utcnow()
+    now = utc_now()
     pending = Approval.search([("status", "=", "pending")])
     count = 0
     for appr in pending:
@@ -52,7 +54,7 @@ def _escalate_one(env, approval) -> bool:
         "assignee_group_id": int(escalate_gid),
         "sequence": (approval.sequence or 0) + 100,
         "form_data": approval.form_data or "{}",
-        "deadline_at": datetime.utcnow() + timedelta(
+        "deadline_at": utc_now() + timedelta(
             hours=int(cfg.get("deadline_hours") or 24)
         ),
     })

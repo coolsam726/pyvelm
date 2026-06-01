@@ -17,7 +17,7 @@ CAPABILITIES = DialectCapabilities(
     supports_add_column_if_not_exists=False,
     supports_drop_schema=False,
     schema_reset=SchemaResetStrategy.DROP_ALL_TABLES,
-    placeholder="%s",
+    placeholder="?",  # pyodbc positional markers (adapter rewrites %s → ?)
 )
 
 PORTABLE_TYPE_MAP = {
@@ -55,6 +55,10 @@ def serial_primary_key() -> str:
 
 def fetch_lastrowid(conn: ConnectionAdapter, table: str) -> int:
     row = conn.execute("SELECT CAST(SCOPE_IDENTITY() AS INTEGER)").fetchone()
+    if row and row[0] is not None:
+        return int(row[0])
+    # Fallback for edge cases where SCOPE_IDENTITY() returns NULL.
+    row = conn.execute(f'SELECT MAX("id") FROM "{table}"').fetchone()
     return int(row[0]) if row and row[0] is not None else 0
 
 
@@ -71,7 +75,8 @@ def string_sql_type(*, primary_key: bool = False) -> str:
 
 
 def supports_create_table_if_not_exists() -> bool:
-    return True
+    # SQL Server has no CREATE TABLE IF NOT EXISTS; callers check table_exists.
+    return False
 
 
 def append_search_pagination(
@@ -99,6 +104,10 @@ def bind_params(params: tuple) -> tuple:
 
 def is_duplicate_column_error(msg: str) -> bool:
     return "duplicate column" in msg or "already an object named" in msg
+
+
+def is_missing_table_error(msg: str) -> bool:
+    return "42s02" in msg or "does not exist" in msg
 
 
 def before_reset_all_tables(conn: ConnectionAdapter) -> None:

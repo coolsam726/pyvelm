@@ -1,0 +1,14 @@
+"""Database seeders for the {{name}} module."""
+from pyvelm.seeding import Seeder
+
+
+class DatabaseSeeder(Seeder):
+    """Entry point — listed in ``seeders/__init__.py`` as ``SEEDERS``.
+
+    Runs on install, upgrade, and Sync. Search before insert so re-runs
+    are safe.
+    """
+
+    def run_instance(self, env, **context):
+        # self.call(env, ExampleSeeder)
+        pass

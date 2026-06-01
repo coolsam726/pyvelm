@@ -42,6 +42,7 @@ class AppsCatalogUpgradeTests(unittest.TestCase):
             catalog = _apps_catalog(env, [MagicMock()])
         entry = catalog[0]
         self.assertTrue(entry["version_upgrade"])
+        self.assertTrue(entry["pending_migrations"])
         self.assertTrue(entry["needs_upgrade"])
         self.assertEqual(entry["state"], "to_upgrade")
 
@@ -58,6 +59,7 @@ class AppsCatalogUpgradeTests(unittest.TestCase):
             catalog = _apps_catalog(env, [MagicMock()])
         entry = catalog[0]
         self.assertFalse(entry["version_upgrade"])
+        self.assertFalse(entry["pending_migrations"])
         self.assertTrue(entry["has_schema_diff"])
         self.assertTrue(entry["needs_upgrade"])
         self.assertEqual(entry["schema_diff_summary"], "1 new column(s)")
@@ -75,12 +77,13 @@ class AppsCatalogUpgradeTests(unittest.TestCase):
             catalog = _apps_catalog(env, [MagicMock()])
         entry = catalog[0]
         self.assertFalse(entry["needs_upgrade"])
+        self.assertFalse(entry["pending_migrations"])
         self.assertEqual(entry["state"], "installed")
 
 
 class AppsActionMessageTests(unittest.TestCase):
     def test_upgrade_and_sync_messages_differ(self):
-        spec = _spec("partners")
+        spec = _spec("partners", version=(0, 2, 0))
         env = MagicMock()
         env.registry = Registry()
         with (
@@ -96,6 +99,22 @@ class AppsActionMessageTests(unittest.TestCase):
             sync = sync_module_action(env, [], "partners")
         self.assertIn("Upgraded partners", up["message"])
         self.assertIn("Synced partners", sync["message"])
+
+    def test_upgrade_noop_when_no_pending_migrations(self):
+        spec = _spec("partners", version=(0, 1, 0))
+        env = MagicMock()
+        env.registry = Registry()
+        with (
+            patch("pyvelm.loader.discover", return_value={"partners": spec}),
+            patch("pyvelm.loader._installed_version", return_value=(0, 1, 0)),
+            patch("pyvelm.loader.reload_installed_models") as reload_models,
+            patch("pyvelm.loader.install") as install,
+        ):
+            result = upgrade_module_action(env, [], "partners")
+        self.assertEqual(result["upgraded"], [])
+        self.assertIn("no pending migrations", result["message"].lower())
+        reload_models.assert_not_called()
+        install.assert_not_called()
 
 
 if __name__ == "__main__":

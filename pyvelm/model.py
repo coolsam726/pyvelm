@@ -3,7 +3,8 @@ from __future__ import annotations
 from copy import copy
 from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
-from .domain import domain_to_sql
+from .database.sa_ddl import require_sa_connection
+from .domain_sa import domain_search_count_select, domain_search_select
 from .fields import Char, Field, Integer, Many2one, finalize_related_field
 from .registry import active_registry
 from .timestamps import (
@@ -12,6 +13,18 @@ from .timestamps import (
     is_system_timestamp_field,
     resolve_timestamps_enabled,
 )
+
+
+def _require_sa_connection(conn) -> Any:
+    """Return the underlying SQLAlchemy connection (required for DML)."""
+    return require_sa_connection(conn)
+
+
+def _conn_cap(conn) -> Any:
+    from .database import dialect_capabilities
+
+    cap = getattr(conn, "capabilities", None)
+    return cap or dialect_capabilities("postgresql")
 
 
 def _rec_name_field(cls) -> str | None:
@@ -324,41 +337,91 @@ class BaseModel(metaclass=MetaModel):
     # ------ DDL ------
 
     @classmethod
-    def _setup_table(cls, conn) -> None:
+    def _setup_table(cls, conn, registry=None) -> None:
         from .database import (
             _conn_capabilities,
             add_column_if_missing,
-            create_table_sql,
-            normalize_column_ddl,
+            is_duplicate_object_error,
             normalize_sql_type,
-            serial_primary_key,
             supports_create_table_if_not_exists,
             table_exists,
         )
+        from .database.sa_ddl import (
+            execute_create_table,
+            model_table_columns,
+            referenced_tables_from_columns,
+            table_from_columns,
+        )
 
+        reg = registry or active_registry()
+        if reg is None:
+            raise RuntimeError("Registry must be active during _setup_table")
         cap = _conn_capabilities(conn)
-        existed = table_exists(conn, cls._table, cap)
-        cols = [serial_primary_key(cap)]
-        for f in cls._fields.values():
-            if not f.is_stored or f.name == "id":
-                continue
-            cols.append(normalize_column_ddl(f.column_ddl(), cap))
-        if not existed or supports_create_table_if_not_exists(cap):
-            conn.execute(create_table_sql(cls._table, ", ".join(cols), cap))
-        if not existed:
+        had_table = table_exists(conn, cls._table, cap)
+        columns = model_table_columns(cls, reg, cap)
+        created_now = False
+        if not had_table or supports_create_table_if_not_exists(cap):
+            try:
+                tbl = table_from_columns(
+                    cls._table,
+                    columns,
+                    referenced_tables=referenced_tables_from_columns(columns),
+                    cap=cap,
+                )
+                execute_create_table(conn, tbl, cap=cap)
+                created_now = not had_table
+            except Exception as exc:
+                # Non-IF-NOT-EXISTS backends can race inspector/table checks.
+                if is_duplicate_object_error(exc):
+                    from .database.introspection import clear_reflection_cache
+
+                    clear_reflection_cache(conn)
+                    if not table_exists(conn, cls._table, cap):
+                        raise
+                    had_table = True
+                else:
+                    raise
+        if created_now:
+            from .database.introspection import clear_reflection_cache
+
+            clear_reflection_cache(conn)
+            return
+        from .database.introspection import clear_reflection_cache
+
+        clear_reflection_cache(conn)
+        if not table_exists(conn, cls._table, cap):
             return
         for f in cls._fields.values():
-            if not f.is_stored or f.name == "id":
+            if not f.is_stored or f.name == "id" or f.column == "id":
                 continue
             sql_type = normalize_sql_type(f.sql_type, cap)
-            add_column_if_missing(conn, cls._table, f.column, sql_type, cap)
+            add_column_if_missing(
+                conn,
+                cls._table,
+                f.column,
+                sql_type,
+                cap,
+                registry=reg,
+                field=f,
+            )
 
     @classmethod
     def _drop_table(cls, conn) -> None:
         from .database import _conn_capabilities
 
         cap = _conn_capabilities(conn)
-        cascade = "" if cap.name in ("sqlite", "mysql", "mssql", "oracle") else " CASCADE"
+        if cap.name == "oracle":
+            # PURGE so the table is truly gone instead of being parked in the
+            # recyclebin, where it later collides with a fresh CREATE TABLE.
+            try:
+                conn.execute(f'DROP TABLE "{cls._table}" PURGE')
+            except Exception as exc:
+                msg = str(getattr(exc, "orig", exc)).lower()
+                if "does not exist" in msg or "ora-00942" in msg:
+                    return
+                raise
+            return
+        cascade = "" if cap.name in ("sqlite", "mysql", "mssql") else " CASCADE"
         conn.execute(f'DROP TABLE IF EXISTS "{cls._table}"{cascade}')
 
     @classmethod
@@ -395,7 +458,8 @@ class BaseModel(metaclass=MetaModel):
     def _setup_relation_tables(cls, conn, registry, created: set[str]) -> None:
         """Create junction tables for Many2many fields. Symmetric pairs dedupe."""
         from .fields import Many2many
-        from .database import _conn_capabilities, create_table_sql, table_exists
+        from .database import _conn_capabilities, table_exists
+        from .database.sa_ddl import execute_create_table, m2m_relation_table
 
         cap = _conn_capabilities(conn)
         for f in cls._fields.values():
@@ -405,15 +469,13 @@ class BaseModel(metaclass=MetaModel):
             if relation in created:
                 continue
             target = registry[f.comodel_name]
-            ddl = (
-                f'"{col1}" integer NOT NULL REFERENCES "{this_table}"("id") ON DELETE CASCADE, '
-                f'"{col2}" integer NOT NULL REFERENCES "{target._table}"("id") ON DELETE CASCADE, '
-                f'PRIMARY KEY ("{col1}", "{col2}")'
-            )
             if table_exists(conn, relation, cap):
                 created.add(relation)
                 continue
-            conn.execute(create_table_sql(relation, ddl, cap))
+            tbl = m2m_relation_table(
+                relation, col1, col2, this_table, target._table, cap
+            )
+            execute_create_table(conn, tbl, cap=cap)
             created.add(relation)
 
     @classmethod
@@ -616,6 +678,98 @@ class BaseModel(metaclass=MetaModel):
                     fields=[field_name],
                 )
 
+    def _ids_with_m2o_pointing_to(
+        self, ref_cls: type, column: str, parent_ids: list[int]
+    ) -> list[int]:
+        if not parent_ids:
+            return []
+        from sqlalchemy import bindparam, select
+
+        from .database.sa_ddl import core_table
+
+        cap = _conn_cap(self.env.conn)
+        tbl = core_table(
+            ref_cls._table,
+            cap,
+            "id",
+            column,
+            registry=self.env.registry,
+            model_cls=ref_cls,
+        )
+        stmt = select(tbl.c.id).where(
+            tbl.c[column].in_(bindparam("ids", expanding=True))
+        )
+        rows = _require_sa_connection(self.env.conn).execute(
+            stmt, {"ids": list(parent_ids)}
+        ).fetchall()
+        return [int(r[0]) for r in rows]
+
+    def _cascade_unlink_m2o_referrers(self) -> None:
+        """Unlink CASCADE Many2one children before us (required on MSSQL)."""
+        cap = _conn_cap(self.env.conn)
+        if cap.name != "mssql":
+            return
+        referrers = self.env.registry._m2o_referrers_index.get(self._name, [])
+        if not referrers or not self._ids:
+            return
+        for ref_model, ref_fname, ondelete in referrers:
+            if ondelete != "CASCADE":
+                continue
+            ref_cls = self.env.registry[ref_model]
+            col = ref_cls._fields[ref_fname].column
+            child_ids = self._ids_with_m2o_pointing_to(
+                ref_cls, col, list(self._ids)
+            )
+            if child_ids:
+                self.env[ref_model].browse(child_ids).unlink()
+
+    def _set_null_m2o_referrers(self) -> None:
+        """Nullify SET NULL Many2one columns pointing at us (required on MSSQL)."""
+        cap = _conn_cap(self.env.conn)
+        if cap.name != "mssql":
+            return
+        referrers = self.env.registry._m2o_referrers_index.get(self._name, [])
+        if not referrers or not self._ids:
+            return
+        from sqlalchemy import bindparam, update
+
+        from .database.sa_ddl import core_table
+
+        sa_conn = _require_sa_connection(self.env.conn)
+        for ref_model, ref_fname, ondelete in referrers:
+            if ondelete != "SET NULL":
+                continue
+            ref_cls = self.env.registry[ref_model]
+            field = ref_cls._fields[ref_fname]
+            col = field.column
+            ref_ids = self._ids_with_m2o_pointing_to(
+                ref_cls, col, list(self._ids)
+            )
+            if not ref_ids:
+                continue
+            tbl = core_table(
+                ref_cls._table,
+                cap,
+                "id",
+                col,
+                registry=self.env.registry,
+                model_cls=ref_cls,
+            )
+            stmt = (
+                update(tbl)
+                .where(tbl.c[col].in_(bindparam("ids", expanding=True)))
+                .values({col: None})
+            )
+            sa_conn.execute(stmt, {"ids": list(self._ids)})
+            before = self.env[ref_model].browse(ref_ids)._snapshot_many2one_columns(
+                [ref_fname]
+            )
+            for rid in ref_ids:
+                self.env.cache.set(ref_model, rid, ref_fname, None)
+            self.env[ref_model].browse(ref_ids)._invalidate_relational_caches(
+                {ref_fname: None}, {}, before_m2o=before
+            )
+
     def _invalidate_m2o_referrers(self) -> None:
         """Drop stale Many2one (and related O2M) cache on rows pointing at us."""
         referrers = self.env.registry._m2o_referrers_index.get(self._name, [])
@@ -676,25 +830,29 @@ class BaseModel(metaclass=MetaModel):
 
     def _apply_m2m(self, parent_ids: list[int], m2m_vals: dict[str, Any]) -> None:
         """Replace junction-table rows for each (field, parent_id) pair."""
+        from sqlalchemy import bindparam, delete, insert
+
+        from .database.sa_ddl import core_table
+
+        sa_conn = _require_sa_connection(self.env.conn)
+        cap = _conn_cap(self.env.conn)
         for fname, value in m2m_vals.items():
             field = self._fields[fname]
             relation, col1, col2, _, _ = field.resolve_spec(
                 type(self), self.env.registry
             )
             target_ids = field.normalize_ids(value)
+            rel_tbl = core_table(relation, cap, col1, col2)
             for parent_id in parent_ids:
-                self.env.conn.execute(
-                    f'DELETE FROM "{relation}" WHERE "{col1}" = %s', [parent_id]
+                del_stmt = delete(rel_tbl).where(
+                    rel_tbl.c[col1] == bindparam("parent_id")
                 )
+                sa_conn.execute(del_stmt, {"parent_id": parent_id})
                 if not target_ids:
                     continue
-                values_sql = ",".join(["(%s, %s)"] * len(target_ids))
-                params: list[int] = []
-                for tid in target_ids:
-                    params.extend([parent_id, tid])
-                self.env.conn.execute(
-                    f'INSERT INTO "{relation}" ("{col1}", "{col2}") VALUES {values_sql}',
-                    params,
+                sa_conn.execute(
+                    insert(rel_tbl),
+                    [{col1: parent_id, col2: tid} for tid in target_ids],
                 )
 
     def create(self, vals: dict[str, Any]) -> "BaseModel":
@@ -720,30 +878,39 @@ class BaseModel(metaclass=MetaModel):
             if field.default is None:
                 continue
             column_vals[fname] = field.default
-        cols, params = [], []
+        from .database import fetch_lastrowid
+        from .database.sa_ddl import core_table
+
+        cap = _conn_cap(self.env.conn)
+        sa_conn = _require_sa_connection(self.env.conn)
+        from sqlalchemy import bindparam, insert
+
+        sql_cols: dict[str, Any] = {}
         for fname, value in column_vals.items():
             field = self._fields[fname]
-            cols.append(f'"{field.column}"')
-            params.append(field.to_sql_param(value))
-        cap = getattr(self.env.conn, "capabilities", None)
-        if cap is None:
-            from .database import dialect_capabilities, fetch_lastrowid, returning_id_clause
-            cap = dialect_capabilities("postgresql")
+            sql_cols[field.column] = field.to_sql_param(value)
+        col_names = tuple(dict.fromkeys((*sql_cols.keys(), "id")))
+        tbl = core_table(
+            self._table,
+            cap,
+            *col_names,
+            registry=self.env.registry,
+            model_cls=self.__class__,
+        )
+        stmt = insert(tbl)
+        if sql_cols:
+            stmt = stmt.values({col_name: bindparam(col_name) for col_name in sql_cols})
+        if cap.supports_returning and cap.name != "oracle":
+            stmt = stmt.returning(tbl.c.id)
+            res = sa_conn.execute(stmt, sql_cols)
+            new_id = int(res.scalar_one())
         else:
-            from .database import fetch_lastrowid, returning_id_clause
-        ret = returning_id_clause(cap)
-        if cols:
-            sql = (
-                f'INSERT INTO "{self._table}" ({", ".join(cols)}) '
-                f'VALUES ({", ".join(["%s"] * len(cols))}){ret}'
-            )
-        else:
-            sql = f'INSERT INTO "{self._table}" DEFAULT VALUES{ret}'
-        cur = self.env.conn.execute(sql, params)
-        if ret:
-            new_id = cur.fetchone()[0]
-        else:
-            new_id = fetch_lastrowid(self.env.conn, self._table)
+            res = sa_conn.execute(stmt, sql_cols)
+            inserted = getattr(res, "inserted_primary_key", None)
+            if inserted and inserted[0] is not None:
+                new_id = int(inserted[0])
+            else:
+                new_id = fetch_lastrowid(self.env.conn, self._table)
         # Seed cache with the normalized (SQL-shape) value, so Many2one
         # caches the int FK, not whatever the user passed in.
         for fname, value in column_vals.items():
@@ -816,14 +983,29 @@ class BaseModel(metaclass=MetaModel):
         if related_vals:
             self._apply_related_vals(related_vals)
         if column_vals:
-            assigns = ", ".join(f'"{self._fields[f].column}" = %s' for f in column_vals)
-            params = [self._fields[f].to_sql_param(v) for f, v in column_vals.items()]
-            placeholders = ",".join(["%s"] * len(self._ids))
-            sql = (
-                f'UPDATE "{self._table}" SET {assigns} '
-                f'WHERE "id" IN ({placeholders})'
+            from sqlalchemy import bindparam, update
+
+            from .database.sa_ddl import core_table
+
+            cap = _conn_cap(self.env.conn)
+            sa_conn = _require_sa_connection(self.env.conn)
+            sql_cols: dict[str, Any] = {}
+            for fname, value in column_vals.items():
+                field = self._fields[fname]
+                sql_cols[field.column] = field.to_sql_param(value)
+            tbl = core_table(
+                self._table,
+                cap,
+                *tuple(dict.fromkeys(("id", *sql_cols.keys()))),
+                registry=self.env.registry,
+                model_cls=self.__class__,
             )
-            self.env.conn.execute(sql, params + list(self._ids))
+            stmt = (
+                update(tbl)
+                .where(tbl.c.id.in_(bindparam("ids", expanding=True)))
+                .values({col_name: bindparam(col_name) for col_name in sql_cols})
+            )
+            sa_conn.execute(stmt, {**sql_cols, "ids": list(self._ids)})
             for rid in self._ids:
                 for fname, value in column_vals.items():
                     self.env.cache.set(
@@ -855,14 +1037,30 @@ class BaseModel(metaclass=MetaModel):
         if not self._ids:
             return
         self.env.check_access(self._name, "unlink")
+        self._cascade_unlink_m2o_referrers()
+        self._set_null_m2o_referrers()
         self._invalidate_before_unlink()
         self._invalidate_m2o_referrers()
         # Fire on_unlink automation rules before the records are deleted.
         from .automation import AutomationEngine
         AutomationEngine.fire(self.env, self._name, "on_unlink", self)
-        placeholders = ",".join(["%s"] * len(self._ids))
-        sql = f'DELETE FROM "{self._table}" WHERE "id" IN ({placeholders})'
-        self.env.conn.execute(sql, list(self._ids))
+        from sqlalchemy import bindparam, delete
+
+        from .database.sa_ddl import core_table
+
+        cap = _conn_cap(self.env.conn)
+        sa_conn = _require_sa_connection(self.env.conn)
+        tbl = core_table(
+            self._table,
+            cap,
+            "id",
+            registry=self.env.registry,
+            model_cls=self.__class__,
+        )
+        stmt = delete(tbl).where(
+            tbl.c.id.in_(bindparam("ids", expanding=True))
+        )
+        sa_conn.execute(stmt, {"ids": list(self._ids)})
         self.env.cache.invalidate(model_name=self._name, ids=list(self._ids))
 
     # ------ READ ------
@@ -882,18 +1080,39 @@ class BaseModel(metaclass=MetaModel):
         ]
         if not missing_ids:
             return
+        if self.env.conn is None:
+            return
+        from .database.sa_ddl import core_table
+
+        cap = _conn_cap(self.env.conn)
+        sa_conn = _require_sa_connection(self.env.conn)
         # Select by column, but cache under attr name.
-        select_cols = ['"id"'] + [f'"{self._fields[f].column}"' for f in fields]
-        placeholders = ",".join(["%s"] * len(missing_ids))
-        sql = (
-            f'SELECT {", ".join(select_cols)} FROM "{self._table}" '
-            f'WHERE "id" IN ({placeholders})'
+        from sqlalchemy import bindparam, select
+
+        seen_cols: list[str] = []
+        col_index: dict[str, int] = {}
+        for col in ("id",) + tuple(self._fields[f].column for f in fields):
+            if col not in col_index:
+                col_index[col] = len(seen_cols)
+                seen_cols.append(col)
+        tbl = core_table(
+            self._table,
+            cap,
+            *seen_cols,
+            registry=self.env.registry,
+            model_cls=self.__class__,
         )
-        rows = self.env.conn.execute(sql, missing_ids).fetchall()
+        stmt = select(*(tbl.c[c] for c in seen_cols)).where(
+            tbl.c.id.in_(bindparam("ids", expanding=True))
+        )
+        rows = sa_conn.execute(stmt, {"ids": missing_ids}).fetchall()
         for row in rows:
-            rid = row[0]
-            for i, fname in enumerate(fields, start=1):
-                self.env.cache.set(self._name, rid, fname, row[i])
+            rid = row[col_index["id"]]
+            for fname in fields:
+                col = self._fields[fname].column
+                self.env.cache.set(
+                    self._name, rid, fname, row[col_index[col]]
+                )
 
     def read(self, fields: list[str] | None = None) -> list[dict[str, Any]]:
         # Default: stored fields only. Non-stored (One2many, future computes)
@@ -925,6 +1144,23 @@ class BaseModel(metaclass=MetaModel):
 
     # ------ SEARCH ------
 
+    def _collect_search_domain(
+        self, domain: list[tuple] | None
+    ) -> list[tuple]:
+        """Merge caller domain with record rules and company scope."""
+        self.env.check_access(self._name, "read")
+        full_domain = list(domain or [])
+        rule_leaves = self.env.collect_record_rules(self._name, "read")
+        if rule_leaves:
+            full_domain.extend(rule_leaves)
+        if (
+            not self.env._acl_bypass
+            and self.env.company_id is not None
+            and getattr(self.__class__, "_company_scoped", False)
+        ):
+            full_domain.append(("company_id", "=", self.env.company_id))
+        return full_domain
+
     def search(
         self,
         domain: list[tuple] | None = None,
@@ -932,71 +1168,40 @@ class BaseModel(metaclass=MetaModel):
         offset: int = 0,
         order: str | None = None,
     ) -> "BaseModel":
-        self.env.check_access(self._name, "read")
-        # AND every applicable ir.rule's domain into the user's view.
-        full_domain = list(domain or [])
-        rule_leaves = self.env.collect_record_rules(self._name, "read")
-        if rule_leaves:
-            full_domain.extend(rule_leaves)
-        # Auto-inject company scope when env.company_id is set and the
-        # model opted in via `_company_scoped`. Applies to everyone
-        # (including superuser) so the company switcher demos
-        # consistently — to see every record across companies, use
-        # `env.with_company(None)` explicitly. The ACL-bypass path
-        # always skips so installer/migration code can see the world.
-        if (
-            not self.env._acl_bypass
-            and self.env.company_id is not None
-            and getattr(self.__class__, "_company_scoped", False)
-        ):
-            full_domain.append(("company_id", "=", self.env.company_id))
-        where, params, joins = domain_to_sql(
-            full_domain,
-            self.__class__,
-            self.env.registry,
-            capabilities=getattr(self.env.conn, "capabilities", None),
-        )
-        base = f'"{self._table}"'
-        sql = f'SELECT {base}."id" FROM {base}{joins} WHERE {where}'
-        if order:
-            sql += f" ORDER BY {order}"
-        from .database import _conn_capabilities, append_search_pagination
+        from .database import _conn_capabilities
 
+        full_domain = self._collect_search_domain(domain)
         cap = getattr(self.env.conn, "capabilities", None) or _conn_capabilities(
             self.env.conn
         )
-        sql = append_search_pagination(
-            sql,
-            base_table_sql=base,
+        stmt = domain_search_select(
+            self.__class__,
+            full_domain,
+            self.env.registry,
+            capabilities=cap,
+            order=order,
             limit=limit,
             offset=offset,
-            order=order,
-            cap=cap,
         )
-        rows = self.env.conn.execute(sql, params).fetchall()
-        return self.__class__(self.env, tuple(r[0] for r in rows))
+        sa_conn = _require_sa_connection(self.env.conn)
+        rows = sa_conn.execute(stmt).fetchall()
+        return self.__class__(self.env, tuple(int(r[0]) for r in rows))
 
     def search_count(self, domain: list[tuple] | None = None) -> int:
-        self.env.check_access(self._name, "read")
-        full_domain = list(domain or [])
-        rule_leaves = self.env.collect_record_rules(self._name, "read")
-        if rule_leaves:
-            full_domain.extend(rule_leaves)
-        if (
-            not self.env._acl_bypass
-            and self.env.company_id is not None
-            and getattr(self.__class__, "_company_scoped", False)
-        ):
-            full_domain.append(("company_id", "=", self.env.company_id))
-        where, params, joins = domain_to_sql(
-            full_domain,
-            self.__class__,
-            self.env.registry,
-            capabilities=getattr(self.env.conn, "capabilities", None),
+        from .database import _conn_capabilities
+
+        full_domain = self._collect_search_domain(domain)
+        cap = getattr(self.env.conn, "capabilities", None) or _conn_capabilities(
+            self.env.conn
         )
-        base = f'"{self._table}"'
-        sql = f'SELECT COUNT(*) FROM {base}{joins} WHERE {where}'
-        return self.env.conn.execute(sql, params).fetchone()[0]
+        stmt = domain_search_count_select(
+            self.__class__,
+            full_domain,
+            self.env.registry,
+            capabilities=cap,
+        )
+        sa_conn = _require_sa_connection(self.env.conn)
+        return int(sa_conn.execute(stmt).scalar_one())
 
     # ---- aggregated reads (read_group) ------------------------------
     #
@@ -1043,17 +1248,7 @@ class BaseModel(metaclass=MetaModel):
     ) -> list[dict[str, Any]]:
         from .fields import Date, Datetime, Float, Integer, Many2one
 
-        self.env.check_access(self._name, "read")
-        full_domain = list(domain or [])
-        rule_leaves = self.env.collect_record_rules(self._name, "read")
-        if rule_leaves:
-            full_domain.extend(rule_leaves)
-        if (
-            not self.env._acl_bypass
-            and self.env.company_id is not None
-            and getattr(self.__class__, "_company_scoped", False)
-        ):
-            full_domain.append(("company_id", "=", self.env.company_id))
+        full_domain = self._collect_search_domain(domain)
 
         if isinstance(groupby, str):
             groupby = [groupby] if groupby else []
@@ -1063,13 +1258,22 @@ class BaseModel(metaclass=MetaModel):
             measures = [measures]
         measures = list(measures or [])
 
+        from sqlalchemy import func
+        from sqlalchemy.sql.expression import literal_column
+
+        from .database import _conn_capabilities
+        from .domain_sa import domain_grouped_select
+
         cls = self.__class__
-        base = f'"{self._table}"'
         _VALID_TRUNCS = ("day", "week", "month", "quarter", "year")
         _VALID_AGGS = ("sum", "avg", "min", "max", "count")
 
-        select_parts: list[str] = []
-        group_sql_parts: list[str] = []
+        cap = getattr(self.env.conn, "capabilities", None) or _conn_capabilities(
+            self.env.conn
+        )
+
+        select_cols: list = []
+        group_by_cols: list = []
         # group_keys: list of (output_key, field_name, trunc_or_None,
         #                     is_m2o, comodel_name_or_None)
         group_keys: list[tuple[str, str, str | None, bool, str | None]] = []
@@ -1087,7 +1291,7 @@ class BaseModel(metaclass=MetaModel):
                 raise ValueError(
                     f"read_group: cannot group by non-stored field {fname!r}"
                 )
-            col_sql = f'{base}."{field.column}"'
+            col_expr = literal_column(f'"{cls._table}"."{field.column}"')
             if trunc:
                 if not isinstance(field, (Date, Datetime)):
                     raise ValueError(
@@ -1099,17 +1303,21 @@ class BaseModel(metaclass=MetaModel):
                         f"read_group: bad trunc {trunc!r}, "
                         f"expected one of {_VALID_TRUNCS}"
                     )
-                expr = f"date_trunc('{trunc}', {col_sql})"
-                # The output key is the original spec so callers can
-                # round-trip it (and the front-end can index by it).
+                if cap.name == "postgresql":
+                    expr = func.date_trunc(trunc, col_expr)
+                else:
+                    expr = literal_column(
+                        f"date_trunc('{trunc}', \"{cls._table}\"."
+                        f'"{field.column}")'
+                    )
                 alias = f"g_{len(group_keys)}"
-                select_parts.append(f'{expr} AS "{alias}"')
-                group_sql_parts.append(expr)
+                select_cols.append(expr.label(alias))
+                group_by_cols.append(expr)
                 group_keys.append((spec, fname, trunc, False, None))
             else:
                 alias = f"g_{len(group_keys)}"
-                select_parts.append(f'{col_sql} AS "{alias}"')
-                group_sql_parts.append(col_sql)
+                select_cols.append(col_expr.label(alias))
+                group_by_cols.append(col_expr)
                 is_m2o = isinstance(field, Many2one)
                 comodel = field.comodel_name if is_m2o else None
                 group_keys.append((spec, fname, None, is_m2o, comodel))
@@ -1122,7 +1330,7 @@ class BaseModel(metaclass=MetaModel):
                 if seen_count:
                     continue
                 seen_count = True
-                select_parts.append('COUNT(*) AS "__count"')
+                select_cols.append(func.count().label("__count"))
                 measure_keys.append(("__count", "count_star", None))
                 continue
             if ":" in spec:
@@ -1147,52 +1355,33 @@ class BaseModel(metaclass=MetaModel):
                 )
             out_key = f"{mfield}:{agg}"
             alias = f"m_{len(measure_keys)}"
-            col = f'{base}."{mf.column}"'
-            select_parts.append(f'{agg.upper()}({col}) AS "{alias}"')
+            col_expr = literal_column(f'"{cls._table}"."{mf.column}"')
+            agg_func = getattr(func, agg)
+            select_cols.append(agg_func(col_expr).label(alias))
             measure_keys.append((out_key, agg, mfield))
         if not seen_count:
             # `__count` is always present so consumers can rely on it
             # without conditional logic — matches Odoo's read_group.
-            select_parts.append('COUNT(*) AS "__count"')
+            select_cols.append(func.count().label("__count"))
             measure_keys.append(("__count", "count_star", None))
 
-        where, params, joins = domain_to_sql(
-            full_domain,
+        stmt = domain_grouped_select(
             cls,
+            full_domain,
             self.env.registry,
-            capabilities=getattr(self.env.conn, "capabilities", None),
-        )
-        sql = (
-            f"SELECT {', '.join(select_parts)} "
-            f"FROM {base}{joins} WHERE {where}"
-        )
-        if group_sql_parts:
-            sql += " GROUP BY " + ", ".join(group_sql_parts)
-        if order:
-            sql += f" ORDER BY {order}"
-        elif group_sql_parts:
-            # Default: stable order on the group keys themselves.
-            sql += " ORDER BY " + ", ".join(group_sql_parts)
-        from .database import _conn_capabilities, append_search_pagination
-
-        cap = getattr(self.env.conn, "capabilities", None) or _conn_capabilities(
-            self.env.conn
-        )
-        sql = append_search_pagination(
-            sql,
-            base_table_sql=base,
+            select_cols,
+            group_by_cols or None,
+            capabilities=cap,
+            order=order,
             limit=limit,
             offset=offset,
-            order=order,
-            cap=cap,
         )
-
-        cur = self.env.conn.execute(sql, params)
+        sa_conn = _require_sa_connection(self.env.conn)
+        raw_rows = sa_conn.execute(stmt).fetchall()
         # We aliased every output column and unpack by position below
         # — group columns first, then measures — so the SELECT order
         # is the contract. ``cur.description`` isn't consulted to
         # stay resilient if the driver ever exposes extra metadata.
-        raw_rows = cur.fetchall()
         rows: list[dict[str, Any]] = []
         # Indexes into col_names — group columns first, then measures,
         # then the trailing __count if present.

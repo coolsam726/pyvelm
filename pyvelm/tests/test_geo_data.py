@@ -77,10 +77,46 @@ class GeoInstallHookTests(unittest.TestCase):
 
         env = MagicMock()
         with patch.object(geo_hooks, "_grant_acl") as grant:
-            with patch.object(geo_hooks, "seed_reference_data") as seed:
-                geo_hooks.install(env)
+            geo_hooks.install(env)
         grant.assert_called_once_with(env)
-        seed.assert_not_called()
+
+    def test_seed_reference_data_uses_geography_seeder(self):
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        from pyvelm import BUILTIN_MODULE_ROOTS
+
+        root = str(BUILTIN_MODULE_ROOTS[0])
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        from geo_data import hooks as geo_hooks  # noqa: E402
+        from geo_data.seeders import GeographyDatabaseSeeder  # noqa: E402
+
+        env = MagicMock()
+        counts = {"continents": 1, "countries": 2, "states": 3, "cities": 4}
+        with patch.object(
+            GeographyDatabaseSeeder, "run", return_value=counts
+        ) as run:
+            out = geo_hooks.seed_reference_data(env)
+        run.assert_called_once_with(
+            env, force=True, patch_existing=True, geo_seed_level="full"
+        )
+        self.assertEqual(out, counts)
+
+    def test_manifest_discovers_geography_seeder_from_package(self):
+        from pathlib import Path
+
+        from pyvelm import BUILTIN_MODULE_ROOTS
+        from pyvelm.loader import _read_manifest
+
+        root = BUILTIN_MODULE_ROOTS[0]
+        spec = _read_manifest(Path(root) / "geo_data")
+        self.assertIsNotNone(spec)
+        assert spec is not None
+        self.assertEqual(
+            spec.seeders,
+            ["geo_data.seeders.geography:GeographyDatabaseSeeder"],
+        )
 
 
 if __name__ == "__main__":

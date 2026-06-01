@@ -116,7 +116,7 @@ class Registry:
         #   4. Validate One2many inverses and Many2many comodels now that
         #      everything is in scope.
         for cls in self._models.values():
-            cls._setup_table(conn)
+            cls._setup_table(conn, registry=self)
         for cls in self._models.values():
             cls._setup_foreign_keys(conn, self)
         created_rels: set[str] = set()

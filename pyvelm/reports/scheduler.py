@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+from pyvelm.timestamps import utc_now
 
 from .export_xlsx import export_csv, export_xlsx
 from .export_pdf import export_pdf
@@ -87,7 +89,7 @@ run_scheduled_report(env, report)
         "action_id": action,
         "interval_number": 1,
         "interval_type": "days",
-        "nextcall": datetime.utcnow() + timedelta(minutes=1),
+        "nextcall": utc_now() + timedelta(minutes=1),
         "active": True,
     })
     report_rec.write({"cron_id": cron})

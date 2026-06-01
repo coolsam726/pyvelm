@@ -54,7 +54,7 @@ class QuoteAndSummaryTests(unittest.TestCase):
 
     def test_summary_mixed(self):
         diff = Diff(
-            new_tables=[("t", "CREATE TABLE t")],
+            new_tables=[("t", ['"id" INTEGER PRIMARY KEY'])],
             new_columns=[("t", "c", "ALTER", True, "text")],
             alterations=[SchemaAlteration("t", "c", "type", "text→int")],
             orphan_columns=[("t", "old")],
@@ -72,17 +72,16 @@ class RenderMigrationTests(unittest.TestCase):
         self.assertIn("nothing to do", body)
 
     def test_render_new_table_and_columns(self):
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import primary_key_column
+        from pyvelm.fields import Char
+
+        cap = dialect_capabilities("postgresql")
+        code_f = Char(required=True)
+        code_f.column = "code"
         diff = Diff(
-            new_tables=[("res_partner", 'CREATE TABLE "res_partner" ()')],
-            new_columns=[
-                (
-                    "res_partner",
-                    "code",
-                    'ALTER TABLE "res_partner" ADD COLUMN "code" text',
-                    True,
-                    "text",
-                )
-            ],
+            new_tables=[("res_partner", [primary_key_column(cap)])],
+            new_columns=[("res_partner", "code", code_f, True, "text")],
             alterations=[
                 SchemaAlteration("res_partner", "code", "set_not_null", "required"),
                 SchemaAlteration("res_partner", "name", "drop_not_null", "optional"),
@@ -91,10 +90,10 @@ class RenderMigrationTests(unittest.TestCase):
             orphan_columns=[("res_partner", "legacy")],
         )
         body = render_migration(diff, (0, 1, 0), (0, 2, 0))
-        self.assertIn("CREATE TABLE", body)
-        self.assertIn("ADD COLUMN", body)
-        self.assertIn("SET NOT NULL", body)
-        self.assertIn("DROP NOT NULL", body)
+        self.assertIn("schema.create", body)
+        self.assertIn("schema.table", body)
+        self.assertIn("drop_nullable", body)
+        self.assertIn("allow_null", body)
         self.assertIn("orphan", body.lower())
 
 
@@ -126,7 +125,7 @@ class TypeHelperTests(unittest.TestCase):
 
     def test_field_type_spec(self):
         f = Char()
-        self.assertEqual(_field_type_spec(f), "text")
+        self.assertEqual(_field_type_spec(f), "varchar(255)")
 
 
 class ComputeDiffNewTableTests(unittest.TestCase):
@@ -186,9 +185,9 @@ class ApplySchemaDiffDropNotNullTests(unittest.TestCase):
 
     def test_count_null_rows(self):
         env = _mock_env([], _partner_cls(required=True))
-        env.conn.execute = MagicMock(
-            return_value=MagicMock(fetchone=MagicMock(return_value=(3,)))
-        )
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        wire_sa_conn(env.conn, env._executed, null_scalar=3)
         self.assertEqual(count_null_rows(env, "res_partner", "code"), 3)
 
     def test_set_not_null_skipped_when_nulls_exist(self):

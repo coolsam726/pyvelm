@@ -15,6 +15,9 @@ from pyvelm.tests.support.db import (
 
 def pytest_configure(config) -> None:
     load_testing_env()
+    # Full geo seed (~5k states + ~6k cities) is for manual/production use;
+    # tests only need continents + countries for model wiring.
+    os.environ.setdefault("PYVELM_GEO_SEED_LEVEL", "countries")
     for key in ("PYVELM_DSN_TEST", "PYVELM_DSN"):
         raw = os.environ.get(key)
         if raw:

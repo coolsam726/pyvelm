@@ -1,13 +1,12 @@
-"""Add `Partner.code` and backfill from name + id.
+"""Add Partner.code; backfill via partners.hooks sync."""
 
-Idempotent backfill lives in ``partners.hooks:sync`` (``SYNC_HOOK``) so
-Apps Sync and ``db migrate`` at the same version still fill NULLs before
-``SET NOT NULL``. This migration runs once on version bump only.
-"""
+from pyvelm.migrations import Schema, Table
 
 
-def migrate(env):
-    env.conn.execute(
-        'ALTER TABLE "res_partner" ADD COLUMN IF NOT EXISTS "code" text'
-    )
-    # Backfill: partners.hooks.sync (SYNC_HOOK)
+def upgrade(env):
+    schema = Schema(env)
+
+    def _alter(t: Table) -> None:
+        t.string("code", nullable=True)
+
+    schema.table("res_partner", _alter)

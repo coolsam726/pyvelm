@@ -55,7 +55,7 @@ def timestamp_sql_type() -> str:
 
 
 def now_sql() -> str:
-    return "CURRENT_TIMESTAMP"
+    return "SYSTIMESTAMP"
 
 
 def string_sql_type(*, primary_key: bool = False) -> str:
@@ -93,9 +93,36 @@ def is_duplicate_column_error(msg: str) -> bool:
     return "already exists" in msg or "name is already used" in msg
 
 
+def is_missing_table_error(msg: str) -> bool:
+    return "ora-00942" in msg or "does not exist" in msg
+
+
 def before_reset_all_tables(conn: ConnectionAdapter) -> None:
     return None
 
 
 def after_reset_all_tables(conn: ConnectionAdapter) -> None:
     return None
+
+
+def reset_all_tables(conn: ConnectionAdapter) -> None:
+    """Authoritatively wipe every object the connecting user owns.
+
+    The generic reset enumerates tables through the SQLAlchemy inspector, but
+    on Oracle that is unreliable: ``get_table_names()`` hides recyclebin
+    entries, and a plain ``DROP TABLE`` (Oracle's default) only *renames* the
+    table into the recyclebin instead of removing it. Leftover objects then
+    resurface as ``ORA-00955: name is already used`` on the next CREATE.
+
+    Query ``user_tables`` directly (the authoritative live-table view), drop
+    each with ``CASCADE CONSTRAINTS PURGE`` so foreign keys and the recyclebin
+    can't get in the way, then ``PURGE RECYCLEBIN`` to clear anything an older
+    non-purging drop left behind.
+    """
+    from ..sa_ddl import execute_sql
+
+    rows = execute_sql(conn, "SELECT table_name FROM user_tables").fetchall()
+    for row in rows:
+        table_name = row[0]
+        execute_sql(conn, f'DROP TABLE "{table_name}" CASCADE CONSTRAINTS PURGE')
+    execute_sql(conn, "PURGE RECYCLEBIN")

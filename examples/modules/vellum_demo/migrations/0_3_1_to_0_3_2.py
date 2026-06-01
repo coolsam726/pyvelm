@@ -1,17 +1,18 @@
-"""Add ``created_at`` / ``updated_at`` to Vellum demo tables."""
+"""Add created_at / updated_at to Vellum demo tables."""
+
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
-def migrate(env):
+def upgrade(env):
+    schema = Schema(env)
+
+    def _timestamps(t: Table) -> None:
+        t.timestamp("created_at", nullable=True)
+        t.timestamp("updated_at", nullable=True)
+
     for table in (
         "vellum_demo_note",
         "vellum_demo_comment",
         "vellum_demo_soft_note",
     ):
-        env.conn.execute(
-            f'ALTER TABLE "{table}" '
-            f'ADD COLUMN IF NOT EXISTS "created_at" timestamp'
-        )
-        env.conn.execute(
-            f'ALTER TABLE "{table}" '
-            f'ADD COLUMN IF NOT EXISTS "updated_at" timestamp'
-        )
+        schema.table(table, _timestamps)

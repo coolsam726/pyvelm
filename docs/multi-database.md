@@ -49,7 +49,7 @@ All CLI commands (`pyvelm migrate`, `pyvelm serve`, cron) read the same variable
 |---------|--------|------|-------------|
 | **PostgreSQL** | **v1.0** | Production reference | Bundled module migrations; full feature set |
 | **SQLite** | **v1.0** | Dev, CI, embedded demos | Single process; no multi-worker production |
-| **MySQL / MariaDB** | **v1.1** | Common OSS hosting | Greenfield install + autogen; Postgres migrations skipped |
+| **MySQL / MariaDB** | **v1.1** | Common OSS hosting | Greenfield install + autogen; CI **`test-mysql`** + **`test-mariadb`** |
 | **Microsoft SQL Server** | **v1.2 (in progress)** | Windows / Azure SQL | Greenfield + autogen; `pyodbc` optional extra; OFFSET/FETCH pagination |
 | **Oracle** | **v1.3 target** | Enterprise | Greenfield + autogen; `oracledb` optional extra; identity columns |
 
@@ -61,6 +61,7 @@ All CLI commands (`pyvelm migrate`, `pyvelm serve`, cron) read the same variable
 ### MySQL / MariaDB
 
 - Use `mysql+pymysql://` or `mariadb+pymysql://` (PyMySQL driver, bundled in pyvelm).
+- CI runs **`test-mysql`** (MySQL 8) and **`test-mariadb`** (MariaDB 11).
 - Quoted identifiers require `ANSI_QUOTES` — set automatically on connect.
 - Bundled Postgres-only `migrations/*.py` are skipped; use greenfield install +
   model-driven `apply_schema_diff`.
@@ -69,6 +70,9 @@ All CLI commands (`pyvelm migrate`, `pyvelm serve`, cron) read the same variable
 ### Microsoft SQL Server
 
 - Use `mssql+pyodbc://` (install `pip install pyvelm[mssql]` and [ODBC Driver 18](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)).
+- `CREATE TABLE IF NOT EXISTS` is not used — tables are created only when absent.
+- Parameter placeholders use `?` (pyodbc); the connection adapter rewrites portable `%s` SQL.
+- `ALTER TABLE` uses `ADD col type` (not `ADD COLUMN`) for new columns on upgrade.
 - `QUOTED_IDENTIFIER ON` is set on connect (double-quoted identifiers match other backends).
 - Pagination uses `OFFSET … ROWS FETCH NEXT … ROWS ONLY` (SQL Server 2012+).
 - Insert IDs use `SCOPE_IDENTITY()` (no `RETURNING` dependency).
@@ -82,7 +86,7 @@ All CLI commands (`pyvelm migrate`, `pyvelm serve`, cron) read the same variable
 - `CREATE TABLE IF NOT EXISTS` is not used — tables are created only when absent.
 - Bundled Postgres-only `migrations/*.py` are skipped; greenfield install +
   model-driven `apply_schema_diff`.
-- CI coverage is planned as a **nightly** job (heavy container startup).
+- CI runs **`test-oracle`** (``gvenzl/oracle-free`` service; slower startup than other matrix jobs).
 
 ### SQLite
 

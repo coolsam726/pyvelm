@@ -118,10 +118,12 @@ def run_report(
     check_definition_access(env, defn)
     secured = _secured_definition(defn, env)
 
+    from ..model import _require_sa_connection
+
     t0 = time.perf_counter()
     compiled = compile_report(secured, env.registry, params, limit=limit, offset=offset)
-    cur = env.conn.execute(compiled.sql, compiled.params)
-    raw_rows = cur.fetchall()
+    sa_conn = _require_sa_connection(env.conn)
+    raw_rows = sa_conn.execute(compiled.stmt).fetchall()
     duration_ms = int((time.perf_counter() - t0) * 1000)
 
     rows: list[dict[str, Any]] = []

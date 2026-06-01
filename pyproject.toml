@@ -107,8 +107,11 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
+where = ["."]
 include = ["pyvelm*"]
 exclude = ["examples*", "tests*"]
+# Ensures subpackages like pyvelm.migrations are always part of the wheel/editable install.
+namespaces = false
 
 [tool.setuptools.package-data]
 pyvelm = [
@@ -132,6 +135,15 @@ pyvelm = [
     "scaffolds/**/*",
     "scaffolds/snippets/**/*",
 ]
+
+[tool.pyright]
+include = ["pyvelm", "examples", "pyvelm/tests"]
+extraPaths = ["."]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+stubPath = ".pyvelm/typing"
 
 [tool.pytest.ini_options]
 testpaths = ["pyvelm/tests"]

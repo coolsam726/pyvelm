@@ -1,62 +1,46 @@
-"""Add Stage 6 tables: ir_actions_server, base_automation,
-ir_cron, mail_message.
+"""Add Stage 6 tables: ir_actions_server, base_automation, ir_cron, mail_message."""
 
-All use CREATE TABLE IF NOT EXISTS so this is safe to run on a
-fresh install (where the model's _setup_table already ran) as well
-as on a real 0.4.x -> 0.5.0 upgrade.
-"""
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
-def migrate(env):
-    conn = env.conn
+def upgrade(env):
+    schema = Schema(env)
 
-    # ---- ir.actions.server ----
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS "ir_actions_server" (
-            "id" SERIAL PRIMARY KEY,
-            "name" text NOT NULL,
-            "model" text NOT NULL,
-            "action_type" text NOT NULL,
-            "vals_json" text,
-            "code" text
-        )
-    ''')
+    def _actions_server(t: Table) -> None:
+        t.string("name", nullable=False)
+        t.string("model", nullable=False)
+        t.string("action_type", nullable=False)
+        t.text("vals_json")
+        t.text("code")
 
-    # ---- base.automation ----
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS "base_automation" (
-            "id" SERIAL PRIMARY KEY,
-            "name" text NOT NULL,
-            "model" text NOT NULL,
-            "trigger" text NOT NULL,
-            "action_id" integer REFERENCES "ir_actions_server"("id") ON DELETE CASCADE,
-            "active" boolean
-        )
-    ''')
+    schema.create("ir_actions_server", _actions_server)
 
-    # ---- ir.cron ----
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS "ir_cron" (
-            "id" SERIAL PRIMARY KEY,
-            "name" text NOT NULL,
-            "action_id" integer REFERENCES "ir_actions_server"("id") ON DELETE CASCADE,
-            "interval_number" integer,
-            "interval_type" text,
-            "nextcall" timestamp,
-            "active" boolean
-        )
-    ''')
+    def _automation(t: Table) -> None:
+        t.string("name", nullable=False)
+        t.string("model", nullable=False)
+        t.string("trigger", nullable=False)
+        t.foreign_id("action_id", "ir_actions_server", ondelete="CASCADE")
+        t.boolean("active")
 
-    # ---- mail.message ----
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS "mail_message" (
-            "id" SERIAL PRIMARY KEY,
-            "model" text,
-            "res_id" integer,
-            "author_id" integer REFERENCES "res_users"("id") ON DELETE SET NULL,
-            "body" text,
-            "message_type" text,
-            "subtype" text,
-            "date" timestamp
-        )
-    ''')
+    schema.create("base_automation", _automation)
+
+    def _cron(t: Table) -> None:
+        t.string("name", nullable=False)
+        t.foreign_id("action_id", "ir_actions_server", ondelete="CASCADE")
+        t.integer("interval_number")
+        t.string("interval_type")
+        t.timestamp("nextcall")
+        t.boolean("active")
+
+    schema.create("ir_cron", _cron)
+
+    def _mail_message(t: Table) -> None:
+        t.string("model")
+        t.integer("res_id")
+        t.foreign_id("author_id", "res_users", ondelete="SET NULL", nullable=True)
+        t.text("body")
+        t.string("message_type")
+        t.string("subtype")
+        t.timestamp("date")
+
+    schema.create("mail_message", _mail_message)

@@ -1,33 +1,23 @@
-"""Migration 0.5.0 → 0.6.0: add multi-company support.
+"""Add multi-company support: res_company and company_id FKs."""
 
-Creates the res_company table and adds company_id columns to
-res_users and res_partner. All DDL uses IF NOT EXISTS / ADD COLUMN IF
-NOT EXISTS so running on a fresh install is noise-free.
-"""
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
-def migrate(env):
-    conn = env.conn
+def upgrade(env):
+    schema = Schema(env)
 
-    # ---- res.company ----
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS "res_company" (
-            "id"     SERIAL PRIMARY KEY,
-            "name"   text NOT NULL,
-            "active" boolean
-        )
-    ''')
+    def _company(t: Table) -> None:
+        t.string("name", nullable=False)
+        t.boolean("active", nullable=True)
 
-    # ---- company_id FK on res_users ----
-    conn.execute('''
-        ALTER TABLE "res_users"
-        ADD COLUMN IF NOT EXISTS "company_id"
-            integer REFERENCES "res_company"("id") ON DELETE SET NULL
-    ''')
+    schema.create("res_company", _company)
 
-    # ---- company_id FK on res_partner ----
-    conn.execute('''
-        ALTER TABLE "res_partner"
-        ADD COLUMN IF NOT EXISTS "company_id"
-            integer REFERENCES "res_company"("id") ON DELETE SET NULL
-    ''')
+    def _users(t: Table) -> None:
+        t.foreign_id("company_id", "res_company", ondelete="SET NULL", nullable=True)
+
+    schema.table("res_users", _users)
+
+    def _partner(t: Table) -> None:
+        t.foreign_id("company_id", "res_company", ondelete="SET NULL", nullable=True)
+
+    schema.table("res_partner", _partner)

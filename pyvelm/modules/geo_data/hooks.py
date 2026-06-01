@@ -1,39 +1,19 @@
-"""Install hook and on-demand seed for geo_data.
+"""Install hook and geography seed entry points for geo_data.
 
-Data sources (``seed_reference_data`` only)
---------------------------------------------
-- ``geonamescache.GeonamesCache`` — continents (7), countries (252 with
-  continent / ISO3 / phone / currency / capital / population), cities
-  (≈32k, filtered down to capitals + population ≥ 100,000).
-- ``pycountry.subdivisions`` — ISO 3166-2 subdivisions (≈5,000),
-  linked to the country by ISO alpha-2.
-
-Both packages are optional dependencies. The seed action imports them
-lazily and surfaces a clear ``pip install pyvelm[geo]`` error when
-either is missing.
-
-Install creates tables and ACLs only — use **Seed geography data** on the
-Countries list (or ``POST /web/geo-data/seed``) to load reference rows.
-
-Idempotency
------------
-``seed_reference_data`` is safe to re-run: existing rows are matched on
-their natural keys and only missing ones are inserted.
+Reference data is loaded by :class:`geo_data.seeders.GeographyDatabaseSeeder`
+(registered in ``seeders/__init__.py``). The loader runs it on install,
+upgrade, and Sync when ``pyvelm[geo]`` is installed. Use **Seed geography
+data** on the Countries list or ``POST /web/geo-data/seed`` to force a run.
 """
 from __future__ import annotations
 
 import logging
 
-from pyvelm.geo_utils import flag_emoji as _flag_emoji
-from pyvelm.geo_utils import require_geo_packages as _require_packages
-
 log = logging.getLogger("pyvelm.geo_data")
-
-_CITY_POPULATION_THRESHOLD = 100_000
 
 
 def install(env):
-    """Schema is handled by the loader; grant ACLs only (no bulk seed)."""
+    """Grant ACLs. Geography rows are seeded via ``SEEDERS`` in the manifest."""
     _grant_acl(env)
 
 
@@ -43,30 +23,14 @@ def seed_reference_data(env) -> dict[str, int]:
     Returns counts ``{continents, countries, states, cities}`` inserted
     on this run (existing rows are skipped or patched).
     """
-    _require_packages()
-    import geonamescache
-    import pycountry
+    from geo_data.seeders.geography import GeographyDatabaseSeeder
 
-    gc = geonamescache.GeonamesCache()
-    counts = {"continents": 0, "countries": 0, "states": 0, "cities": 0}
-
-    before = len(env["res.continent"].search([]))
-    continents = _seed_continents(env, gc)
-    counts["continents"] = len(env["res.continent"].search([])) - before
-
-    before = len(env["res.country"].search([]))
-    countries = _seed_countries(env, gc, continents)
-    counts["countries"] = len(env["res.country"].search([])) - before
-
-    before = len(env["res.country.state"].search([]))
-    states = _seed_states(env, pycountry, countries)
-    counts["states"] = len(env["res.country.state"].search([])) - before
-
-    before = len(env["res.city"].search([]))
-    _seed_cities(env, gc, countries, states)
-    counts["cities"] = len(env["res.city"].search([])) - before
-
-    return counts
+    result = GeographyDatabaseSeeder.run(
+        env, force=True, patch_existing=True, geo_seed_level="full"
+    )
+    if result is None:
+        return {"continents": 0, "countries": 0, "states": 0, "cities": 0}
+    return result
 
 
 def _grant_acl(env) -> None:
@@ -107,148 +71,3 @@ def _grant_acl(env) -> None:
         _grant(admin, model, write=True)
         if user:
             _grant(user, model, write=False)
-
-
-def _seed_continents(env, gc) -> dict[str, int]:
-    """Insert any continent not yet present; return ``{code: id}``."""
-    Continent = env["res.continent"]
-    existing = {c.code: c.id for c in Continent.search([])}
-    inserted = 0
-    for code, payload in gc.get_continents().items():
-        if code in existing:
-            continue
-        rec = Continent.create({"name": payload.get("name") or code, "code": code})
-        existing[code] = rec.id
-        inserted += 1
-    if inserted:
-        log.info("geo_data: inserted %d continents", inserted)
-    return existing
-
-
-def _seed_countries(env, gc, continents: dict[str, int]) -> dict[str, int]:
-    """Insert / patch countries; return ``{iso_alpha2: id}``."""
-    Country = env["res.country"]
-    existing_by_code: dict[str, int] = {}
-    for c in Country.search([]):
-        if c.code:
-            existing_by_code[c.code.upper()] = c.id
-    inserted = 0
-    patched = 0
-    out: dict[str, int] = {}
-    for iso2, payload in gc.get_countries().items():
-        vals = {
-            "name": payload.get("name") or iso2,
-            "code": iso2,
-            "iso3": payload.get("iso3") or None,
-            "phone_code": payload.get("phone") or None,
-            "currency_code": payload.get("currencycode") or None,
-            "capital": payload.get("capital") or None,
-            "population": int(payload.get("population") or 0) or None,
-            "flag_emoji": _flag_emoji(iso2) or None,
-            "continent_id": continents.get(payload.get("continentcode") or "")
-            or None,
-        }
-        if iso2 in existing_by_code:
-            # Patch existing rows so re-seeds pick up upstream fixes.
-            rec = Country.browse(existing_by_code[iso2])
-            rec.write({k: v for k, v in vals.items() if v is not None})
-            out[iso2] = rec.id
-            patched += 1
-            continue
-        rec = Country.create(vals)
-        out[iso2] = rec.id
-        inserted += 1
-    if inserted or patched:
-        log.info(
-            "geo_data: countries — %d inserted, %d patched", inserted, patched
-        )
-    return out
-
-
-def _seed_states(env, pycountry, countries: dict[str, int]) -> dict[str, int]:
-    """Insert any ISO 3166-2 subdivision not yet present.
-
-    Returns ``{(country_iso2, admin1_code): state_id}`` so the city
-    seeder can resolve ``admin1code`` to the right state.
-    """
-    State = env["res.country.state"]
-    existing = {s.code: s.id for s in State.search([])}
-    inserted = 0
-    by_country_admin1: dict[tuple[str, str], int] = {}
-    for sub in pycountry.subdivisions:
-        iso2 = (sub.country_code or "").upper()
-        country_id = countries.get(iso2)
-        if not country_id:
-            continue
-        code = sub.code  # "US-CA"
-        short_code = code.split("-", 1)[-1] if "-" in code else code
-        if code in existing:
-            by_country_admin1[(iso2, short_code)] = existing[code]
-            continue
-        rec = State.create(
-            {
-                "name": sub.name,
-                "code": code,
-                "short_code": short_code,
-                "type": getattr(sub, "type", None) or None,
-                "country_id": country_id,
-            }
-        )
-        existing[code] = rec.id
-        by_country_admin1[(iso2, short_code)] = rec.id
-        inserted += 1
-    if inserted:
-        log.info("geo_data: inserted %d states/subdivisions", inserted)
-    return by_country_admin1
-
-
-def _seed_cities(env, gc, countries: dict[str, int], states: dict[tuple[str, str], int]) -> None:
-    """Seed capitals + cities with population ≥ 100k."""
-    City = env["res.city"]
-
-    capitals_by_iso2: dict[str, str] = {
-        iso2: (payload.get("capital") or "").strip().lower()
-        for iso2, payload in gc.get_countries().items()
-        if payload.get("capital")
-    }
-
-    existing_geoname_ids = {
-        c.geoname_id for c in City.search([]) if c.geoname_id
-    }
-    inserted = 0
-    cities = gc.get_cities()
-    for gid, payload in cities.items():
-        gid_int = int(gid) if not isinstance(gid, int) else gid
-        if gid_int in existing_geoname_ids:
-            continue
-        iso2 = (payload.get("countrycode") or "").upper()
-        country_id = countries.get(iso2)
-        if not country_id:
-            continue
-        name = payload.get("name") or ""
-        population = int(payload.get("population") or 0)
-        is_capital = (
-            name.strip().lower() == capitals_by_iso2.get(iso2, "")
-            if capitals_by_iso2.get(iso2)
-            else False
-        )
-        if population < _CITY_POPULATION_THRESHOLD and not is_capital:
-            continue
-        admin1 = (payload.get("admin1code") or "").upper()
-        state_id = states.get((iso2, admin1)) if admin1 else None
-        City.create(
-            {
-                "name": name,
-                "country_id": country_id,
-                "state_id": state_id,
-                "latitude": float(payload.get("latitude") or 0.0),
-                "longitude": float(payload.get("longitude") or 0.0),
-                "population": population or None,
-                "timezone": payload.get("timezone") or None,
-                "geoname_id": gid_int,
-                "is_capital": is_capital,
-            }
-        )
-        inserted += 1
-    if inserted:
-        log.info("geo_data: inserted %d cities", inserted)

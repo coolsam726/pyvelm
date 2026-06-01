@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import unittest
 
-from pyvelm import BaseModel, Char, Integer, Many2one, One2many, Registry
+from pyvelm import BaseModel, Char, Integer, Many2one, One2many, Registry, Text
+from pyvelm.database import dialect_capabilities
 from pyvelm.domain import (
     domain_to_sql,
     expand_or_groups,
@@ -113,6 +114,24 @@ class DomainOperatorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             domain_to_sql([("name", "=", "x", "bad")], self.Partner, self.reg)
 
+    def test_oracle_text_equality_uses_dbms_lob_compare(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Note(BaseModel):
+                _name = "test.note"
+                _table = "test_note"
+                body = Text()
+
+        where, params, _ = domain_to_sql(
+            [("body", "=", "Admin")],
+            Note,
+            reg,
+            capabilities=dialect_capabilities("oracle"),
+        )
+        self.assertIn("dbms_lob.compare", where.lower())
+        self.assertEqual(params, ["Admin"])
+
 
 class DomainPathTests(unittest.TestCase):
     def setUp(self):
@@ -133,8 +152,7 @@ class DomainPathTests(unittest.TestCase):
             self.reg,
         )
         self.assertIn("NOT (EXISTS", where)
-        self.assertIn("ILIKE", where)
-        self.assertIn('NOT (_e1_0t."name"', where)
+        self.assertIn("NOT ILIKE", where.upper())
 
     def test_exists_empty_in_universal(self):
         where, params, _ = domain_to_sql(

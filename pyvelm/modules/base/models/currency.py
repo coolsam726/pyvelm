@@ -29,6 +29,7 @@ from xml.etree import ElementTree as ET
 from pyvelm import (
     BaseModel, Boolean, Char, Datetime, Float, Many2one, One2many, depends,
 )
+from pyvelm.timestamps import utc_now
 
 log = logging.getLogger("pyvelm.currency")
 
@@ -88,7 +89,7 @@ class Currency(BaseModel):
         """
         self.ensure_one()
         if date is None:
-            date = datetime.utcnow()
+            date = utc_now()
         Rate = self.env["res.currency.rate"]
         rates = Rate.search(
             [

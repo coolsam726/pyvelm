@@ -79,6 +79,7 @@ class DialectCapabilitiesTests(unittest.TestCase):
         cap = dialect_capabilities("mssql")
         self.assertFalse(cap.supports_ilike)
         self.assertFalse(cap.supports_returning)
+        self.assertEqual(cap.placeholder, "?")
         self.assertIn("IDENTITY", serial_primary_key(cap))
 
     def test_mssql_dsn_normalisation(self):
@@ -123,8 +124,26 @@ class DialectCapabilitiesTests(unittest.TestCase):
         from pyvelm.database import ir_module_create_sql
 
         sql = ir_module_create_sql(dialect_capabilities("mysql"))
-        self.assertIn('"name" VARCHAR(255) PRIMARY KEY', sql)
+        self.assertIn("VARCHAR(255)", sql)
+        self.assertIn("PRIMARY KEY", sql)
+        self.assertIn("name", sql)
         self.assertNotIn("text PRIMARY KEY", sql)
+
+    def test_ir_module_create_sql_mssql_no_if_not_exists(self):
+        from pyvelm.database import ir_module_create_sql
+
+        sql = ir_module_create_sql(dialect_capabilities("mssql"))
+        self.assertIn("CREATE TABLE", sql)
+        self.assertIn("ir_module", sql)
+        self.assertNotIn("IF NOT EXISTS", sql)
+
+    def test_ir_module_create_sql_oracle_quotes_columns(self):
+        from pyvelm.database import ir_module_create_sql
+
+        sql = ir_module_create_sql(dialect_capabilities("oracle"))
+        self.assertIn('"name"', sql)
+        self.assertIn('"version"', sql)
+        self.assertIn('"installed_at"', sql)
 
 
 class SqliteDatabaseTests(unittest.TestCase):
@@ -147,6 +166,97 @@ class SqliteDatabaseTests(unittest.TestCase):
         cap = dialect_capabilities("sqlite")
         self.assertIn("AUTOINCREMENT", serial_primary_key(cap))
 
+    def test_field_to_column_postgres_omits_inline_foreign_key(self):
+        from pyvelm.database.sa_ddl import dialect_capabilities, field_to_column
+        from pyvelm.fields import Many2one
+
+        company = type("Company", (), {"_table": "res_company"})()
+        reg = mock.MagicMock()
+        reg.__getitem__ = lambda _s, _n: company
+        field = Many2one("res.company", ondelete="SET NULL")
+        field.column = "company_id"
+        col = field_to_column(field, reg, dialect_capabilities("postgresql"))
+        self.assertFalse(col.foreign_keys)
+
+    def test_sort_models_for_table_setup_orders_fk_targets_first(self):
+        from pyvelm.database.sa_ddl import sort_models_for_table_setup
+        from pyvelm.fields import Char, Many2one
+
+        class Company:
+            _name = "res.company"
+            _table = "res_company"
+            _fields = {"name": Char()}
+
+        class User:
+            _name = "res.users"
+            _table = "res_users"
+            _fields = {
+                "name": Char(),
+                "company_id": Many2one("res.company", ondelete="SET NULL"),
+            }
+
+        reg = mock.MagicMock()
+        reg.__getitem__ = lambda _s, n: {"res.company": Company, "res.users": User}[n]
+        ordered = sort_models_for_table_setup([User, Company], reg)
+        self.assertEqual([m._name for m in ordered], ["res.company", "res.users"])
+
+    def test_sort_models_pulls_fk_targets_from_registry(self):
+        from pyvelm.database.sa_ddl import sort_models_for_table_setup
+        from pyvelm.fields import Char, Many2one
+
+        class Folder:
+            _name = "res.attachment.folder"
+            _table = "res_attachment_folder"
+            _fields = {"name": Char()}
+
+        class Attachment:
+            _name = "ir.attachment"
+            _table = "ir_attachment"
+            _fields = {
+                "name": Char(),
+                "folder_id": Many2one("res.attachment.folder", ondelete="SET NULL"),
+            }
+
+        models = {
+            "res.attachment.folder": Folder,
+            "ir.attachment": Attachment,
+        }
+        reg = mock.MagicMock()
+        reg.__contains__ = lambda _s, n: n in models
+        reg.__getitem__ = lambda _s, n: models[n]
+        ordered = sort_models_for_table_setup([Attachment], reg)
+        self.assertEqual(
+            [m._name for m in ordered],
+            ["res.attachment.folder", "ir.attachment"],
+        )
+
+    def test_sqlite_datetime_insert_no_deprecation_warning(self):
+        import warnings
+        from datetime import datetime
+
+        from sqlalchemy import create_engine, text
+
+        from pyvelm.database.dialects.sqlite import configure_engine
+
+        engine = create_engine("sqlite:///:memory:")
+        configure_engine(engine)
+        with engine.connect() as conn:
+            conn.execute(text('CREATE TABLE "t" ("d" timestamp)'))
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always", DeprecationWarning)
+                conn.execute(
+                    text('INSERT INTO "t" ("d") VALUES (:d)'),
+                    {"d": datetime(2024, 6, 1, 12, 30, 45)},
+                )
+                conn.commit()
+        adapter_warnings = [
+            w
+            for w in caught
+            if issubclass(w.category, DeprecationWarning)
+            and "datetime adapter" in str(w.message)
+        ]
+        self.assertEqual(adapter_warnings, [])
+
 
 @requires_backend("mysql")
 class MysqlDatabaseTests(unittest.TestCase):
@@ -161,6 +271,28 @@ class MysqlDatabaseTests(unittest.TestCase):
             conn.execute(
                 'CREATE TABLE IF NOT EXISTS "demo" ('
                 '"id" INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY, "name" text)'
+            )
+            conn.execute('INSERT INTO "demo" ("name") VALUES (%s)', ["alpha"])
+        with db.connect() as conn:
+            row = conn.execute('SELECT "name" FROM "demo" WHERE "id" = %s', [1]).fetchone()
+        db.dispose()
+        self.assertEqual(row, ("alpha",))
+
+
+@requires_backend("oracle")
+class OracleDatabaseTests(unittest.TestCase):
+    def test_autocommit_insert_visible_on_next_connection(self):
+        from pyvelm.tests.support.db import dsn_from_env, reset_database
+
+        dsn = dsn_from_env()
+        assert dsn is not None
+        reset_database(dsn)
+        db = create_database_from_dsn(dsn, pool_size=1)
+        with db.connect() as conn:
+            conn.execute(
+                'CREATE TABLE "demo" ('
+                '"id" INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, '
+                '"name" VARCHAR2(255))'
             )
             conn.execute('INSERT INTO "demo" ("name") VALUES (%s)', ["alpha"])
         with db.connect() as conn:

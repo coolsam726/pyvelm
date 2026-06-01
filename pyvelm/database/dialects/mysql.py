@@ -22,8 +22,8 @@ CAPABILITIES = DialectCapabilities(
 
 PORTABLE_TYPE_MAP = {
     "double precision": "DOUBLE",
-    "timestamptz": "DATETIME(6)",
-    "timestamp": "DATETIME(6)",
+    "timestamptz": "TIMESTAMP(6)",
+    "timestamp": "TIMESTAMP(6)",
     "boolean": "BOOLEAN",
     "SERIAL": "INTEGER",
 }
@@ -57,11 +57,11 @@ def fetch_lastrowid(conn: ConnectionAdapter, table: str) -> int:
 
 
 def timestamp_sql_type() -> str:
-    return "DATETIME(6)"
+    return "TIMESTAMP(6)"
 
 
 def now_sql() -> str:
-    return "CURRENT_TIMESTAMP"
+    return "CURRENT_TIMESTAMP(6)"
 
 
 def string_sql_type(*, primary_key: bool = False) -> str:
@@ -96,8 +96,12 @@ def is_duplicate_column_error(msg: str) -> bool:
 
 
 def before_reset_all_tables(conn: ConnectionAdapter) -> None:
-    conn.execute("SET FOREIGN_KEY_CHECKS = 0")
+    from ..sa_ddl import execute_sql
+
+    execute_sql(conn, "SET FOREIGN_KEY_CHECKS = 0")
 
 
 def after_reset_all_tables(conn: ConnectionAdapter) -> None:
-    conn.execute("SET FOREIGN_KEY_CHECKS = 1")
+    from ..sa_ddl import execute_sql
+
+    execute_sql(conn, "SET FOREIGN_KEY_CHECKS = 1")

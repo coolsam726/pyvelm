@@ -1,10 +1,10 @@
-"""Migration 0.23.0 → 0.24.0 — **User** group and membership backfill."""
+"""User group and membership backfill."""
+
+from base import hooks
+from pyvelm.security import assign_user_group_to_active_users, ensure_user_group
 
 
-def migrate(env):
-    from base import hooks
-    from pyvelm.security import assign_user_group_to_active_users, ensure_user_group
-
+def upgrade(env):
     if "res.groups" in env.registry:
         ensure_user_group(env)
     assign_user_group_to_active_users(env)

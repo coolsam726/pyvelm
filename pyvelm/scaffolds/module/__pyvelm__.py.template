@@ -15,3 +15,5 @@ DATA: list[str] = []
 
 # Optional install hook — runs once on first install.
 # INSTALL_HOOK: str = "{{name}}.hooks:install"
+# Optional: override auto-discovery from seeders/__init__.py
+# SEEDERS: list[str] = ["{{name}}.seeders:DatabaseSeeder"]
