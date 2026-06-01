@@ -7,5 +7,9 @@ visible because ``False`` is the default).
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     return None

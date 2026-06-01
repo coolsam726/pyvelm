@@ -1,6 +1,10 @@
 """Migration 0.19.0 → 0.20.0 — white-label branding columns on ``res_company``."""
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     cols = [
         ("app_name", "text"),
@@ -13,6 +17,6 @@ def migrate(env):
         ("show_powered_by", "boolean DEFAULT true"),
     ]
     for name, ddl in cols:
-        env.conn.execute(
+        execute_migration_sql(env.conn, 
             f'ALTER TABLE "res_company" ADD COLUMN IF NOT EXISTS "{name}" {ddl}'
         )

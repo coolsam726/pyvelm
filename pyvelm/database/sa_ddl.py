@@ -263,10 +263,10 @@ def execute_sql(
     conn,
     sql: str,
     params: list | tuple | None = None,
-) -> None:
+):
     """Execute SQL via SQLAlchemy ``text()`` (requires SA connection)."""
     require_sa_connection(conn)
-    conn.execute(sql, params)
+    return conn.execute(sql, params)
 
 
 def count_null_rows(conn, table: str, column: str) -> int:

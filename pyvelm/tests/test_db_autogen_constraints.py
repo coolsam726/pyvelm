@@ -73,11 +73,16 @@ def _mock_env(rows, cls, *, null_check_returns=None, dialect_name: str = "postgr
             return _cursor([(1,)])
         return _cursor([])
 
-    conn.execute = execute
     null_scalar = int(null_check_returns[0][0]) if null_check_returns else 0
     from pyvelm.tests.support.sa_ddl import wire_sa_conn
 
-    wire_sa_conn(conn, executed, dialect_name=dialect_name, null_scalar=null_scalar)
+    wire_sa_conn(
+        conn,
+        executed,
+        dialect_name=dialect_name,
+        null_scalar=null_scalar,
+        base_execute=execute,
+    )
     env = MagicMock(registry=reg, conn=conn)
     env._executed = executed
     return env

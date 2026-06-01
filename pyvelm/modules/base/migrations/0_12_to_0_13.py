@@ -13,6 +13,10 @@ Idempotent: both rows are looked up by name before creating.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     from base import hooks
 

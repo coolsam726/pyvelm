@@ -12,8 +12,12 @@ Idempotent: every DDL uses `IF NOT EXISTS`.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'CREATE TABLE IF NOT EXISTS "ir_ui_menu" ('
         '"id" SERIAL PRIMARY KEY, '
         '"module" text NOT NULL, '
@@ -25,25 +29,25 @@ def migrate(env):
         '"icon" text, '
         '"active" boolean DEFAULT TRUE)'
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "ir_ui_menu" '
         'DROP CONSTRAINT IF EXISTS "ir_ui_menu_parent_id_fkey"'
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "ir_ui_menu" '
         'ADD CONSTRAINT "ir_ui_menu_parent_id_fkey" '
         'FOREIGN KEY ("parent_id") REFERENCES "ir_ui_menu"("id") '
         'ON DELETE CASCADE'
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "ir_ui_menu" '
         'ADD COLUMN IF NOT EXISTS "access_model" text'
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "ir_ui_menu" '
         'ADD COLUMN IF NOT EXISTS "access_perm" text'
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "ir_ui_menu" '
         'ADD COLUMN IF NOT EXISTS "access_policy" text'
     )

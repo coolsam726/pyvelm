@@ -12,8 +12,12 @@ No data backfill — every existing attachment stays valid in the new
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "ir_attachment" '
         'ADD COLUMN IF NOT EXISTS "folder_id" INTEGER NULL'
     )

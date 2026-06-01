@@ -53,6 +53,11 @@ from .env import (
     warn_if_poor_nuke_dsn,
 )
 from .introspection import column_exists, table_exists
+from .migration_sql import (
+    execute_migration_sql,
+    fetchall_migration,
+    fetchone_migration,
+)
 from .sa_ddl import compile_create_table, execute_create_table, execute_sql
 from .postgres_admin import (
     prepare_postgres_schema_drop,
@@ -91,7 +96,10 @@ __all__ = [
     "create_database_from_dsn",
     "create_table_sql",
     "execute_create_table",
+    "execute_migration_sql",
     "execute_sql",
+    "fetchall_migration",
+    "fetchone_migration",
     "delete_sqlite_file",
     "dialect_base_name",
     "dialect_capabilities",

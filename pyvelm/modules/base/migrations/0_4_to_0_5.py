@@ -7,11 +7,15 @@ as on a real 0.4.x -> 0.5.0 upgrade.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     conn = env.conn
 
     # ---- ir.actions.server ----
-    conn.execute('''
+    execute_migration_sql(conn, '''
         CREATE TABLE IF NOT EXISTS "ir_actions_server" (
             "id" SERIAL PRIMARY KEY,
             "name" text NOT NULL,
@@ -23,7 +27,7 @@ def migrate(env):
     ''')
 
     # ---- base.automation ----
-    conn.execute('''
+    execute_migration_sql(conn, '''
         CREATE TABLE IF NOT EXISTS "base_automation" (
             "id" SERIAL PRIMARY KEY,
             "name" text NOT NULL,
@@ -35,7 +39,7 @@ def migrate(env):
     ''')
 
     # ---- ir.cron ----
-    conn.execute('''
+    execute_migration_sql(conn, '''
         CREATE TABLE IF NOT EXISTS "ir_cron" (
             "id" SERIAL PRIMARY KEY,
             "name" text NOT NULL,
@@ -48,7 +52,7 @@ def migrate(env):
     ''')
 
     # ---- mail.message ----
-    conn.execute('''
+    execute_migration_sql(conn, '''
         CREATE TABLE IF NOT EXISTS "mail_message" (
             "id" SERIAL PRIMARY KEY,
             "model" text,

@@ -6,11 +6,15 @@ NOT EXISTS so running on a fresh install is noise-free.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     conn = env.conn
 
     # ---- res.company ----
-    conn.execute('''
+    execute_migration_sql(conn, '''
         CREATE TABLE IF NOT EXISTS "res_company" (
             "id"     SERIAL PRIMARY KEY,
             "name"   text NOT NULL,
@@ -19,14 +23,14 @@ def migrate(env):
     ''')
 
     # ---- company_id FK on res_users ----
-    conn.execute('''
+    execute_migration_sql(conn, '''
         ALTER TABLE "res_users"
         ADD COLUMN IF NOT EXISTS "company_id"
             integer REFERENCES "res_company"("id") ON DELETE SET NULL
     ''')
 
     # ---- company_id FK on res_partner ----
-    conn.execute('''
+    execute_migration_sql(conn, '''
         ALTER TABLE "res_partner"
         ADD COLUMN IF NOT EXISTS "company_id"
             integer REFERENCES "res_company"("id") ON DELETE SET NULL

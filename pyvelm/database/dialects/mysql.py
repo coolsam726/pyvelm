@@ -96,8 +96,12 @@ def is_duplicate_column_error(msg: str) -> bool:
 
 
 def before_reset_all_tables(conn: ConnectionAdapter) -> None:
-    conn.execute("SET FOREIGN_KEY_CHECKS = 0")
+    from ..sa_ddl import execute_sql
+
+    execute_sql(conn, "SET FOREIGN_KEY_CHECKS = 0")
 
 
 def after_reset_all_tables(conn: ConnectionAdapter) -> None:
-    conn.execute("SET FOREIGN_KEY_CHECKS = 1")
+    from ..sa_ddl import execute_sql
+
+    execute_sql(conn, "SET FOREIGN_KEY_CHECKS = 1")

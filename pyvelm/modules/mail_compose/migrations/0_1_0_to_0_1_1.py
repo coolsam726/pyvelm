@@ -9,8 +9,12 @@ collided with the constraint on launch.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "mail_compose_message" '
         'ALTER COLUMN "recipient_to" DROP NOT NULL'
     )

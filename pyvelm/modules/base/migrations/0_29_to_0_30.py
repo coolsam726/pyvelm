@@ -10,8 +10,12 @@ for system attachments like avatars / mail).
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "ir_attachment" '
         'ADD COLUMN IF NOT EXISTS "company_id" INTEGER NULL'
     )

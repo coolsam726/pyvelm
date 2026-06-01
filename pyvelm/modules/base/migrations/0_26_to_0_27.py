@@ -8,5 +8,9 @@ columns set to NULL (single-recipient send still works).
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     return None

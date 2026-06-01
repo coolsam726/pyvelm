@@ -6,12 +6,16 @@ nullable (extension views don't carry their own arch).
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute('ALTER TABLE "ir_ui_view" ALTER COLUMN "arch" DROP NOT NULL')
-    env.conn.execute('ALTER TABLE "ir_ui_view" ADD COLUMN IF NOT EXISTS "priority" integer NOT NULL DEFAULT 16')
-    env.conn.execute('ALTER TABLE "ir_ui_view" ADD COLUMN IF NOT EXISTS "inherit_id" integer')
-    env.conn.execute('ALTER TABLE "ir_ui_view" ADD COLUMN IF NOT EXISTS "operations" text')
-    env.conn.execute(
+    execute_migration_sql(env.conn, 'ALTER TABLE "ir_ui_view" ALTER COLUMN "arch" DROP NOT NULL')
+    execute_migration_sql(env.conn, 'ALTER TABLE "ir_ui_view" ADD COLUMN IF NOT EXISTS "priority" integer NOT NULL DEFAULT 16')
+    execute_migration_sql(env.conn, 'ALTER TABLE "ir_ui_view" ADD COLUMN IF NOT EXISTS "inherit_id" integer')
+    execute_migration_sql(env.conn, 'ALTER TABLE "ir_ui_view" ADD COLUMN IF NOT EXISTS "operations" text')
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "ir_ui_view" '
         'ADD CONSTRAINT "ir_ui_view_inherit_id_fkey" '
         'FOREIGN KEY ("inherit_id") REFERENCES "ir_ui_view"("id") '

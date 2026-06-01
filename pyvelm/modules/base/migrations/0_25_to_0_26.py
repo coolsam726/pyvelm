@@ -5,6 +5,10 @@ This backfills Admin ACL on existing databases.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     from pyvelm.security import grant_model_access
 

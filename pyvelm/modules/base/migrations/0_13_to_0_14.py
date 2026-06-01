@@ -10,8 +10,12 @@ until their next run.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "ir_cron" '
         'ADD COLUMN IF NOT EXISTS "lastcall" timestamp'
     )

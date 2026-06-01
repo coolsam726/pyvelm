@@ -298,45 +298,69 @@ class PdfModuleTests(unittest.TestCase):
 
 
 class HooksTests(unittest.TestCase):
-    def _conn(self, fetchone_side=None, fetchall_side=None):
-        conn = MagicMock()
-        if fetchone_side is not None:
-            conn.execute.return_value.fetchone.side_effect = fetchone_side
-        if fetchall_side is not None:
-            conn.execute.return_value.fetchall.return_value = fetchall_side
-        return conn
-
     def test_adopt_legacy_no_report_layout(self):
         env = MagicMock()
-        env.conn = self._conn(fetchone_side=[None])
-        dl_hooks._adopt_legacy_module(env)
-        env.conn.execute.assert_called_once()
+        with patch(
+            "document_layout.hooks.fetchone_migration",
+            return_value=None,
+        ) as fetchone:
+            dl_hooks._adopt_legacy_module(env)
+        fetchone.assert_called_once()
 
     def test_adopt_legacy_rename(self):
         env = MagicMock()
-        env.conn = self._conn(fetchone_side=[(1,), None])
-        dl_hooks._adopt_legacy_module(env)
-        self.assertEqual(env.conn.execute.call_count, 3)
+        with (
+            patch(
+                "document_layout.hooks.fetchone_migration",
+                side_effect=[(1,), None],
+            ),
+            patch(
+                "document_layout.hooks.execute_migration_sql",
+            ) as execute,
+        ):
+            dl_hooks._adopt_legacy_module(env)
+        self.assertEqual(execute.call_count, 1)
 
     def test_adopt_legacy_delete_duplicate(self):
         env = MagicMock()
-        env.conn = self._conn(fetchone_side=[(1,), (1,)])
-        dl_hooks._adopt_legacy_module(env)
-        env.conn.execute.assert_any_call(
-            'DELETE FROM "ir_module" WHERE "name" = %s', ("report_layout",),
+        with (
+            patch(
+                "document_layout.hooks.fetchone_migration",
+                side_effect=[(1,), (1,)],
+            ),
+            patch(
+                "document_layout.hooks.execute_migration_sql",
+            ) as execute,
+        ):
+            dl_hooks._adopt_legacy_module(env)
+        execute.assert_called_with(
+            env.conn,
+            'DELETE FROM "ir_module" WHERE "name" = %s',
+            ("report_layout",),
         )
 
     def test_migrate_both_columns(self):
         env = MagicMock()
-        env.conn = self._conn(fetchall_side=[("report_layout",), ("document_layout",)])
-        dl_hooks._migrate_company_field(env)
-        self.assertGreaterEqual(env.conn.execute.call_count, 2)
+        with (
+            patch("pyvelm.database.column_exists", side_effect=[True, True]),
+            patch(
+                "document_layout.hooks.execute_migration_sql",
+            ) as execute,
+        ):
+            dl_hooks._migrate_company_field(env)
+        self.assertGreaterEqual(execute.call_count, 2)
 
     def test_migrate_rename_only(self):
         env = MagicMock()
-        env.conn = self._conn(fetchall_side=[("report_layout",)])
-        dl_hooks._migrate_company_field(env)
-        env.conn.execute.assert_called_with(
+        with (
+            patch("pyvelm.database.column_exists", side_effect=[True, False]),
+            patch(
+                "document_layout.hooks.execute_migration_sql",
+            ) as execute,
+        ):
+            dl_hooks._migrate_company_field(env)
+        execute.assert_called_with(
+            env.conn,
             'ALTER TABLE "res_company" RENAME COLUMN "report_layout" TO "document_layout"',
         )
 

@@ -5,6 +5,10 @@ group names; fresh installs and sync get the same seeds from ``base.hooks``.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     from base import hooks
 

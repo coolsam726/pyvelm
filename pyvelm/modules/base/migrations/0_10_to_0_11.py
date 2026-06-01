@@ -9,27 +9,32 @@ Idempotent: ADD COLUMN IF NOT EXISTS, and the backfill only touches
 rows where currency_id is NULL.
 """
 
+from pyvelm.database import execute_migration_sql, fetchone_migration
+
 
 def migrate(env):
     conn = env.conn
 
-    conn.execute(
+    execute_migration_sql(
+        conn,
         'ALTER TABLE "res_company" '
         'ADD COLUMN IF NOT EXISTS "currency_id" '
-        'integer REFERENCES "res_currency"("id") ON DELETE SET NULL'
+        'integer REFERENCES "res_currency"("id") ON DELETE SET NULL',
     )
 
     # Backfill existing companies with USD if a USD row exists.
     # The 0_9_to_0_10 migration (or the install hook) seeds it, so
     # by the time this runs there should be one — but we defensively
     # tolerate the absence rather than crash mid-upgrade.
-    row = conn.execute(
+    row = fetchone_migration(
+        conn,
         'SELECT "id" FROM "res_currency" WHERE "code" = %s LIMIT 1',
         ("USD",),
-    ).fetchone()
+    )
     if row:
         usd_id = row[0]
-        conn.execute(
+        execute_migration_sql(
+            conn,
             'UPDATE "res_company" SET "currency_id" = %s '
             'WHERE "currency_id" IS NULL',
             (usd_id,),

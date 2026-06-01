@@ -1,5 +1,6 @@
-"""Install/sync hooks for document_layout."""
 from __future__ import annotations
+
+from pyvelm.database import execute_migration_sql, fetchone_migration
 
 
 def install(env):
@@ -15,18 +16,14 @@ def sync(env):
 
 def _adopt_legacy_module(env) -> None:
     """Rename ``ir_module`` row ``report_layout`` → ``document_layout`` when upgrading."""
-    cur = env.conn.execute(
-        'SELECT 1 FROM "ir_module" WHERE "name" = %s', ("report_layout",),
-    ).fetchone()
+    cur = fetchone_migration(env.conn, 'SELECT 1 FROM "ir_module" WHERE "name" = %s', ("report_layout",),)
     if not cur:
         return
-    newer = env.conn.execute(
-        'SELECT 1 FROM "ir_module" WHERE "name" = %s', ("document_layout",),
-    ).fetchone()
+    newer = fetchone_migration(env.conn, 'SELECT 1 FROM "ir_module" WHERE "name" = %s', ("document_layout",),)
     if newer:
-        env.conn.execute('DELETE FROM "ir_module" WHERE "name" = %s', ("report_layout",))
+        execute_migration_sql(env.conn, 'DELETE FROM "ir_module" WHERE "name" = %s', ("report_layout",))
     else:
-        env.conn.execute(
+        execute_migration_sql(env.conn, 
             'UPDATE "ir_module" SET "name" = %s WHERE "name" = %s',
             ("document_layout", "report_layout"),
         )
@@ -42,14 +39,14 @@ def _migrate_company_field(env) -> None:
         if column_exists(conn, "res_company", name):
             cols.add(name)
     if "report_layout" in cols and "document_layout" in cols:
-        conn.execute(
+        execute_migration_sql(conn, 
             'UPDATE "res_company" SET "document_layout" = "report_layout" '
             'WHERE ("document_layout" IS NULL OR "document_layout" = \'\') '
             'AND "report_layout" IS NOT NULL AND "report_layout" != \'\'',
         )
-        conn.execute('ALTER TABLE "res_company" DROP COLUMN IF EXISTS "report_layout"')
+        execute_migration_sql(conn, 'ALTER TABLE "res_company" DROP COLUMN IF EXISTS "report_layout"')
     elif "report_layout" in cols:
-        conn.execute(
+        execute_migration_sql(conn, 
             'ALTER TABLE "res_company" RENAME COLUMN "report_layout" TO "document_layout"',
         )
 

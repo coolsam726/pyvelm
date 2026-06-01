@@ -11,8 +11,12 @@ looks each currency up by ``code`` before creating.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'CREATE TABLE IF NOT EXISTS "res_currency" ('
         '"id" SERIAL PRIMARY KEY, '
         '"code" text NOT NULL, '
@@ -21,7 +25,7 @@ def migrate(env):
         '"rounding" double precision DEFAULT 0.01, '
         '"active" boolean DEFAULT TRUE)'
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'CREATE TABLE IF NOT EXISTS "res_currency_rate" ('
         '"id" SERIAL PRIMARY KEY, '
         '"currency_id" integer NOT NULL, '
@@ -30,11 +34,11 @@ def migrate(env):
     )
     # FK on the rate's currency_id — CASCADE so deleting a currency
     # also removes its rate history.
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "res_currency_rate" '
         'DROP CONSTRAINT IF EXISTS "res_currency_rate_currency_id_fkey"'
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "res_currency_rate" '
         'ADD CONSTRAINT "res_currency_rate_currency_id_fkey" '
         'FOREIGN KEY ("currency_id") REFERENCES "res_currency"("id") '

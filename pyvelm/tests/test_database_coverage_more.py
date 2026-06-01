@@ -194,12 +194,20 @@ class DialectHelperTests(unittest.TestCase):
         mssql.configure_engine(engine)
         # Listeners registered — no error means connect hook is wired.
         self.assertTrue(hasattr(engine, "dispatch"))
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
         conn = MagicMock()
+        executed: list[str] = []
+
+        wire_sa_conn(
+            conn,
+            executed,
+            base_execute=lambda sql, params=None: MagicMock(),
+        )
         mysql.before_reset_all_tables(conn)
         mysql.after_reset_all_tables(conn)
-        calls = [str(c.args[0]) for c in conn.execute.call_args_list]
-        self.assertIn("FOREIGN_KEY_CHECKS = 0", calls[0])
-        self.assertIn("FOREIGN_KEY_CHECKS = 1", calls[1])
+        self.assertIn("FOREIGN_KEY_CHECKS = 0", executed[0])
+        self.assertIn("FOREIGN_KEY_CHECKS = 1", executed[1])
 
     def test_mssql_before_reset_drops_fks(self):
         conn = MagicMock()
@@ -321,11 +329,14 @@ class DdlHelperTests(unittest.TestCase):
 
         conn = MagicMock()
         cap = dialect_caps("mysql")
-        wire_sa_conn(conn, [], dialect_name="mysql")
+
+        def base_execute(sql, params=None):
+            raise RuntimeError("duplicate column name")
+
+        wire_sa_conn(conn, [], dialect_name="mysql", base_execute=base_execute)
         with patch(
             "pyvelm.database.introspection.column_exists", return_value=False
         ):
-            conn.execute.side_effect = RuntimeError("duplicate column name")
             self.assertFalse(
                 add_column_if_missing(conn, "t", "c", "text", cap)
             )
@@ -573,12 +584,20 @@ class DdlRemainingGapsTests(unittest.TestCase):
         self.assertEqual(oracle_sql, 'ALTER TABLE "t" ADD "c" INTEGER')
 
     def test_reset_schema_drop_schema_path(self):
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
         conn = MagicMock()
+        executed: list[str] = []
+
+        wire_sa_conn(
+            conn,
+            executed,
+            base_execute=lambda sql, params=None: MagicMock(),
+        )
         cap = dialect_caps("postgresql")
         reset_schema(conn, cap)
-        calls = [str(c.args[0]) for c in conn.execute.call_args_list]
-        self.assertTrue(any("DROP SCHEMA" in s for s in calls))
-        self.assertTrue(any("CREATE SCHEMA" in s for s in calls))
+        self.assertTrue(any("DROP SCHEMA" in s for s in executed))
+        self.assertTrue(any("CREATE SCHEMA" in s for s in executed))
 
     def test_reset_schema_oracle_uses_user_tables_and_purges(self):
         """Oracle reset must not rely on the inspector (it hides recyclebin
@@ -594,9 +613,12 @@ class DdlRemainingGapsTests(unittest.TestCase):
                 r.fetchall.return_value = []
             return r
 
-        conn.execute.side_effect = execute
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        executed: list[str] = []
+        wire_sa_conn(conn, executed, dialect_name="oracle", base_execute=execute)
         reset_schema(conn, dialect_caps("oracle"))
-        calls = [c.args[0] for c in conn.execute.call_args_list]
+        calls = executed
         self.assertTrue(any("user_tables" in s.lower() for s in calls))
         self.assertIn(
             'DROP TABLE "base_automation" CASCADE CONSTRAINTS PURGE', calls

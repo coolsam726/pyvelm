@@ -10,8 +10,12 @@ timezone.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "res_company" '
         "ADD COLUMN IF NOT EXISTS \"timezone\" text DEFAULT 'UTC'"
     )

@@ -6,6 +6,10 @@ the same row from ``base.hooks:install``; this backfills existing DBs.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     from base import hooks
 

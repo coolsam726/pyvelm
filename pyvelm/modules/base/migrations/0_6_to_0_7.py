@@ -13,8 +13,12 @@ no-ops.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'DELETE FROM "ir_rule" WHERE "model" = %s AND "name" = %s',
         ["res.partner", "res.partner: company scope"],
     )

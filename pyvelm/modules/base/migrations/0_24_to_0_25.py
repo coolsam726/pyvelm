@@ -8,6 +8,10 @@ avatar fields. New uploads set the flag at upload time.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     from base import hooks
 

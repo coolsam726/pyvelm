@@ -10,12 +10,16 @@ name) is a no-op.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'UPDATE "ir_cron" SET "name" = %s WHERE "name" = %s',
         ("Currency Rate Sync from ECB", "ECB rate fetcher"),
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'UPDATE "ir_actions_server" SET "name" = %s WHERE "name" = %s',
         ("Currency Rate Sync from ECB", "ECB rate fetcher"),
     )

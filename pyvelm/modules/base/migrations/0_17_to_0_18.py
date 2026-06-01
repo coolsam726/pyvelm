@@ -10,8 +10,12 @@ Fresh installs pick the column up through ``_setup_table``'s
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "res_users" '
         'ADD COLUMN IF NOT EXISTS "avatar_url" text'
     )

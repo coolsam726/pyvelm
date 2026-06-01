@@ -1,6 +1,10 @@
 """Migration 0.23.0 → 0.24.0 — **User** group and membership backfill."""
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     from base import hooks
     from pyvelm.security import assign_user_group_to_active_users, ensure_user_group

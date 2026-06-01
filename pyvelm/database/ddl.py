@@ -151,10 +151,12 @@ def add_column_if_missing(
 
 def reset_schema(conn: ConnectionAdapter, cap: DialectCapabilities) -> None:
     """Backend-specific schema wipe for migrate:reset / migrate:fresh."""
+    from .sa_ddl import execute_sql
+
     if cap.schema_reset == SchemaResetStrategy.DROP_SCHEMA:
-        conn.execute("DROP SCHEMA IF EXISTS public CASCADE")
-        conn.execute("CREATE SCHEMA public")
-        conn.execute("GRANT ALL ON SCHEMA public TO public")
+        execute_sql(conn, "DROP SCHEMA IF EXISTS public CASCADE")
+        execute_sql(conn, "CREATE SCHEMA public")
+        execute_sql(conn, "GRANT ALL ON SCHEMA public TO public")
         return
 
     if cap.schema_reset == SchemaResetStrategy.DROP_ALL_TABLES:
@@ -176,9 +178,9 @@ def reset_schema(conn: ConnectionAdapter, cap: DialectCapabilities) -> None:
             tables = inspect(conn._sa.engine).get_table_names()
         for table in tables:
             if cap.name == "oracle":
-                conn.execute(f'DROP TABLE "{table}"')
+                execute_sql(conn, f'DROP TABLE "{table}"')
             else:
-                conn.execute(f'DROP TABLE IF EXISTS "{table}"')
+                execute_sql(conn, f'DROP TABLE IF EXISTS "{table}"')
         backend.after_reset_all_tables(conn)
         return
 

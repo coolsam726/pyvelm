@@ -15,21 +15,25 @@ the record up by name before creating.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     # ---- column additions -----------------------------------------
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "mail_message" '
         'ADD COLUMN IF NOT EXISTS "recipient_email" text'
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "mail_message" '
         'ADD COLUMN IF NOT EXISTS "subject" text'
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         "ALTER TABLE \"mail_message\" "
         "ADD COLUMN IF NOT EXISTS \"state\" text DEFAULT 'outgoing'"
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'ALTER TABLE "mail_message" '
         'ADD COLUMN IF NOT EXISTS "error" text'
     )

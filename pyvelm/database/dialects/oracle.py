@@ -115,8 +115,10 @@ def reset_all_tables(conn: ConnectionAdapter) -> None:
     can't get in the way, then ``PURGE RECYCLEBIN`` to clear anything an older
     non-purging drop left behind.
     """
-    rows = conn.execute("SELECT table_name FROM user_tables").fetchall()
+    from ..sa_ddl import execute_sql
+
+    rows = execute_sql(conn, "SELECT table_name FROM user_tables").fetchall()
     for row in rows:
         table_name = row[0]
-        conn.execute(f'DROP TABLE "{table_name}" CASCADE CONSTRAINTS PURGE')
-    conn.execute("PURGE RECYCLEBIN")
+        execute_sql(conn, f'DROP TABLE "{table_name}" CASCADE CONSTRAINTS PURGE')
+    execute_sql(conn, "PURGE RECYCLEBIN")

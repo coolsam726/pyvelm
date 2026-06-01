@@ -11,26 +11,30 @@ Idempotent:
   - drop the old column only after the copy succeeds
 """
 
+from pyvelm.database import execute_migration_sql, fetchone_migration
+
 
 def migrate(env):
     conn = env.conn
 
-    # Add the new column.
-    conn.execute(
+    execute_migration_sql(
+        conn,
         'ALTER TABLE "res_currency_rate" '
-        'ADD COLUMN IF NOT EXISTS "date" timestamp'
+        'ADD COLUMN IF NOT EXISTS "date" timestamp',
     )
 
-    # Did the old `name` column survive the previous version? Copy if so.
-    row = conn.execute(
+    row = fetchone_migration(
+        conn,
         "SELECT 1 FROM information_schema.columns "
-        "WHERE table_name = 'res_currency_rate' AND column_name = 'name'"
-    ).fetchone()
+        "WHERE table_name = 'res_currency_rate' AND column_name = 'name'",
+    )
     if row:
-        conn.execute(
+        execute_migration_sql(
+            conn,
             'UPDATE "res_currency_rate" '
-            'SET "date" = "name" WHERE "date" IS NULL'
+            'SET "date" = "name" WHERE "date" IS NULL',
         )
-        conn.execute(
-            'ALTER TABLE "res_currency_rate" DROP COLUMN IF EXISTS "name"'
+        execute_migration_sql(
+            conn,
+            'ALTER TABLE "res_currency_rate" DROP COLUMN IF EXISTS "name"',
         )

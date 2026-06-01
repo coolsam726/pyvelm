@@ -324,6 +324,9 @@ def render_migration(
     out.append('"""')
     out.append("")
     out.append("")
+    out.append("from pyvelm.database import execute_migration_sql")
+    out.append("")
+    out.append("")
     out.append("def migrate(env):")
     if diff.is_empty:
         out.append("    pass  # nothing to do")
@@ -335,14 +338,14 @@ def render_migration(
     mig_cap = dialect_capabilities("postgresql")
     for table, columns in diff.new_tables:
         ddl = create_table_sql(table, columns, mig_cap)
-        out.append(f"    env.conn.execute({_q(ddl)})")
+        out.append(f"    execute_migration_sql(env.conn, {_q(ddl)})")
     for table, col, field_obj, was_required, _sql_type in diff.new_columns:
         col_obj = field_obj.sa_column(
             type("_R", (), {"_models": {table: object}})(),
             mig_cap,
         )
         stmt = compile_add_column(table, col_obj, mig_cap)
-        out.append(f"    env.conn.execute({_q(stmt)})")
+        out.append(f"    execute_migration_sql(env.conn, {_q(stmt)})")
         if was_required:
             out.append(
                 f"    # TODO: required field — backfill {table}.{col} "
@@ -351,7 +354,7 @@ def render_migration(
             tighten = (
                 f'ALTER TABLE "{table}" ALTER COLUMN "{col}" SET NOT NULL'
             )
-            out.append(f"    # env.conn.execute({_q(tighten)})")
+            out.append(f"    # execute_migration_sql(env.conn, {_q(tighten)})")
     for alt in diff.alterations:
         out.append("")
         out.append(f"    # {alt.table}.{alt.column}: {alt.kind} — {alt.detail}")
@@ -360,13 +363,13 @@ def render_migration(
                 f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" '
                 f"SET NOT NULL"
             )
-            out.append(f"    # env.conn.execute({_q(stmt)})")
+            out.append(f"    # execute_migration_sql(env.conn, {_q(stmt)})")
         elif alt.kind == "drop_not_null":
             stmt = (
                 f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" '
                 f"DROP NOT NULL"
             )
-            out.append(f"    # env.conn.execute({_q(stmt)})")
+            out.append(f"    # execute_migration_sql(env.conn, {_q(stmt)})")
         elif alt.kind == "type":
             out.append(
                 f"    # e.g. ALTER TABLE \"{alt.table}\" ALTER COLUMN "

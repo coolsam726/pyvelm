@@ -14,8 +14,12 @@ this script.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'CREATE TABLE IF NOT EXISTS "ir_attachment" ('
         '"id" SERIAL PRIMARY KEY, '
         '"name" text NOT NULL, '
@@ -30,7 +34,7 @@ def migrate(env):
         '"datas" text'
         ")"
     )
-    env.conn.execute(
+    execute_migration_sql(env.conn, 
         'CREATE INDEX IF NOT EXISTS "ir_attachment_res_idx" '
         'ON "ir_attachment" ("res_model", "res_id")'
     )

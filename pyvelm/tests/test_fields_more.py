@@ -64,6 +64,7 @@ def _env(reg: Registry) -> Environment:
     conn = MagicMock()
     conn.dialect_name = "postgresql"
     conn.capabilities = dialect_capabilities("postgresql")
+    conn.execute.return_value.fetchall.return_value = []
     wire_sa_conn(conn, [], dialect_name="postgresql")
     return Environment(conn, registry=reg, uid=1)
 

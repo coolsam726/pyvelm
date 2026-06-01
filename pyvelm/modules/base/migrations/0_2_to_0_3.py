@@ -11,15 +11,19 @@ runs on the *first* install (current is None), not on upgrades.
 """
 
 
+
+
+from pyvelm.database import execute_migration_sql
+
 def migrate(env):
     conn = env.conn
-    conn.execute('''
+    execute_migration_sql(conn, '''
         CREATE TABLE IF NOT EXISTS "res_groups" (
             "id" SERIAL PRIMARY KEY,
             "name" text NOT NULL
         )
     ''')
-    conn.execute('''
+    execute_migration_sql(conn, '''
         CREATE TABLE IF NOT EXISTS "res_users" (
             "id" SERIAL PRIMARY KEY,
             "name" text NOT NULL,
@@ -28,14 +32,14 @@ def migrate(env):
             "active" boolean
         )
     ''')
-    conn.execute('''
+    execute_migration_sql(conn, '''
         CREATE TABLE IF NOT EXISTS "res_groups_res_users_rel" (
             "res_groups_id" integer NOT NULL REFERENCES "res_groups"("id") ON DELETE CASCADE,
             "res_users_id" integer NOT NULL REFERENCES "res_users"("id") ON DELETE CASCADE,
             PRIMARY KEY ("res_groups_id", "res_users_id")
         )
     ''')
-    conn.execute('''
+    execute_migration_sql(conn, '''
         CREATE TABLE IF NOT EXISTS "ir_model_access" (
             "id" SERIAL PRIMARY KEY,
             "name" text NOT NULL,
@@ -47,7 +51,7 @@ def migrate(env):
             "perm_unlink" boolean
         )
     ''')
-    conn.execute('''
+    execute_migration_sql(conn, '''
         CREATE TABLE IF NOT EXISTS "ir_rule" (
             "id" SERIAL PRIMARY KEY,
             "name" text NOT NULL,
