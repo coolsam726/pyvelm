@@ -56,6 +56,7 @@ def _mock_env(rows, cls, *, null_check_returns=None):
 
     conn = MagicMock()
     executed: list[str] = []
+    conn.dialect_name = "postgresql"
 
     def execute(sql, params=None):
         executed.append(sql)
@@ -71,6 +72,12 @@ def _mock_env(rows, cls, *, null_check_returns=None):
     conn.execute = execute
     env = MagicMock(registry=reg, conn=conn)
     env._executed = executed
+    return env
+
+
+def _mock_env_dialect(rows, cls, *, dialect_name: str, null_check_returns=None):
+    env = _mock_env(rows, cls, null_check_returns=null_check_returns)
+    env.conn.dialect_name = dialect_name
     return env
 
 
@@ -129,6 +136,31 @@ class ApplySchemaDiffTests(unittest.TestCase):
         self.assertTrue(
             any("SET NOT NULL" in s and "code" in s for s in env._executed)
         )
+
+    def test_applies_set_not_null_mssql_uses_alter_column_type_not_null(self):
+        env = _mock_env_dialect(
+            [("id", "NO", "int4", "integer"), ("code", "YES", "text", "text")],
+            _partner_cls(required=True),
+            dialect_name="mssql",
+            null_check_returns=[],
+        )
+        result = apply_schema_diff(env, "partners")
+        self.assertEqual(result.set_not_null, 1)
+        self.assertTrue(
+            any("ALTER COLUMN" in s and "NOT NULL" in s for s in env._executed)
+        )
+        self.assertFalse(any("SET NOT NULL" in s for s in env._executed))
+
+    def test_applies_set_not_null_oracle_uses_modify(self):
+        env = _mock_env_dialect(
+            [("id", "NO", "int4", "integer"), ("code", "YES", "text", "text")],
+            _partner_cls(required=True),
+            dialect_name="oracle",
+            null_check_returns=[],
+        )
+        result = apply_schema_diff(env, "partners")
+        self.assertEqual(result.set_not_null, 1)
+        self.assertTrue(any("MODIFY" in s and "NOT NULL" in s for s in env._executed))
 
     def test_skips_set_not_null_when_null_rows_exist(self):
         env = _mock_env(

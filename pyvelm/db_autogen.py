@@ -488,9 +488,10 @@ def _column_has_nulls(env: "Environment", table: str, column: str) -> bool:
 def _apply_nullability(
     env: "Environment", diff: Diff, result: ApplyResult
 ) -> None:
-    from pyvelm.database import _conn_capabilities
+    from pyvelm.database import _conn_capabilities, normalize_sql_type
 
-    if _conn_capabilities(env.conn).name in ("sqlite", "mysql"):
+    cap = _conn_capabilities(env.conn)
+    if cap.name in ("sqlite", "mysql"):
         return
     for alt in diff.alterations:
         if alt.kind == "set_not_null":
@@ -501,16 +502,40 @@ def _apply_nullability(
                     f"{alt.table}.{alt.column} ({n} NULL)"
                 )
                 continue
-            env.conn.execute(
-                f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" '
-                f"SET NOT NULL"
-            )
+            if cap.name == "oracle":
+                env.conn.execute(
+                    f'ALTER TABLE "{alt.table}" MODIFY ("{alt.column}" NOT NULL)'
+                )
+            elif cap.name == "mssql":
+                cols = _fetch_table_columns(env, alt.table) or {}
+                col_schema = cols.get(alt.column)
+                type_spec = col_schema.type_spec if col_schema is not None else "text"
+                sql_type = normalize_sql_type(type_spec, cap)
+                env.conn.execute(
+                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" {sql_type} NOT NULL'
+                )
+            else:
+                env.conn.execute(
+                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" SET NOT NULL'
+                )
             result.set_not_null += 1
         elif alt.kind == "drop_not_null":
-            env.conn.execute(
-                f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" '
-                f"DROP NOT NULL"
-            )
+            if cap.name == "oracle":
+                env.conn.execute(
+                    f'ALTER TABLE "{alt.table}" MODIFY ("{alt.column}" NULL)'
+                )
+            elif cap.name == "mssql":
+                cols = _fetch_table_columns(env, alt.table) or {}
+                col_schema = cols.get(alt.column)
+                type_spec = col_schema.type_spec if col_schema is not None else "text"
+                sql_type = normalize_sql_type(type_spec, cap)
+                env.conn.execute(
+                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" {sql_type} NULL'
+                )
+            else:
+                env.conn.execute(
+                    f'ALTER TABLE "{alt.table}" ALTER COLUMN "{alt.column}" DROP NOT NULL'
+                )
             result.drop_not_null += 1
 
 
