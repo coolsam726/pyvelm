@@ -723,6 +723,53 @@ class BaseModel(metaclass=MetaModel):
             if child_ids:
                 self.env[ref_model].browse(child_ids).unlink()
 
+    def _set_null_m2o_referrers(self) -> None:
+        """Nullify SET NULL Many2one columns pointing at us (required on MSSQL)."""
+        cap = _conn_cap(self.env.conn)
+        if cap.name != "mssql":
+            return
+        referrers = self.env.registry._m2o_referrers_index.get(self._name, [])
+        if not referrers or not self._ids:
+            return
+        from sqlalchemy import bindparam, update
+
+        from .database.sa_ddl import core_table
+
+        sa_conn = _require_sa_connection(self.env.conn)
+        for ref_model, ref_fname, ondelete in referrers:
+            if ondelete != "SET NULL":
+                continue
+            ref_cls = self.env.registry[ref_model]
+            field = ref_cls._fields[ref_fname]
+            col = field.column
+            ref_ids = self._ids_with_m2o_pointing_to(
+                ref_cls, col, list(self._ids)
+            )
+            if not ref_ids:
+                continue
+            tbl = core_table(
+                ref_cls._table,
+                cap,
+                "id",
+                col,
+                registry=self.env.registry,
+                model_cls=ref_cls,
+            )
+            stmt = (
+                update(tbl)
+                .where(tbl.c[col].in_(bindparam("ids", expanding=True)))
+                .values({col: None})
+            )
+            sa_conn.execute(stmt, {"ids": list(self._ids)})
+            before = self.env[ref_model].browse(ref_ids)._snapshot_many2one_columns(
+                [ref_fname]
+            )
+            for rid in ref_ids:
+                self.env.cache.set(ref_model, rid, ref_fname, None)
+            self.env[ref_model].browse(ref_ids)._invalidate_relational_caches(
+                {ref_fname: None}, {}, before_m2o=before
+            )
+
     def _invalidate_m2o_referrers(self) -> None:
         """Drop stale Many2one (and related O2M) cache on rows pointing at us."""
         referrers = self.env.registry._m2o_referrers_index.get(self._name, [])
@@ -991,6 +1038,7 @@ class BaseModel(metaclass=MetaModel):
             return
         self.env.check_access(self._name, "unlink")
         self._cascade_unlink_m2o_referrers()
+        self._set_null_m2o_referrers()
         self._invalidate_before_unlink()
         self._invalidate_m2o_referrers()
         # Fire on_unlink automation rules before the records are deleted.

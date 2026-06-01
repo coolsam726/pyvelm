@@ -614,26 +614,28 @@ class DdlRemainingGapsTests(unittest.TestCase):
         self.assertIsInstance(arch_col.type, NVARCHAR)
         self.assertIsNone(arch_col.type.length)
 
-    def test_effective_fk_ondelete_mssql_self_ref_cascade(self):
+    def test_effective_fk_ondelete_mssql_maps_cascade_actions_to_no_action(self):
         from pyvelm.database.dialects import dialect_capabilities
         from pyvelm.database.sa_ddl import effective_fk_ondelete
 
         cap = dialect_capabilities("mssql")
+        for action in ("CASCADE", "SET NULL", "set null"):
+            self.assertEqual(
+                effective_fk_ondelete(
+                    action,
+                    local_table="res_partner",
+                    ref_table="res_country",
+                    cap=cap,
+                ),
+                "NO ACTION",
+                action,
+            )
         self.assertEqual(
             effective_fk_ondelete(
                 "CASCADE",
-                local_table="ir_ui_view",
-                ref_table="ir_ui_view",
-                cap=cap,
-            ),
-            "NO ACTION",
-        )
-        self.assertEqual(
-            effective_fk_ondelete(
-                "CASCADE",
-                local_table="ir_ui_view",
-                ref_table="res_users",
-                cap=cap,
+                local_table="res_partner",
+                ref_table="res_country",
+                cap=dialect_capabilities("postgresql"),
             ),
             "CASCADE",
         )

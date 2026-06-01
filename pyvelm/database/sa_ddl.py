@@ -99,11 +99,12 @@ def effective_fk_ondelete(
 ) -> str:
     """Dialect-adjusted ON DELETE for inline / ALTER foreign keys.
 
-    SQL Server rejects self-referential ``ON DELETE CASCADE`` (error 1785).
-    Use ``NO ACTION`` at the database and cascade in ``BaseModel.unlink``.
+    SQL Server allows only one cascading path per table (error 1785), including
+    multiple ``ON DELETE SET NULL`` FKs on the same table. Emit ``NO ACTION`` at
+    the database and apply CASCADE / SET NULL in ``BaseModel.unlink``.
     """
     action = (ondelete or "CASCADE").upper().replace("_", " ")
-    if cap.name == "mssql" and local_table == ref_table and action == "CASCADE":
+    if cap.name == "mssql" and action in ("CASCADE", "SET NULL"):
         return "NO ACTION"
     return action
 
