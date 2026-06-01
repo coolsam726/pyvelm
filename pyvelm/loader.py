@@ -457,6 +457,9 @@ def _setup_module_schema(spec: ModuleSpec, env: Environment) -> None:
     created: set[str] = set()
     for cls in all_cls:
         cls._setup_relation_tables(env.conn, registry, created)
+    from pyvelm.database.introspection import clear_reflection_cache
+
+    clear_reflection_cache(env.conn)
 
 
 def _pad(v: tuple[int, ...], width: int = 3) -> tuple[int, ...]:

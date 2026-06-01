@@ -472,10 +472,13 @@ class IntrospectionMockTests(unittest.TestCase):
             return_value=True,
         ):
             inspector = MagicMock()
+            inspector.get_table_names.return_value = ["demo"]
             inspector.get_columns.return_value = [{"name": "id"}, {"name": "name"}]
             with patch("sqlalchemy.inspect", return_value=inspector):
                 self.assertTrue(column_exists(conn, "demo", "name"))
                 self.assertFalse(column_exists(conn, "demo", "missing"))
+                inspector.get_table_names.return_value = ["DEMO"]
+                self.assertTrue(column_exists(conn, "demo", "name"))
 
     def test_table_exists_information_schema_fallback(self):
         conn = MagicMock()

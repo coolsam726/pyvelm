@@ -350,10 +350,10 @@ class BaseModel(metaclass=MetaModel):
         if reg is None:
             raise RuntimeError("Registry must be active during _setup_table")
         cap = _conn_capabilities(conn)
-        existed = table_exists(conn, cls._table, cap)
+        had_table = table_exists(conn, cls._table, cap)
         columns = model_table_columns(cls, reg, cap)
         created_now = False
-        if not existed or supports_create_table_if_not_exists(cap):
+        if not had_table or supports_create_table_if_not_exists(cap):
             try:
                 tbl = table_from_columns(
                     cls._table,
@@ -361,14 +361,22 @@ class BaseModel(metaclass=MetaModel):
                     referenced_tables=referenced_tables_from_columns(columns),
                 )
                 execute_create_table(conn, tbl, cap=cap)
-                created_now = not existed
+                created_now = not had_table
             except Exception as exc:
                 # Non-IF-NOT-EXISTS backends can race inspector/table checks.
                 if is_duplicate_object_error(exc):
-                    existed = True
+                    had_table = True
                 else:
                     raise
         if created_now:
+            from .database.introspection import clear_reflection_cache
+
+            clear_reflection_cache(conn)
+            return
+        if not had_table:
+            from .database.introspection import clear_reflection_cache
+
+            clear_reflection_cache(conn)
             return
         for f in cls._fields.values():
             if not f.is_stored or f.name == "id" or f.column == "id":
@@ -383,6 +391,9 @@ class BaseModel(metaclass=MetaModel):
                 registry=reg,
                 field=f,
             )
+        from .database.introspection import clear_reflection_cache
+
+        clear_reflection_cache(conn)
 
     @classmethod
     def _drop_table(cls, conn) -> None:

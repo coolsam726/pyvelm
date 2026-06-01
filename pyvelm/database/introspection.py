@@ -13,6 +13,41 @@ def _inspector_sa_connection(sa_conn) -> SAConnection | None:
     return None
 
 
+def clear_reflection_cache(conn) -> None:
+    """Drop SQLAlchemy inspector caches after DDL on this connection.
+
+    SQLAlchemy 2.x caches ``get_table_names()`` / ``has_table()`` per
+    Inspector; DDL in the same transaction leaves stale snapshots and
+    makes ``column_exists`` / schema diff think columns are still missing.
+    """
+    sa_conn = _inspector_sa_connection(sqlalchemy_connection(conn))
+    if sa_conn is None:
+        return
+    from sqlalchemy import inspect as sa_inspect
+
+    insp = sa_inspect(sa_conn)
+    clear = getattr(insp, "clear_cache", None)
+    if callable(clear):
+        clear()
+
+
+def _inspector_table_name(insp, table: str) -> str | None:
+    """Resolve *table* against reflected names (case-insensitive fallback)."""
+    from sqlalchemy.exc import NoSuchTableError
+
+    try:
+        names = insp.get_table_names()
+    except NoSuchTableError:
+        return None
+    if table in names:
+        return table
+    lower = table.lower()
+    for name in names:
+        if name.lower() == lower:
+            return name
+    return None
+
+
 def column_exists(
     conn, table: str, column: str, cap: DialectCapabilities | None = None
 ) -> bool:
@@ -26,7 +61,11 @@ def column_exists(
     if sa_conn is not None:
         from sqlalchemy import inspect as sa_inspect
 
-        cols = sa_inspect(sa_conn).get_columns(table)
+        insp = sa_inspect(sa_conn)
+        resolved = _inspector_table_name(insp, table)
+        if resolved is None:
+            return False
+        cols = insp.get_columns(resolved)
         return column in {c["name"] for c in cols}
     rows = conn.execute(
         "SELECT column_name FROM information_schema.columns "

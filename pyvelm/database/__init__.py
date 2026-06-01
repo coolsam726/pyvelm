@@ -52,7 +52,7 @@ from .env import (
     uses_serverless_schema_wipe,
     warn_if_poor_nuke_dsn,
 )
-from .introspection import column_exists, table_exists
+from .introspection import clear_reflection_cache, column_exists, table_exists
 from .migration_sql import (
     execute_migration_sql,
     fetchall_migration,
@@ -89,6 +89,7 @@ __all__ = [
     "append_search_pagination",
     "app_dsn_from_env",
     "capabilities_from_dsn",
+    "clear_reflection_cache",
     "column_exists",
     "compile_create_table",
     "configure_engine",

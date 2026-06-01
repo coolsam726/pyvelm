@@ -283,16 +283,15 @@ def _fetch_table_columns_inspector(conn, table: str) -> dict[str, ColumnSchema] 
     # Inspect the live connection, not the engine: inspecting the engine
     # opens a second pooled connection that deadlocks on Postgres against an
     # uncommitted ALTER TABLE held by this connection (ACCESS EXCLUSIVE lock).
+    from pyvelm.database.introspection import _inspector_table_name
+
     insp = sa_inspect(conn._sa)
-    try:
-        table_names = insp.get_table_names()
-    except NoSuchTableError:
-        return None
-    if table not in table_names:
+    resolved = _inspector_table_name(insp, table)
+    if resolved is None:
         return None
     out: dict[str, ColumnSchema] = {}
     try:
-        cols = insp.get_columns(table)
+        cols = insp.get_columns(resolved)
     except NoSuchTableError:
         return None
     for col in cols:
@@ -627,12 +626,16 @@ def _column_exists(env, table: str, column: str) -> bool:
 
 def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
     """Apply model/DB drift: additive DDL plus safe nullability changes."""
+    from pyvelm.database import _conn_capabilities, get_backend
+    from pyvelm.database.introspection import clear_reflection_cache
+
+    clear_reflection_cache(env.conn)
     diff = compute_diff(env, module)
     result = ApplyResult(
         new_tables=len(diff.new_tables),
         new_columns=len(diff.new_columns),
     )
-    from pyvelm.database import _conn_capabilities, is_duplicate_object_error
+    from pyvelm.database import is_duplicate_object_error
     from pyvelm.database.sa_ddl import execute_create_table
 
     from pyvelm.database.sa_ddl import (
@@ -657,6 +660,7 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
             # let the column-sync pass below reconcile any drift.
             if not is_duplicate_object_error(exc):
                 raise
+    clear_reflection_cache(env.conn)
     # Always re-diff after CREATE TABLE attempts. If an inspector race reported
     # "table missing" but CREATE collided with an existing table, the original
     # diff contains no new_columns (it short-circuits at new_tables). A fresh
@@ -665,13 +669,19 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
     for table, col, field_obj, _was_required, _sql_type in diff.new_columns:
         if _column_exists(env, table, col):
             continue
-        execute_add_column(
-            env.conn,
-            table,
-            field_obj.sa_column(env.registry, cap),
-            cap,
-            if_not_exists=cap.supports_add_column_if_not_exists,
-        )
+        try:
+            execute_add_column(
+                env.conn,
+                table,
+                field_obj.sa_column(env.registry, cap),
+                cap,
+                if_not_exists=cap.supports_add_column_if_not_exists,
+            )
+        except Exception as exc:
+            orig = getattr(exc, "orig", exc)
+            if not get_backend(cap.name).is_duplicate_column_error(str(orig).lower()):
+                raise
+    clear_reflection_cache(env.conn)
     # Re-diff so new columns can receive SET NOT NULL in the same pass.
     diff = compute_diff(env, module)
     _apply_nullability(env, diff, result)

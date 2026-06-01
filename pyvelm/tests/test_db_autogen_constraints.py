@@ -308,6 +308,35 @@ class ApplySchemaDiffTests(unittest.TestCase):
 
 
 class InspectorEdgeCaseTests(unittest.TestCase):
+    def test_apply_schema_diff_swallows_duplicate_column(self):
+        """MySQL raises 1060 when autogen re-adds a column the ORM just created."""
+        env = _mock_env_dialect([], _partner_cls(required=True), dialect_name="mysql")
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import primary_key_column
+
+        cap = dialect_capabilities("mysql")
+        code_f = _code_field(required=True)
+        diff = Diff(
+            new_columns=[("res_partner", "code", code_f, True, "text")]
+        )
+
+        def sa_execute(stmt, params=None):
+            from pyvelm.database.sa_ddl import _sqlalchemy_dialect
+
+            sql = str(stmt.compile(dialect=_sqlalchemy_dialect(cap)))
+            if "ADD COLUMN" in sql.upper() and "code" in sql:
+                raise Exception('(1060, "Duplicate column name \'code\'")')
+            r = MagicMock()
+            r.fetchall.return_value = []
+            r.fetchone.return_value = None
+            return r
+
+        env.conn._sa.execute = sa_execute
+        with patch("pyvelm.db_autogen.compute_diff", return_value=diff):
+            with patch("pyvelm.db_autogen._column_exists", return_value=False):
+                result = apply_schema_diff(env, "partners")
+        self.assertEqual(result.new_columns, 1)
+
     def test_fetch_table_columns_inspector_missing_table_returns_none(self):
         from sqlalchemy.exc import NoSuchTableError
 
