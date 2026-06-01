@@ -6,7 +6,8 @@
 
 ## Context
 
-Pyvelm today speaks PostgreSQL only: hand-built SQL strings (`%s` binds, `ILIKE`,
+Pyvelm v1.0 ships a SQLAlchemy Core layer; PostgreSQL remains the reference
+backend, with SQLite supported for dev/CI. Earlier code used hand-built SQL strings (`%s` binds, `ILIKE`,
 `information_schema`, `DROP SCHEMA`), psycopg 3 connections, and
 `psycopg_pool.ConnectionPool`. The product goal for **v1.x** is:
 

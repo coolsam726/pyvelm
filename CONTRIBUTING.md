@@ -28,9 +28,15 @@ between them and the last `print` is a failure.
 ## Running the docs locally
 
 ```bash
-mkdocs serve          # http://localhost:8000 with live reload
-mkdocs build --strict # what CI runs
+pip install -e ".[docs]"   # mkdocs, material, mkdocstrings, mike
+
+mkdocs serve               # edit current tree — http://127.0.0.1:8000
+mkdocs build --strict      # PR CI + pre-tag check (broken links fail)
+mike serve                 # preview versioned layout (after at least one mike deploy)
 ```
+
+Published docs use [mike](https://github.com/jimporter/mike) on `gh-pages`
+(version picker in the Material theme). See [docs/versioning.md](docs/versioning.md).
 
 ## Test coverage
 
@@ -144,9 +150,10 @@ Steps:
      then `publish-pypi` (PyPI via OIDC trusted publishing; no API token),
      then `github-release` (wheel + sdist attached; **release notes from
      CHANGELOG.md**, not the auto-generated commit list).
-   - **docs** (`docs.yml`) — `mkdocs build --strict` and deploy to GitHub
-     Pages from the tagged tree. Docs are **not** rebuilt on every `main`
-     push; fix doc links locally with `mkdocs build --strict` before tagging.
+   - **docs** (`docs.yml`) — on tag push, **mike** deploys
+     `https://coolsam726.github.io/pyvelm/<version>/` and updates the
+     **latest** alias. PRs only run `mkdocs build --strict`. Fix links locally
+     before tagging. See [docs/versioning.md](docs/versioning.md).
 
    To fix an existing release body after the fact:
 

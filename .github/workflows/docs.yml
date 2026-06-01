@@ -1,38 +1,60 @@
-# Build the MkDocs site and publish to GitHub Pages when a release tag
-# is pushed (`v*`). Pages → "Build and deployment" → Source = "GitHub
-# Actions" must be enabled once in the repo settings.
+# Build docs on PRs; publish versioned site with mike on release tags.
 #
-# Manual runs via the Actions tab are wired up too for one-off rebuilds
-# (e.g. after fixing only docstrings).
+# GitHub Pages → Settings → Build and deployment → Source = "Deploy from a branch"
+# → Branch `gh-pages` / `/ (root)` (mike manages version subdirs + default redirect).
 #
-# Docs are not rebuilt on every `main` push — only on release tags (and
-# workflow_dispatch). Run `mkdocs build --strict` locally before merging.
+# Local: `mkdocs build --strict` before merging; `mike deploy` after tagging (see docs/versioning.md).
 
 name: docs
 
 on:
+  pull_request:
+    branches: [main]
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Mike version directory (e.g. 1.0, no leading v)"
+        required: true
+        default: "1.0"
+      update_latest:
+        description: "Point the latest alias at this version"
+        type: boolean
+        default: true
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
+  pages: read
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install pyvelm + docs deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[docs]"
+      - name: Strict MkDocs build
+        run: mkdocs build --strict
+
+  deploy:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          # Fetch full history so the "git revision date" plugin (if we
-          # add it later) and any `edit_uri` links resolve cleanly.
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -41,24 +63,24 @@ jobs:
       - name: Install pyvelm + docs deps
         run: |
           python -m pip install --upgrade pip
-          # Install pyvelm itself so mkdocstrings can import it. The
-          # `docs` extra pulls mkdocs + material + mkdocstrings[python].
           pip install -e ".[docs]"
-      - name: Build site
-        # `--strict` makes any broken intra-site link fail the build.
-        # Cheap insurance against typos in nav entries or markdown
-        # cross-references.
-        run: mkdocs build --strict
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site/
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Configure git for mike
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Deploy release tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mike deploy --push --update-aliases "$VERSION" latest
+          mike set-default --push latest
+      - name: Deploy manual version
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [[ "${{ inputs.update_latest }}" == "true" ]]; then
+            mike deploy --push --update-aliases "$VERSION" latest
+            mike set-default --push latest
+          else
+            mike deploy --push "$VERSION"
+          fi

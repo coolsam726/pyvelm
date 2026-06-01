@@ -7,10 +7,17 @@ out of the 0.x line.
 
 ## Unreleased
 
+### Added
+
+- **Versioned docs (mike)** — GitHub Pages hosts per-release trees (`/latest/`,
+  `/1.0/`, …) with a Material version picker. See [docs/versioning.md](docs/versioning.md).
+
 ### Changed
 
-- **docs CI** — `.github/workflows/docs.yml` deploys to GitHub Pages on `v*`
-  release tags (and `workflow_dispatch`) only, not on every `main` push.
+- **Documentation** — v1.0 release notes, database/seeders/SQLite getting-started
+  paths, and [multi-database.md](docs/multi-database.md) linked from the nav.
+- **docs CI** — `.github/workflows/docs.yml` uses **mike** on `v*` tags (and
+  `workflow_dispatch`); PRs run `mkdocs build --strict` only.
 - **MySQL / MariaDB (v1.1 WIP)** — `DialectCapabilities` for `mysql`/`mariadb`,
   DSN normalisation (`mysql+pymysql://`), portable DDL/type mapping, schema reset,
   MariaDB CI job + HTTP smoke. Requires `pymysql` (core dependency).

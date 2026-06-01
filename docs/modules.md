@@ -365,8 +365,10 @@ apply). Write seeders to be **idempotent** — match existing rows on natural
 keys and only insert or patch what is missing.
 
 Override discovery with an explicit ``SEEDERS`` list in ``__pyvelm__.py``
-when needed. Re-run manually with ``pyvelm db seed myapp``. See ``geo_data``
-for a full example.
+when needed. Re-run manually with ``pyvelm db seed`` or ``pyvelm db seed myapp``.
+Override ``should_run`` / ``enabled`` on the seeder class to skip optional work.
+Heavy reference data (e.g. **geo_data**) uses batched inserts — see
+[Geo data](geo-data.md).
 
 Optional migration file for the same version bump (runs once on upgrade):
 

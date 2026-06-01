@@ -5,16 +5,15 @@ ERP shell that exists only here.**
 
 **PyVELM** is a declarative Python ERP framework. Models, Odoo-style recordsets and modules, view inheritance via
 dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
-bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on
-PostgreSQL (psycopg 3), FastAPI, and Jinja2.
+bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on a
+portable **SQLAlchemy Core** database layer (PostgreSQL or SQLite), FastAPI, and Jinja2.
 
-**Latest release:** [v0.26.2](releases/v0.26.2.md) (2026-05-30) — workflow sidebar
-links point at ``/web/views/workflow/…`` (fixes 404 on Instances/Approvals/Tasks).
-See [releases](releases/v0.26.2.md) and the
-[changelog](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md).
+**Latest release:** [v1.0.0](releases/v1.0.0.md) — SQLAlchemy database layer, SQLite
+portability, Laravel-style seeders, declarative Schema migrations. Docs are
+[versioned](versioning.md) (use the header picker for older lines).
 
 ```bash
-pip install pyvelm==0.26.2
+pip install pyvelm==1.0.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
@@ -61,6 +60,7 @@ python examples/vellum_smoke.py
 
 | Version | Highlights |
 |---------|------------|
+| [v1.0.0](releases/v1.0.0.md) | **Database layer** (Postgres + SQLite), **seeders**, **Schema** migrations, multi-DB routing preview |
 | [v0.26.2](releases/v0.26.2.md) | **Workflow** sidebar links — ``view_module="workflow"`` fixes 404 on Instances/Approvals/Tasks |
 | [v0.26.1](releases/v0.26.1.md) | **`WEB_ROUTES`** mount on **Apps** install — no restart for [document layout](document-layout.md) designer / PDF routes |
 | [v0.26.0](releases/v0.26.0.md) | **[Font theming](branding.md)** (Google Fonts); **console** migrate/serve/test; **Apps Upgrade/Sync**; bundled-module bootstrap |
@@ -105,23 +105,25 @@ Older notes: [v0.2.4](releases/v0.2.4.md) … [v0.2.0](releases/v0.2.0.md).
 
 If you're new, read these in order:
 
-1. **[Getting started](getting-started.md)** — boot the stack, add
-   your first module.
-2. **[Declaring models](models.md)** — fields, relationships,
+1. **[Getting started](getting-started.md)** — boot the stack (Postgres, Docker,
+   or SQLite), add your first module.
+2. **[Database layer (v1.0)](multi-database.md)** — DSNs, dialects, SQLite vs
+   Postgres, routing preview.
+3. **[Declaring models](models.md)** — fields, relationships,
    computed values, model inheritance, dotted search domains.
-3. **[Vellum](vellum.md)** — optional Eloquent-style queries and
+4. **[Vellum](vellum.md)** — optional Eloquent-style queries and
    ergonomics (`env.query`, scopes, soft deletes).
-4. **[Building UIs](views.md)** — list, form, and kanban views;
+5. **[Building UIs](views.md)** — list, form, and kanban views;
    widgets; list `domain`; the search bar; row reorder.
-5. **[Form UX](form-ux.md)** — notebooks, sticky actions, Ctrl+S, save
+6. **[Form UX](form-ux.md)** — notebooks, sticky actions, Ctrl+S, save
    toasts, opening related records in `PvDialog`.
-6. **[One2many on parent forms](one2many-forms.md)** — embedded sub-grids:
+7. **[One2many on parent forms](one2many-forms.md)** — embedded sub-grids:
    `list_view`, `columns`, `form_view`, `edit_toggle`, dialog vs inline.
-7. **[Extending views](inheritance.md)** — patch views from another
+8. **[Extending views](inheritance.md)** — patch views from another
    module without forking them.
-8. **[Modules](modules.md)** — the manifest, data files, the
+9. **[Modules](modules.md)** — the manifest, data files, seeders, the
    loader, writing migrations, the Apps catalog.
-9. **[Report Builder](report-builder.md)** — user-defined reports,
+10. **[Report Builder](report-builder.md)** — user-defined reports,
    visual builder, secure SQL compilation, export and scheduling.
 
 Then as you need them:
