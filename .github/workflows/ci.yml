@@ -131,6 +131,46 @@ jobs:
           pytest pyvelm/tests/test_database.py pyvelm/tests/test_database_routing.py \
             pyvelm/tests/test_http_smoke.py -q
 
+  test-mysql:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: pyvelm
+          MYSQL_DATABASE: pyvelm_test
+          MYSQL_USER: pyvelm
+          MYSQL_PASSWORD: pyvelm
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -upyvelm -ppyvelm"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      PYVELM_DSN_TEST: mysql+pymysql://pyvelm:pyvelm@127.0.0.1:3306/pyvelm_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install package and test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,geo]"
+
+      - name: Run MySQL portability tests
+        run: |
+          pytest pyvelm/tests/test_database.py pyvelm/tests/test_database_routing.py \
+            pyvelm/tests/test_http_smoke.py -q
+
   test-mssql:
     runs-on: ubuntu-latest
 
@@ -185,6 +225,45 @@ jobs:
           PY
 
       - name: Run MSSQL portability tests
+        run: |
+          pytest pyvelm/tests/test_database.py pyvelm/tests/test_database_routing.py \
+            pyvelm/tests/test_http_smoke.py -q
+
+  test-oracle:
+    runs-on: ubuntu-latest
+
+    services:
+      oracle:
+        image: gvenzl/oracle-free:latest
+        env:
+          ORACLE_PASSWORD: Pyvelm123!
+          APP_USER: pyvelm
+          APP_USER_PASSWORD: pyvelm
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval=15s
+          --health-timeout=10s
+          --health-retries=20
+
+    env:
+      PYVELM_DSN_TEST: oracle+oracledb://pyvelm:pyvelm@127.0.0.1:1521/?service_name=FREEPDB1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install package and test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test,geo,oracle]"
+
+      - name: Run Oracle portability tests
         run: |
           pytest pyvelm/tests/test_database.py pyvelm/tests/test_database_routing.py \
             pyvelm/tests/test_http_smoke.py -q

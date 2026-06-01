@@ -84,7 +84,7 @@ def requires_dsn(func: _F) -> _F:
 
 
 def requires_backend(name: str) -> Callable[[_F], _F]:
-    """Skip unless the test DSN targets *name* (``postgresql``, ``sqlite``, ``mysql``)."""
+    """Skip unless the test DSN targets *name* (``postgresql``, ``sqlite``, ``mysql``, ``mssql``, ``oracle``)."""
 
     def decorator(func: _F) -> _F:
         @wraps(func)
