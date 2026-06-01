@@ -1,16 +1,14 @@
 """Add date / datetime / time demo columns on vellum.demo.note."""
 
+from pyvelm.migrations import Blueprint, Schema, Table
 
-def migrate(env):
-    env.conn.execute(
-        'ALTER TABLE "vellum_demo_note" '
-        'ADD COLUMN IF NOT EXISTS "publish_on" date'
-    )
-    env.conn.execute(
-        'ALTER TABLE "vellum_demo_note" '
-        'ADD COLUMN IF NOT EXISTS "event_at" timestamp'
-    )
-    env.conn.execute(
-        'ALTER TABLE "vellum_demo_note" '
-        'ADD COLUMN IF NOT EXISTS "standup_at" time'
-    )
+
+def upgrade(env):
+    schema = Schema(env)
+
+    def _alter(t: Table) -> None:
+        t.date("publish_on", nullable=True)
+        t.timestamp("event_at", nullable=True)
+        t.time("standup_at", nullable=True)
+
+    schema.table("vellum_demo_note", _alter)

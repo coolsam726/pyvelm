@@ -1,12 +1,12 @@
 """Add view inheritance columns to ir.ui.view."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _alter(t):
+    def _alter(t: Table) -> None:
         t.drop_nullable("arch")
         t.integer("priority", nullable=False).default(16)
         t.integer("inherit_id", nullable=True)

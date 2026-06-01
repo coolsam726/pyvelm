@@ -21,21 +21,24 @@
         </button>
         {% endif %}
     {% else %}
-        {% if app.needs_upgrade %}
         <button type="button"
                 hx-post="/web/apps/{{ app.name }}/upgrade"
                 hx-swap="none"
-                hx-confirm="{% if app.version_upgrade %}Upgrade {{ app.name }} from {{ app.installed_version }} to {{ app.available_version }}? Applies schema changes, re-syncs views/menus, and runs migrations in one transaction.{% else %}Upgrade {{ app.name }}? Applies pending schema changes detected by db diff{% if app.schema_diff_summary %}: {{ app.schema_diff_summary }}{% endif %}.{% endif %}"
-                class="{{ btn }} font-semibold rounded-md
+                hx-confirm="{% if app.pending_migrations %}Upgrade {{ app.name }} from {{ app.installed_version }} to {{ app.available_version }}? Runs only migration scripts not yet applied for this version gap, then updates the installed version. Use Sync for schema and view changes without a version bump.{% else %}Upgrade {{ app.name }} ({{ app.installed_version }})? No pending migrations — installed version matches the manifest. Use Sync to apply model schema diff and reload views.{% endif %}"
+                class="{{ btn }} font-semibold rounded-md transition-colors
+                       {% if app.pending_migrations %}
+                       border border-warning text-warning-strong bg-warning-soft
+                       hover:opacity-90
+                       {% else %}
                        border border-default text-body bg-neutral-primary
-                       hover:bg-neutral-secondary transition-colors">
-            {% if app.version_upgrade and not compact %}
+                       hover:bg-neutral-secondary
+                       {% endif %}">
+            {% if app.pending_migrations and not compact %}
             Upgrade to {{ app.available_version }}
             {% else %}
             Upgrade
             {% endif %}
         </button>
-        {% endif %}
         <button type="button"
                 hx-post="/web/apps/{{ app.name }}/sync"
                 hx-swap="none"

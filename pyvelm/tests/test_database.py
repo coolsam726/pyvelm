@@ -160,6 +160,33 @@ class SqliteDatabaseTests(unittest.TestCase):
         cap = dialect_capabilities("sqlite")
         self.assertIn("AUTOINCREMENT", serial_primary_key(cap))
 
+    def test_sqlite_datetime_insert_no_deprecation_warning(self):
+        import warnings
+        from datetime import datetime
+
+        from sqlalchemy import create_engine, text
+
+        from pyvelm.database.dialects.sqlite import configure_engine
+
+        engine = create_engine("sqlite:///:memory:")
+        configure_engine(engine)
+        with engine.connect() as conn:
+            conn.execute(text('CREATE TABLE "t" ("d" timestamp)'))
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always", DeprecationWarning)
+                conn.execute(
+                    text('INSERT INTO "t" ("d") VALUES (:d)'),
+                    {"d": datetime(2024, 6, 1, 12, 30, 45)},
+                )
+                conn.commit()
+        adapter_warnings = [
+            w
+            for w in caught
+            if issubclass(w.category, DeprecationWarning)
+            and "datetime adapter" in str(w.message)
+        ]
+        self.assertEqual(adapter_warnings, [])
+
 
 @requires_backend("mysql")
 class MysqlDatabaseTests(unittest.TestCase):

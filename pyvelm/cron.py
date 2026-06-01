@@ -24,7 +24,9 @@ Usage
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+from pyvelm.timestamps import utc_now
 
 from pyvelm import BaseModel, Boolean, Char, Integer, Many2one
 from pyvelm.fields import Field
@@ -111,7 +113,7 @@ class CronJob(BaseModel):
             try:
                 action.run(env[action.model].search([]))
             finally:
-                now = datetime.utcnow()
+                now = utc_now()
                 updates: dict = {"lastcall": now}
                 delta_fn = _INTERVAL_DELTAS.get(self.interval_type or "hours")
                 if delta_fn:
@@ -132,7 +134,7 @@ class CronJob(BaseModel):
         if "ir.cron" not in env.registry:
             return []
 
-        now = datetime.utcnow()
+        now = utc_now()
         prev_bypass = env._acl_bypass
         env._acl_bypass = True
         executed = []

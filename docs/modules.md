@@ -344,11 +344,18 @@ def sync(env):
 Optional migration file for the same version bump (runs once on upgrade):
 
 ```python
-def migrate(env):
-    env.conn.execute(
-        'ALTER TABLE "res_partner" '
-        'ADD COLUMN IF NOT EXISTS "code" text'
-    )
+from pyvelm.migrations import Blueprint, Schema, Table
+
+def upgrade(env):
+    schema = Schema(env)
+
+    def _alter(t: Table) -> None:
+        t.string("code", nullable=True)
+
+    schema.table("res_partner", _alter)
+    # Laravel-style FK: t.foreign("currency_id").constrained("res_currency")
+    # Shorthand: t.foreign_id("currency_id", "res_currency", ondelete="SET NULL")
+    # Column builders: Blueprint.supported_columns()
     # Backfill is in SYNC_HOOK — see partners/hooks.py
 ```
 
@@ -404,7 +411,7 @@ and run DDL.
 | Action | What happens |
 |---|---|
 | **Install** | Topologically installs the target and any uninstalled prerequisites. Models are imported into the live registry; the standard install pass runs (schema, hook, view/menu sync). Primary button on the card. |
-| **Upgrade** | Shown when the manifest version is ahead of `ir_module` **or** when `db diff` detects pending schema changes. Reloads models, runs version-gap migrations when needed, applies additive schema, re-syncs views/menus. Secondary (outline) button. |
+| **Upgrade** | Always shown on installed modules. Runs only version-gap migration scripts (between the recorded `ir_module` version and the manifest); no-op when versions already match. Highlighted when a version bump is pending. Use **Sync** for schema/views without a bump. |
 | **Sync** | Always available on installed modules. Re-applies schema diff and reloads views/menus from disk without requiring a version bump — use after pulling code. Warning (amber) button. |
 | **Uninstall** | Drops tables owned by the module, deletes its `ir.ui.view` and `ir.ui.menu` rows, removes the `ir_module` entry. All inside one transaction. |
 

@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
+
+from pyvelm.timestamps import utc_now
 
 from .schema import WorkflowDefinitionError, validate_definition
 
@@ -148,7 +150,7 @@ class WorkflowEngine:
             "state": tr["to"],
             "stage_data": json.dumps(stage_data),
             "pending_transition": False,
-            "state_updated_at": datetime.utcnow(),
+            "state_updated_at": utc_now(),
         })
         _post_chatter(
             env, record,
@@ -181,7 +183,7 @@ class WorkflowEngine:
         approval.write({
             "status": "approved" if approved else "rejected",
             "acted_by": uid,
-            "acted_at": datetime.utcnow(),
+            "acted_at": utc_now(),
             "comment": comment or False,
         })
         if "workflow.task" in env.registry and uid:
@@ -200,7 +202,7 @@ class WorkflowEngine:
             instance.write({
                 "state": reject_to,
                 "pending_transition": False,
-                "state_updated_at": datetime.utcnow(),
+                "state_updated_at": utc_now(),
             })
             _post_chatter(
                 env, record,
@@ -215,7 +217,7 @@ class WorkflowEngine:
         instance.write({
             "state": tr["to"],
             "pending_transition": False,
-            "state_updated_at": datetime.utcnow(),
+            "state_updated_at": utc_now(),
         })
         _post_chatter(env, record, _approval_complete_message(defn, tr))
         return instance
@@ -407,7 +409,7 @@ def _approval_deadline(approval_cfg: dict):
     if not hours:
         return None
     try:
-        return datetime.utcnow() + timedelta(hours=int(hours))
+        return utc_now() + timedelta(hours=int(hours))
     except (TypeError, ValueError):
         return None
 

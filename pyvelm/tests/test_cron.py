@@ -4,10 +4,11 @@ from __future__ import annotations
 import io
 import unittest
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from pyvelm import BaseModel, Char, Environment, Registry
+from pyvelm.timestamps import utc_now
 from pyvelm.tests.support.db import DatabaseTestCase
 
 
@@ -84,14 +85,14 @@ class CronRunDueUnitTests(unittest.TestCase):
 
     def test_run_due_skips_future_nextcall(self):
         job = MagicMock()
-        job.nextcall = datetime.utcnow() + timedelta(days=1)
+        job.nextcall = utc_now() + timedelta(days=1)
         job.action_id = MagicMock(id=1)
         env, _ = _cron_env([job])
         self.assertEqual(CronJob.run_due(env), [])
 
     def test_run_due_skips_no_action(self):
         job = MagicMock()
-        job.nextcall = datetime.utcnow() - timedelta(hours=1)
+        job.nextcall = utc_now() - timedelta(hours=1)
         job.action_id = None
         env, _ = _cron_env([job])
         self.assertEqual(CronJob.run_due(env), [])
@@ -99,7 +100,7 @@ class CronRunDueUnitTests(unittest.TestCase):
     def test_run_due_executes_and_returns_name(self):
         job = MagicMock()
         job.name = "Hourly"
-        job.nextcall = datetime.utcnow() - timedelta(hours=2)
+        job.nextcall = utc_now() - timedelta(hours=2)
         job.action_id = MagicMock(id=7)
         job.interval_number = 1
         job.interval_type = "hours"
@@ -118,7 +119,7 @@ class CronRunDueUnitTests(unittest.TestCase):
     def test_run_due_skips_missing_model_test_cron_cleanup(self):
         job = MagicMock()
         job.name = "Test cron"
-        job.nextcall = datetime.utcnow() - timedelta(hours=1)
+        job.nextcall = utc_now() - timedelta(hours=1)
         job.action_id = MagicMock(id=3)
         job.interval_number = 1
         job.interval_type = "hours"
@@ -137,7 +138,7 @@ class CronRunDueUnitTests(unittest.TestCase):
     def test_run_due_skips_uninstalled_model_non_test_cron(self):
         job = MagicMock()
         job.name = "Production job"
-        job.nextcall = datetime.utcnow() - timedelta(hours=1)
+        job.nextcall = utc_now() - timedelta(hours=1)
         job.action_id = MagicMock(id=9)
         job.interval_number = 2
         job.interval_type = "days"
@@ -156,7 +157,7 @@ class CronRunDueUnitTests(unittest.TestCase):
     def test_run_due_advances_on_action_failure(self):
         job = MagicMock()
         job.name = "Flaky"
-        job.nextcall = datetime.utcnow() - timedelta(hours=1)
+        job.nextcall = utc_now() - timedelta(hours=1)
         job.action_id = MagicMock(id=5)
         job.interval_number = 1
         job.interval_type = "hours"
@@ -265,7 +266,7 @@ class CronJobIntegrationTests(DatabaseTestCase):
     def test_run_due_executes_overdue_job(self):
         self.Target.create({"label": "before"})
         action = self._write_action("records.write({'label': 'after'})")
-        past = datetime.utcnow() - timedelta(hours=2)
+        past = utc_now() - timedelta(hours=2)
         self.Cron.create({
             "name": "Hourly",
             "action_id": action,

@@ -1,12 +1,12 @@
 """Add Stage 6 tables: ir_actions_server, base_automation, ir_cron, mail_message."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _actions_server(t):
+    def _actions_server(t: Table) -> None:
         t.string("name", nullable=False)
         t.string("model", nullable=False)
         t.string("action_type", nullable=False)
@@ -15,7 +15,7 @@ def upgrade(env):
 
     schema.create("ir_actions_server", _actions_server)
 
-    def _automation(t):
+    def _automation(t: Table) -> None:
         t.string("name", nullable=False)
         t.string("model", nullable=False)
         t.string("trigger", nullable=False)
@@ -24,7 +24,7 @@ def upgrade(env):
 
     schema.create("base_automation", _automation)
 
-    def _cron(t):
+    def _cron(t: Table) -> None:
         t.string("name", nullable=False)
         t.foreign_id("action_id", "ir_actions_server", ondelete="CASCADE")
         t.integer("interval_number")
@@ -34,7 +34,7 @@ def upgrade(env):
 
     schema.create("ir_cron", _cron)
 
-    def _mail_message(t):
+    def _mail_message(t: Table) -> None:
         t.string("model")
         t.integer("res_id")
         t.foreign_id("author_id", "res_users", ondelete="SET NULL", nullable=True)

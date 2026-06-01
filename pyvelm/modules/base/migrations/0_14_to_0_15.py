@@ -1,6 +1,6 @@
 """Add res_company.timezone column."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema
 
 
 def upgrade(env):

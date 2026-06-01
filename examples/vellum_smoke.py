@@ -51,9 +51,10 @@ def _reset_vellum_tables(conn) -> None:
 
 
 def _ensure_soft_note_column(env) -> None:
-    env.conn.execute(
-        'ALTER TABLE "vellum_demo_soft_note" '
-        'ADD COLUMN IF NOT EXISTS "deleted_at" timestamp'
+    from pyvelm.migrations import Schema
+
+    Schema(env).table(
+        "vellum_demo_soft_note", lambda t: t.timestamp("deleted_at", nullable=True)
     )
 
 

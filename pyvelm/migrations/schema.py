@@ -1,10 +1,24 @@
-"""Declarative schema migrations — no hand-written SQL in module scripts."""
+"""Declarative schema migrations — no hand-written SQL in module scripts.
+
+Column builders on :class:`Blueprint` (inside ``schema.create`` / ``schema.table``):
+
+- ``id``, ``string``, ``text``, ``integer``, ``bigInteger`` (alias ``big``)
+- ``boolean``, ``float``, ``timestamp``, ``date``, ``time``
+- ``foreign_id(name, table, …)`` — integer FK column in one call
+- ``foreign(name).constrained(table?)`` / ``foreignId(name)`` — fluent FK (Laravel-style)
+
+Alter helpers: ``drop_column``, ``rename_column``, ``drop_nullable``, ``allow_null``,
+``drop_constraint``, ``foreign_key``, ``index``, ``primary_key``.
+
+See :data:`SUPPORTED_COLUMN_BUILDERS` and :data:`SUPPORTED_ALTERATIONS`.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, TypeAlias
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     Float,
@@ -45,6 +59,110 @@ from pyvelm.database.sa_ddl import (
 
 if TYPE_CHECKING:
     from pyvelm.env import Environment
+
+# Public registry of Blueprint builder names (for docs / tooling).
+SUPPORTED_COLUMN_BUILDERS: tuple[str, ...] = (
+    "id",
+    "string",
+    "text",
+    "integer",
+    "bigInteger",
+    "big",
+    "boolean",
+    "float",
+    "timestamp",
+    "date",
+    "time",
+    "foreign_id",
+    "foreign",
+    "foreignId",
+)
+
+SUPPORTED_ALTERATIONS: tuple[str, ...] = (
+    "drop_column",
+    "rename_column",
+    "drop_nullable",
+    "allow_null",
+    "drop_constraint",
+    "foreign_key",
+    "index",
+    "primary_key",
+)
+
+
+def _normalize_ondelete(action: str) -> str:
+    key = (action or "CASCADE").strip().upper().replace(" ", "_")
+    return {
+        "CASCADE": "CASCADE",
+        "SET_NULL": "SET NULL",
+        "RESTRICT": "RESTRICT",
+        "NO_ACTION": "NO ACTION",
+        "SET_DEFAULT": "SET DEFAULT",
+    }.get(key, key.replace("_", " "))
+
+
+def _infer_fk_table(column: str) -> str:
+    """Guess referenced table from ``{model}_id`` (Laravel ``constrained()`` default).
+
+    ``group_id`` → ``groups``. Pyvelm often uses prefixed tables (``res_company``);
+    pass the table explicitly when inference does not match.
+    """
+    if not column.endswith("_id"):
+        raise ValueError(
+            f"Cannot infer referenced table from column {column!r}; "
+            f"use constrained('table_name')."
+        )
+    stem = column[:-3]
+    if stem.endswith("s"):
+        return stem
+    return f"{stem}s"
+
+
+class _ForeignColumnBuilder:
+    """Fluent FK column — finish with ``.constrained()`` or ``.references()``."""
+
+    __slots__ = ("_bp", "_name", "_use_big", "_ref_table", "_nullable", "_ondelete")
+
+    def __init__(self, bp: "Blueprint", name: str, *, use_big: bool = False) -> None:
+        self._bp = bp
+        self._name = name
+        self._use_big = use_big
+        self._ref_table: str | None = None
+        self._nullable = True
+        self._ondelete = "CASCADE"
+
+    def constrained(self, table: str | None = None) -> _ColumnSpec:
+        ref = table if table is not None else _infer_fk_table(self._name)
+        return self._bp._add_foreign_key_column(
+            self._name,
+            ref,
+            nullable=self._nullable,
+            ondelete=self._ondelete,
+            use_big=self._use_big,
+        )
+
+    def references(self, table: str) -> _ColumnSpec:
+        """Alias for ``constrained(table)``."""
+        return self.constrained(table)
+
+    def nullable(self, value: bool = True) -> _ForeignColumnBuilder:
+        self._nullable = value
+        return self
+
+    def null(self) -> _ForeignColumnBuilder:
+        return self.nullable(True)
+
+    def onDelete(self, action: str) -> _ForeignColumnBuilder:
+        self._ondelete = _normalize_ondelete(action)
+        return self
+
+    ondelete = onDelete
+
+    def cascade(self) -> _ForeignColumnBuilder:
+        return self.onDelete("CASCADE")
+
+    def setNull(self) -> _ForeignColumnBuilder:
+        return self.onDelete("SET NULL")
 
 
 class _ColumnSpec:
@@ -112,7 +230,20 @@ class _AlterOp:
 
 
 class Blueprint:
-    """Build columns and alterations for one table."""
+    """Build columns and alterations for one table.
+
+    Use :meth:`supported_columns` / :meth:`supported_alterations` to list builders.
+    """
+
+    @classmethod
+    def supported_columns(cls) -> tuple[str, ...]:
+        """Column type builders available on ``schema.create`` / ``schema.table``."""
+        return SUPPORTED_COLUMN_BUILDERS
+
+    @classmethod
+    def supported_alterations(cls) -> tuple[str, ...]:
+        """Table alteration helpers (mostly ``schema.table``)."""
+        return SUPPORTED_ALTERATIONS
 
     def __init__(self, table: str, cap, *, create: bool) -> None:
         self.table = table
@@ -139,6 +270,13 @@ class Blueprint:
     def integer(self, name: str, *, nullable: bool = True) -> _ColumnSpec:
         return self._add_column(name, Integer(), nullable=nullable)
 
+    def bigInteger(self, name: str, *, nullable: bool = True) -> _ColumnSpec:
+        return self._add_column(name, BigInteger(), nullable=nullable)
+
+    def big(self, name: str, *, nullable: bool = True) -> _ColumnSpec:
+        """Alias for :meth:`bigInteger`."""
+        return self.bigInteger(name, nullable=nullable)
+
     def boolean(self, name: str, *, nullable: bool = True) -> _ColumnSpec:
         return self._add_column(name, Boolean(), nullable=nullable)
 
@@ -150,6 +288,16 @@ class Blueprint:
 
         return self._add_column(name, DateTime(), nullable=nullable)
 
+    def date(self, name: str, *, nullable: bool = True) -> _ColumnSpec:
+        from sqlalchemy import Date
+
+        return self._add_column(name, Date(), nullable=nullable)
+
+    def time(self, name: str, *, nullable: bool = True) -> _ColumnSpec:
+        from sqlalchemy import Time
+
+        return self._add_column(name, Time(), nullable=nullable)
+
     def foreign_id(
         self,
         name: str,
@@ -158,19 +306,22 @@ class Blueprint:
         ondelete: str = "CASCADE",
         nullable: bool = True,
     ) -> _ColumnSpec:
-        spec = (
-            _ColumnSpec(name, Integer(), cap=self._cap)
-            .nullable(nullable)
-            .references(ref_table, ondelete=ondelete)
+        """Add an integer FK column referencing ``ref_table.id``."""
+        return self._add_foreign_key_column(
+            name,
+            ref_table,
+            nullable=nullable,
+            ondelete=ondelete,
+            use_big=False,
         )
-        col = spec.build()
-        if self._create:
-            self._columns.append(col)
-        else:
-            self._alter_ops.append(
-                _AlterOp(lambda t, c, col=col: _add_column_if_missing(c, t, col))
-            )
-        return spec
+
+    def foreign(self, name: str, *, big: bool = False) -> _ForeignColumnBuilder:
+        """Start a fluent FK column; finish with ``.constrained()`` or ``.references()``."""
+        return _ForeignColumnBuilder(self, name, use_big=big)
+
+    def foreignId(self, name: str) -> _ForeignColumnBuilder:
+        """``foreign(name, big=True)`` — Laravel-style ``foreignId`` (bigint FK)."""
+        return self.foreign(name, big=True)
 
     def index(self, *column_names: str, name: str | None = None) -> None:
         if not self._create:
@@ -251,6 +402,41 @@ class Blueprint:
             )
         )
 
+    def _add_foreign_key_column(
+        self,
+        name: str,
+        ref_table: str,
+        *,
+        nullable: bool,
+        ondelete: str,
+        use_big: bool,
+    ) -> _ColumnSpec:
+        col_type = BigInteger() if use_big else Integer()
+        spec = (
+            _ColumnSpec(name, col_type, cap=self._cap)
+            .nullable(nullable)
+            .references(ref_table, ondelete=ondelete)
+        )
+        col = spec.build()
+        if self._create:
+            self._columns.append(col)
+        else:
+            bare = Column(name, col_type, nullable=nullable)
+            cname = f"{self.table}_{name}_fkey"
+            self._alter_ops.append(
+                _AlterOp(
+                    lambda t, c, cap, col=bare: _add_column_if_missing(c, t, col, cap)
+                )
+            )
+            self._alter_ops.append(
+                _AlterOp(
+                    lambda t, c, cap, lc=name, rt=ref_table, cn=cname, od=ondelete: execute_add_foreign_key(
+                        c, t, cn, lc, rt, ondelete=od, cap=cap
+                    )
+                )
+            )
+        return spec
+
     def _add_column(self, name: str, col_type, *, nullable: bool) -> _ColumnSpec:
         spec = _ColumnSpec(name, col_type, cap=self._cap).nullable(nullable)
         col = spec.build()
@@ -266,6 +452,10 @@ class Blueprint:
         for op in self._alter_ops:
             op.fn(self.table, conn, cap)
 
+
+# Annotate migration builders for IDE autocomplete (``def _alter(t: Table):``).
+Table: TypeAlias = Blueprint
+TableCallback: TypeAlias = Callable[[Blueprint], None]
 
 def _add_column_if_missing(conn, table: str, col: Column, cap) -> None:
     from pyvelm.database import column_exists
@@ -283,7 +473,7 @@ class Schema:
         self.conn = env.conn
         self.cap = conn_capabilities(env.conn)
 
-    def create(self, table: str, fn: Callable[[Blueprint], None]) -> None:
+    def create(self, table: str, fn: TableCallback) -> None:
         bp = Blueprint(table, self.cap, create=True)
         fn(bp)
         cols = list(bp._columns)
@@ -304,7 +494,7 @@ class Schema:
         for iname, cols in bp._indexes:
             execute_create_index(self.conn, iname, table, cols, cap=self.cap)
 
-    def table(self, table: str, fn: Callable[[Blueprint], None]) -> None:
+    def table(self, table: str, fn: TableCallback) -> None:
         bp = Blueprint(table, self.cap, create=False)
         fn(bp)
         bp._run_alters(self.conn, self.cap)

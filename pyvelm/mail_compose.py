@@ -207,14 +207,15 @@ class MailCompose(BaseModel):
                 )
             else:
                 Msg = self.env["mail.message"]
-                from datetime import datetime
+                from pyvelm.timestamps import utc_now
+
                 vals = {
                     "model": self.model or "mail.compose.message",
                     "res_id": int(self.res_id or self.id),
                     "body": self.body_html or "",
                     "body_is_html": True,
                     "message_type": "email",
-                    "date": datetime.utcnow(),
+                    "date": utc_now(),
                     "recipient_email": str(self.recipient_to).strip(),
                     "recipient_cc": (self.recipient_cc or None),
                     "recipient_bcc": (self.recipient_bcc or None),

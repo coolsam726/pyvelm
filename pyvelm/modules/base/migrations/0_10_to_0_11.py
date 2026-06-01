@@ -1,12 +1,12 @@
 """Add currency_id to res.company; backfill with USD when present."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _alter(t):
+    def _alter(t: Table) -> None:
         t.foreign_id(
             "currency_id", "res_currency", ondelete="SET NULL", nullable=True
         )

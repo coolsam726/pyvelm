@@ -1,12 +1,12 @@
 """Rename res_currency_rate.name to res_currency_rate.date."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _add_date(t):
+    def _add_date(t: Table) -> None:
         t.timestamp("date", nullable=True)
 
     schema.table("res_currency_rate", _add_date)

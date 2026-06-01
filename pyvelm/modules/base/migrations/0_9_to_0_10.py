@@ -1,12 +1,12 @@
 """Add res.currency + res.currency.rate; seed currencies."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _currency(t):
+    def _currency(t: Table) -> None:
         t.string("code", nullable=False)
         t.string("name", nullable=True)
         t.string("symbol", nullable=True).default("$")
@@ -15,14 +15,14 @@ def upgrade(env):
 
     schema.create("res_currency", _currency)
 
-    def _rate(t):
+    def _rate(t: Table) -> None:
         t.foreign_id("currency_id", "res_currency", ondelete="CASCADE", nullable=False)
         t.timestamp("name", nullable=True)
         t.float("rate", nullable=True).default(1.0)
 
     schema.create("res_currency_rate", _rate)
 
-    def _fk(t):
+    def _fk(t: Table) -> None:
         t.drop_constraint("res_currency_rate_currency_id_fkey")
         t.foreign_key(
             "currency_id",

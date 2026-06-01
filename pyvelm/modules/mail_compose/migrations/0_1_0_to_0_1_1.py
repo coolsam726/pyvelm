@@ -1,6 +1,6 @@
 """Relax NOT NULL on mail_compose_message.recipient_to."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema
 
 
 def upgrade(env):

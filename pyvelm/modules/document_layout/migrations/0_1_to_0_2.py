@@ -1,7 +1,7 @@
 """Module rename report_layout → document_layout."""
 
 from document_layout.hooks import _migrate_company_field
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema
 
 
 def upgrade(env):

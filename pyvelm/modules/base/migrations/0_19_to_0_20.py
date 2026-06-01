@@ -1,12 +1,12 @@
 """White-label branding columns on res_company."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _alter(t):
+    def _alter(t: Table) -> None:
         t.string("app_name", nullable=True)
         t.string("app_tagline", nullable=True)
         t.string("logo_url", nullable=True)

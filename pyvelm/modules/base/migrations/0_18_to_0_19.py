@@ -1,6 +1,6 @@
 """Add res_company.primary_color."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema
 
 
 def upgrade(env):

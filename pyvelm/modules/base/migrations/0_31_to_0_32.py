@@ -1,6 +1,6 @@
 """Add res_company.font_family."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema
 
 
 def upgrade(env):

@@ -1,12 +1,12 @@
 """Outgoing-mail dispatcher columns + seed dispatcher cron."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _alter(t):
+    def _alter(t: Table) -> None:
         t.string("recipient_email", nullable=True)
         t.string("subject", nullable=True)
         t.string("state", nullable=True).default("outgoing")

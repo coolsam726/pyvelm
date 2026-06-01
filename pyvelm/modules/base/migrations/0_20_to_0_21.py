@@ -1,6 +1,6 @@
 """Add res_company.logo_url_dark."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema
 
 
 def upgrade(env):

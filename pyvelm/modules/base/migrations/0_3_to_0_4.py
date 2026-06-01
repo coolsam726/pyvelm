@@ -1,6 +1,6 @@
 """Add session_token column to res_users."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema
 
 
 def upgrade(env):

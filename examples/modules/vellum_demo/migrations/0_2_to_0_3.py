@@ -1,10 +1,11 @@
-"""Add ``vellum.demo.soft_note`` and ``deleted_at`` for soft-delete tests."""
+"""Add vellum.demo.soft_note and deleted_at for soft-delete tests."""
+
+from pyvelm.migrations import Blueprint, Schema
 
 
-def migrate(env):
-    Soft = env["vellum.demo.soft_note"]
-    Soft._setup_table(env.conn)
-    env.conn.execute(
-        'ALTER TABLE "vellum_demo_soft_note" '
-        'ADD COLUMN IF NOT EXISTS "deleted_at" timestamp'
+def upgrade(env):
+    env["vellum.demo.soft_note"]._setup_table(env.conn)
+    schema = Schema(env)
+    schema.table(
+        "vellum_demo_soft_note", lambda t: t.timestamp("deleted_at", nullable=True)
     )

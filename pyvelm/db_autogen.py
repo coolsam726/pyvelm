@@ -323,7 +323,7 @@ def render_migration(
     out.append("Type / NOT NULL / DROP changes are commented — review first.")
     out.append('"""')
     out.append("")
-    out.append("from pyvelm.migrations import Schema")
+    out.append("from pyvelm.migrations import Schema, Table")
     out.append("")
     out.append("")
     out.append("def upgrade(env):")
@@ -335,7 +335,7 @@ def render_migration(
         fn_name = f"_{table}"
         out.append("")
         lines = _blueprint_lines_from_columns(columns)
-        out.append(f"    def {fn_name}(t):")
+        out.append(f"    def {fn_name}(t: Table) -> None:")
         if lines:
             for line in lines:
                 out.append(f"        {line}")
@@ -346,7 +346,7 @@ def render_migration(
         fn_name = f"_{table}_add_{col}"
         line = _blueprint_line_from_field(field_obj, col, required=was_required)
         out.append("")
-        out.append(f"    def {fn_name}(t):")
+        out.append(f"    def {fn_name}(t: Table) -> None:")
         out.append(f"        {line}")
         out.append(f"    schema.table({table!r}, {fn_name})")
         if was_required:

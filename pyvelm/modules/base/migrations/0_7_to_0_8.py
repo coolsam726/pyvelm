@@ -1,12 +1,12 @@
 """Introduce the ir.ui.menu model."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _menu(t):
+    def _menu(t: Table) -> None:
         t.string("module", nullable=False)
         t.string("name", nullable=False)
         t.string("label", nullable=False)
@@ -18,7 +18,7 @@ def upgrade(env):
 
     schema.create("ir_ui_menu", _menu)
 
-    def _alter(t):
+    def _alter(t: Table) -> None:
         t.drop_constraint("ir_ui_menu_parent_id_fkey")
         t.foreign_key(
             "parent_id",

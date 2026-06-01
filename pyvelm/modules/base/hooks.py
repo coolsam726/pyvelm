@@ -345,11 +345,11 @@ def _seed_currencies(env):
         return
     if "res.currency.rate" not in env.registry:
         return
-    from datetime import datetime
+    from pyvelm.timestamps import utc_now
 
     Currency = env["res.currency"]
     Rate = env["res.currency.rate"]
-    seeded_at = datetime.utcnow()
+    seeded_at = utc_now()
 
     # (code, name, symbol, rounding, opening rate vs. implicit reference).
     # Real-world rates change daily — these are illustrative starter

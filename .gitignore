@@ -1,5 +1,4 @@
 .pyvelm/
-pyrightconfig.json
 .venv/
 .coverage
 coverage.xml

@@ -56,7 +56,7 @@ from __future__ import annotations
 import logging
 import os
 import smtplib
-from datetime import datetime
+from pyvelm.timestamps import utc_now
 from email.message import EmailMessage
 from typing import Protocol
 
@@ -482,7 +482,7 @@ class MailThread:
             "res_id": self.id,
             "body": body,
             "message_type": message_type,
-            "date": datetime.utcnow(),
+            "date": utc_now(),
         }
         if subtype:
             vals["subtype"] = subtype
@@ -525,7 +525,7 @@ class MailThread:
             "res_id": self.id,
             "body": body,
             "message_type": message_type,
-            "date": datetime.utcnow(),
+            "date": utc_now(),
             "recipient_email": recipient_email,
             "recipient_cc": (cc or None),
             "recipient_bcc": (bcc or None),
@@ -602,7 +602,7 @@ class MailThread:
             "body": body_html,
             "body_is_html": True,
             "message_type": "email",
-            "date": datetime.utcnow(),
+            "date": utc_now(),
             "recipient_email": recipient_email,
             "recipient_cc": (cc or None),
             "recipient_bcc": (bcc or None),

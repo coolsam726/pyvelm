@@ -1,0 +1,13 @@
+{
+  "include": [
+    "pyvelm",
+    "examples",
+    "pyvelm/tests"
+  ],
+  "extraPaths": ["."],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "basic",
+  "stubPath": ".pyvelm/typing"
+}

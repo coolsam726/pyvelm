@@ -1,8 +1,6 @@
-"""Add ``vellum.demo.comment`` for Vellum relation tests."""
+"""Add vellum.demo.comment for Vellum relation tests."""
 
 
-def migrate(env):
-    Comment = env["vellum.demo.comment"]
-    Comment._setup_table(env.conn)
-    Note = env["vellum.demo.note"]
-    Note._setup_table(env.conn)
+def upgrade(env):
+    env["vellum.demo.comment"]._setup_table(env.conn)
+    env["vellum.demo.note"]._setup_table(env.conn)

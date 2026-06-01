@@ -1,12 +1,12 @@
 """Introduce ir.attachment and Admin ACL."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _attachment(t):
+    def _attachment(t: Table) -> None:
         t.string("name", nullable=False)
         t.string("datas_fname", nullable=True)
         t.string("mimetype", nullable=True)

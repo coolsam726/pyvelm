@@ -1,8 +1,12 @@
-"""Add ``birth_date`` to res.partner for the date picker demo."""
+"""Add birth_date to res.partner for the date picker demo."""
+
+from pyvelm.migrations import Schema, Table
 
 
-def migrate(env):
-    env.conn.execute(
-        'ALTER TABLE "res_partner" '
-        'ADD COLUMN IF NOT EXISTS "birth_date" date'
-    )
+def upgrade(env):
+    schema = Schema(env)
+
+    def _alter(t: Table) -> None:
+        t.date("birth_date", nullable=True)
+
+    schema.table("res_partner", _alter)

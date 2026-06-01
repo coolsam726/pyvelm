@@ -1,12 +1,12 @@
 """Add menu_layout on res.company."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _alter(t):
+    def _alter(t: Table) -> None:
         t.string("menu_layout", nullable=True)
 
     schema.table("res_company", _alter)

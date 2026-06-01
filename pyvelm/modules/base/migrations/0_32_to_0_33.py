@@ -1,12 +1,12 @@
 """Header logo height + show brand text in chrome."""
 
-from pyvelm.migrations import Schema
+from pyvelm.migrations import Blueprint, Schema, Table
 
 
 def upgrade(env):
     schema = Schema(env)
 
-    def _alter(t):
+    def _alter(t: Table) -> None:
         t.integer("header_logo_height", nullable=True).default(0)
         t.boolean("show_header_brand_text", nullable=True).default(True)
 
