@@ -7,7 +7,7 @@ from pyvelm import BaseModel, Char, Many2many, Registry
 from pyvelm.database import dialect_capabilities
 from pyvelm.domain import domain_to_sql
 from pyvelm.domain_sa import _sa_dialect, domain_search_select
-from pyvelm.fields import Integer, Many2one
+from pyvelm.fields import Boolean, Integer, Many2one, Text
 
 
 def _partner_registry():
@@ -77,12 +77,47 @@ class DomainSACompileTests(unittest.TestCase):
         self.assertNotIn('""res_currency_rate"', sql)
         self.assertIn("currency_id_1", compiled.params)
 
-    def test_oracle_text_equality_uses_dbms_lob_compare(self):
-        reg, Partner = _partner_registry()
+    def test_oracle_char_order_by_label_uses_varchar_not_clob(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Menu(BaseModel):
+                _name = "ir.ui.menu"
+                _table = "ir_ui_menu"
+                label = Char(required=True)
+                sequence = Integer()
+                active = Boolean()
+
         cap = dialect_capabilities("oracle")
         stmt = domain_search_select(
-            Partner,
-            [("name", "=", "Admin")],
+            Menu,
+            [("active", "=", True)],
+            reg,
+            capabilities=cap,
+            order='"sequence" ASC, "label" ASC',
+        )
+        sql = str(
+            stmt.compile(
+                dialect=_sa_dialect(cap), compile_kwargs={"render_postcompile": True}
+            )
+        ).upper()
+        self.assertIn("ORDER BY", sql)
+        self.assertIn("LABEL", sql)
+        self.assertNotIn("CLOB", sql)
+
+    def test_oracle_text_equality_uses_dbms_lob_compare(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Note(BaseModel):
+                _name = "test.note"
+                _table = "test_note"
+                body = Text()
+
+        cap = dialect_capabilities("oracle")
+        stmt = domain_search_select(
+            Note,
+            [("body", "=", "Admin")],
             reg,
             capabilities=cap,
         )

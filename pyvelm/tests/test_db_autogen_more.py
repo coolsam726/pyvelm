@@ -125,7 +125,7 @@ class TypeHelperTests(unittest.TestCase):
 
     def test_field_type_spec(self):
         f = Char()
-        self.assertEqual(_field_type_spec(f), "text")
+        self.assertEqual(_field_type_spec(f), "varchar(255)")
 
 
 class ComputeDiffNewTableTests(unittest.TestCase):

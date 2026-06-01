@@ -199,6 +199,8 @@ def sa_type_for_field(field: "Field", cap: DialectCapabilities):
             return DATETIMEOFFSET()
     if upper in ("INTEGER", "INT", "SERIAL", "BIGINT"):
         return Integer()
+    if "NUMBER(1)" in upper or upper == "BOOLEAN":
+        return Boolean()
     if upper in ("TEXT", "CLOB"):
         return Text()
     if "VARCHAR" in upper or "CHAR" in upper:
@@ -209,8 +211,6 @@ def sa_type_for_field(field: "Field", cap: DialectCapabilities):
         return String(length)
     if "DOUBLE" in upper or upper == "FLOAT":
         return Float()
-    if "NUMBER(1)" in upper or upper == "BOOLEAN":
-        return Boolean()
     if "TIMESTAMP WITH TIME ZONE" in upper or upper == "TIMESTAMPTZ":
         return DateTime(timezone=True)
     if "TIMESTAMP" in upper:

@@ -114,13 +114,18 @@ def _normalize_pg_column(udt_name: str, data_type: str) -> str:
     return (data_type or udt or "text").strip().lower()
 
 
+def _varchar_family(type_name: str) -> bool:
+    """True for Char-like types (varchar/text) that are compatible in Postgres."""
+    key = _normalize_type_name(type_name)
+    if key in ("text", "character varying", "varchar"):
+        return True
+    return key.startswith("varchar(") or key.startswith("character varying")
+
+
 def _types_match(expected: str, actual: str) -> bool:
     if expected == actual:
         return True
-    # Char/Text both land as text in pyvelm + Postgres.
-    if expected == "text" and actual in ("text", "character varying", "varchar"):
-        return True
-    if actual == "text" and expected in ("text", "character varying", "varchar"):
+    if _varchar_family(expected) and _varchar_family(actual):
         return True
     return False
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import unittest
 
-from pyvelm import BaseModel, Char, Integer, Many2one, One2many, Registry
+from pyvelm import BaseModel, Char, Integer, Many2one, One2many, Registry, Text
 from pyvelm.database import dialect_capabilities
 from pyvelm.domain import (
     domain_to_sql,
@@ -115,10 +115,18 @@ class DomainOperatorTests(unittest.TestCase):
             domain_to_sql([("name", "=", "x", "bad")], self.Partner, self.reg)
 
     def test_oracle_text_equality_uses_dbms_lob_compare(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Note(BaseModel):
+                _name = "test.note"
+                _table = "test_note"
+                body = Text()
+
         where, params, _ = domain_to_sql(
-            [("name", "=", "Admin")],
-            self.Partner,
-            self.reg,
+            [("body", "=", "Admin")],
+            Note,
+            reg,
             capabilities=dialect_capabilities("oracle"),
         )
         self.assertIn("dbms_lob.compare", where.lower())

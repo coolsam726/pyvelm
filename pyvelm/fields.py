@@ -257,7 +257,7 @@ class Field:
 
 
 class Char(Field):
-    sql_type = "text"
+    sql_type = "varchar(255)"
     python_type = str
 
     def __init__(
@@ -286,6 +286,8 @@ class Char(Field):
             tracking=tracking,
         )
         self.size = size
+        if size is not None:
+            self.sql_type = f"varchar({int(size)})"
         # `choices` constrains the value to a small enumeration. Items
         # are either plain strings (label == value) or ``(value, label)``
         # tuples. When set, edit widgets render a ``<select>`` instead
@@ -310,7 +312,7 @@ class Char(Field):
 
 
 class Text(Char):
-    pass
+    sql_type = "text"
 
 
 class Code(Text):
