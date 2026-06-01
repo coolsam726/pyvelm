@@ -17,7 +17,7 @@ CAPABILITIES = DialectCapabilities(
     supports_add_column_if_not_exists=False,
     supports_drop_schema=False,
     schema_reset=SchemaResetStrategy.DROP_ALL_TABLES,
-    placeholder="%s",
+    placeholder="?",  # pyodbc positional markers (adapter rewrites %s → ?)
 )
 
 PORTABLE_TYPE_MAP = {

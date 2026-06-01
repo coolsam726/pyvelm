@@ -473,6 +473,12 @@ class ConnectionAdapterMoreTests(unittest.TestCase):
         adapter = ConnectionAdapter(MagicMock(), capabilities=cap)
         self.assertEqual(adapter._convert_sql("WHERE x = %s"), "WHERE x = ?")
 
+    def test_placeholder_conversion_mssql(self):
+        cap = dialect_caps("mssql")
+        adapter = ConnectionAdapter(MagicMock(), capabilities=cap)
+        self.assertEqual(cap.placeholder, "?")
+        self.assertEqual(adapter._convert_sql('WHERE "name" = %s'), 'WHERE "name" = ?')
+
     def test_commit_rollback_via_dbapi(self):
         dbapi = MagicMock()
         dbapi.autocommit = False

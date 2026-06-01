@@ -79,6 +79,7 @@ class DialectCapabilitiesTests(unittest.TestCase):
         cap = dialect_capabilities("mssql")
         self.assertFalse(cap.supports_ilike)
         self.assertFalse(cap.supports_returning)
+        self.assertEqual(cap.placeholder, "?")
         self.assertIn("IDENTITY", serial_primary_key(cap))
 
     def test_mssql_dsn_normalisation(self):
