@@ -22,8 +22,8 @@ CAPABILITIES = DialectCapabilities(
 
 PORTABLE_TYPE_MAP = {
     "double precision": "DOUBLE",
-    "timestamptz": "DATETIME(6)",
-    "timestamp": "DATETIME(6)",
+    "timestamptz": "TIMESTAMP(6)",
+    "timestamp": "TIMESTAMP(6)",
     "boolean": "BOOLEAN",
     "SERIAL": "INTEGER",
 }
@@ -57,7 +57,7 @@ def fetch_lastrowid(conn: ConnectionAdapter, table: str) -> int:
 
 
 def timestamp_sql_type() -> str:
-    return "DATETIME(6)"
+    return "TIMESTAMP(6)"
 
 
 def now_sql() -> str:
