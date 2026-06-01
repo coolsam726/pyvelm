@@ -578,6 +578,11 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
             # let the column-sync pass below reconcile any drift.
             if not is_duplicate_object_error(exc):
                 raise
+    # Always re-diff after CREATE TABLE attempts. If an inspector race reported
+    # "table missing" but CREATE collided with an existing table, the original
+    # diff contains no new_columns (it short-circuits at new_tables). A fresh
+    # diff is required so we still add any columns that are genuinely missing.
+    diff = compute_diff(env, module)
     from pyvelm.database import add_column_if_missing, _conn_capabilities, normalize_sql_type
 
     cap = _conn_capabilities(env.conn)

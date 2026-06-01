@@ -234,6 +234,42 @@ class ApplySchemaDiffTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 apply_schema_diff(env, "partners")
 
+    def test_duplicate_create_re_diffs_and_adds_missing_columns(self):
+        """If CREATE TABLE collides (ORA-00955), we must re-diff for columns."""
+        env = _mock_env_dialect([], _partner_cls(required=True), dialect_name="oracle")
+        first = Diff(new_tables=[("res_partner", 'CREATE TABLE "res_partner" ("id" INTEGER)')])
+        second = Diff(
+            new_columns=[
+                (
+                    "res_partner",
+                    "code",
+                    'ALTER TABLE "res_partner" ADD COLUMN "code" text',
+                    True,
+                    "text",
+                )
+            ]
+        )
+        third = Diff()
+
+        executed: list[str] = []
+
+        def execute(sql, params=None):
+            executed.append(sql)
+            if sql.upper().startswith("CREATE TABLE"):
+                raise Exception("ORA-00955: name is already used by an existing object")
+            r = MagicMock()
+            r.fetchall.return_value = []
+            r.fetchone.return_value = None
+            return r
+
+        env.conn.execute = execute
+        with patch("pyvelm.db_autogen.compute_diff", side_effect=[first, second, third]):
+            with patch("pyvelm.db_autogen._column_exists", return_value=False):
+                apply_schema_diff(env, "partners")
+
+        self.assertTrue(any(s.upper().startswith("CREATE TABLE") for s in executed))
+        self.assertTrue(any('ALTER TABLE "res_partner" ADD "code"' in s for s in executed))
+
 
 class InspectorEdgeCaseTests(unittest.TestCase):
     def test_fetch_table_columns_inspector_missing_table_returns_none(self):
