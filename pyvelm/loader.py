@@ -372,7 +372,18 @@ def _ensure_ir_module(env: Environment) -> None:
         cap
     ):
         return
-    env.conn.execute(ir_module_create_sql(cap))
+    try:
+        env.conn.execute(ir_module_create_sql(cap))
+    except Exception as exc:
+        # Non-IF-NOT-EXISTS backends can race on bootstrap checks.
+        msg = str(getattr(exc, "orig", exc)).lower()
+        if (
+            "already exists" in msg
+            or "already an object named" in msg
+            or "name is already used by an existing object" in msg
+        ):
+            return
+        raise
 
 
 def _installed_module_names(env: Environment) -> set[str]:
@@ -792,9 +803,13 @@ def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
                 schema_note = applied.summary()
                 if spec.install_hook is not None:
                     spec.install_hook(env)
+                from pyvelm.database import _conn_capabilities, now_sql
+
+                cap = _conn_capabilities(env.conn)
                 env.conn.execute(
                     f'INSERT INTO "{IR_MODULE_TABLE}" '
-                    f'("name", "version") VALUES (%s, %s)',
+                    f'("name", "version", "installed_at") '
+                    f'VALUES (%s, %s, {now_sql(cap)})',
                     [spec.name, spec.version_str],
                 )
             else:
