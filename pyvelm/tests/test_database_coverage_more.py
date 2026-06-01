@@ -872,6 +872,44 @@ class DialectRemainingGapsTests(unittest.TestCase):
         oracle.before_reset_all_tables(MagicMock())
         oracle.after_reset_all_tables(MagicMock())
 
+    def test_sqlite_pagination_limit_and_offset(self):
+        sql = sqlite.append_search_pagination(
+            "SELECT 1",
+            base_table_sql='"t"',
+            limit=10,
+            offset=2,
+            order=None,
+        )
+        self.assertIn("LIMIT 10", sql)
+        self.assertIn("OFFSET 2", sql)
+
+    def test_mssql_configure_engine_registers_connect_listener(self):
+        with patch("sqlalchemy.event.listens_for") as listen:
+            mssql.configure_engine(MagicMock())
+        listen.assert_called_once()
+
+    def test_mssql_fetch_lastrowid_fallback_max(self):
+        conn = MagicMock()
+        conn.execute.side_effect = [
+            MagicMock(fetchone=MagicMock(return_value=(None,))),
+            MagicMock(fetchone=MagicMock(return_value=(42,))),
+        ]
+        self.assertEqual(mssql.fetch_lastrowid(conn, "demo"), 42)
+
+    def test_mssql_pagination_without_order_uses_id(self):
+        sql = mssql.append_search_pagination(
+            "SELECT * FROM demo",
+            base_table_sql='"demo"',
+            limit=5,
+            offset=0,
+            order=None,
+        )
+        self.assertIn("ORDER BY", sql.upper())
+        self.assertIn("FETCH NEXT", sql.upper())
+
+    def test_mssql_is_missing_table_error(self):
+        self.assertTrue(mssql.is_missing_table_error("42s02 object missing"))
+
     def test_postgresql_pagination_offset(self):
         sql = postgresql.append_search_pagination(
             "SELECT 1", base_table_sql='"t"', limit=None, offset=3, order=None

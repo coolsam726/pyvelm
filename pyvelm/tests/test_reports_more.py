@@ -13,7 +13,13 @@ from pyvelm.reports.compile_collections import (
     column_expr_for_path,
     default_subaggregate,
 )
-from pyvelm.reports.execute import ReportResult, _secured_definition, run_report
+from pyvelm.reports.execute import (
+    ReportResult,
+    _resolve_currency_symbols,
+    _resolve_m2o_labels,
+    _secured_definition,
+    run_report,
+)
 from pyvelm.reports.export_xlsx import export_csv, export_xlsx
 from pyvelm.reports.fields_api import (
     check_definition_access,
@@ -210,11 +216,223 @@ class ReportCompileMoreTests(unittest.TestCase):
         self.assertTrue(any(k[0] == "ccy" for k in (compiled.row_key_order or [])))
 
 
+class ReportExecuteLabelTests(unittest.TestCase):
+    def test_resolve_m2o_labels_fallback_to_id(self):
+        from pyvelm.reports.compile import ColumnMeta
+
+        env = MagicMock()
+        rec = MagicMock()
+        rec.id = 3
+        rec._fields = {}
+        Partner = MagicMock()
+        Partner.browse.return_value = [rec]
+        env.__getitem__ = lambda _s, k: Partner
+        rows = [{"country_id": 3}]
+        cols = [
+            ColumnMeta(
+                key="country_id",
+                label="Country",
+                expr="country_id",
+                comodel="res.country",
+                is_m2o=True,
+            ),
+        ]
+        _resolve_m2o_labels(env, cols, rows)
+        self.assertEqual(rows[0]["country_id__label"], "3")
+
+    def test_resolve_m2o_labels_skips_empty_ids(self):
+        from pyvelm.reports.compile import ColumnMeta
+
+        env = MagicMock()
+        rows = [{"country_id": None}]
+        cols = [
+            ColumnMeta(
+                key="country_id",
+                label="Country",
+                expr="country_id",
+                comodel="res.country",
+                is_m2o=True,
+            ),
+        ]
+        _resolve_m2o_labels(env, cols, rows)
+        env.__getitem__.assert_not_called()
+
+    def test_resolve_m2o_labels(self):
+        from pyvelm.reports.compile import ColumnMeta
+
+        env = MagicMock()
+        Partner = MagicMock()
+        rec = MagicMock()
+        rec.id = 7
+        rec._fields = {"name": object(), "display_name": object()}
+        rec.display_name = "France"
+        Partner.browse.return_value = [rec]
+        env.__getitem__ = lambda _s, k: Partner if k == "res.country" else MagicMock()
+        rows = [{"country_id": 7}]
+        cols = [
+            ColumnMeta(key="country_id", label="Country", expr="country_id", comodel="res.country", is_m2o=True),
+        ]
+        _resolve_m2o_labels(env, cols, rows)
+        self.assertEqual(rows[0]["country_id__label"], "France")
+
+    def test_resolve_currency_fixed_id(self):
+        from pyvelm.reports.compile import ColumnMeta
+
+        reg = Registry()
+        with reg.activate():
+
+            class Currency(BaseModel):
+                _name = "res.currency"
+                _table = "res_currency"
+                symbol = Char()
+                code = Char()
+
+        env = MagicMock()
+        env.registry = reg
+        env.check_access = MagicMock()
+        rec = MagicMock(id=5, symbol="€", code="EUR")
+        Currency = MagicMock()
+        Currency.browse.return_value = rec
+        env.__getitem__ = lambda _s, k: Currency if k == "res.currency" else reg[k]
+        rows = [{"amount": 10}]
+        cols = [
+            ColumnMeta(
+                key="amount",
+                label="Amount",
+                expr="amount",
+                format={"type": "currency", "currency_source": "fixed", "currency_id": 5},
+            ),
+        ]
+        _resolve_currency_symbols(env, cols, rows)
+        self.assertEqual(rows[0]["amount__currency_symbol"], "€")
+
+    def test_resolve_currency_from_field(self):
+        from pyvelm.reports.compile import ColumnMeta
+
+        reg = Registry()
+        with reg.activate():
+
+            class Currency(BaseModel):
+                _name = "res.currency"
+                _table = "res_currency"
+                symbol = Char()
+                code = Char()
+
+        env = MagicMock()
+        env.registry = reg
+        env.check_access = MagicMock()
+        rec = MagicMock(id=5, symbol="€", code="EUR")
+        Currency = MagicMock()
+        Currency.browse.return_value = [rec]
+        env.__getitem__ = lambda _s, k: Currency if k == "res.currency" else reg[k]
+        rows = [{"amount": 10, "currency_id": 5}]
+        cols = [
+            ColumnMeta(
+                key="amount",
+                label="Amount",
+                expr="amount",
+                format={"type": "currency", "currency_source": "field"},
+                currency_id_key="currency_id",
+            ),
+        ]
+        _resolve_currency_symbols(env, cols, rows)
+        self.assertEqual(rows[0]["amount__currency_symbol"], "€")
+
+    def test_resolve_currency_skips_without_module_or_permission(self):
+        from pyvelm.reports.compile import ColumnMeta
+
+        env = MagicMock()
+        env.registry = Registry()
+        rows = [{"amount": 1}]
+        cols = [
+            ColumnMeta(
+                key="amount",
+                label="Amount",
+                expr="amount",
+                format={"type": "currency", "currency_source": "fixed", "currency_id": 1},
+            ),
+        ]
+        _resolve_currency_symbols(env, cols, rows)
+        env.check_access.side_effect = PermissionError
+        reg = Registry()
+        with reg.activate():
+
+            class Currency(BaseModel):
+                _name = "res.currency"
+                symbol = Char()
+
+        env.registry = reg
+        _resolve_currency_symbols(env, cols, rows)
+
+
 class ReportCollectionsTests(unittest.TestCase):
     def test_default_subaggregate_by_field_type(self):
         reg = _partner_registry()
         self.assertEqual(default_subaggregate(reg["res.partner"]._fields["amount"]), "sum")
         self.assertEqual(default_subaggregate(reg["res.partner"]._fields["name"]), "string_agg")
+
+    def test_collection_subquery_m2o_string_agg(self):
+        reg = _partner_registry()
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.domain_sa import column_element_to_sql
+        from pyvelm.paths import parse_path
+
+        cap = dialect_capabilities("postgresql")
+        path = parse_path(reg["res.partner"], "child_ids.country_id", reg)
+        expr = collection_subquery_expr(
+            path, reg["res.partner"], '"res_partner"', reg, "string_agg"
+        )
+        sql = column_element_to_sql(expr, cap)
+        self.assertIn("string_agg", sql.lower())
+
+    def test_collection_subquery_no_hop_raises(self):
+        reg = _partner_registry()
+        from pyvelm.paths import parse_path
+
+        path = parse_path(reg["res.partner"], "name", reg)
+        with self.assertRaises(ValueError):
+            collection_subquery_expr(
+                path, reg["res.partner"], '"res_partner"', reg, "count"
+            )
+
+    def test_collection_subquery_string_agg(self):
+        reg = _partner_registry()
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.domain_sa import column_element_to_sql
+        from pyvelm.paths import parse_path
+
+        cap = dialect_capabilities("postgresql")
+        path = parse_path(reg["res.partner"], "child_ids.name", reg)
+        expr = collection_subquery_expr(
+            path, reg["res.partner"], '"res_partner"', reg, "string_agg"
+        )
+        sql = column_element_to_sql(expr, cap)
+        self.assertIn("string_agg", sql.lower())
+
+    def test_collection_subquery_unknown_aggregate_raises(self):
+        reg = _partner_registry()
+        from pyvelm.paths import parse_path
+        from pyvelm.reports.compile_collections import _collection_aggregate
+        from sqlalchemy import literal_column
+
+        path = parse_path(reg["res.partner"], "child_ids.name", reg)
+        with self.assertRaises(ValueError):
+            _collection_aggregate(
+                "nope",
+                leaf_col=literal_column("1"),
+                coll_alias="_sqc",
+                leaf_cls=reg["res.partner"],
+                path=path,
+                current_alias="_sqc",
+                registry=reg,
+            )
+
+    def test_column_expr_requires_compiler(self):
+        reg = _partner_registry()
+        with self.assertRaises(ValueError):
+            column_expr_for_path(
+                "name", reg["res.partner"], '"res_partner"', reg, [], {}, [0], None
+            )
 
     def test_collection_subquery_o2m_count(self):
         reg = _partner_registry()
