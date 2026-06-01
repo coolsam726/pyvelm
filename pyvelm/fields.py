@@ -144,6 +144,8 @@ class Field:
                 record.env.compute_field(record, self)
             else:
                 record._read([self.name])
+            if not cache.contains(record._name, rid, self.name):
+                return self.default_value()
         return self.to_python(cache.get(record._name, rid, self.name))
 
     def __set__(self, record, value) -> None:

@@ -59,6 +59,10 @@ def _field_label(field: Field, fname: str) -> str:
     return field.string or fname.replace("_", " ").title()
 
 
+def _auto_display_label(rec) -> str:
+    return f"{rec._name} #{rec.id}"
+
+
 def _format_m2o(env, field: Many2one, raw_id: Any) -> str:
     if raw_id is None:
         return _EMPTY
@@ -67,11 +71,13 @@ def _format_m2o(env, field: Many2one, raw_id: Any) -> str:
     if not rec:
         return _EMPTY
     rec.ensure_one()
-    display = getattr(rec, "display_name", None)
-    if display:
-        return str(display)
     name = getattr(rec, "name", None)
-    return str(name) if name else str(raw_id)
+    if name not in (None, ""):
+        return str(name)
+    display = getattr(rec, "display_name", None)
+    if display and str(display) != _auto_display_label(rec):
+        return str(display)
+    return str(raw_id)
 
 
 def _format_m2m(env, field: Many2many, ids: Any) -> str:
@@ -85,11 +91,13 @@ def _format_m2m(env, field: Many2many, ids: Any) -> str:
         if not rec:
             continue
         rec.ensure_one()
+        name = getattr(rec, "name", None)
+        if name not in (None, ""):
+            labels.append(str(name))
+            continue
         display = getattr(rec, "display_name", None)
-        if display:
+        if display and str(display) != _auto_display_label(rec):
             labels.append(str(display))
-        elif getattr(rec, "name", None):
-            labels.append(str(rec.name))
         else:
             labels.append(str(rid))
     return ", ".join(labels) if labels else _EMPTY

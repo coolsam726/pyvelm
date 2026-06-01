@@ -14,6 +14,14 @@ from .timestamps import (
 )
 
 
+def _require_sa_connection(conn) -> Any:
+    """Return the underlying SQLAlchemy connection (required for DML)."""
+    sa_conn = getattr(conn, "_sa", None)
+    if sa_conn is None:
+        raise RuntimeError("SQLAlchemy connection is required.")
+    return sa_conn
+
+
 def _rec_name_field(cls) -> str | None:
     """Return the Char/Text (etc.) field used for the default display_name."""
     raw = getattr(cls, "_rec_name", "name")
@@ -698,25 +706,26 @@ class BaseModel(metaclass=MetaModel):
 
     def _apply_m2m(self, parent_ids: list[int], m2m_vals: dict[str, Any]) -> None:
         """Replace junction-table rows for each (field, parent_id) pair."""
+        from sqlalchemy import bindparam, column, delete, insert, table
+
+        sa_conn = _require_sa_connection(self.env.conn)
         for fname, value in m2m_vals.items():
             field = self._fields[fname]
             relation, col1, col2, _, _ = field.resolve_spec(
                 type(self), self.env.registry
             )
             target_ids = field.normalize_ids(value)
+            rel_tbl = table(relation, column(col1), column(col2))
             for parent_id in parent_ids:
-                self.env.conn.execute(
-                    f'DELETE FROM "{relation}" WHERE "{col1}" = %s', [parent_id]
+                del_stmt = delete(rel_tbl).where(
+                    column(col1) == bindparam("parent_id")
                 )
+                sa_conn.execute(del_stmt, {"parent_id": parent_id})
                 if not target_ids:
                     continue
-                values_sql = ",".join(["(%s, %s)"] * len(target_ids))
-                params: list[int] = []
-                for tid in target_ids:
-                    params.extend([parent_id, tid])
-                self.env.conn.execute(
-                    f'INSERT INTO "{relation}" ("{col1}", "{col2}") VALUES {values_sql}',
-                    params,
+                sa_conn.execute(
+                    insert(rel_tbl),
+                    [{col1: parent_id, col2: tid} for tid in target_ids],
                 )
 
     def create(self, vals: dict[str, Any]) -> "BaseModel":
@@ -742,11 +751,6 @@ class BaseModel(metaclass=MetaModel):
             if field.default is None:
                 continue
             column_vals[fname] = field.default
-        cols, params = [], []
-        for fname, value in column_vals.items():
-            field = self._fields[fname]
-            cols.append(f'"{field.column}"')
-            params.append(field.to_sql_param(value))
         cap = getattr(self.env.conn, "capabilities", None)
         if cap is None:
             from .database import dialect_capabilities, fetch_lastrowid
@@ -754,11 +758,8 @@ class BaseModel(metaclass=MetaModel):
             cap = dialect_capabilities("postgresql")
         else:
             from .database import fetch_lastrowid
-        sa_conn = getattr(self.env.conn, "_sa", None)
-        if sa_conn is None:
-            raise RuntimeError(
-                "SQLAlchemy connection is required for BaseModel.create()."
-            )
+
+        sa_conn = _require_sa_connection(self.env.conn)
         from sqlalchemy import bindparam, column, insert, table
 
         sql_cols: dict[str, Any] = {}
@@ -856,14 +857,24 @@ class BaseModel(metaclass=MetaModel):
         if related_vals:
             self._apply_related_vals(related_vals)
         if column_vals:
-            assigns = ", ".join(f'"{self._fields[f].column}" = %s' for f in column_vals)
-            params = [self._fields[f].to_sql_param(v) for f, v in column_vals.items()]
-            placeholders = ",".join(["%s"] * len(self._ids))
-            sql = (
-                f'UPDATE "{self._table}" SET {assigns} '
-                f'WHERE "id" IN ({placeholders})'
+            from sqlalchemy import bindparam, column, table, update
+
+            sa_conn = _require_sa_connection(self.env.conn)
+            sql_cols: dict[str, Any] = {}
+            for fname, value in column_vals.items():
+                field = self._fields[fname]
+                sql_cols[field.column] = field.to_sql_param(value)
+            tbl = table(
+                self._table,
+                column("id"),
+                *[column(col_name) for col_name in sql_cols],
             )
-            self.env.conn.execute(sql, params + list(self._ids))
+            stmt = (
+                update(tbl)
+                .where(column("id").in_(bindparam("ids", expanding=True)))
+                .values({col_name: bindparam(col_name) for col_name in sql_cols})
+            )
+            sa_conn.execute(stmt, {**sql_cols, "ids": list(self._ids)})
             for rid in self._ids:
                 for fname, value in column_vals.items():
                     self.env.cache.set(
@@ -900,9 +911,14 @@ class BaseModel(metaclass=MetaModel):
         # Fire on_unlink automation rules before the records are deleted.
         from .automation import AutomationEngine
         AutomationEngine.fire(self.env, self._name, "on_unlink", self)
-        placeholders = ",".join(["%s"] * len(self._ids))
-        sql = f'DELETE FROM "{self._table}" WHERE "id" IN ({placeholders})'
-        self.env.conn.execute(sql, list(self._ids))
+        from sqlalchemy import bindparam, column, delete, table
+
+        sa_conn = _require_sa_connection(self.env.conn)
+        tbl = table(self._table, column("id"))
+        stmt = delete(tbl).where(
+            column("id").in_(bindparam("ids", expanding=True))
+        )
+        sa_conn.execute(stmt, {"ids": list(self._ids)})
         self.env.cache.invalidate(model_name=self._name, ids=list(self._ids))
 
     # ------ READ ------
@@ -922,14 +938,20 @@ class BaseModel(metaclass=MetaModel):
         ]
         if not missing_ids:
             return
+        sa_conn = getattr(self.env.conn, "_sa", None)
+        if sa_conn is None:
+            # No database attached (unit tests with cache-only environments).
+            return
         # Select by column, but cache under attr name.
-        select_cols = ['"id"'] + [f'"{self._fields[f].column}"' for f in fields]
-        placeholders = ",".join(["%s"] * len(missing_ids))
-        sql = (
-            f'SELECT {", ".join(select_cols)} FROM "{self._table}" '
-            f'WHERE "id" IN ({placeholders})'
+        from sqlalchemy import bindparam, column, select, table
+        sa_cols = [column("id")] + [
+            column(self._fields[f].column) for f in fields
+        ]
+        tbl = table(self._table, *sa_cols)
+        stmt = select(*sa_cols).where(
+            column("id").in_(bindparam("ids", expanding=True))
         )
-        rows = self.env.conn.execute(sql, missing_ids).fetchall()
+        rows = sa_conn.execute(stmt, {"ids": missing_ids}).fetchall()
         for row in rows:
             rid = row[0]
             for i, fname in enumerate(fields, start=1):
