@@ -96,13 +96,46 @@ class ConnectionAdapter:
             sql = re.sub(r"\bFALSE\b", "1=0", sql)
         return sql
 
-    def execute(self, sql: str, params: list | tuple | None = None) -> ExecuteResult:
+    def _prepare_text_sql(
+        self, sql: str, params: tuple[Any, ...]
+    ) -> tuple[str, dict[str, Any]]:
+        """Normalize driver SQL placeholders to SQLAlchemy ``text()`` bind names."""
         sql = self._convert_sql(sql)
-        if params is not None:
-            bind = get_backend(self.capabilities.name).bind_params(tuple(params))
-            result = self._sa.exec_driver_sql(sql, bind)
-        else:
-            result = self._sa.exec_driver_sql(sql)
+        if not params:
+            return sql, {}
+        params = tuple(get_backend(self.capabilities.name).bind_params(params))
+        if re.search(r":\d+\b", sql):
+            return sql, {str(i + 1): params[i] for i in range(len(params))}
+        if "?" in sql:
+            out: list[str] = []
+            bind: dict[str, Any] = {}
+            for i, part in enumerate(sql.split("?")):
+                out.append(part)
+                if i < len(params):
+                    key = f"p{i}"
+                    bind[key] = params[i]
+                    out.append(f":{key}")
+            return "".join(out), bind
+        if "%s" in sql:
+            out = []
+            bind = {}
+            for i, part in enumerate(sql.split("%s")):
+                out.append(part)
+                if i < len(params):
+                    key = f"p{i}"
+                    bind[key] = params[i]
+                    out.append(f":{key}")
+            return "".join(out), bind
+        raise ValueError(f"SQL has parameters but no recognized placeholders: {sql!r}")
+
+    def execute(self, sql: str, params: list | tuple | None = None) -> ExecuteResult:
+        from sqlalchemy import text
+
+        if self._sa is None:
+            raise RuntimeError("SQLAlchemy connection is required.")
+        bind_params = tuple(params) if params is not None else ()
+        sql, bind = self._prepare_text_sql(sql, bind_params)
+        result = self._sa.execute(text(sql), bind or None)
         rows = None
         if result.returns_rows:
             rows = [tuple(row) for row in result.fetchall()]

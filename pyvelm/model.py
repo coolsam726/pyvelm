@@ -987,6 +987,39 @@ class BaseModel(metaclass=MetaModel):
 
     # ------ SEARCH ------
 
+    def _collect_search_domain(
+        self, domain: list[tuple] | None
+    ) -> list[tuple]:
+        """Merge caller domain with record rules and company scope."""
+        self.env.check_access(self._name, "read")
+        full_domain = list(domain or [])
+        rule_leaves = self.env.collect_record_rules(self._name, "read")
+        if rule_leaves:
+            full_domain.extend(rule_leaves)
+        if (
+            not self.env._acl_bypass
+            and self.env.company_id is not None
+            and getattr(self.__class__, "_company_scoped", False)
+        ):
+            full_domain.append(("company_id", "=", self.env.company_id))
+        return full_domain
+
+    def _domain_to_sql(
+        self, full_domain: list[tuple]
+    ) -> tuple[str, list[Any], str]:
+        where, params, joins = domain_to_sql(
+            full_domain,
+            self.__class__,
+            self.env.registry,
+            capabilities=getattr(self.env.conn, "capabilities", None),
+        )
+        return where, params, joins
+
+    def _execute_search_sql(self, sql: str, params: list[Any]) -> list[tuple]:
+        """Run a compiled search/read_group SELECT via SQLAlchemy ``text()``."""
+        _require_sa_connection(self.env.conn)
+        return self.env.conn.execute(sql, params).fetchall()
+
     def search(
         self,
         domain: list[tuple] | None = None,
@@ -994,30 +1027,8 @@ class BaseModel(metaclass=MetaModel):
         offset: int = 0,
         order: str | None = None,
     ) -> "BaseModel":
-        self.env.check_access(self._name, "read")
-        # AND every applicable ir.rule's domain into the user's view.
-        full_domain = list(domain or [])
-        rule_leaves = self.env.collect_record_rules(self._name, "read")
-        if rule_leaves:
-            full_domain.extend(rule_leaves)
-        # Auto-inject company scope when env.company_id is set and the
-        # model opted in via `_company_scoped`. Applies to everyone
-        # (including superuser) so the company switcher demos
-        # consistently — to see every record across companies, use
-        # `env.with_company(None)` explicitly. The ACL-bypass path
-        # always skips so installer/migration code can see the world.
-        if (
-            not self.env._acl_bypass
-            and self.env.company_id is not None
-            and getattr(self.__class__, "_company_scoped", False)
-        ):
-            full_domain.append(("company_id", "=", self.env.company_id))
-        where, params, joins = domain_to_sql(
-            full_domain,
-            self.__class__,
-            self.env.registry,
-            capabilities=getattr(self.env.conn, "capabilities", None),
-        )
+        full_domain = self._collect_search_domain(domain)
+        where, params, joins = self._domain_to_sql(full_domain)
         base = f'"{self._table}"'
         sql = f'SELECT {base}."id" FROM {base}{joins} WHERE {where}'
         if order:
@@ -1035,30 +1046,16 @@ class BaseModel(metaclass=MetaModel):
             order=order,
             cap=cap,
         )
-        rows = self.env.conn.execute(sql, params).fetchall()
+        rows = self._execute_search_sql(sql, params)
         return self.__class__(self.env, tuple(r[0] for r in rows))
 
     def search_count(self, domain: list[tuple] | None = None) -> int:
-        self.env.check_access(self._name, "read")
-        full_domain = list(domain or [])
-        rule_leaves = self.env.collect_record_rules(self._name, "read")
-        if rule_leaves:
-            full_domain.extend(rule_leaves)
-        if (
-            not self.env._acl_bypass
-            and self.env.company_id is not None
-            and getattr(self.__class__, "_company_scoped", False)
-        ):
-            full_domain.append(("company_id", "=", self.env.company_id))
-        where, params, joins = domain_to_sql(
-            full_domain,
-            self.__class__,
-            self.env.registry,
-            capabilities=getattr(self.env.conn, "capabilities", None),
-        )
+        full_domain = self._collect_search_domain(domain)
+        where, params, joins = self._domain_to_sql(full_domain)
         base = f'"{self._table}"'
         sql = f'SELECT COUNT(*) FROM {base}{joins} WHERE {where}'
-        return self.env.conn.execute(sql, params).fetchone()[0]
+        row = self._execute_search_sql(sql, params)[0]
+        return int(row[0])
 
     # ---- aggregated reads (read_group) ------------------------------
     #
@@ -1105,17 +1102,7 @@ class BaseModel(metaclass=MetaModel):
     ) -> list[dict[str, Any]]:
         from .fields import Date, Datetime, Float, Integer, Many2one
 
-        self.env.check_access(self._name, "read")
-        full_domain = list(domain or [])
-        rule_leaves = self.env.collect_record_rules(self._name, "read")
-        if rule_leaves:
-            full_domain.extend(rule_leaves)
-        if (
-            not self.env._acl_bypass
-            and self.env.company_id is not None
-            and getattr(self.__class__, "_company_scoped", False)
-        ):
-            full_domain.append(("company_id", "=", self.env.company_id))
+        full_domain = self._collect_search_domain(domain)
 
         if isinstance(groupby, str):
             groupby = [groupby] if groupby else []
@@ -1218,12 +1205,7 @@ class BaseModel(metaclass=MetaModel):
             select_parts.append('COUNT(*) AS "__count"')
             measure_keys.append(("__count", "count_star", None))
 
-        where, params, joins = domain_to_sql(
-            full_domain,
-            cls,
-            self.env.registry,
-            capabilities=getattr(self.env.conn, "capabilities", None),
-        )
+        where, params, joins = self._domain_to_sql(full_domain)
         sql = (
             f"SELECT {', '.join(select_parts)} "
             f"FROM {base}{joins} WHERE {where}"
@@ -1249,12 +1231,11 @@ class BaseModel(metaclass=MetaModel):
             cap=cap,
         )
 
-        cur = self.env.conn.execute(sql, params)
+        raw_rows = self._execute_search_sql(sql, params)
         # We aliased every output column and unpack by position below
         # — group columns first, then measures — so the SELECT order
         # is the contract. ``cur.description`` isn't consulted to
         # stay resilient if the driver ever exposes extra metadata.
-        raw_rows = cur.fetchall()
         rows: list[dict[str, Any]] = []
         # Indexes into col_names — group columns first, then measures,
         # then the trailing __count if present.
