@@ -581,7 +581,7 @@ class DdlRemainingGapsTests(unittest.TestCase):
         from pyvelm.database.ddl import add_column_sql
 
         mssql_sql = add_column_sql("t", "c", "BIT", dialect_caps("mssql"))
-        self.assertEqual(mssql_sql, 'ALTER TABLE "t" ADD "c" BIT')
+        self.assertEqual(mssql_sql, "ALTER TABLE [t] ADD [c] BIT")
         self.assertNotIn("ADD COLUMN", mssql_sql)
         oracle_sql = add_column_sql("t", "c", "INTEGER", dialect_caps("oracle"))
         self.assertEqual(oracle_sql, 'ALTER TABLE "t" ADD "c" INTEGER')
@@ -596,6 +596,7 @@ class DdlRemainingGapsTests(unittest.TestCase):
         sql = compile_add_column("res_partner", col, dialect_caps("mssql"))
         self.assertIn("NVARCHAR", sql)
         self.assertIn("ADD", sql.upper())
+        self.assertIn("[res_partner]", sql)
 
     def test_reset_schema_drop_schema_path(self):
         from pyvelm.tests.support.sa_ddl import wire_sa_conn

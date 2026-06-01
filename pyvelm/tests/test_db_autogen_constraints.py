@@ -298,7 +298,9 @@ class ApplySchemaDiffTests(unittest.TestCase):
         env.conn.execute = execute
         env.conn._sa.execute = sa_execute
         with patch("pyvelm.db_autogen.compute_diff", side_effect=[first, second, third]):
-            with patch("pyvelm.db_autogen._column_exists", return_value=False):
+            with patch("pyvelm.db_autogen._column_exists", return_value=False), patch(
+                "pyvelm.database.table_exists", return_value=True
+            ):
                 apply_schema_diff(env, "partners")
 
         self.assertTrue(any("CREATE TABLE" in s.upper() for s in executed))
@@ -333,7 +335,9 @@ class InspectorEdgeCaseTests(unittest.TestCase):
 
         env.conn._sa.execute = sa_execute
         with patch("pyvelm.db_autogen.compute_diff", return_value=diff):
-            with patch("pyvelm.db_autogen._column_exists", return_value=False):
+            with patch("pyvelm.db_autogen._column_exists", return_value=False), patch(
+                "pyvelm.database.table_exists", return_value=True
+            ):
                 result = apply_schema_diff(env, "partners")
         self.assertEqual(result.new_columns, 1)
 

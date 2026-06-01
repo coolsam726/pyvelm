@@ -667,8 +667,12 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
     # diff contains no new_columns (it short-circuits at new_tables). A fresh
     # diff is required so we still add any columns that are genuinely missing.
     diff = compute_diff(env, module)
+    from pyvelm.database import table_exists
+
     for table, col, field_obj, _was_required, _sql_type in diff.new_columns:
         if _column_exists(env, table, col):
+            continue
+        if not table_exists(env.conn, table, cap):
             continue
         try:
             execute_add_column(

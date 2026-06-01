@@ -7,7 +7,7 @@ from sqlalchemy.schema import CreateColumn
 from .adapter import conn_capabilities
 from .dialects import get_backend
 from .introspection import column_exists
-from .sa_ddl import _sqlalchemy_dialect, require_sa_connection
+from .sa_ddl import _sqlalchemy_dialect, ddl_quote_identifier, require_sa_connection
 
 
 def compile_create_index(
@@ -22,11 +22,13 @@ def compile_create_index(
 
 
 def compile_drop_column(table: str, column: str, cap) -> str:
+    tbl = ddl_quote_identifier(table, cap)
+    col = ddl_quote_identifier(column, cap)
     if cap.name in ("postgresql", "sqlite"):
-        return f'ALTER TABLE "{table}" DROP COLUMN IF EXISTS "{column}"'
+        return f"ALTER TABLE {tbl} DROP COLUMN IF EXISTS {col}"
     if cap.name == "mssql":
-        return f'ALTER TABLE "{table}" DROP COLUMN "{column}"'
-    return f'ALTER TABLE "{table}" DROP COLUMN "{column}"'
+        return f"ALTER TABLE {tbl} DROP COLUMN {col}"
+    return f"ALTER TABLE {tbl} DROP COLUMN {col}"
 
 
 def compile_rename_column(table: str, old: str, new: str, cap) -> str:
@@ -56,9 +58,14 @@ def compile_add_foreign_key(
         add_kw = "ADD"
     else:
         add_kw = "ADD CONSTRAINT"
+    tbl = ddl_quote_identifier(table, cap)
+    cname = ddl_quote_identifier(constraint_name, cap)
+    lcol = ddl_quote_identifier(local_col, cap)
+    ref = ddl_quote_identifier(ref_table, cap)
+    rid = ddl_quote_identifier("id", cap)
     return (
-        f'ALTER TABLE "{table}" {add_kw} "{constraint_name}" '
-        f'FOREIGN KEY ("{local_col}") REFERENCES "{ref_table}"("id") '
+        f"ALTER TABLE {tbl} {add_kw} {cname} "
+        f"FOREIGN KEY ({lcol}) REFERENCES {ref}({rid}) "
         f"ON DELETE {ondelete}"
     )
 
@@ -71,13 +78,17 @@ def compile_set_nullable(
             return f'ALTER TABLE "{table}" MODIFY ("{column}" NULL)'
         if cap.name == "mssql":
             sql_type = type_spec or "text"
-            return f'ALTER TABLE "{table}" ALTER COLUMN "{column}" {sql_type} NULL'
+            tbl = ddl_quote_identifier(table, cap)
+            col = ddl_quote_identifier(column, cap)
+            return f"ALTER TABLE {tbl} ALTER COLUMN {col} {sql_type} NULL"
         return f'ALTER TABLE "{table}" ALTER COLUMN "{column}" DROP NOT NULL'
     if cap.name == "oracle":
         return f'ALTER TABLE "{table}" MODIFY ("{column}" NOT NULL)'
     if cap.name == "mssql":
         sql_type = type_spec or "text"
-        return f'ALTER TABLE "{table}" ALTER COLUMN "{column}" {sql_type} NOT NULL'
+        tbl = ddl_quote_identifier(table, cap)
+        col = ddl_quote_identifier(column, cap)
+        return f"ALTER TABLE {tbl} ALTER COLUMN {col} {sql_type} NOT NULL"
     return f'ALTER TABLE "{table}" ALTER COLUMN "{column}" SET NOT NULL'
 
 

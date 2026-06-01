@@ -74,12 +74,26 @@ def uses_inline_foreign_keys(cap: DialectCapabilities) -> bool:
 
 
 def columns_use_quoted_identifiers(cap: DialectCapabilities) -> bool:
-    """Oracle uppercases unquoted DDL identifiers; pyvelm SQL uses ``"col"``."""
-    return cap.name == "oracle"
+    """Dialects where DDL must quote columns to match runtime ``"col"`` SQL."""
+    return cap.name in ("oracle", "mssql")
+
+
+def ddl_quote_identifier(name: str, cap: DialectCapabilities) -> str:
+    """Quote a table/column name for hand-built DDL strings."""
+    if cap.name == "mssql":
+        escaped = name.replace("]", "]]")
+        return f"[{escaped}]"
+    return f'"{name}"'
 
 
 def _column_quote_kw(cap: DialectCapabilities) -> dict[str, bool]:
     return {"quote": True} if columns_use_quoted_identifiers(cap) else {}
+
+
+def _fk_target_table_column(table: str, column: str, cap: DialectCapabilities) -> str:
+    return (
+        f"{ddl_quote_identifier(table, cap)}.{ddl_quote_identifier(column, cap)}"
+    )
 
 
 def sa_type_for_field(field: "Field", cap: DialectCapabilities):
@@ -151,9 +165,9 @@ def field_to_column(field: "Field", registry, cap: DialectCapabilities) -> Colum
                 **quote_kw,
             )
         target = registry[field.comodel_name]
-        fk_target = f"{target._table}.id"
-        if columns_use_quoted_identifiers(cap):
-            fk_target = f'"{target._table}"."id"'
+        fk_target = _fk_target_table_column(target._table, "id", cap)
+        if not columns_use_quoted_identifiers(cap):
+            fk_target = f"{target._table}.id"
         return Column(
             field.column,
             Integer(),
@@ -203,8 +217,8 @@ def m2m_relation_table(
 ) -> Table:
     quote_kw = _column_quote_kw(cap)
     if columns_use_quoted_identifiers(cap):
-        this_fk = f'"{this_table}"."id"'
-        other_fk = f'"{other_table}"."id"'
+        this_fk = _fk_target_table_column(this_table, "id", cap)
+        other_fk = _fk_target_table_column(other_table, "id", cap)
     else:
         this_fk = f"{this_table}.id"
         other_fk = f"{other_table}.id"
@@ -370,10 +384,11 @@ def table_bound_column(table_name: str, column: Column) -> Column:
 def compile_add_column(table: str, column: Column, cap: DialectCapabilities) -> str:
     bound = table_bound_column(table, column)
     col_sql = str(CreateColumn(bound).compile(dialect=_sqlalchemy_dialect(cap)))
+    tbl_sql = ddl_quote_identifier(table, cap)
     if cap.supports_add_column_if_not_exists:
-        return f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS {col_sql}'
+        return f"ALTER TABLE {tbl_sql} ADD COLUMN IF NOT EXISTS {col_sql}"
     add_kw = "ADD" if cap.name in ("mssql", "oracle") else "ADD COLUMN"
-    return f'ALTER TABLE "{table}" {add_kw} {col_sql}'
+    return f"ALTER TABLE {tbl_sql} {add_kw} {col_sql}"
 
 
 def execute_add_column(

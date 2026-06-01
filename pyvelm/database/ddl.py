@@ -91,8 +91,13 @@ def add_column_sql(
     table: str, column: str, sql_type: str, cap: DialectCapabilities
 ) -> str:
     """Portable ``ALTER TABLE … ADD …`` (SQL Server/Oracle omit ``COLUMN``)."""
+    from .sa_ddl import ddl_quote_identifier
+
     add_kw = "ADD" if cap.name in ("mssql", "oracle") else "ADD COLUMN"
-    return f'ALTER TABLE "{table}" {add_kw} "{column}" {sql_type}'
+    return (
+        f"ALTER TABLE {ddl_quote_identifier(table, cap)} {add_kw} "
+        f"{ddl_quote_identifier(column, cap)} {sql_type}"
+    )
 
 
 def add_column_if_not_exists_sql(
