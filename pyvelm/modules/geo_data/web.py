@@ -39,11 +39,18 @@ def register_routes(app) -> None:
         if "res.country" not in env.registry:
             raise HTTPException(status_code=404, detail="geo_data is not installed")
 
-        from geo_data.hooks import seed_reference_data
+        from geo_data.seeders.geography import GeographyDatabaseSeeder
 
         try:
             with env.transaction():
-                counts = seed_reference_data(env)
+                counts = GeographyDatabaseSeeder.run(env)
+                if counts is None:
+                    counts = {
+                        "continents": 0,
+                        "countries": 0,
+                        "states": 0,
+                        "cities": 0,
+                    }
         except RuntimeError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

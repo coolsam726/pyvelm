@@ -1,7 +1,9 @@
 """Install hook for the {{name}} module.
 
 Runs once on first install (after schema setup, before view sync).
-Use for seed data, default access rules, etc.
+Use for ACLs and light setup. Bulk seed data belongs in ``seeders/``
+(register classes in ``seeders/__init__.py`` — auto-discovered by the
+loader). Subclass ``pyvelm.seeding.Seeder``.
 """
 
 

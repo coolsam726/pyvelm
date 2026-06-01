@@ -11,6 +11,7 @@ Optionally:
 
     MODELS_PACKAGE = "myapp.partners.models"   # defaults to <pkg>.models
     INSTALL_HOOK = "myapp.partners.hooks:install"
+    # Optional — default: discover seeders/SEEDERS from seeders/__init__.py
     SYNC_HOOK = "myapp.partners.hooks:sync"   # runs on Apps Sync (re-install path)
     WEB_ROUTES = "myapp.partners.web:register_routes"  # optional FastAPI routes
     MIGRATIONS_PACKAGE = "myapp.partners.migrations"  # defaults to <pkg>.migrations
@@ -76,6 +77,7 @@ class ModuleSpec:
     models_package: str
     migrations_package: str | None
     install_hook: Callable | None = None
+    seeders: list[str] = dc_field(default_factory=list)
     sync_hook: Callable | None = None
     web_routes: str | None = None
     package_path: Path | None = None
@@ -148,6 +150,13 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
     migrations_pkg = getattr(mod, "MIGRATIONS_PACKAGE", f"{package}.migrations")
     install_dotted = getattr(mod, "INSTALL_HOOK", None)
     install_hook = _import_attr(install_dotted) if install_dotted else None
+    from .seeding import resolve_module_seeders
+
+    seeders = resolve_module_seeders(
+        package,
+        pkg_path,
+        list(getattr(mod, "SEEDERS", [])),
+    )
     sync_dotted = getattr(mod, "SYNC_HOOK", None)
     sync_hook = _import_attr(sync_dotted) if sync_dotted else None
     web_routes = getattr(mod, "WEB_ROUTES", None)
@@ -164,6 +173,7 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
         models_package=models_pkg,
         migrations_package=migrations_pkg,
         install_hook=install_hook,
+        seeders=seeders,
         sync_hook=sync_hook,
         web_routes=web_routes,
         package_path=pkg_path,
@@ -777,6 +787,19 @@ def _sync_menus(spec: ModuleSpec, env: Environment) -> None:
             Menu.create(vals)
 
 
+def _run_module_seeders(spec: ModuleSpec, env: Environment) -> None:
+    """Run manifest ``SEEDERS`` (install, upgrade, and Apps Sync).
+
+    Seeders must be idempotent — match on natural keys, skip or patch
+    existing rows (see ``geo_data`` seeders).
+    """
+    if not spec.seeders:
+        return
+    from .seeding import run_seeders
+
+    run_seeders(env, spec.seeders, module=spec.name)
+
+
 def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
     """Install or upgrade each module, in `specs` order, atomically per
     module. Models must already be loaded into `env.registry`.
@@ -826,6 +849,7 @@ def install(specs: list[ModuleSpec], env: Environment) -> list[dict]:
                     f'"installed_at" = {now_sql(cap)} WHERE "name" = %s',
                     [spec.version_str, spec.name],
                 )
+            _run_module_seeders(spec, env)
             # Load data files (views, menus) from disk — always reload
             # so Upgrade/Sync picks up new DATA without reinstall.
             _load_data_files(spec)

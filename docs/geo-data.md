@@ -16,12 +16,15 @@ pip install pyvelm[geo]
 ```
 
 Then install the module from **Apps**, or include it in your
-`loader.load_and_install(...)` call. Install creates the tables and ACLs
-only — tables start **empty**.
+`loader.load_and_install(...)` call. Whenever `pyvelm[geo]` is present,
+the bundled `GeographyDatabaseSeeder` runs on **install**, **upgrade**,
+and **Sync** (continents → countries → states → cities; idempotent).
+Without the geo extras, the module installs but seeding is skipped until
+you ``pip install pyvelm[geo]`` and Sync or run ``pyvelm db seed geo_data``.
 
-To load reference data, open **Settings → Geography → Countries** and
-click **Seed geography data** (requires `pyvelm[geo]` and superuser).
-The seed reads `geonamescache` + `pycountry` in one transaction.
+You can also open **Settings → Geography → Countries** and click
+**Seed geography data** (superuser). The seed reads `geonamescache` +
+`pycountry` in one transaction.
 
 The seed is **idempotent**: existing rows are matched on their
 natural keys (continent `code`, country `code`, state `code`, city

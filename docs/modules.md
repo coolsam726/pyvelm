@@ -341,6 +341,33 @@ def sync(env):
         partner.code = f"{prefix}-{partner.id}"
 ```
 
+### Seeders (Laravel-style)
+
+Register seeders under ``<module>/seeders/`` — the loader reads
+``seeders/__init__.py`` automatically (no manifest entry required):
+
+```python
+# myapp/seeders/database.py
+from pyvelm.seeding import Seeder
+
+class DatabaseSeeder(Seeder):
+    def run_instance(self, env, **context):
+        self.call(env, CountrySeeder)
+
+# myapp/seeders/__init__.py
+from .database import DatabaseSeeder
+
+SEEDERS = [DatabaseSeeder]
+```
+
+Runs on **install**, **upgrade**, and **Sync** (after hooks and schema
+apply). Write seeders to be **idempotent** — match existing rows on natural
+keys and only insert or patch what is missing.
+
+Override discovery with an explicit ``SEEDERS`` list in ``__pyvelm__.py``
+when needed. Re-run manually with ``pyvelm db seed myapp``. See ``geo_data``
+for a full example.
+
 Optional migration file for the same version bump (runs once on upgrade):
 
 ```python

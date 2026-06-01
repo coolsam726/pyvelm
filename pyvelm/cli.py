@@ -406,6 +406,22 @@ def _add_db_subcommand(subs) -> None:
     )
     st_p.set_defaults(func=_run_db_status)
 
+    seed_p = db_subs.add_parser(
+        "seed",
+        help="Run module SEEDERS (e.g. geo_data geography reference data).",
+    )
+    seed_p.add_argument(
+        "module",
+        nargs="?",
+        default=None,
+        help="Module name (e.g. geo_data). Omit to seed every installed module with SEEDERS.",
+    )
+    seed_p.add_argument(
+        "--roots", nargs="*", default=None,
+        help="Extra module roots (default: pyvelm.toml + PYVELM_MODULE_ROOTS).",
+    )
+    seed_p.set_defaults(func=_run_db_seed)
+
     nuke_p = db_subs.add_parser(
         "nuke",
         help=(
@@ -566,6 +582,7 @@ from .migrate_cli import (
     require_dsn as _require_dsn,
     resolve_migrate_specs as _resolve_migrate_specs,
     run_db_migrate_fresh,
+    run_db_seed,
     run_migrate,
     wipe_schema as _wipe_schema,
 )
@@ -643,6 +660,12 @@ def _run_db_nuke(args: argparse.Namespace) -> None:
     print("Reinstalling modules…")
     results = _execute_db_install(dsn, ordered)
     _print_install_results(ordered, results)
+
+
+def _run_db_seed(args: argparse.Namespace) -> None:
+    """Run manifest SEEDERS for one module or all installed modules."""
+    roots = _resolve_module_roots(args)
+    run_db_seed(roots, only_module=args.module)
 
 
 def _run_db_status(args: argparse.Namespace) -> None:

@@ -1,0 +1,6 @@
+"""Registered seeders for the {{name}} module (auto-discovered by the loader)."""
+from .database import DatabaseSeeder
+
+SEEDERS = [DatabaseSeeder]
+
+__all__ = ["DatabaseSeeder", "SEEDERS"]
