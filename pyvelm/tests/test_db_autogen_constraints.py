@@ -131,9 +131,10 @@ class SchemaDiffTests(unittest.TestCase):
         with patch("pyvelm.db_autogen._fetch_table_columns", return_value=None):
             diff = compute_diff(env, "partners")
         self.assertEqual(len(diff.new_tables), 1)
-        _table, ddl = diff.new_tables[0]
-        self.assertIn('PRIMARY KEY', ddl)
-        self.assertEqual(ddl.count('"id"'), 1)
+        _table, col_ddls = diff.new_tables[0]
+        joined = " ".join(col_ddls)
+        self.assertIn("PRIMARY KEY", joined)
+        self.assertEqual(joined.count('"id"'), 1)
 
 
 class ApplySchemaDiffTests(unittest.TestCase):
@@ -237,7 +238,7 @@ class ApplySchemaDiffTests(unittest.TestCase):
     def test_duplicate_create_re_diffs_and_adds_missing_columns(self):
         """If CREATE TABLE collides (ORA-00955), we must re-diff for columns."""
         env = _mock_env_dialect([], _partner_cls(required=True), dialect_name="oracle")
-        first = Diff(new_tables=[("res_partner", 'CREATE TABLE "res_partner" ("id" INTEGER)')])
+        first = Diff(new_tables=[("res_partner", ['"id" INTEGER PRIMARY KEY'])])
         second = Diff(
             new_columns=[
                 (

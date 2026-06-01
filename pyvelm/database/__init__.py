@@ -52,6 +52,7 @@ from .env import (
     warn_if_poor_nuke_dsn,
 )
 from .introspection import column_exists, table_exists
+from .sa_ddl import compile_create_table, execute_create_table
 from .postgres_admin import (
     prepare_postgres_schema_drop,
     release_postgres_schema_drop_lock,
@@ -83,10 +84,12 @@ __all__ = [
     "app_dsn_from_env",
     "capabilities_from_dsn",
     "column_exists",
+    "compile_create_table",
     "configure_engine",
     "conn_capabilities",
     "create_database_from_dsn",
     "create_table_sql",
+    "execute_create_table",
     "delete_sqlite_file",
     "dialect_base_name",
     "dialect_capabilities",

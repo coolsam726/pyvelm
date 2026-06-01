@@ -82,7 +82,7 @@ class SchemaAlteration:
 class Diff:
     """Structured delta between declared models and the DB."""
 
-    new_tables: list[tuple[str, str]] = _dc_field(default_factory=list)
+    new_tables: list[tuple[str, list[str]]] = _dc_field(default_factory=list)
     new_columns: list[tuple[str, str, str, bool, str]] = _dc_field(default_factory=list)
     orphan_columns: list[tuple[str, str]] = _dc_field(default_factory=list)
     alterations: list[SchemaAlteration] = _dc_field(default_factory=list)
@@ -153,13 +153,12 @@ def compute_diff(env: "Environment", module: str) -> Diff:
             expected[f.column] = (f, normalize_column_ddl(f.column_ddl(), cap))
         actual = _fetch_table_columns(env, table)
         if actual is None:
-            from .database import create_table_sql, serial_primary_key
+            from .database import serial_primary_key
 
             col_ddls = [serial_primary_key(cap)] + [
                 ddl for _, ddl in expected.values()
             ]
-            ddl = create_table_sql(table, ", ".join(col_ddls), cap)
-            diff.new_tables.append((table, ddl))
+            diff.new_tables.append((table, col_ddls))
             continue
         for col, (field_obj, col_ddl) in expected.items():
             if col not in actual:
@@ -342,7 +341,12 @@ def render_migration(
     if diff.is_empty:
         out.append("    pass  # nothing to do")
         return "\n".join(out) + "\n"
-    for _, ddl in diff.new_tables:
+    from pyvelm.database import create_table_sql
+    from pyvelm.database.dialects import dialect_capabilities
+
+    mig_cap = dialect_capabilities("postgresql")
+    for table, col_ddls in diff.new_tables:
+        ddl = create_table_sql(table, ", ".join(col_ddls), mig_cap)
         out.append(f"    env.conn.execute({_q(ddl)})")
     for table, col, stmt, was_required, _sql_type in diff.new_columns:
         out.append(f"    env.conn.execute({_q(stmt)})")
@@ -566,11 +570,13 @@ def apply_schema_diff(env: "Environment", module: str) -> ApplyResult:
         new_tables=len(diff.new_tables),
         new_columns=len(diff.new_columns),
     )
-    from pyvelm.database import is_duplicate_object_error
+    from pyvelm.database import _conn_capabilities, is_duplicate_object_error
+    from pyvelm.database.sa_ddl import execute_create_table
 
-    for _, ddl in diff.new_tables:
+    cap = _conn_capabilities(env.conn)
+    for table, ddl in diff.new_tables:
         try:
-            env.conn.execute(ddl)
+            execute_create_table(env.conn, table, ddl, cap)
         except Exception as exc:
             # Backends without CREATE TABLE IF NOT EXISTS (Oracle, MSSQL) raise
             # when the table already exists and their inspectors can disagree

@@ -336,7 +336,6 @@ class BaseModel(metaclass=MetaModel):
         from .database import (
             _conn_capabilities,
             add_column_if_missing,
-            create_table_sql,
             is_duplicate_object_error,
             normalize_column_ddl,
             normalize_sql_type,
@@ -344,6 +343,7 @@ class BaseModel(metaclass=MetaModel):
             supports_create_table_if_not_exists,
             table_exists,
         )
+        from .database.sa_ddl import execute_create_table
 
         cap = _conn_capabilities(conn)
         existed = table_exists(conn, cls._table, cap)
@@ -356,7 +356,7 @@ class BaseModel(metaclass=MetaModel):
         created_now = False
         if not existed or supports_create_table_if_not_exists(cap):
             try:
-                conn.execute(create_table_sql(cls._table, ", ".join(cols), cap))
+                execute_create_table(conn, cls._table, cols, cap)
                 created_now = not existed
             except Exception as exc:
                 # Non-IF-NOT-EXISTS backends can race inspector/table checks.
@@ -425,7 +425,8 @@ class BaseModel(metaclass=MetaModel):
     def _setup_relation_tables(cls, conn, registry, created: set[str]) -> None:
         """Create junction tables for Many2many fields. Symmetric pairs dedupe."""
         from .fields import Many2many
-        from .database import _conn_capabilities, create_table_sql, table_exists
+        from .database import _conn_capabilities, table_exists
+        from .database.sa_ddl import execute_create_table
 
         cap = _conn_capabilities(conn)
         for f in cls._fields.values():
@@ -443,7 +444,7 @@ class BaseModel(metaclass=MetaModel):
             if table_exists(conn, relation, cap):
                 created.add(relation)
                 continue
-            conn.execute(create_table_sql(relation, ddl, cap))
+            execute_create_table(conn, relation, ddl, cap)
             created.add(relation)
 
     @classmethod

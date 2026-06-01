@@ -271,7 +271,7 @@ def sqlalchemy_connection(conn) -> SAConnection | None:
 
 def conn_capabilities(conn) -> DialectCapabilities:
     cap = getattr(conn, "capabilities", None)
-    if cap is not None:
+    if cap is not None and isinstance(getattr(cap, "name", None), str):
         return cap
     name = getattr(conn, "dialect_name", None)
     if name:

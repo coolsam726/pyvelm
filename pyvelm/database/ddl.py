@@ -118,6 +118,26 @@ def add_column_if_missing(
     cap = cap or conn_capabilities(conn)
     if column_exists(conn, table, column, cap):
         return False
+    null = ""
+    ddl = f'"{column}" {sql_type} {null}'.strip()
+    if sqlalchemy_connection(conn) is not None:
+        from .sa_ddl import execute_add_column
+
+        try:
+            execute_add_column(
+                conn,
+                table,
+                ddl,
+                cap,
+                if_not_exists=cap.supports_add_column_if_not_exists,
+            )
+            return True
+        except Exception as exc:
+            orig = getattr(exc, "orig", exc)
+            msg = str(orig).lower()
+            if get_backend(cap.name).is_duplicate_column_error(msg):
+                return False
+            raise
     stmt = add_column_if_not_exists_sql(table, column, sql_type, cap)
     if stmt is None:
         stmt = add_column_sql(table, column, sql_type, cap)
@@ -173,9 +193,9 @@ def supports_create_table_if_not_exists(cap: DialectCapabilities) -> bool:
 
 
 def create_table_sql(table: str, column_ddl: str, cap: DialectCapabilities) -> str:
-    if supports_create_table_if_not_exists(cap):
-        return f'CREATE TABLE IF NOT EXISTS "{table}" ({column_ddl})'
-    return f'CREATE TABLE "{table}" ({column_ddl})'
+    from .sa_ddl import compile_create_table
+
+    return compile_create_table(table, column_ddl, cap)
 
 
 def migration_supported(
