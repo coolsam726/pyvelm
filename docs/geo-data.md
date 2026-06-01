@@ -28,10 +28,16 @@ You can also open **Settings → Geography → Countries** and click
 
 The seed is **idempotent**: existing rows are matched on their
 natural keys (continent `code`, country `code`, state `code`, city
-`geoname_id`) and only the missing ones are inserted. Existing
-country rows are patched with any extra fields the seeder knows
-about (ISO-3, phone code, etc.), so re-installing after a pyvelm
-upgrade picks up upstream fixes.
+`geoname_id`) and only the missing ones are inserted. Inserts use
+batched SQL (not one ORM `create()` per row). After the first full
+load, install/upgrade/Sync skips the seeder when ~200+ countries are
+already present. Use **Seed geography data** or `seed_reference_data()`
+to force a refresh (countries are patched with upstream field updates).
+
+For faster CI, pytest sets `PYVELM_GEO_SEED_LEVEL=countries` (continents +
+countries only). Production installs use the default `full` level (includes
+states and cities). Override with `PYVELM_GEO_SEED_LEVEL=full` in the
+environment when you need the complete dataset in tests.
 
 ## Models
 

@@ -25,7 +25,9 @@ def seed_reference_data(env) -> dict[str, int]:
     """
     from geo_data.seeders.geography import GeographyDatabaseSeeder
 
-    result = GeographyDatabaseSeeder.run(env)
+    result = GeographyDatabaseSeeder.run(
+        env, force=True, patch_existing=True, geo_seed_level="full"
+    )
     if result is None:
         return {"continents": 0, "countries": 0, "states": 0, "cities": 0}
     return result

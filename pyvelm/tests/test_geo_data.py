@@ -98,7 +98,9 @@ class GeoInstallHookTests(unittest.TestCase):
             GeographyDatabaseSeeder, "run", return_value=counts
         ) as run:
             out = geo_hooks.seed_reference_data(env)
-        run.assert_called_once_with(env)
+        run.assert_called_once_with(
+            env, force=True, patch_existing=True, geo_seed_level="full"
+        )
         self.assertEqual(out, counts)
 
     def test_manifest_discovers_geography_seeder_from_package(self):

@@ -142,3 +142,119 @@ def run_seeders(env, seeders: list[str], *, module: str | None = None) -> list[A
         log.info("Running seeder %s%s", dotted, f" ({module})" if module else "")
         results.append(resolve_seeder(dotted).run(env))
     return results
+
+
+def _conn_cap(conn) -> Any:
+    from .database import dialect_capabilities
+
+    cap = getattr(conn, "capabilities", None)
+    return cap or dialect_capabilities("postgresql")
+
+
+def fetch_column_map(
+    env,
+    table: str,
+    key_column: str,
+    *,
+    model_cls=None,
+    registry=None,
+    normalize_key: str | None = "upper",
+) -> dict[str, int]:
+    """Load ``{key_column value: id}`` in one query (for idempotent seeders)."""
+    from sqlalchemy import select
+
+    from .database.sa_ddl import core_table, model_cls_for_table, require_sa_connection
+
+    cap = _conn_cap(env.conn)
+    if model_cls is None and registry is not None:
+        model_cls = model_cls_for_table(registry, table)
+    tbl = core_table(
+        table, cap, "id", key_column, registry=registry, model_cls=model_cls
+    )
+    rows = require_sa_connection(env.conn).execute(
+        select(tbl.c[key_column], tbl.c.id)
+    ).fetchall()
+    out: dict[str, int] = {}
+    for key, rid in rows:
+        if key is None:
+            continue
+        text = str(key)
+        if normalize_key == "upper":
+            text = text.upper()
+        out[text] = int(rid)
+    return out
+
+
+def fetch_int_column_set(
+    env,
+    table: str,
+    column: str,
+    *,
+    model_cls=None,
+    registry=None,
+) -> set[int]:
+    """Load distinct integer values from *column* (e.g. geoname_id)."""
+    from sqlalchemy import select
+
+    from .database.sa_ddl import core_table, model_cls_for_table, require_sa_connection
+
+    cap = _conn_cap(env.conn)
+    if model_cls is None and registry is not None:
+        model_cls = model_cls_for_table(registry, table)
+    tbl = core_table(table, cap, column, registry=registry, model_cls=model_cls)
+    rows = require_sa_connection(env.conn).execute(select(tbl.c[column])).fetchall()
+    return {int(r[0]) for r in rows if r[0] is not None}
+
+
+def _field_row_to_sql(model_cls, vals: dict[str, Any]) -> dict[str, Any]:
+    from .timestamps import timestamp_columns, uses_timestamps, utc_now
+
+    sql: dict[str, Any] = {}
+    for fname, value in vals.items():
+        field = model_cls._fields.get(fname)
+        if field is None or not field.is_stored or field.compute:
+            continue
+        if hasattr(field, "to_sql_param"):
+            sql[field.column] = field.to_sql_param(value)
+        else:
+            sql[field.column] = value
+    if uses_timestamps(model_cls):
+        now = utc_now()
+        for ts in timestamp_columns(model_cls):
+            col = model_cls._fields[ts].column
+            if col not in sql:
+                sql[col] = now
+    return sql
+
+
+def bulk_insert_stored(
+    env,
+    model_cls,
+    rows: list[dict[str, Any]],
+    *,
+    chunk_size: int = 500,
+) -> int:
+    """Insert *rows* (field-name dicts) with batched ``executemany``."""
+    if not rows:
+        return 0
+    from sqlalchemy import insert
+
+    from .database.sa_ddl import core_table, require_sa_connection
+
+    cap = _conn_cap(env.conn)
+    sa_conn = require_sa_connection(env.conn)
+    sql_rows = [_field_row_to_sql(model_cls, row) for row in rows]
+    columns = sorted({key for row in sql_rows for key in row})
+    tbl = core_table(
+        model_cls._table,
+        cap,
+        *columns,
+        registry=env.registry,
+        model_cls=model_cls,
+    )
+    inserted = 0
+    for start in range(0, len(sql_rows), chunk_size):
+        chunk = sql_rows[start : start + chunk_size]
+        sa_conn.execute(insert(tbl), chunk)
+        inserted += len(chunk)
+    return inserted

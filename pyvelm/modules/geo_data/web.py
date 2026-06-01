@@ -43,7 +43,9 @@ def register_routes(app) -> None:
 
         try:
             with env.transaction():
-                counts = GeographyDatabaseSeeder.run(env)
+                counts = GeographyDatabaseSeeder.run(
+                    env, force=True, patch_existing=True, geo_seed_level="full"
+                )
                 if counts is None:
                     counts = {
                         "continents": 0,

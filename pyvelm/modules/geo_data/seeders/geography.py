@@ -2,15 +2,40 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from pyvelm.geo_utils import flag_emoji as _flag_emoji
 from pyvelm.geo_utils import geo_packages_available, require_geo_packages
-from pyvelm.seeding import Seeder
+from pyvelm.seeding import (
+    Seeder,
+    bulk_insert_stored,
+    fetch_column_map,
+    fetch_int_column_set,
+)
 
 log = logging.getLogger("pyvelm.geo_data")
 
 _CITY_POPULATION_THRESHOLD = 100_000
+# GeoNames ships ~250 countries; treat DB as seeded when we already have most of them.
+_COUNTRIES_SEEDED_THRESHOLD = 200
+_BULK_CHUNK = 500
+
+
+def _geo_seed_level(context: dict[str, Any]) -> str:
+    return (
+        (context.get("geo_seed_level") or os.environ.get("PYVELM_GEO_SEED_LEVEL") or "full")
+        .strip()
+        .lower()
+    )
+
+
+def _include_states(level: str) -> bool:
+    return level in ("full", "states")
+
+
+def _include_cities(level: str) -> bool:
+    return level == "full"
 
 
 class ContinentSeeder(Seeder):
@@ -19,32 +44,54 @@ class ContinentSeeder(Seeder):
     def run_instance(self, env, **context: Any) -> dict[str, int]:
         gc = context["gc"]
         Continent = env["res.continent"]
-        existing = {c.code: c.id for c in Continent.search([])}
-        inserted = 0
+        existing = fetch_column_map(
+            env,
+            Continent._table,
+            "code",
+            model_cls=Continent,
+            normalize_key="upper",
+        )
+        to_insert: list[dict[str, Any]] = []
         for code, payload in gc.get_continents().items():
             if code in existing:
                 continue
-            rec = Continent.create({"name": payload.get("name") or code, "code": code})
-            existing[code] = rec.id
-            inserted += 1
+            to_insert.append(
+                {"name": payload.get("name") or code, "code": code}
+            )
+        inserted = bulk_insert_stored(env, Continent, to_insert)
+        counts = context.get("inserted")
+        if isinstance(counts, dict):
+            counts["continents"] = inserted
         if inserted:
             log.info("geo_data: inserted %d continents", inserted)
+        existing.update(
+            fetch_column_map(
+                env,
+                Continent._table,
+                "code",
+                model_cls=Continent,
+                normalize_key="upper",
+            )
+        )
         return existing
 
 
 class CountrySeeder(Seeder):
-    """Insert or patch countries from geonamescache."""
+    """Insert countries from geonamescache (batched; optional patch on re-seed)."""
 
     def run_instance(self, env, *, continents: dict[str, int], **context: Any) -> dict[str, int]:
         gc = context["gc"]
         Country = env["res.country"]
-        existing_by_code: dict[str, int] = {}
-        for c in Country.search([]):
-            if c.code:
-                existing_by_code[c.code.upper()] = c.id
-        inserted = 0
+        existing = fetch_column_map(
+            env,
+            Country._table,
+            "code",
+            model_cls=Country,
+            normalize_key="upper",
+        )
+        patch_existing = bool(context.get("patch_existing"))
+        to_insert: list[dict[str, Any]] = []
         patched = 0
-        out: dict[str, int] = {}
         for iso2, payload in gc.get_countries().items():
             vals = {
                 "name": payload.get("name") or iso2,
@@ -58,20 +105,32 @@ class CountrySeeder(Seeder):
                 "continent_id": continents.get(payload.get("continentcode") or "")
                 or None,
             }
-            if iso2 in existing_by_code:
-                rec = Country.browse(existing_by_code[iso2])
-                rec.write({k: v for k, v in vals.items() if v is not None})
-                out[iso2] = rec.id
-                patched += 1
+            if iso2 in existing:
+                if patch_existing:
+                    env["res.country"].browse(existing[iso2]).write(
+                        {k: v for k, v in vals.items() if v is not None}
+                    )
+                    patched += 1
                 continue
-            rec = Country.create(vals)
-            out[iso2] = rec.id
-            inserted += 1
+            to_insert.append(vals)
+        inserted = bulk_insert_stored(env, Country, to_insert, chunk_size=_BULK_CHUNK)
+        counts = context.get("inserted")
+        if isinstance(counts, dict):
+            counts["countries"] = inserted
         if inserted or patched:
             log.info(
                 "geo_data: countries — %d inserted, %d patched", inserted, patched
             )
-        return out
+        existing.update(
+            fetch_column_map(
+                env,
+                Country._table,
+                "code",
+                model_cls=Country,
+                normalize_key="upper",
+            )
+        )
+        return existing
 
 
 class StateSeeder(Seeder):
@@ -83,20 +142,24 @@ class StateSeeder(Seeder):
         import pycountry
 
         State = env["res.country.state"]
-        existing = {s.code: s.id for s in State.search([])}
-        inserted = 0
-        by_country_admin1: dict[tuple[str, str], int] = {}
+        existing = fetch_column_map(
+            env,
+            State._table,
+            "code",
+            model_cls=State,
+            normalize_key=None,
+        )
+        to_insert: list[dict[str, Any]] = []
         for sub in pycountry.subdivisions:
             iso2 = (sub.country_code or "").upper()
             country_id = countries.get(iso2)
             if not country_id:
                 continue
             code = sub.code
-            short_code = code.split("-", 1)[-1] if "-" in code else code
             if code in existing:
-                by_country_admin1[(iso2, short_code)] = existing[code]
                 continue
-            rec = State.create(
+            short_code = code.split("-", 1)[-1] if "-" in code else code
+            to_insert.append(
                 {
                     "name": sub.name,
                     "code": code,
@@ -105,11 +168,23 @@ class StateSeeder(Seeder):
                     "country_id": country_id,
                 }
             )
-            existing[code] = rec.id
-            by_country_admin1[(iso2, short_code)] = rec.id
-            inserted += 1
+        inserted = bulk_insert_stored(env, State, to_insert, chunk_size=_BULK_CHUNK)
+        counts = context.get("inserted")
+        if isinstance(counts, dict):
+            counts["states"] = inserted
         if inserted:
             log.info("geo_data: inserted %d states/subdivisions", inserted)
+        by_country_admin1: dict[tuple[str, str], int] = {}
+        for code, rid in fetch_column_map(
+            env,
+            State._table,
+            "code",
+            model_cls=State,
+            normalize_key=None,
+        ).items():
+            if "-" in code:
+                iso2, short = code.split("-", 1)[0].upper(), code.split("-", 1)[1]
+                by_country_admin1[(iso2, short)] = rid
         return by_country_admin1
 
 
@@ -133,10 +208,10 @@ class CitySeeder(Seeder):
             if payload.get("capital")
         }
 
-        existing_geoname_ids = {
-            c.geoname_id for c in City.search([]) if c.geoname_id
-        }
-        inserted = 0
+        existing_geoname_ids = fetch_int_column_set(
+            env, City._table, "geoname_id", model_cls=City
+        )
+        to_insert: list[dict[str, Any]] = []
         for gid, payload in gc.get_cities().items():
             gid_int = int(gid) if not isinstance(gid, int) else gid
             if gid_int in existing_geoname_ids:
@@ -156,7 +231,7 @@ class CitySeeder(Seeder):
                 continue
             admin1 = (payload.get("admin1code") or "").upper()
             state_id = states.get((iso2, admin1)) if admin1 else None
-            City.create(
+            to_insert.append(
                 {
                     "name": name,
                     "country_id": country_id,
@@ -169,7 +244,10 @@ class CitySeeder(Seeder):
                     "is_capital": is_capital,
                 }
             )
-            inserted += 1
+        inserted = bulk_insert_stored(env, City, to_insert, chunk_size=_BULK_CHUNK)
+        counts = context.get("inserted")
+        if isinstance(counts, dict):
+            counts["cities"] = inserted
         if inserted:
             log.info("geo_data: inserted %d cities", inserted)
         return inserted
@@ -179,41 +257,41 @@ class GeographyDatabaseSeeder(Seeder):
     """Orchestrate continent → country → state → city seeding."""
 
     @classmethod
-    def should_run(cls, env, **context: Any) -> bool:  # noqa: ARG003
+    def should_run(cls, env, **context: Any) -> bool:
         if not geo_packages_available():
             log.info(
                 "geo_data: geography seed skipped — install extras: pip install pyvelm[geo]"
             )
             return False
+        if context.get("force"):
+            return True
+        if "res.country" in env.registry:
+            if env["res.country"].search_count([]) >= _COUNTRIES_SEEDED_THRESHOLD:
+                log.info("geo_data: geography seed skipped — countries already loaded")
+                return False
         return True
 
     def run_instance(self, env, **context: Any) -> dict[str, int]:
         require_geo_packages()
         import geonamescache
 
+        level = _geo_seed_level(context)
         gc = geonamescache.GeonamesCache()
-        ctx = {"gc": gc, **context}
         counts = {"continents": 0, "countries": 0, "states": 0, "cities": 0}
+        ctx = {"gc": gc, "inserted": counts, **context}
 
-        before = len(env["res.continent"].search([]))
         continent_map = self.call(env, ContinentSeeder, **ctx)
-        counts["continents"] = len(env["res.continent"].search([])) - before
+        countries = self.call(env, CountrySeeder, continents=continent_map, **ctx)
 
-        before = len(env["res.country"].search([]))
-        countries = self.call(
-            env, CountrySeeder, continents=continent_map, **ctx
-        )
-        counts["countries"] = len(env["res.country"].search([])) - before
+        if _include_states(level):
+            states = self.call(env, StateSeeder, countries=countries, **ctx)
+        else:
+            states = {}
+            log.info("geo_data: skipping states (PYVELM_GEO_SEED_LEVEL=%s)", level)
 
-        before = len(env["res.country.state"].search([]))
-        states = self.call(env, StateSeeder, countries=countries, **ctx)
-        counts["states"] = len(env["res.country.state"].search([])) - before
+        if _include_cities(level):
+            self.call(env, CitySeeder, countries=countries, states=states, **ctx)
+        else:
+            log.info("geo_data: skipping cities (PYVELM_GEO_SEED_LEVEL=%s)", level)
 
-        before = len(env["res.city"].search([]))
-        cities_added = self.call(
-            env, CitySeeder, countries=countries, states=states, **ctx
-        )
-        counts["cities"] = cities_added if cities_added else (
-            len(env["res.city"].search([])) - before
-        )
         return counts
