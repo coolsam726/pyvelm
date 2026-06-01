@@ -90,12 +90,6 @@ def _column_quote_kw(cap: DialectCapabilities) -> dict[str, bool]:
     return {"quote": True} if columns_use_quoted_identifiers(cap) else {}
 
 
-def _fk_target_table_column(table: str, column: str, cap: DialectCapabilities) -> str:
-    return (
-        f"{ddl_quote_identifier(table, cap)}.{ddl_quote_identifier(column, cap)}"
-    )
-
-
 def sa_type_for_field(field: "Field", cap: DialectCapabilities):
     sql_type = normalize_sql_type(field.sql_type, cap)
     upper = sql_type.upper()
@@ -165,13 +159,10 @@ def field_to_column(field: "Field", registry, cap: DialectCapabilities) -> Colum
                 **quote_kw,
             )
         target = registry[field.comodel_name]
-        fk_target = _fk_target_table_column(target._table, "id", cap)
-        if not columns_use_quoted_identifiers(cap):
-            fk_target = f"{target._table}.id"
         return Column(
             field.column,
             Integer(),
-            ForeignKey(fk_target, ondelete=field.ondelete),
+            ForeignKey(f"{target._table}.id", ondelete=field.ondelete),
             nullable=not field.required,
             **quote_kw,
         )
@@ -216,12 +207,8 @@ def m2m_relation_table(
     cap: DialectCapabilities,
 ) -> Table:
     quote_kw = _column_quote_kw(cap)
-    if columns_use_quoted_identifiers(cap):
-        this_fk = _fk_target_table_column(this_table, "id", cap)
-        other_fk = _fk_target_table_column(other_table, "id", cap)
-    else:
-        this_fk = f"{this_table}.id"
-        other_fk = f"{other_table}.id"
+    this_fk = f"{this_table}.id"
+    other_fk = f"{other_table}.id"
     metadata = _metadata_with_tables(this_table, other_table, cap=cap)
     return Table(
         relation,

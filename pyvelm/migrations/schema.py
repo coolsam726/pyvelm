@@ -50,10 +50,8 @@ from pyvelm.database.sa_alter import (
 )
 from pyvelm.database.sa_ddl import (
     _column_quote_kw,
-    _fk_target_table_column,
     execute_add_column,
     execute_create_table,
-    columns_use_quoted_identifiers,
     primary_key_column,
     referenced_tables_from_columns,
     require_sa_connection,
@@ -217,12 +215,7 @@ class _ColumnSpec:
 
         fk = None
         if self.fk_table and uses_inline_foreign_keys(self._cap):
-            fk_target = (
-                _fk_target_table_column(self.fk_table, "id", self._cap)
-                if columns_use_quoted_identifiers(self._cap)
-                else f"{self.fk_table}.id"
-            )
-            fk = ForeignKey(fk_target, ondelete=self.fk_ondelete)
+            fk = ForeignKey(f"{self.fk_table}.id", ondelete=self.fk_ondelete)
         col = Column(
             self.name,
             self.col_type,
