@@ -1,0 +1,3209 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Odoo semantics, Laravel ergonomics, Filament craft — a Tailwind-native Python ERP shell built only for PyVELM.">
+      
+      
+      
+        <link rel="canonical" href="https://coolsam726.github.io/pyvelm/1.0.0/vellum-design/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Vellum — design doc - PyVELM</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#vellum-design-doc" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="PyVELM" class="md-header__button md-logo" aria-label="PyVELM" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            PyVELM
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Vellum — design doc
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/coolsam726/pyvelm" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+  API reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="PyVELM" class="md-nav__button md-logo" aria-label="PyVELM" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    PyVELM
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/coolsam726/pyvelm" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-database/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Database layer (v1.0)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Declaring models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vellum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vellum (optional ORM)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building UIs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../form-ux/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Form UX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../one2many-forms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    One2many on forms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inheritance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extending views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../report-builder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Report Builder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mail-compose/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Email composer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../file-manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    File library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../document-layout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Document layouts & PDF
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../navigation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shell navigation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../geo-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geo data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../branding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    White-label branding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../console/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ide-typing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE typing stubs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../versioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Doc versions (mike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recordsets & fields
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recordsets & fields
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/fields/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.fields
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/depends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.depends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/env/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.env
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/domain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.domain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/vellum/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.vellum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules & loader
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Modules & loader
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/loader/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.loader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/builders/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.builders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Views & rendering
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Views & rendering
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.views
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/render/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.render
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Workflows
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/actions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.actions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/automation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.automation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cron/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.cron
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP & CLI
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    HTTP & CLI
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/web/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.web
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pyvelm.cli
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-non-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Non-goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-substrate-what-already-exists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The substrate (what already exists)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-file-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. File layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-opting-a-model-into-vellum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Opting a model into Vellum
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Opting a model into Vellum">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-which-class-to-call-query-on-envquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Which class to call query on? (env.query)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-slice-a-querybuilder-collections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Slice A — QueryBuilder + collections
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Slice A — QueryBuilder + collections">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-querybuilder-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 QueryBuilder API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6.1 QueryBuilder API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operator-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operator mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-collection-helpers-on-recordsets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Collection helpers on recordsets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-slice-a-footprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Slice A footprint
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-slice-b-relationships-as-methods-eager-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Slice B — Relationships as methods + eager loading
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Slice B — Relationships as methods + eager loading">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-method-based-relations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Method-based relations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-eager-loading-via-with_" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 Eager loading via with_(...)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-with_count" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.3 with_count
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#74-slice-b-footprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.4 Slice B footprint
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-slice-c-scopes-accessorsmutators-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Slice C — Scopes, accessors/mutators, events
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Slice C — Scopes, accessors/mutators, events">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-scopes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 Scopes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#82-accessors-and-mutators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.2 Accessors and mutators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#83-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.3 Events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#84-slice-c-footprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.4 Slice C footprint
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-slice-d-mass-assignment-soft-deletes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Slice D — Mass assignment + soft deletes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Slice D — Mass assignment + soft deletes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-mass-assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.1 Mass assignment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#92-soft-deletes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.2 Soft deletes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#93-slice-d-footprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.3 Slice D footprint
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-slice-e-migration-dsl-optional-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Slice E — Migration DSL (optional, deferred)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-what-changes-in-core-total" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. What changes in core, total
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-decisions-to-confirm-before-coding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Decisions to confirm before coding
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-phasing-pr-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Phasing &amp; PR plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-open-questions-to-flag-in-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Open questions to flag in review
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="vellum-design-doc">Vellum — design doc<a class="headerlink" href="#vellum-design-doc" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> Slices A–D implemented (Vellum feature-complete; Slice E migration
+DSL deferred). <strong>User guide:</strong> <a href="../vellum/">vellum.md</a>. Inheritance:
+<code>class Model(Vellum, BaseModel)</code>; add <code>SoftDeletes</code> last:
+<code>class Post(Vellum, BaseModel, SoftDeletes)</code>.
+<strong>Module name:</strong> <code>vellum</code>
+<strong>Location:</strong> <code>pyvelm/modules/vellum/</code> (bundled, opt-in per model)
+<strong>Depends on:</strong> <code>base</code>
+<strong>Tracking issue:</strong> TBD</p>
+<blockquote>
+<p><strong>Why "Vellum"?</strong> Vellum is the fine parchment scribes used for
+manuscripts that had to last — the surface that holds expressive,
+deliberate writing. The metaphor lands cleanly on an ORM (the surface
+that holds the record), and the name rhymes with <strong>pyvelm</strong>, so
+<code>pyvelm.vellum</code> reads like it was named for this framework.</p>
+</blockquote>
+<h2 id="1-goal">1. Goal<a class="headerlink" href="#1-goal" title="Permanent link">&para;</a></h2>
+<p>Bring <a href="https://laravel.com/docs/eloquent">Laravel Eloquent</a>-style ergonomics
+to pyvelm — chainable query builder, method-based relationships, eager
+loading, model events, mass-assignment policy, accessors/mutators, optional
+soft deletes — <strong>without forking the ORM</strong>.</p>
+<p>Every Vellum verb must compose down to an existing pyvelm primitive
+(<code>BaseModel.search</code>, <code>BaseModel._read</code>, <code>env.cache</code>,
+<code>AutomationEngine.fire</code>, etc.). The veneer is sugar; the substrate stays
+authoritative for SQL, ACL, multi-company, and computed-field
+invalidation.</p>
+<h2 id="2-non-goals">2. Non-goals<a class="headerlink" href="#2-non-goals" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Not a parallel ORM.</strong> No second cache, no second connection layer,
+  no second ACL pipeline, no second domain compiler.</li>
+<li><strong>Not a replacement for <code>env[...].search(...)</code>.</strong> The two styles
+  coexist on the same models in the same env. Existing pyvelm code
+  keeps working unchanged.</li>
+<li><strong>Not a Python port of PHP idioms.</strong> <code>Model::where</code> becomes
+  <code>Model.query(env).where</code>; <code>$user-&gt;name</code> becomes <code>user.name</code> (already
+  works); facades (<code>DB::table(...)</code>) are out of scope.</li>
+<li><strong>No new field types.</strong> Fields stay in <code>pyvelm.fields</code>.</li>
+<li><strong>No view-layer changes.</strong> Forms / lists / kanbans still consume the
+  same recordsets.</li>
+</ul>
+<h2 id="3-the-substrate-what-already-exists">3. The substrate (what already exists)<a class="headerlink" href="#3-the-substrate-what-already-exists" title="Permanent link">&para;</a></h2>
+<p>To anchor the design, here's what we already have in core:</p>
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Existing primitive</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Read by domain</td>
+<td><code>BaseModel.search(domain, limit, offset, order)</code></td>
+</tr>
+<tr>
+<td>Count</td>
+<td><code>BaseModel.search_count(domain)</code></td>
+</tr>
+<tr>
+<td>Bulk fetch into cache</td>
+<td><code>BaseModel._read(fields)</code> keyed by <code>(model, id, field)</code></td>
+</tr>
+<tr>
+<td>Recordset semantics</td>
+<td><code>BaseModel.__iter__</code>, <code>len</code>, <code>bool</code>, <code>==</code>, <code>browse</code></td>
+</tr>
+<tr>
+<td>Cache layer</td>
+<td><code>env.cache.get/set/contains/invalidate</code></td>
+</tr>
+<tr>
+<td>Lifecycle hooks</td>
+<td><code>AutomationEngine.fire(env, model, event, records)</code> from <code>create/write/unlink</code></td>
+</tr>
+<tr>
+<td>Computed invalidation</td>
+<td><code>env.notify_changed(model, ids, fields)</code></td>
+</tr>
+<tr>
+<td>Multi-company filter</td>
+<td><code>_company_scoped</code> auto-injects in <code>search</code></td>
+</tr>
+<tr>
+<td>ACL</td>
+<td><code>env.check_access(model, perm)</code> in every CRUD/search</td>
+</tr>
+</tbody>
+</table>
+<p>Every section below maps Vellum verbs onto these primitives.</p>
+<h2 id="4-file-layout">4. File layout<a class="headerlink" href="#4-file-layout" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pyvelm/modules/vellum/
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── __pyvelm__.py            # manifest: NAME=&quot;vellum&quot;, DEPENDS=[&quot;base&quot;]
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── __init__.py              # public API re-exports
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├── mixin.py                 # the Vellum opt-in mixin (Slice A)
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├── query.py                 # QueryBuilder (Slice A)
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>├── collection.py            # recordset extensions (Slice A)
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>├── relations.py             # BelongsTo / HasMany / HasOne / BelongsToMany (Slice B)
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├── eager.py                 # with_() driver, batched prefetch (Slice B)
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>├── scope.py                 # @scope decorator (Slice C)
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>├── attribute.py             # get_X_attribute / set_X_attribute weaving (Slice C)
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>├── events.py                # creating/created/updating/... dispatcher (Slice C)
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>├── soft_delete.py           # SoftDeletes mixin + with_trashed/only_trashed (Slice D)
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>└── tests/...
+</span></code></pre></div>
+<p>The module ships <strong>no DB models of its own</strong>. The manifest exists only so
+the loader knows the module is installed; nothing in the migration table
+changes when it loads. (We may want a <code>vellum.fake</code> test-only model
+in <code>tests/</code> so the CI suite has something to exercise; it would not be
+seeded.)</p>
+<h2 id="5-opting-a-model-into-vellum">5. Opting a model into Vellum<a class="headerlink" href="#5-opting-a-model-into-vellum" title="Permanent link">&para;</a></h2>
+<p>Vellum is a <strong>per-model opt-in</strong>, not a global switch:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyvelm</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Char</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">Many2one</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyvelm.vellum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Vellum</span><span class="p">,</span> <span class="n">scope</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Vellum</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">_name</span> <span class="o">=</span> <span class="s2">&quot;blog.post&quot;</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">title</span> <span class="o">=</span> <span class="n">Char</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">body</span> <span class="o">=</span> <span class="n">Char</span><span class="p">()</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">author_id</span> <span class="o">=</span> <span class="n">Many2one</span><span class="p">(</span><span class="s2">&quot;res.users&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">views</span> <span class="o">=</span> <span class="n">Integer</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">_fillable</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;body&quot;</span><span class="p">,</span> <span class="s2">&quot;author_id&quot;</span><span class="p">]</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">author</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">belongs_to</span><span class="p">(</span><span class="s2">&quot;res.users&quot;</span><span class="p">,</span> <span class="s2">&quot;author_id&quot;</span><span class="p">)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="nd">@scope</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">popular</span><span class="p">(</span><span class="n">qb</span><span class="p">):</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>        <span class="k">return</span> <span class="n">qb</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="s2">&quot;views&quot;</span><span class="p">,</span> <span class="s2">&quot;&gt;&quot;</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The <code>Vellum</code> mixin's <code>__init_subclass__</code> does the wiring (collects
+<code>@scope</code> methods, weaves accessors/mutators, registers event hooks).
+<strong>List <code>Vellum</code> before <code>BaseModel</code></strong> in the inheritance tuple so Python
+MRO picks Vellum's <code>create</code> / <code>write</code> / <code>unlink</code> overrides for
+events and mutators.</p>
+<p>Models that don't inherit <code>Vellum</code> are unaffected — they keep working
+through the regular pyvelm idiom.</p>
+<h3 id="51-which-class-to-call-query-on-envquery">5.1 Which class to call <code>query</code> on? (<code>env.query</code>)<a class="headerlink" href="#51-which-class-to-call-query-on-envquery" title="Permanent link">&para;</a></h3>
+<p>Models are often extended with <code>_inherit</code> in other modules. The loader
+<strong>replaces</strong> <code>registry["blog.post"]</code> with a merged class; importing
+<code>Post</code> from <code>blog.models.post</code> may be a stale Python object after
+extensions load.</p>
+<p><strong>Runtime rule:</strong> use the technical name on the environment:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">posts</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;blog.post&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="s2">&quot;views&quot;</span><span class="p">,</span> <span class="s2">&quot;&gt;&quot;</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+</span></code></pre></div>
+<p><code>Environment.query(model_name)</code> resolves <code>registry[model_name]</code> (the
+same class as <code>env[model_name].__class__</code>) and returns a <code>QueryBuilder</code>.
+Works for any registered model; collection helpers (<code>pluck</code>, in-memory
+<code>where</code>, …) still require the <code>Vellum</code> mixin on that model.</p>
+<p><code>Post.query(env)</code> remains valid in the module that defines <code>_name</code>
+(tests, scripts with a fixed module set).</p>
+<h2 id="6-slice-a-querybuilder-collections">6. Slice A — QueryBuilder + collections<a class="headerlink" href="#6-slice-a-querybuilder-collections" title="Permanent link">&para;</a></h2>
+<h3 id="61-querybuilder-api">6.1 QueryBuilder API<a class="headerlink" href="#61-querybuilder-api" title="Permanent link">&para;</a></h3>
+<p><code>env.query("blog.post")</code> (preferred) or <code>Post.query(env)</code> returns a
+<code>QueryBuilder</code> bound to that env. Builders are immutable — every
+chainable returns a fresh builder, so they're safe to share and compose.</p>
+<div class="highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Build (prefer env.query when _inherit is in play)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">qb</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;blog.post&quot;</span><span class="p">)</span>                 <span class="c1"># QueryBuilder</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">qb</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span>                        <span class="c1"># same, if Post is the registry class</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">qb</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="s2">&quot;author_id&quot;</span><span class="p">,</span> <span class="n">env</span><span class="o">.</span><span class="n">uid</span><span class="p">)</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">qb</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="s2">&quot;views&quot;</span><span class="p">,</span> <span class="s2">&quot;&gt;&quot;</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">qb</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">where_in</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;draft&quot;</span><span class="p">,</span> <span class="s2">&quot;review&quot;</span><span class="p">])</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">qb</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">where_like</span><span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;intro%&quot;</span><span class="p">)</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">qb</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">where_between</span><span class="p">(</span><span class="s2">&quot;published_at&quot;</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">qb</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">where_null</span><span class="p">(</span><span class="s2">&quot;archived_at&quot;</span><span class="p">)</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">qb</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;created_at&quot;</span><span class="p">,</span> <span class="s2">&quot;desc&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="c1"># Terminate</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">posts</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>                            <span class="c1"># Recordset</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">post</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>                           <span class="c1"># Recordset(1) or empty</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>             <span class="c1"># by id</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">find_or_fail</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>     <span class="c1"># raises</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="n">names</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">pluck</span><span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">)</span>                   <span class="c1"># list[str]</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">total</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>                          <span class="c1"># int</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="n">exists</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span>                        <span class="c1"># bool</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">qb</span><span class="o">.</span><span class="n">chunk</span><span class="p">(</span><span class="mi">500</span><span class="p">):</span>                 <span class="c1"># iterates page-by-page</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="o">...</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="n">page</span> <span class="o">=</span> <span class="n">qb</span><span class="o">.</span><span class="n">paginate</span><span class="p">(</span><span class="n">page</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">per_page</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>     <span class="c1"># {items, total, page, per_page}</span>
+</span></code></pre></div>
+<p><strong>Implementation:</strong> the builder accumulates <code>(field, op, value)</code> tuples
+in a <code>_wheres</code> list and an <code>_orders</code> list. Terminators call
+<code>Model.search(domain, limit, offset, order)</code> / <code>search_count</code> /
+<code>browse</code> — no new SQL paths.</p>
+<h4 id="operator-mapping">Operator mapping<a class="headerlink" href="#operator-mapping" title="Permanent link">&para;</a></h4>
+<p>Laravel Eloquent's verbose operator strings map cleanly to pyvelm domain ops:</p>
+<table>
+<thead>
+<tr>
+<th>QB call</th>
+<th>pyvelm domain leaf</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>where("x", v)</code></td>
+<td><code>("x", "=", v)</code></td>
+</tr>
+<tr>
+<td><code>where("x", "!=", v)</code></td>
+<td><code>("x", "!=", v)</code></td>
+</tr>
+<tr>
+<td><code>where("x", "&gt;", v)</code></td>
+<td><code>("x", "&gt;", v)</code></td>
+</tr>
+<tr>
+<td><code>where_in("x", vs)</code></td>
+<td><code>("x", "in", list(vs))</code></td>
+</tr>
+<tr>
+<td><code>where_not_in("x", vs)</code></td>
+<td><code>("x", "not in", list(vs))</code></td>
+</tr>
+<tr>
+<td><code>where_like("x", pat)</code></td>
+<td><code>("x", "like", pat)</code></td>
+</tr>
+<tr>
+<td><code>where_ilike("x", pat)</code></td>
+<td><code>("x", "ilike", pat)</code></td>
+</tr>
+<tr>
+<td><code>where_null("x")</code></td>
+<td><code>("x", "=", None)</code></td>
+</tr>
+<tr>
+<td><code>where_not_null("x")</code></td>
+<td><code>("x", "!=", None)</code></td>
+</tr>
+<tr>
+<td><code>where_between("x", a, b)</code></td>
+<td><code>("x", "&gt;=", a), ("x", "&lt;=", b)</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>or_where(...)</code> and grouped <code>where(callable)</code> need OR support. The
+existing pyvelm domain parser uses Polish-style <code>|</code> / <code>&amp;</code> prefixes
+(check <code>pyvelm/domain.py</code> before implementing). The builder emits the
+right prefix tokens at terminate time.</p>
+<h3 id="62-collection-helpers-on-recordsets">6.2 Collection helpers on recordsets<a class="headerlink" href="#62-collection-helpers-on-recordsets" title="Permanent link">&para;</a></h3>
+<p>These extend recordsets returned from Vellum-opted models. Two
+options to expose them:</p>
+<ul>
+<li><strong>Option A (clean, recommended):</strong> the <code>Vellum</code> mixin contributes
+  methods directly to the model class — so <code>Post.query(env).get()</code>
+  returns a <code>Post</code>-class recordset that has <code>.pluck</code>, <code>.first</code>, <code>.map</code>,
+  etc., natively.</li>
+<li><strong>Option B (universal):</strong> a <code>Collection.wrap(rs)</code> adapter that any
+  recordset can pass through. Useful when collection helpers are wanted
+  on a non-opted model.</li>
+</ul>
+<p>We ship Option A and keep Option B as a small utility.</p>
+<div class="highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">posts</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">posts</span><span class="o">.</span><span class="n">pluck</span><span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">)</span>                <span class="c1"># [&quot;Intro&quot;, &quot;Tutorial&quot;, ...]</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">posts</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>                        <span class="c1"># Post(...) singleton or empty</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">posts</span><span class="o">.</span><span class="n">last</span><span class="p">()</span>                         <span class="c1"># Post(...) singleton or empty</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">posts</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="n">some_post</span><span class="p">)</span>            <span class="c1"># bool, by id</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">posts</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="s2">&quot;draft&quot;</span><span class="p">)</span>       <span class="c1"># in-memory filter; returns Post recordset</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">posts</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>                       <span class="c1"># in-set lookup; empty if not present</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">posts</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">title</span><span class="o">.</span><span class="n">upper</span><span class="p">())</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">posts</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">views</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">)</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">posts</span><span class="o">.</span><span class="n">each</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">id</span><span class="p">))</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">posts</span><span class="o">.</span><span class="n">chunk</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>                     <span class="c1"># iterable of Post recordsets</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">posts</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>                      <span class="c1"># list of dicts via .read()</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="n">posts</span><span class="o">.</span><span class="n">fresh</span><span class="p">()</span>                        <span class="c1"># re-search same ids, drop cache</span>
+</span></code></pre></div>
+<p><strong>Important distinction:</strong> <code>qb.where(...).get()</code> builds SQL; <code>posts.where(...)</code>
+filters in-memory and never hits the DB. Same name, different layer —
+Laravel does this too, and it's a footgun. We document it loudly.</p>
+<h3 id="63-slice-a-footprint">6.3 Slice A footprint<a class="headerlink" href="#63-slice-a-footprint" title="Permanent link">&para;</a></h3>
+<ul>
+<li>~3 new files: <code>query.py</code>, <code>collection.py</code>, plus the skeleton <code>mixin.py</code>.</li>
+<li>~400 LoC + tests.</li>
+<li><strong>Zero changes to pyvelm core.</strong></li>
+<li>Lands as a single PR.</li>
+</ul>
+<h2 id="7-slice-b-relationships-as-methods-eager-loading">7. Slice B — Relationships as methods + eager loading<a class="headerlink" href="#7-slice-b-relationships-as-methods-eager-loading" title="Permanent link">&para;</a></h2>
+<h3 id="71-method-based-relations">7.1 Method-based relations<a class="headerlink" href="#71-method-based-relations" title="Permanent link">&para;</a></h3>
+<p>Laravel Eloquent's killer feature: relations are methods, and the method
+returns a relation object that is itself queryable.</p>
+<div class="highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Vellum</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="n">_name</span> <span class="o">=</span> <span class="s2">&quot;blog.post&quot;</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">author_id</span> <span class="o">=</span> <span class="n">Many2one</span><span class="p">(</span><span class="s2">&quot;res.users&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">author</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">belongs_to</span><span class="p">(</span><span class="s2">&quot;res.users&quot;</span><span class="p">,</span> <span class="s2">&quot;author_id&quot;</span><span class="p">)</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">comments</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_many</span><span class="p">(</span><span class="s2">&quot;blog.comment&quot;</span><span class="p">,</span> <span class="n">inverse_name</span><span class="o">=</span><span class="s2">&quot;post_id&quot;</span><span class="p">)</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">tags</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">belongs_to_many</span><span class="p">(</span><span class="s2">&quot;blog.tag&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Usage:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">post</span><span class="o">.</span><span class="n">author</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>                  <span class="c1"># Recordset[res.users] of size 1</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">post</span><span class="o">.</span><span class="n">comments</span><span class="p">()</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="s2">&quot;approved&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;posted_at&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">post</span><span class="o">.</span><span class="n">tags</span><span class="p">()</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+</span></code></pre></div>
+<p>Relations are thin wrappers over <code>QueryBuilder</code> with a pre-applied
+filter. <code>BelongsTo</code> reads the FK column from the parent and queries the
+co-model by id; <code>HasMany</code> filters the co-model by the inverse column;
+<code>BelongsToMany</code> joins through the existing M2M junction table that
+<code>Many2many</code> already generates.</p>
+<p><strong>Coexistence with field descriptors.</strong> A user can declare <em>both</em> a
+relational field and a relation method on the same name:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Vellum</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="n">comments</span> <span class="o">=</span> <span class="n">One2many</span><span class="p">(</span><span class="s2">&quot;blog.comment&quot;</span><span class="p">,</span> <span class="s2">&quot;post_id&quot;</span><span class="p">)</span>   <span class="c1"># field</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">comments</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>                              <span class="c1"># SHADOWS the field</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_many</span><span class="p">(</span><span class="s2">&quot;blog.comment&quot;</span><span class="p">,</span> <span class="s2">&quot;post_id&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Python's class body rules pick the last-assigned name, which is the
+method — so the descriptor disappears. <strong>We disallow this collision</strong>
+at <code>__init_subclass__</code> time and raise a clear error. Two acceptable
+patterns:</p>
+<ul>
+<li>Declare the relation as a method only; <code>post.comments()</code> returns the
+  queryable, <code>post.comments().get()</code> returns the recordset.</li>
+<li>Keep the field and don't declare a method — <code>post.comments</code> already
+  works the pyvelm way, and <code>with_("comments")</code> (below) eager-loads it.</li>
+</ul>
+<p>The doc will recommend the second pattern for One2many/Many2many (since
+the field is already there) and the first pattern for relation styles
+the pyvelm field layer doesn't yet model (e.g. polymorphic relations,
+through-relations, scope-bound relations).</p>
+<h3 id="72-eager-loading-via-with_">7.2 Eager loading via <code>with_(...)</code><a class="headerlink" href="#72-eager-loading-via-with_" title="Permanent link">&para;</a></h3>
+<p>The N+1 fix. <code>with_(*paths)</code> adds prefetch instructions to the builder;
+the terminator runs them after the main <code>search</code>.</p>
+<div class="highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">posts</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>        <span class="o">.</span><span class="n">with_</span><span class="p">(</span><span class="s2">&quot;author_id&quot;</span><span class="p">,</span> <span class="s2">&quot;comments.author_id&quot;</span><span class="p">,</span> <span class="s2">&quot;tags&quot;</span><span class="p">)</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>        <span class="o">.</span><span class="n">latest</span><span class="p">()</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        <span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>        <span class="o">.</span><span class="n">get</span><span class="p">()</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="p">)</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">posts</span><span class="p">:</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">author_id</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>            <span class="c1"># 0 extra queries — cache hit</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">p</span><span class="o">.</span><span class="n">comments</span><span class="p">:</span>               <span class="c1"># 0 extra queries — bucket hit</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>        <span class="nb">print</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">author_id</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>        <span class="c1"># 0 extra queries — cache hit</span>
+</span></code></pre></div>
+<p><strong>How it works</strong>, by relation type:</p>
+<ul>
+<li>
+<p><strong>Many2one prefetch.</strong> Bulk-load the FK column for all parent ids
+  (<code>_read([fk])</code>), collect the referenced co-model ids, bulk-load every
+  field the consumer will read on the co-model (<code>_read(...)</code>). All
+  reads land in <code>env.cache</code>, so the descriptor in <code>fields.py</code> hits
+  cache on access — zero new code paths in core.</p>
+</li>
+<li>
+<p><strong>One2many prefetch.</strong> This one is harder because today
+  <code>One2many.__get__</code> (in <code>pyvelm/fields.py:348</code>) re-queries every time
+  — there is no per-parent cache. Two options:</p>
+</li>
+<li>
+<p><strong>Sidecar map (zero core changes).</strong> The eager loader stashes
+     <code>env._vellum_o2m_cache[(parent_model, parent_id, field_name)]</code>
+     and the eager-fetched recordset uses a per-instance override of
+     <code>__getattr__</code> to consult it before falling through to the
+     descriptor. <strong>Downsides:</strong> brittle, breaks if any non-vellum
+     code accesses the same field, doesn't help across model
+     boundaries.</p>
+</li>
+<li><strong>Small core hook (~5 lines).</strong> Teach <code>One2many.__get__</code> to
+     consult <code>env.cache</code> for a tuple-of-ids stored under
+     <code>(parent_model, parent_id, field_name)</code> if present, and have the
+     eager loader populate that key. This is a clean,
+     framework-wide cache and benefits non-vellum code too. The
+     descriptor invalidates on <code>notify_changed</code> for the inverse FK
+     just like a stored field.</li>
+</ul>
+<p><strong>Recommendation: option 2.</strong> It's the right place architecturally
+  and it's tiny. It would land as part of Slice B with its own test.
+  Flagged here as the only <strong>core change</strong> the Vellum veneer wants.</p>
+<ul>
+<li><strong>Many2many prefetch.</strong> Single bulk <code>SELECT col1, col2 FROM
+  &lt;relation&gt; WHERE col1 IN (...)</code>, group by parent id, cache like the
+  One2many case. Same core hook benefits both.</li>
+</ul>
+<p><strong>Dotted paths.</strong> <code>with_("comments.author_id")</code> recurses — after
+fetching all comments for all parents, treat that flat comment
+recordset as a new parent set and run the Many2one prefetch for
+<code>author_id</code>. Cycles are detected by tracking visited <code>(model, field)</code>
+pairs.</p>
+<h3 id="73-with_count">7.3 <code>with_count</code><a class="headerlink" href="#73-with_count" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">with_count</span><span class="p">(</span><span class="s2">&quot;comments&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>   <span class="c1"># each post gets ._comments_count</span>
+</span></code></pre></div>
+<p>Implemented via a single grouped-by-inverse-FK SQL aggregation; the
+results stash into a sidecar dict on the recordset (we can't add a
+field — it'd require a migration). Exposed via a <code>count_of(name)</code>
+method to keep it explicit, since <code>post._comments_count</code> would look
+like a real field but isn't.</p>
+<h3 id="74-slice-b-footprint">7.4 Slice B footprint<a class="headerlink" href="#74-slice-b-footprint" title="Permanent link">&para;</a></h3>
+<ul>
+<li>~5 new files: <code>relations.py</code>, <code>eager.py</code>, <code>__init__.py</code> re-exports updates.</li>
+<li>~500 LoC + tests.</li>
+<li><strong>One small core change</strong>: 5-line addition to <code>One2many.__get__</code>
+  (and same to <code>Many2many.__get__</code>) to read from <code>env.cache</code> when a
+  tuple-of-ids is present. Worth its own PR even if Slice B doesn't
+  ship; the speedup helps all of pyvelm.</li>
+<li>Lands as the second PR.</li>
+</ul>
+<h2 id="8-slice-c-scopes-accessorsmutators-events">8. Slice C — Scopes, accessors/mutators, events<a class="headerlink" href="#8-slice-c-scopes-accessorsmutators-events" title="Permanent link">&para;</a></h2>
+<h3 id="81-scopes">8.1 Scopes<a class="headerlink" href="#81-scopes" title="Permanent link">&para;</a></h3>
+<p><code>@scope</code> marks a method as a query modifier that becomes available as a
+chainable on the builder.</p>
+<div class="highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Vellum</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="nd">@scope</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">published</span><span class="p">(</span><span class="n">qb</span><span class="p">):</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>        <span class="k">return</span> <span class="n">qb</span><span class="o">.</span><span class="n">where_not_null</span><span class="p">(</span><span class="s2">&quot;published_at&quot;</span><span class="p">)</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    <span class="nd">@scope</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">by_author</span><span class="p">(</span><span class="n">qb</span><span class="p">,</span> <span class="n">author</span><span class="p">):</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>        <span class="k">return</span> <span class="n">qb</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="s2">&quot;author_id&quot;</span><span class="p">,</span> <span class="n">author</span><span class="o">.</span><span class="n">id</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">author</span><span class="p">,</span> <span class="s2">&quot;id&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">author</span><span class="p">)</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">published</span><span class="p">()</span><span class="o">.</span><span class="n">by_author</span><span class="p">(</span><span class="n">some_user</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+</span></code></pre></div>
+<p><strong>Implementation:</strong> <code>@scope</code> tags the function with <code>__pyvelm_scope__ =
+True</code>. At class creation, the Vellum mixin collects them into a
+<code>_scopes: dict[str, callable]</code>. <code>QueryBuilder.__getattr__</code> dispatches
+unknown attributes through <code>_scopes</code>.</p>
+<h3 id="82-accessors-and-mutators">8.2 Accessors and mutators<a class="headerlink" href="#82-accessors-and-mutators" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">(</span><span class="n">Vellum</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="n">_name</span> <span class="o">=</span> <span class="s2">&quot;res.users&quot;</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="n">name</span> <span class="o">=</span> <span class="n">Char</span><span class="p">()</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_display_name_attribute</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>        <span class="c1"># Synthetic attribute — no column.</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> &lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">login</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">set_login_attribute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+</span></code></pre></div>
+<ul>
+<li><strong>Accessors</strong> (<code>get_&lt;X&gt;_attribute</code>) make <code>user.display_name</code> work
+  even when no field <code>display_name</code> exists. Implemented by adding a
+  Python <code>__getattr__</code> on the Vellum mixin that, on miss, checks for
+  a <code>get_&lt;X&gt;_attribute</code> method.</li>
+<li><strong>Mutators</strong> (<code>set_&lt;X&gt;_attribute</code>) transform a value on write.
+  Implemented by wrapping <code>BaseModel.write</code> and <code>BaseModel.create</code> in
+  the mixin and routing each (field, value) through the mutator
+  registry before reaching <code>_split_vals</code>.</li>
+</ul>
+<p>Both are discovered at <code>__init_subclass__</code> so the lookup is <code>O(1)</code> at
+runtime.</p>
+<h3 id="83-events">8.3 Events<a class="headerlink" href="#83-events" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Vellum</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    <span class="nd">@on</span><span class="p">(</span><span class="s2">&quot;creating&quot;</span><span class="p">)</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_slugify</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">slug</span><span class="p">:</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">slug</span> <span class="o">=</span> <span class="n">slugify</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">)</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>    <span class="nd">@on</span><span class="p">(</span><span class="s2">&quot;updated&quot;</span><span class="p">)</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_bump_version</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>        <span class="c1"># Fired after write commits.</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>        <span class="o">...</span>
+</span></code></pre></div>
+<p>Eight events, matching Laravel: <code>creating</code>, <code>created</code>, <code>updating</code>,
+<code>updated</code>, <code>saving</code>, <code>saved</code>, <code>deleting</code>, <code>deleted</code>. Plus the
+already-existing automation triggers (<code>on_create</code>, <code>on_write</code>,
+<code>on_unlink</code>) keep working — they fire alongside.</p>
+<p><strong>Hookpoint.</strong> The Vellum mixin overrides <code>create / write / unlink</code>
+on the model class:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vals</span><span class="p">):</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="n">vals</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_mutators</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">vals</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_fillable</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">dispatcher</span><span class="o">.</span><span class="n">fire</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">,</span> <span class="s2">&quot;creating&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">browse</span><span class="p">([]))</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    <span class="n">dispatcher</span><span class="o">.</span><span class="n">fire</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">,</span> <span class="s2">&quot;saving&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">browse</span><span class="p">([]))</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">rec</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="n">dispatcher</span><span class="o">.</span><span class="n">fire</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">,</span> <span class="s2">&quot;created&quot;</span><span class="p">,</span> <span class="n">rec</span><span class="p">)</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>    <span class="n">dispatcher</span><span class="o">.</span><span class="n">fire</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name</span><span class="p">,</span> <span class="s2">&quot;saved&quot;</span><span class="p">,</span> <span class="n">rec</span><span class="p">)</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>    <span class="k">return</span> <span class="n">rec</span>
+</span></code></pre></div>
+<p>Zero core changes. <code>AutomationEngine.fire</code> still runs from the
+<code>BaseModel</code> parent class, so DB-defined <code>base.automation</code> rules
+continue to fire — Vellum events are an <strong>in-code</strong> additional
+hook, not a replacement.</p>
+<h3 id="84-slice-c-footprint">8.4 Slice C footprint<a class="headerlink" href="#84-slice-c-footprint" title="Permanent link">&para;</a></h3>
+<ul>
+<li>~3 new files: <code>scope.py</code>, <code>attribute.py</code>, <code>events.py</code>.</li>
+<li>~200 LoC + tests.</li>
+<li><strong>Zero core changes.</strong></li>
+</ul>
+<h2 id="9-slice-d-mass-assignment-soft-deletes">9. Slice D — Mass assignment + soft deletes<a class="headerlink" href="#9-slice-d-mass-assignment-soft-deletes" title="Permanent link">&para;</a></h2>
+<h3 id="91-mass-assignment">9.1 Mass assignment<a class="headerlink" href="#91-mass-assignment" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Vellum</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>    <span class="n">_fillable</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;body&quot;</span><span class="p">,</span> <span class="s2">&quot;author_id&quot;</span><span class="p">]</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="c1"># OR:</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="c1"># _guarded = [&quot;id&quot;, &quot;created_at&quot;, &quot;internal_flag&quot;]</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># OK</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">create</span><span class="p">({</span><span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="s2">&quot;Hi&quot;</span><span class="p">,</span> <span class="s2">&quot;body&quot;</span><span class="p">:</span> <span class="s2">&quot;Hello&quot;</span><span class="p">})</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1"># Filtered (silently drops &#39;internal_flag&#39;) or raises depending on policy</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="n">post</span> <span class="o">=</span> <span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">create</span><span class="p">({</span><span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="s2">&quot;Hi&quot;</span><span class="p">,</span> <span class="s2">&quot;internal_flag&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+</span></code></pre></div>
+<ul>
+<li><code>_fillable</code> and <code>_guarded</code> are mutually exclusive — declaring both
+  is an error at class creation.</li>
+<li>Default behavior is to <strong>silently drop</strong> disallowed keys (Laravel
+  default). An <code>_strict_fillable = True</code> flips to <strong>raise</strong>.</li>
+<li>A <code>fill(vals)</code> instance method does the same filtering and then
+  calls <code>write</code> — useful for partial-update endpoints.</li>
+</ul>
+<h3 id="92-soft-deletes">9.2 Soft deletes<a class="headerlink" href="#92-soft-deletes" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Post</span><span class="p">(</span><span class="n">Vellum</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">SoftDeletes</span><span class="p">):</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>    <span class="n">_name</span> <span class="o">=</span> <span class="s2">&quot;blog.post&quot;</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="n">_soft_delete_column</span> <span class="o">=</span> <span class="s2">&quot;deleted_at&quot;</span>   <span class="c1"># default</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>                   <span class="c1"># excludes soft-deleted</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">with_trashed</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>    <span class="c1"># includes them</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="n">Post</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">only_trashed</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>    <span class="c1"># ONLY soft-deleted</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="n">post</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>                            <span class="c1"># sets deleted_at = now()</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="n">post</span><span class="o">.</span><span class="n">restore</span><span class="p">()</span>                           <span class="c1"># nulls deleted_at</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="n">post</span><span class="o">.</span><span class="n">force_delete</span><span class="p">()</span>                      <span class="c1"># actual unlink</span>
+</span></code></pre></div>
+<ul>
+<li><code>SoftDeletes</code> adds a <code>deleted_at = Datetime()</code> field by default —
+  but adding a field on an opt-in mixin means <strong>adding a column to an
+  existing table</strong>. We piggyback on the <code>db autogen</code> flow: the
+  developer who flips a model to <code>SoftDeletes</code> runs <code>pyvelm db autogen
+  &lt;module&gt;</code> and the migration drops in.</li>
+<li>Alternative: support reusing an existing <code>active</code> Boolean instead of
+  <code>deleted_at</code>. Set <code>_soft_delete_column = "active"</code> and the mixin
+  reads from / writes to it. This avoids the migration cost for models
+  that already follow the <code>active</code> convention.</li>
+<li>The QueryBuilder applies a default scope <code>where("deleted_at", "=",
+  None)</code> (or <code>where("active", "=", True)</code> in the alternative mode);
+  <code>with_trashed()</code> removes it; <code>only_trashed()</code> flips it.</li>
+</ul>
+<h3 id="93-slice-d-footprint">9.3 Slice D footprint<a class="headerlink" href="#93-slice-d-footprint" title="Permanent link">&para;</a></h3>
+<ul>
+<li>~2 new files: <code>soft_delete.py</code> + extend <code>query.py</code> for the default
+  scope plumbing.</li>
+<li>~200 LoC + tests.</li>
+<li><strong>Zero core changes</strong>, but soft-delete adopters pay a migration to
+  add <code>deleted_at</code>.</li>
+</ul>
+<h2 id="10-slice-e-migration-dsl-optional-deferred">10. Slice E — Migration DSL (optional, deferred)<a class="headerlink" href="#10-slice-e-migration-dsl-optional-deferred" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyvelm.vellum.schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">Schema</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">migrate</span><span class="p">(</span><span class="n">env</span><span class="p">):</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="n">Schema</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">&quot;blog_post&quot;</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="p">(</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>        <span class="n">t</span><span class="o">.</span><span class="n">id</span><span class="p">(),</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>        <span class="n">t</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">not_null</span><span class="p">(),</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>        <span class="n">t</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;body&quot;</span><span class="p">),</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>        <span class="n">t</span><span class="o">.</span><span class="n">belongs_to</span><span class="p">(</span><span class="s2">&quot;res_users&quot;</span><span class="p">,</span> <span class="n">as_</span><span class="o">=</span><span class="s2">&quot;author&quot;</span><span class="p">),</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>        <span class="n">t</span><span class="o">.</span><span class="n">integer</span><span class="p">(</span><span class="s2">&quot;views&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">default</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>        <span class="n">t</span><span class="o">.</span><span class="n">timestamps</span><span class="p">(),</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>    <span class="p">))</span>
+</span></code></pre></div>
+<p>This is the one feature where Laravel Eloquent has a clear edge over the
+current <code>env.conn.execute("CREATE TABLE ...")</code> style. <strong>But</strong> pyvelm
+already has:</p>
+<ul>
+<li><code>db autogen</code> (waves additive migrations automatically),</li>
+<li>working hand-written migrations,</li>
+<li>the entire <code>BaseModel._setup_table</code> DDL path.</li>
+</ul>
+<p>Recommendation: <strong>defer Slice E</strong> until we have a reason. It would
+only help one developer audience (people writing migrations by hand
+who want fluent DSL), and the autogen path covers most of that.</p>
+<h2 id="11-what-changes-in-core-total">11. What changes in core, total<a class="headerlink" href="#11-what-changes-in-core-total" title="Permanent link">&para;</a></h2>
+<p>If we ship A → B → C → D:</p>
+<table>
+<thead>
+<tr>
+<th>Slice</th>
+<th>Core changes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>none</td>
+</tr>
+<tr>
+<td>B</td>
+<td>5–10 lines: <code>One2many.__get__</code> and <code>Many2many.__get__</code> consult <code>env.cache</code> for a tuple-of-ids before re-querying</td>
+</tr>
+<tr>
+<td>C</td>
+<td>none</td>
+</tr>
+<tr>
+<td>D</td>
+<td>none</td>
+</tr>
+</tbody>
+</table>
+<p>The Slice B change is <strong>worth doing on its own</strong> — it's an unambiguous
+win for any pyvelm code that re-reads the same <code>One2many</code> more than
+once in a request.</p>
+<h2 id="12-decisions-to-confirm-before-coding">12. Decisions to confirm before coding<a class="headerlink" href="#12-decisions-to-confirm-before-coding" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Module location.</strong> Confirmed: bundled at <code>pyvelm/modules/vellum/</code>.</li>
+<li><strong><code>with_</code> core hook.</strong> Land the <code>One2many</code> / <code>Many2many</code> cache hook
+   in core as its own PR before Slice B, or batch it with Slice B?
+   <strong>Recommendation:</strong> its own PR — it stands on its own merit.</li>
+<li><strong>Field/method name collision policy.</strong> Reject at class-creation
+   time with a clear error message? Or silently let the method win?
+   <strong>Recommendation:</strong> reject.</li>
+<li><strong>Default mass-assignment policy.</strong> Silently drop disallowed keys
+   (Laravel default) or raise? <strong>Recommendation:</strong> drop, with
+   <code>_strict_fillable = True</code> to raise.</li>
+<li><strong>Soft-delete column.</strong> Default to <code>deleted_at</code> (Datetime, Laravel
+   default) or reuse <code>active</code> (Boolean, pyvelm convention)? Or
+   support both (the model picks)? <strong>Recommendation:</strong> support both
+   via <code>_soft_delete_column</code>, default <code>deleted_at</code>.</li>
+<li><strong>Builder mutability.</strong> Immutable builders (Laravel-style) or
+   mutate-in-place? <strong>Recommendation:</strong> immutable — matches Laravel
+   and is easier to reason about with shared references.</li>
+<li><strong>Where do <code>with_count</code> results live?</strong> As a sidecar dict on the
+   recordset (not a field) — confirm OK to expose via
+   <code>recordset.count_of(name)</code> rather than attribute access.</li>
+<li><strong>What does <code>Post.query(env).first()</code> return for an empty result?</strong>
+   Empty recordset (pyvelm style) or <code>None</code> (Laravel style)?
+   <strong>Recommendation:</strong> empty recordset — keeps every Vellum return
+   value compatible with the rest of pyvelm. <code>.first_or_fail()</code>
+   raises.</li>
+</ol>
+<h2 id="13-phasing-pr-plan">13. Phasing &amp; PR plan<a class="headerlink" href="#13-phasing-pr-plan" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>PR</th>
+<th>Scope</th>
+<th>LoC est.</th>
+<th>Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Slice A — QueryBuilder + collection helpers</td>
+<td>~400</td>
+<td>low</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Core: One2many/Many2many cache hook</td>
+<td>~30</td>
+<td>low–med</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Slice B — relationships + eager loading (depends on PR 2)</td>
+<td>~500</td>
+<td>med</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Slice C — scopes + accessors/mutators + events</td>
+<td>~200</td>
+<td>low</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Slice D — mass assignment + soft deletes</td>
+<td>~200</td>
+<td>med</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Slice E — migration DSL</td>
+<td>~300</td>
+<td>low, deferred</td>
+</tr>
+</tbody>
+</table>
+<p>Each PR ships with a test module under
+<code>pyvelm/modules/vellum/tests/</code> exercising a representative model
+(<code>vellum_demo_post</code>, <code>vellum_demo_user</code>) — same pattern the rest
+of the framework uses for in-tree tests.</p>
+<h2 id="14-open-questions-to-flag-in-review">14. Open questions to flag in review<a class="headerlink" href="#14-open-questions-to-flag-in-review" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Does the team want <strong>soft delete to count as a deferred decision</strong>
+  (since it carries a migration cost) and ship A/B/C only first?</li>
+<li>Do we want a <strong>Laravel-style query log</strong> (per-env list of compiled
+  SQL strings) to land alongside Slice A? Small, useful in tests, no
+  user-facing impact otherwise.</li>
+<li>Are there any <strong>fields the user might want to alias</strong> under accessor
+  rules (e.g. <code>get_email_attribute</code> lowercase-normalises every read)?
+  If yes, we need to think about whether the cache stores the raw or
+  the accessor-transformed value (recommendation: store raw, transform
+  on read, since other Python code is the only path that hits the
+  cache directly and we'd surprise it otherwise).</li>
+<li><code>force_delete()</code> vs <code>unlink()</code>: should <code>Vellum.unlink()</code> route to
+  <code>force_delete</code> (hard delete) or <code>delete</code> (soft delete on
+  SoftDeletes-bearing models)? <strong>Recommendation:</strong> the existing
+  <code>unlink()</code> always hard-deletes; SoftDeletes adds <code>delete()</code> and
+  <code>restore()</code> as new verbs.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/sponsors/coolsam726" target="_blank" rel="noopener" title="Sponsor on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="m241 87.1 15 20.7 15-20.7C296 52.5 336.2 32 378.9 32 452.4 32 512 91.6 512 165.1v2.6c0 112.2-139.9 242.5-212.9 298.2-12.4 9.4-27.6 14.1-43.1 14.1s-30.8-4.6-43.1-14.1C139.9 410.2 0 279.9 0 167.7v-2.6C0 91.6 59.6 32 133.1 32 175.8 32 216 52.5 241 87.1"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "navigation.instant", "content.code.copy", "content.code.annotate", "toc.follow", "search.suggest", "search.share"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
