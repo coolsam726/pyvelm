@@ -144,7 +144,7 @@ def compute_diff(env: "Environment", module: str) -> Diff:
             expected[f.column] = (f, f.column_ddl())
         actual = _fetch_table_columns(env, table)
         if actual is None:
-            from .database import serial_primary_key
+            from .database import create_table_sql, serial_primary_key
 
             cap = getattr(env.conn, "capabilities", None)
             if cap is None:
@@ -153,10 +153,7 @@ def compute_diff(env: "Environment", module: str) -> Diff:
             col_ddls = [serial_primary_key(cap)] + [
                 ddl for _, ddl in expected.values()
             ]
-            ddl = (
-                f'CREATE TABLE IF NOT EXISTS "{table}" '
-                f'({", ".join(col_ddls)})'
-            )
+            ddl = create_table_sql(table, ", ".join(col_ddls), cap)
             diff.new_tables.append((table, ddl))
             continue
         for col, (field_obj, col_ddl) in expected.items():

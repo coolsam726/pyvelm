@@ -261,6 +261,11 @@ class DdlHelperTests(unittest.TestCase):
             "IF NOT EXISTS",
             create_table_sql("t", '"id" int', cap_oracle),
         )
+        cap_mssql = dialect_caps("mssql")
+        self.assertNotIn(
+            "IF NOT EXISTS",
+            create_table_sql("t", '"id" int', cap_mssql),
+        )
 
     def test_reset_schema_unsupported(self):
         conn = MagicMock()
@@ -584,7 +589,7 @@ class DialectRemainingGapsTests(unittest.TestCase):
         self.assertIn("DATETIMEOFFSET", mssql.timestamp_sql_type())
         self.assertIn("SYSDATETIMEOFFSET", mssql.now_sql())
         self.assertIn("NVARCHAR(255)", mssql.string_sql_type(primary_key=True))
-        self.assertTrue(mssql.supports_create_table_if_not_exists())
+        self.assertFalse(mssql.supports_create_table_if_not_exists())
         self.assertEqual(mssql.bind_params((2,)), (2,))
 
     def test_mysql_bind_params(self):

@@ -360,9 +360,18 @@ def reload_installed_models(env: Environment, specs: dict[str, ModuleSpec]) -> N
 
 
 def _ensure_ir_module(env: Environment) -> None:
-    from pyvelm.database import _conn_capabilities, ir_module_create_sql
+    from pyvelm.database import (
+        _conn_capabilities,
+        ir_module_create_sql,
+        supports_create_table_if_not_exists,
+        table_exists,
+    )
 
     cap = _conn_capabilities(env.conn)
+    if table_exists(env.conn, IR_MODULE_TABLE, cap) and not supports_create_table_if_not_exists(
+        cap
+    ):
+        return
     env.conn.execute(ir_module_create_sql(cap))
 
 

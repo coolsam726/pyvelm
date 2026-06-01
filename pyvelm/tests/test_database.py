@@ -126,6 +126,15 @@ class DialectCapabilitiesTests(unittest.TestCase):
         self.assertIn('"name" VARCHAR(255) PRIMARY KEY', sql)
         self.assertNotIn("text PRIMARY KEY", sql)
 
+    def test_ir_module_create_sql_mssql_no_if_not_exists(self):
+        from pyvelm.database import ir_module_create_sql
+
+        sql = ir_module_create_sql(dialect_capabilities("mssql"))
+        self.assertIn('CREATE TABLE "ir_module"', sql)
+        self.assertNotIn("IF NOT EXISTS", sql)
+        self.assertIn("NVARCHAR(255)", sql)
+        self.assertIn("DATETIMEOFFSET", sql)
+
 
 class SqliteDatabaseTests(unittest.TestCase):
     def test_create_table_and_insert(self):

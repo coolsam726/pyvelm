@@ -178,9 +178,9 @@ def ir_module_create_sql(cap: DialectCapabilities) -> str:
     default = now_sql(cap)
     name_type = string_sql_type(cap, primary_key=True)
     version_type = string_sql_type(cap)
-    return (
-        f'CREATE TABLE IF NOT EXISTS "ir_module" ('
+    column_ddl = (
         f'"name" {name_type} PRIMARY KEY, '
         f'"version" {version_type} NOT NULL, '
-        f'"installed_at" {ts} NOT NULL DEFAULT {default})'
+        f'"installed_at" {ts} NOT NULL DEFAULT {default}'
     )
+    return create_table_sql("ir_module", column_ddl, cap)

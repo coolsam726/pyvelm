@@ -71,7 +71,8 @@ def string_sql_type(*, primary_key: bool = False) -> str:
 
 
 def supports_create_table_if_not_exists() -> bool:
-    return True
+    # SQL Server has no CREATE TABLE IF NOT EXISTS; callers check table_exists.
+    return False
 
 
 def append_search_pagination(
