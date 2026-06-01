@@ -1,9 +1,12 @@
-# Build docs on PRs; publish versioned site with mike on release tags.
+# PRs: strict `mkdocs build` only (no publish).
+# Release tags (`v*`) and workflow_dispatch: mike pushes to `gh-pages`.
 #
-# GitHub Pages → Settings → Build and deployment → Source = "Deploy from a branch"
-# → Branch `gh-pages` / `/ (root)` (mike manages version subdirs + default redirect).
+# GitHub Pages must serve that branch (not "GitHub Actions" / `main`):
+#   Settings → Pages → Build and deployment → Deploy from a branch → `gh-pages` / `/`
+# After the first mike deploy, run this once if the live site still shows an old flat build:
+#   gh api -X POST repos/<owner>/<repo>/pages/builds
 #
-# Local: `mkdocs build --strict` before merging; `mike deploy` after tagging (see docs/versioning.md).
+# Local: `mkdocs build --strict` before merging; tag a release to publish (see docs/versioning.md).
 
 name: docs
 
@@ -26,7 +29,7 @@ on:
 
 permissions:
   contents: write
-  pages: read
+  pages: write
 
 concurrency:
   group: docs-${{ github.workflow }}-${{ github.ref }}
@@ -71,7 +74,9 @@ jobs:
       - name: Deploy release tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          # Mike version dirs use major.minor (1.0), not full semver (1.0.0).
+          FULL="${GITHUB_REF_NAME#v}"
+          VERSION="$(echo "$FULL" | cut -d. -f1-2)"
           mike deploy --push --update-aliases "$VERSION" latest
           mike set-default --push latest
       - name: Deploy manual version
@@ -84,3 +89,8 @@ jobs:
           else
             mike deploy --push "$VERSION"
           fi
+      - name: Rebuild GitHub Pages from gh-pages
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds"

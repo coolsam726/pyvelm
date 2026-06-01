@@ -36,7 +36,9 @@ mike serve                 # preview versioned layout (after at least one mike d
 ```
 
 Published docs use [mike](https://github.com/jimporter/mike) on `gh-pages`
-(version picker in the Material theme). See [docs/versioning.md](docs/versioning.md).
+(version picker in the Material theme). GitHub Pages must deploy from that branch
+(`gh-pages` / root), not from GitHub Actions or `main`. See
+[docs/versioning.md](docs/versioning.md).
 
 ## Test coverage
 
