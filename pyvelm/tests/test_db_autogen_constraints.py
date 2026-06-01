@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import unittest
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 from pyvelm.db_autogen import (
     ApplyResult,
     Diff,
     SchemaAlteration,
+    _fetch_table_columns_inspector,
     apply_schema_diff,
     compute_diff,
 )
@@ -179,4 +181,16 @@ class ApplySchemaDiffTests(unittest.TestCase):
         r = ApplyResult(set_not_null=2, skipped_not_null=1)
         self.assertIn("2 NOT NULL", r.summary())
         self.assertIn("pending", r.summary())
+
+
+class InspectorEdgeCaseTests(unittest.TestCase):
+    def test_fetch_table_columns_inspector_missing_table_returns_none(self):
+        from sqlalchemy.exc import NoSuchTableError
+
+        conn = MagicMock()
+        conn._sa = MagicMock()
+        insp = MagicMock()
+        insp.get_table_names.side_effect = NoSuchTableError("base_automation")
+        with patch("sqlalchemy.inspect", return_value=insp):
+            self.assertIsNone(_fetch_table_columns_inspector(conn, "base_automation"))
 

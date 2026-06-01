@@ -287,15 +287,24 @@ def _fetch_table_columns_inspector(conn, table: str) -> dict[str, ColumnSchema] 
             )
         return out
     from sqlalchemy import inspect as sa_inspect
+    from sqlalchemy.exc import NoSuchTableError
 
     # Inspect the live connection, not the engine: inspecting the engine
     # opens a second pooled connection that deadlocks on Postgres against an
     # uncommitted ALTER TABLE held by this connection (ACCESS EXCLUSIVE lock).
     insp = sa_inspect(conn._sa)
-    if table not in insp.get_table_names():
+    try:
+        table_names = insp.get_table_names()
+    except NoSuchTableError:
+        return None
+    if table not in table_names:
         return None
     out: dict[str, ColumnSchema] = {}
-    for col in insp.get_columns(table):
+    try:
+        cols = insp.get_columns(table)
+    except NoSuchTableError:
+        return None
+    for col in cols:
         out[col["name"]] = ColumnSchema(
             nullable=bool(col.get("nullable", True)),
             type_spec=_normalize_inspector_type(col["type"]),
