@@ -126,26 +126,31 @@ entries — lives in Python files referenced by `DATA`:
 manifest = Manifest.make("partners").data("views/partner.py", "views/menu.py")
 ```
 
-The loader executes each file and harvests the module-level lists:
-
-- `VIEWS` — base view declarations.
-- `VIEW_INHERITS` — patches against other modules' views.
-- `MENUS` — sidebar entries.
+The loader executes each file and harvests declarative data from a
+fluent ``views_data`` builder (preferred) or legacy module-level lists
+(``VIEWS``, ``VIEW_INHERITS``, ``MENUS``).
 
 ```python
 # partners/views/partner.py
-from pyvelm.builders import list_view, form_view, section
+from pyvelm.builders import Field, FormView, ListView, ViewsData
 
-VIEWS = [
-    list_view("partner.list", "res.partner",
-              fields=["name", "code", "country_id"]),
-    form_view("partner.form", "res.partner",
-              sections=[
-                  section("identity", "Identity", ["name", "code"]),
-                  section("location", "Location", ["country_id"]),
-              ]),
-]
+views_data = (
+    ViewsData.make()
+    .views(
+        ListView.make("partner.list")
+        .model("res.partner")
+        .columns(["name", "code", "country_id"])
+        .form_view("partner.form"),
+        FormView.make("partner.form")
+        .model("res.partner")
+        .section("identity", "Identity", ["name", "code"])
+        .section("location", "Location", ["country_id"]),
+    )
+)
 ```
+
+Legacy function helpers (``list_view``, ``form_view``, ``field``, …) remain
+available and produce the same dicts the loader always consumed.
 
 Files that don't define any of those lists are still imported — use
 this for side-effects like registering custom widgets via
@@ -177,21 +182,24 @@ Use the **`Menus`** builder so you only pass names you already know from
 `VIEWS` — not hand-built `/web/views/...` paths:
 
 ```python
-# partners/views/menu.py  —  NAME in __pyvelm__.py is "partners"
-from pyvelm.builders import Menus
+# partners/views/menu.py  —  module name in __pyvelm__.py is "partners"
+from pyvelm.builders import Menus, ViewsData
 
 m = Menus("partners")
 
-MENUS = [
+views_data = ViewsData.make().menus(
     m.group("business", "Business", icon="square-3-stack-3d", sequence=50).children([
         m.group("business.directory", "Directory", sequence=10).children([
-            m.item("business.partners", "Partners",
-                   view="partner.list", sequence=10),
+            m.item("business.partners", "Partners")
+            .view("partner.list")
+            .sequence(10),
         ]),
-        m.item("business.tags", "Tags",
-               parent=("admin", "settings.reference"), view="tag.list", sequence=20),
+        m.item("business.tags", "Tags")
+        .parent(("admin", "settings.reference"))
+        .view("tag.list")
+        .sequence(20),
     ]),
-]
+)
 ```
 
 | What you write | What gets stored |

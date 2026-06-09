@@ -1,59 +1,63 @@
 """Views for ``vellum.demo.comment``."""
 
-from pyvelm.builders import card, field, form_view, kanban_view, list_view, section
-from pyvelm.types import View
+from pyvelm.builders import (
+    Field,
+    FormView,
+    KanbanCard,
+    KanbanView,
+    ListView,
+    ViewsData,
+)
 
-VIEWS: list[View] = [
-    list_view(
-        "demo_comment.list",
-        "vellum.demo.comment",
-        title="Comment",
-        fields=[
-            "body",
-            "note_id",
-            field("active", widget="toggle"),
-            "created_at",
-            "updated_at",
-        ],
-        form_view="demo_comment.form",
-    ),
-    form_view(
-        "demo_comment.form",
-        "vellum.demo.comment",
-        sections=[
-            section(
-                "main",
-                "Comment",
-                [
-                    "note_id",
-                    field("active", widget="toggle"),
-                    field("body", colspan='full'),
-                ],
-            ),
-            section(
-                "metadata",
-                "Record info",
-                [
-                    "created_at",
-                    "updated_at",
-                ],
-            ),
-        ],
-    ),
-    kanban_view(
-        "demo_comment.kanban",
-        "vellum.demo.comment",
-        card=card(
-            "display_name",
-            fields=[
+views_data = (
+    ViewsData.make()
+    .views(
+        ListView.make("demo_comment.list")
+        .model("vellum.demo.comment")
+        .title("Comment")
+        .columns(
+            [
                 "body",
-                "active",
+                "note_id",
+                Field.make("active").toggle(),
+                "created_at",
+                "updated_at",
+            ]
+        )
+        .form_view("demo_comment.form"),
+        FormView.make("demo_comment.form")
+        .model("vellum.demo.comment")
+        .section(
+            "main",
+            "Comment",
+            [
+                "note_id",
+                Field.make("active").toggle(),
+                Field.make("body").colspan("full"),
+            ],
+        )
+        .section(
+            "metadata",
+            "Record info",
+            [
                 "created_at",
                 "updated_at",
             ],
         ),
+        KanbanView.make("demo_comment.kanban")
+        .model("vellum.demo.comment")
+        .card(
+            KanbanCard.make("display_name").fields(
+                [
+                    "body",
+                    "active",
+                    "created_at",
+                    "updated_at",
+                ]
+            )
+        )
         # group_by="note_id",
-        sequence="sequence",
-        form_view="demo_comment.form",
-    ),
-]
+        .sequence("sequence")
+        .form_view("demo_comment.form"),
+    )
+)

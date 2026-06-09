@@ -5,27 +5,23 @@ exist for the rare case where an admin wants to bulk-rename or fix
 parent links via the standard CRUD plumbing.
 """
 
-from pyvelm.builders import field, form_view, list_view, section
-from pyvelm.types import View
+from pyvelm.builders import Field, FormView, ListView, ViewsData
 
-VIEWS: list[View] = [
-    list_view(
-        "file_manager.folder.list",
-        "res.attachment.folder",
-        title="Folders",
-        fields=["display_name", "name", "parent_id", "sequence", "color"],
-        form_view="file_manager.folder.form",
-    ),
-    form_view(
-        "file_manager.folder.form",
-        "res.attachment.folder",
-        title="Folder",
-        sections=[
-            section(
-                "identity",
-                "Identity",
-                ["name", "parent_id", "sequence", field("color", widget="color")],
-            ),
-        ],
-    ),
-]
+views_data = (
+    ViewsData.make()
+    .views(
+        ListView.make("file_manager.folder.list")
+        .model("res.attachment.folder")
+        .title("Folders")
+        .columns(["display_name", "name", "parent_id", "sequence", "color"])
+        .form_view("file_manager.folder.form"),
+        FormView.make("file_manager.folder.form")
+        .model("res.attachment.folder")
+        .title("Folder")
+        .section(
+            "identity",
+            "Identity",
+            ["name", "parent_id", "sequence", Field.make("color").widget("color")],
+        ),
+    )
+)

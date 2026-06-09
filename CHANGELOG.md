@@ -14,12 +14,18 @@ out of the 0.x line.
 - **Fluent module manifests** — ``Manifest.make("partners").version(0, 1, 0).depends(...)``
   velmphp-style builder assigned to ``manifest`` in ``__pyvelm__.py``; legacy
   ``NAME`` / ``VERSION`` constants remain supported.
+- **Fluent view/menu builders** — ``ListView.make()``, ``FormView.make()``,
+  ``Field.make()``, ``ViewsData.make()`` (velmphp / Filament-style); assign
+  ``views_data`` in DATA files. Legacy ``list_view`` / ``field`` functions
+  remain supported.
 
 ### Changed
 
 - **Module scaffolds** — ``pyvelm make:module`` and generators patch fluent
   ``.data(...)`` chains; migration CLI bumps ``.version(...)`` as well as
   legacy ``VERSION`` tuples.
+- **Bundled and example view files** — migrated to ``views_data`` fluent
+  declarations; ``make:view`` scaffolds emit ``Field.make()`` / ``ListView.make()``.
 
 ## [1.0.1] — 2026-06-01
 

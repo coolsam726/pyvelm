@@ -1,81 +1,80 @@
 """View declarations for the ``crm`` module."""
 
 from pyvelm.builders import (
-    card,
-    field,
-    form_view,
-    graph_view,
-    kanban_view,
-    list_view,
-    pivot_view,
-    section,
+    Field,
+    FormView,
+    GraphView,
+    KanbanCard,
+    KanbanView,
+    ListView,
+    PivotView,
+    ViewsData,
 )
-from pyvelm.types import View
 
-VIEWS: list[View] = [
-    list_view(
-        "lead.list", "crm.lead",
-        title="All Leads",
-        form_view="lead.form",
-        fields=[
-            "name",
-            "partner_id",
-            "stage",
-            field("priority", label="Prio"),
-            field("expected_revenue", label="Revenue (k€)"),
-            field("probability", label="Prob %"),
-            "salesperson",
-            "expected_close",
-            "next_contact_at",
-            "label",
-            "active",
-        ],
-    ),
-
-    form_view(
-        "lead.form", "crm.lead",
-        sections=[
-            section("main",       "Opportunity", ["name", "partner_id", "stage", "priority"]),
-            section("financials", "Financials",  ["expected_revenue", "probability", "salesperson"]),
-            section(
-                "scheduling",
-                "Scheduling (date · datetime popup · time)",
-                ["expected_close", "next_contact_at", "preferred_call_time"],
-            ),
-            section("meta",       "Meta",        ["company_id", "active"]),
-        ],
-    ),
-
-    kanban_view(
-        "lead.kanban", "crm.lead",
-        title="Pipeline",
-        group_by="stage",
-        form_view="lead.form",
-        card=card(
-            "name",
-            subtitle="salesperson",
-            fields=[
-                field("partner_id", label="Contact"),
-                field("expected_revenue", label="Revenue (k€)"),
-                field("probability", label="Prob %"),
-            ],
-            badges=["active"],
+views_data = (
+    ViewsData.make()
+    .views(
+        ListView.make("lead.list")
+        .model("crm.lead")
+        .title("All Leads")
+        .form_view("lead.form")
+        .columns(
+            [
+                "name",
+                "partner_id",
+                "stage",
+                Field.make("priority").label("Prio"),
+                Field.make("expected_revenue").label("Revenue (k€)"),
+                Field.make("probability").label("Prob %"),
+                "salesperson",
+                "expected_close",
+                "next_contact_at",
+                "label",
+                "active",
+            ]
         ),
-    ),
-
-    graph_view(
-        "lead.graph", "crm.lead",
-        title="Revenue by stage",
-        groupby="stage",
-        measure="expected_revenue:sum",
-        chart="bar",
-    ),
-
-    pivot_view(
-        "lead.pivot", "crm.lead",
-        title="Pipeline pivot",
-        row_groupby=["stage"],
-        col_groupby=["priority"],
-        measures=["__count", "expected_revenue:sum"],
-    ),
-]
+        FormView.make("lead.form")
+        .model("crm.lead")
+        .section("main", "Opportunity", ["name", "partner_id", "stage", "priority"])
+        .section(
+            "financials",
+            "Financials",
+            ["expected_revenue", "probability", "salesperson"],
+        )
+        .section(
+            "scheduling",
+            "Scheduling (date · datetime popup · time)",
+            ["expected_close", "next_contact_at", "preferred_call_time"],
+        )
+        .section("meta", "Meta", ["company_id", "active"]),
+        KanbanView.make("lead.kanban")
+        .model("crm.lead")
+        .title("Pipeline")
+        .group_by("stage")
+        .form_view("lead.form")
+        .card(
+            KanbanCard.make("name")
+            .subtitle("salesperson")
+            .fields(
+                [
+                    Field.make("partner_id").label("Contact"),
+                    Field.make("expected_revenue").label("Revenue (k€)"),
+                    Field.make("probability").label("Prob %"),
+                ]
+            )
+            .badges(["active"])
+        ),
+        GraphView.make("lead.graph")
+        .model("crm.lead")
+        .title("Revenue by stage")
+        .groupby("stage")
+        .measure("expected_revenue:sum")
+        .chart("bar"),
+        PivotView.make("lead.pivot")
+        .model("crm.lead")
+        .title("Pipeline pivot")
+        .row_groupby(["stage"])
+        .col_groupby(["priority"])
+        .measures(["__count", "expected_revenue:sum"]),
+    )
+)

@@ -320,9 +320,9 @@ def _field_view_ref(fname: str, field: Any) -> str:
     from .fields import Boolean, Many2many, One2many
 
     if isinstance(field, Boolean):
-        return f'field("{fname}", widget="toggle")'
+        return f'Field.make("{fname}").toggle()'
     if isinstance(field, (One2many, Many2many)):
-        return f'field("{fname}", widget="dialog")'
+        return f'Field.make("{fname}").widget("dialog")'
     return f'"{fname}"'
 
 
@@ -483,7 +483,7 @@ def _format_form_sections(sections: list[tuple[str, str, list[str]]]) -> str:
     for sid, title, field_lines in sections:
         inner = _format_field_list(field_lines)
         blocks.append(
-            f'            section("{sid}", "{title}", [\n{inner}\n            ]),'
+            f'        .section("{sid}", "{title}", [\n{inner}\n        ])'
         )
     return "\n".join(blocks)
 
