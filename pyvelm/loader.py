@@ -637,9 +637,20 @@ def _load_data_files(spec: ModuleSpec) -> None:
                     raise ImportError(f"Could not import data file {path}")
                 mod = importlib.util.module_from_spec(spec_obj)
                 spec_obj.loader.exec_module(mod)
-            views.extend(getattr(mod, "VIEWS", []))
-            inherits.extend(getattr(mod, "VIEW_INHERITS", []))
-            menus.extend(flatten_menus(getattr(mod, "MENUS", [])))
+            from .builders import ViewsData, flatten_menus
+
+            views_data = getattr(mod, "views_data", None) or getattr(
+                mod, "VIEWS_DATA", None
+            )
+            if isinstance(views_data, ViewsData):
+                data = views_data.to_dict()
+                views.extend(data.get("VIEWS", []))
+                inherits.extend(data.get("VIEW_INHERITS", []))
+                menus.extend(data.get("MENUS", []))
+            else:
+                views.extend(getattr(mod, "VIEWS", []))
+                inherits.extend(getattr(mod, "VIEW_INHERITS", []))
+                menus.extend(flatten_menus(getattr(mod, "MENUS", [])))
         else:
             raise ValueError(
                 f"Module {spec.name!r}: data file {rel_path!r} has unsupported "

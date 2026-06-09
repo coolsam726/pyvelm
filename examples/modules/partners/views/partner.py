@@ -1,85 +1,77 @@
 """View declarations for the ``partners`` module."""
 
 from pyvelm.builders import (
-    card,
-    field,
-    form_view,
-    kanban_view,
-    list_view,
-    section,
+    Field,
+    FormView,
+    KanbanCard,
+    KanbanView,
+    ListView,
+    ViewsData,
 )
-from pyvelm.types import View
 
-VIEWS: list[View] = [
-    list_view(
-        "partner.list",
-        "res.partner",
-        fields=[
-            "name",
-            "workflow_state_label",
-            "code",
-            "company_id",
-            "age",
-            "birth_date",
-            "country_id",
-            "active",
-        ],
-        form_view="partner.form",
-    ),
-    form_view(
-        "partner.form",
-        "res.partner",
-        sections=[
-            section("identity", "Identity", ["name", "code"]),
-            section(
-                "profile",
-                "Profile",
-                [
-                    "age",
-                    "birth_date",
-                    "country_id",
-                    "company_id",
-                    "parent_id",
-                    "active",
-                ],
-            ),
-            section(
-                "relations",
-                "Relations",
-                [
-                    field("tag_ids", widget="dialog"),
-                    field("child_ids", widget="dialog"),
-                ],
-            ),
-        ],
-    ),
-    kanban_view(
-        "partner.kanban",
-        "res.partner",
-        title="Partner Board",
-        card=card(
-            "name",
-            subtitle="code",
-            fields=["age", "country_id"],
-            badges=[field("active", widget="toggle"), "tag_ids"],
+views_data = (
+    ViewsData.make()
+    .views(
+        ListView.make("partner.list")
+        .model("res.partner")
+        .columns(
+            [
+                "name",
+                "workflow_state_label",
+                "code",
+                "company_id",
+                "age",
+                "birth_date",
+                "country_id",
+                "active",
+            ]
+        )
+        .form_view("partner.form"),
+        FormView.make("partner.form")
+        .model("res.partner")
+        .section("identity", "Identity", ["name", "code"])
+        .section(
+            "profile",
+            "Profile",
+            [
+                "age",
+                "birth_date",
+                "country_id",
+                "company_id",
+                "parent_id",
+                "active",
+            ],
+        )
+        .section(
+            "relations",
+            "Relations",
+            [
+                Field.make("tag_ids").widget("dialog"),
+                Field.make("child_ids").widget("dialog"),
+            ],
         ),
+        KanbanView.make("partner.kanban")
+        .model("res.partner")
+        .title("Partner Board")
+        .card(
+            KanbanCard.make("name")
+            .subtitle("code")
+            .fields(["age", "country_id"])
+            .badges([Field.make("active").toggle(), "tag_ids"])
+        )
         # group_by="country_id",
-        form_view="partner.form",
-    ),
-    # ---- res.tag ----
-    # Moved here from admin: partners owns res.tag, so it owns the
-    # views too. The Settings → Tags sidebar entry (see views/menu.py)
-    # still parents under admin.settings via cross-module menu refs.
-    list_view(
-        "tag.list",
-        "res.tag",
+        .form_view("partner.form"),
+        # ---- res.tag ----
+        # Moved here from admin: partners owns res.tag, so it owns the
+        # views too. The Settings → Tags sidebar entry (see views/menu.py)
+        # still parents under admin.settings via cross-module menu refs.
+        ListView.make("tag.list")
+        .model("res.tag")
         # sequence opts into drag-reorder (handle column, forced sort).
-        sequence="sequence",
-        fields=["name"],
-    ),
-    form_view(
-        "tag.form",
-        "res.tag",
-        sections=[section("main", "Tag", ["name"])],
-    ),
-]
+        .sequence("sequence")
+        .columns(["name"]),
+        FormView.make("tag.form")
+        .model("res.tag")
+        .section("main", "Tag", ["name"]),
+    )
+)

@@ -42,7 +42,9 @@ class ViewScaffoldFromModelTests(unittest.TestCase):
         self.assertIn("main", ids)
         self.assertIn("relations", ids)
         rel_lines = next(lines for sid, _t, lines in sections if sid == "relations")
-        self.assertTrue(any('widget="dialog"' in line for line in rel_lines))
+        self.assertTrue(
+            any('.widget("dialog")' in line or 'widget="dialog"' in line for line in rel_lines)
+        )
 
     def test_generate_views_from_model_on_disk(self):
         with tempfile.TemporaryDirectory() as tmp:

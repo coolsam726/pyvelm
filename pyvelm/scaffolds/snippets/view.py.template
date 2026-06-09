@@ -1,23 +1,21 @@
 """Views for ``{{model}}``."""
 
-from pyvelm.builders import field, form_view, list_view, section
-from pyvelm.types import View
+from pyvelm.builders import Field, FormView, ListView, ViewsData
 
-VIEWS: list[View] = [
-    list_view(
-        "{{stem}}.list",
-        "{{model}}",
-        title="{{title}}",
-        fields=[
+views_data = (
+    ViewsData.make()
+    .views(
+        ListView.make("{{stem}}.list")
+        .model("{{model}}")
+        .title("{{title}}")
+        .columns(
+            [
 {{list_fields}}
-        ],
-        form_view="{{stem}}.form",
-    ),
-    form_view(
-        "{{stem}}.form",
-        "{{model}}",
-        sections=[
+            ]
+        )
+        .form_view("{{stem}}.form"),
+        FormView.make("{{stem}}.form")
+        .model("{{model}}")
 {{form_sections}}
-        ],
-    ),
-]
+    )
+)
