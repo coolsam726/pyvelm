@@ -6,6 +6,11 @@
 <span class="text-2xs font-medium px-1.5 py-0.5 rounded-full bg-warning-soft text-warning-strong shrink-0">
     Upgrade
 </span>
+{% elif app.state == "to_sync" %}
+<span class="text-2xs font-medium px-1.5 py-0.5 rounded-full bg-warning-soft text-warning-strong shrink-0"
+      title="{{ app.schema_diff_summary or 'Schema changes pending' }}">
+    Sync
+</span>
 {% else %}
 <span class="text-2xs font-medium px-1.5 py-0.5 rounded-full bg-neutral-tertiary text-body-subtle shrink-0">
     Not installed

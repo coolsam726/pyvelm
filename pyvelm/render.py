@@ -5784,19 +5784,126 @@ def render_access_denied_page(
 
 
 def _catalog_schema_diff_pending(env, spec) -> tuple[bool, str]:
-    """Return whether ``db diff`` would change anything for an installed module."""
+    """Return whether Sync would apply any schema change for an installed module."""
     from . import db_autogen
     from . import loader as _loader
+    from pyvelm.database.introspection import clear_reflection_cache
 
     try:
         if not spec.loaded:
             _loader._load_models(spec, env.registry)
+        clear_reflection_cache(env.conn)
         diff = db_autogen.compute_diff(env, spec.name)
     except Exception:  # noqa: BLE001
         return False, ""
-    if diff.is_empty:
+    if not db_autogen.diff_has_syncable_changes(env, diff):
         return False, ""
-    return True, db_autogen._summary(diff)
+    summary = db_autogen._syncable_summary(diff)
+    return True, summary or db_autogen._summary(diff)
+
+
+def _manifest_reverse_dependents(
+    target_name: str,
+    specs: dict,
+    installed: set[str],
+) -> list[str]:
+    """Installed modules whose manifest ``DEPENDS`` lists *target_name* exactly."""
+    reverse: list[str] = []
+    for n in installed:
+        if n == target_name:
+            continue
+        s = specs.get(n)
+        if s and target_name in s.depends:
+            reverse.append(n)
+    return sorted(reverse)
+
+
+def _inherit_uninstall_blockers(
+    env,
+    target_name: str,
+    *,
+    installed: set[str],
+) -> list[str]:
+    """Block uninstall of a **base owner** while installed extensions remain.
+
+    Pure ``_inherit`` extension modules (e.g. ``super_chain_demo_b``) are
+    always uninstallable — they do not own the shared table, and removing
+    them does not orphan columns on another module's models.
+    """
+    registry = env.registry
+    blockers: list[str] = []
+
+    owned_models = {
+        m for m, owner in registry._model_module.items() if owner == target_name
+    }
+    if not owned_models:
+        return blockers
+
+    blocking_mods: list[str] = []
+    extended_models: list[str] = []
+    for ext_mod, model_names in registry._model_extensions.items():
+        if ext_mod == target_name or ext_mod not in installed:
+            continue
+        overlap = owned_models.intersection(model_names)
+        if overlap:
+            blocking_mods.append(ext_mod)
+            extended_models.extend(overlap)
+    if blocking_mods:
+        blockers.append(
+            "Extended by installed module(s) via _inherit: "
+            f"{', '.join(sorted(set(blocking_mods)))} "
+            f"({', '.join(sorted(set(extended_models)))}). "
+            f"Uninstall those first."
+        )
+
+    return blockers
+
+
+def _uninstall_blockers(
+    env,
+    module_roots: list,
+    target_name: str,
+    *,
+    specs: dict | None = None,
+    installed: set[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Reasons uninstall is blocked, plus reverse dependency module names."""
+    from . import loader as _loader
+
+    blockers: list[str] = []
+    reverse_deps: list[str] = []
+
+    if target_name in _loader.BOOTSTRAP_MODULES:
+        blockers.append(
+            f"`{target_name}` is a bundled bootstrap module and cannot be "
+            f"uninstalled."
+        )
+
+    if specs is None:
+        specs = _loader.discover(module_roots) if module_roots else {}
+    if installed is None:
+        try:
+            rows = env.conn.execute(
+                f'SELECT "name" FROM "{_loader.IR_MODULE_TABLE}"'
+            ).fetchall()
+            installed = {r[0] for r in rows}
+        except Exception:  # noqa: BLE001
+            installed = set()
+
+    if target_name not in installed:
+        return blockers, reverse_deps
+
+    reverse_deps = _manifest_reverse_dependents(target_name, specs, installed)
+    if reverse_deps:
+        blockers.append(
+            f"Still depended on by: {', '.join(reverse_deps)}"
+        )
+
+    blockers.extend(
+        _inherit_uninstall_blockers(env, target_name, installed=installed)
+    )
+
+    return blockers, reverse_deps
 
 
 def _apps_catalog(env, module_roots: list) -> list[dict]:
@@ -5811,11 +5918,12 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
           "author": str, "icon": str,
           "available_version": str,
           "installed_version": str | None,
-          "state": "installed" | "to_upgrade" | "uninstalled",
+          "state": "installed" | "to_upgrade" | "to_sync" | "uninstalled",
           "version_upgrade": bool,
           "pending_migrations": bool,  # installed version < manifest
           "has_schema_diff": bool,
-          "needs_upgrade": bool,
+          "needs_upgrade": bool,       # version bump pending (Upgrade btn)
+          "needs_sync": bool,          # schema diff, versions match (Sync btn)
           "schema_diff_summary": str,
           "depends": list[str],
           "deps_missing": list[str],   # names of deps not yet installed
@@ -5825,6 +5933,11 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
                                        # because the cascade can't pick them
                                        # up. Empty list means "cascade can
                                        # handle it."
+          "can_install": bool,         # False only when deps_unknown
+          "install_blockers": list[str],
+          "can_uninstall": bool,
+          "uninstall_blockers": list[str],
+          "reverse_deps": list[str],
         }
     """
     from . import loader as _loader
@@ -5840,6 +5953,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
     except Exception:  # noqa: BLE001
         # Fresh DB before any install — table doesn't exist yet.
         installed = {}
+    installed_names = set(installed)
 
     catalog: list[dict] = []
     for name, spec in specs.items():
@@ -5861,6 +5975,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
         if inst is None:
             state = "uninstalled"
             needs_upgrade = False
+            needs_sync = False
         else:
             installed_v = tuple(int(p) for p in inst.split("."))
             version_upgrade = spec.version > installed_v
@@ -5869,10 +5984,33 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
                 has_schema_diff, schema_diff_summary = _catalog_schema_diff_pending(
                     env, spec,
                 )
-            needs_upgrade = version_upgrade or has_schema_diff
-            state = "to_upgrade" if needs_upgrade else "installed"
+            # velmphp-style split: Upgrade = version-gap migrations only;
+            # Sync = schema/views reload when versions already match.
+            needs_upgrade = version_upgrade
+            needs_sync = has_schema_diff and not version_upgrade
+            if version_upgrade:
+                state = "to_upgrade"
+            elif has_schema_diff:
+                state = "to_sync"
+            else:
+                state = "installed"
         deps_missing = [d for d in spec.depends if d not in installed]
         deps_unknown = [d for d in deps_missing if d not in specs]
+        install_blockers = (
+            [f"Missing on disk: {', '.join(deps_unknown)}"]
+            if deps_unknown
+            else []
+        )
+        uninstall_blockers: list[str] = []
+        reverse_deps: list[str] = []
+        if inst is not None:
+            uninstall_blockers, reverse_deps = _uninstall_blockers(
+                env,
+                module_roots,
+                name,
+                specs=specs,
+                installed=installed_names,
+            )
         catalog.append(
             {
                 "name": spec.name,
@@ -5889,10 +6027,16 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
                 "pending_migrations": pending_migrations,
                 "has_schema_diff": has_schema_diff,
                 "needs_upgrade": needs_upgrade,
+                "needs_sync": needs_sync,
                 "schema_diff_summary": schema_diff_summary,
                 "depends": spec.depends,
                 "deps_missing": deps_missing,
                 "deps_unknown": deps_unknown,
+                "can_install": not deps_unknown,
+                "install_blockers": install_blockers,
+                "can_uninstall": inst is not None and not uninstall_blockers,
+                "uninstall_blockers": uninstall_blockers,
+                "reverse_deps": reverse_deps,
             }
         )
     catalog.sort(key=lambda c: (c["display_name"].lower(), c["name"]))
@@ -6058,7 +6202,9 @@ def uninstall_preview(env, module_roots: list, target_name: str) -> dict:
     if target_name == "base":
         return {
             "target": target_name,
-            "blockers": ["`base` is the system module and cannot be uninstalled."],
+            "blockers": [
+                "`base` is a bundled bootstrap module and cannot be uninstalled."
+            ],
             "tables": [],
             "views": 0,
             "menus": 0,
@@ -6067,49 +6213,10 @@ def uninstall_preview(env, module_roots: list, target_name: str) -> dict:
             "reverse_deps": [],
         }
 
-    blockers: list[str] = []
-
-    # Reverse dependency lookup: any installed module whose disk
-    # manifest declares `target_name` in DEPENDS blocks the uninstall.
-    specs = _loader.discover(module_roots) if module_roots else {}
-    installed_rows = env.conn.execute(
-        f'SELECT "name" FROM "{_loader.IR_MODULE_TABLE}"'
-    ).fetchall()
-    installed = {r[0] for r in installed_rows}
-    reverse_deps = []
-    for n in installed:
-        if n == target_name:
-            continue
-        s = specs.get(n)
-        if s and target_name in s.depends:
-            reverse_deps.append(n)
-    if reverse_deps:
-        blockers.append(f"Still depended on by: {', '.join(sorted(reverse_deps))}")
-
-    # Modules that extend other models via _inherit aren't safely
-    # reversible today — the new columns sit on tables owned by
-    # other modules and we don't track per-module column ownership.
-    registry = env.registry
-    extends: list[str] = []
-    for model_name in registry._model_extensions.get(target_name, []):
-        cls = registry._models.get(model_name)
-        if cls is None:
-            continue
-        # Reloading models can re-register owned ``_name`` models here;
-        # only block uninstall when this module extends another module's table.
-        if (
-            registry._model_module.get(model_name) == target_name
-            and getattr(cls, "_name", None) == model_name
-        ):
-            continue
-        extends.append(model_name)
-    if extends:
-        blockers.append(
-            f"Extends models via _inherit: {', '.join(sorted(extends))}. "
-            f"Uninstall would orphan their added columns."
-        )
+    blockers, reverse_deps = _uninstall_blockers(env, module_roots, target_name)
 
     # Tables owned by this module.
+    registry = env.registry
     owned_tables: list[str] = []
     for model_name, owner in registry._model_module.items():
         if owner == target_name:
@@ -6190,6 +6297,7 @@ def render_apps_page(env, module_roots: list, current_path: str | None = None) -
         "total": len(catalog),
         "installed": sum(1 for c in catalog if c["state"] == "installed"),
         "to_upgrade": sum(1 for c in catalog if c["state"] == "to_upgrade"),
+        "to_sync": sum(1 for c in catalog if c["state"] == "to_sync"),
         "uninstalled": sum(1 for c in catalog if c["state"] == "uninstalled"),
     }
     categories = sorted({c["category"] for c in catalog})
@@ -6203,6 +6311,7 @@ def render_apps_page(env, module_roots: list, current_path: str | None = None) -
             f"{summary['total']} modules · "
             f"{summary['installed']} installed · "
             f"{summary['to_upgrade']} to upgrade · "
+            f"{summary['to_sync']} to sync · "
             f"{summary['uninstalled']} uninstalled"
         ),
         **layout_context(env, current_path),

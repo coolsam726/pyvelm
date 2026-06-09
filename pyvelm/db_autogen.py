@@ -97,6 +97,53 @@ class Diff:
         )
 
 
+def diff_has_syncable_changes(env: "Environment", diff: Diff) -> bool:
+    """True when ``apply_schema_diff`` would apply at least one change.
+
+    Ignores orphan columns and type drift (hand-written migrations only),
+    and ``SET NOT NULL`` while NULL rows still exist.
+    """
+    if diff.new_tables or diff.new_columns:
+        return True
+    for alt in diff.alterations:
+        if alt.kind == "drop_not_null":
+            return True
+        if alt.kind == "set_not_null" and not _column_has_nulls(
+            env, alt.table, alt.column
+        ):
+            return True
+    return False
+
+
+def _syncable_summary(diff: Diff) -> str:
+    """Human summary of changes Sync can apply (subset of ``_summary``)."""
+    if not (
+        diff.new_tables
+        or diff.new_columns
+        or any(
+            a.kind in ("set_not_null", "drop_not_null") for a in diff.alterations
+        )
+    ):
+        return ""
+    parts: list[str] = []
+    if diff.new_tables:
+        parts.append(f"{len(diff.new_tables)} new table(s)")
+    if diff.new_columns:
+        parts.append(f"{len(diff.new_columns)} new column(s)")
+    kinds: dict[str, int] = {}
+    for alt in diff.alterations:
+        if alt.kind in ("set_not_null", "drop_not_null"):
+            kinds[alt.kind] = kinds.get(alt.kind, 0) + 1
+    labels: list[str] = []
+    if kinds.get("set_not_null"):
+        labels.append(f"{kinds['set_not_null']} NOT NULL tighten")
+    if kinds.get("drop_not_null"):
+        labels.append(f"{kinds['drop_not_null']} NOT NULL relax")
+    if labels:
+        parts.append(", ".join(labels) + " change(s)")
+    return "Changes: " + ", ".join(parts) + "."
+
+
 def _field_type_spec(field: Field) -> str:
     """Normalized SQL type string for a stored field declaration."""
     return _normalize_type_name(getattr(field, "sql_type", "text"))

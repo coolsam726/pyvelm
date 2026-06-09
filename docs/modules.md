@@ -425,7 +425,7 @@ appear without restarting the server) and joins what it finds with
 the `ir_module` table. Each module renders as a card with:
 
 - Name, summary, author, optional icon.
-- State badge — **Installed** / **Upgrade →** / **Not installed**.
+- State badge — **Installed** / **Upgrade** / **Sync** / **Not installed**.
 - Version line (or `installed → available` when an upgrade is
   pending).
 - Dependency list. Names go red when a declared dep isn't
@@ -443,12 +443,14 @@ and run DDL.
 | Action | What happens |
 |---|---|
 | **Install** | Topologically installs the target and any uninstalled prerequisites. Models are imported into the live registry; the standard install pass runs (schema, hook, view/menu sync). Primary button on the card. |
-| **Upgrade** | Always shown on installed modules. Runs only version-gap migration scripts (between the recorded `ir_module` version and the manifest); no-op when versions already match. Highlighted when a version bump is pending. Use **Sync** for schema/views without a bump. |
-| **Sync** | Always available on installed modules. Re-applies schema diff and reloads views/menus from disk without requiring a version bump — use after pulling code. Warning (amber) button. |
+| **Upgrade** | Shown only when the manifest version is ahead of the recorded `ir_module` version. Runs version-gap migration scripts and bumps the installed version. |
+| **Sync** | Always available on installed modules. Re-applies schema diff and reloads views/menus from disk — highlighted when model/schema changes are pending without a version bump. |
 | **Uninstall** | Drops tables owned by the module, deletes its `ir.ui.view` and `ir.ui.menu` rows, removes the `ir_module` entry. All inside one transaction. |
 
-POST endpoints respond with `HX-Redirect: /web/apps` so the sidebar
-re-renders (newly-installed modules may have added menu entries).
+POST endpoints respond with `HX-Redirect: /web/apps` so the catalog
+refreshes in place (with a `pv_flash` summary when applicable).
+Installed modules that cannot be uninstalled show a disabled
+**Protected** button with the blocker reason in its tooltip.
 
 ### Uninstall safety
 
@@ -457,17 +459,20 @@ the framework runs `uninstall_preview` and returns a list of
 **blockers** if it spots a problem:
 
 - **`base` is the system module** — always blocked.
+- **Bundled bootstrap modules** — every module under ``pyvelm/modules/``
+  (``BOOTSTRAP_MODULES``) is protected the same way as ``base``.
 - **Reverse dependencies** — any installed module whose manifest
   still lists this one in `DEPENDS` blocks the uninstall. Remove
   the dependent first.
-- **`_inherit` extensions** — modules that extend models owned by
-  another module can't be uninstalled cleanly. Their added columns
-  sit on someone else's table and the framework doesn't track
-  per-module column ownership.
+- **`_inherit` base owners** — uninstalling a module that *owns*
+  models is blocked while other **installed** modules still extend
+  those models via `_inherit`. Uninstall the extensions first.
+  Pure extension modules (they only `_inherit` someone else's
+  model) remain uninstallable.
 
-The UI surfaces these via the styled alert dialog instead of
-routing into the confirm flow — there's no destructive path to
-confirm.
+The UI disables the uninstall button when blockers exist (tooltip shows
+why). The confirm dialog still re-checks blockers before any destructive
+action runs.
 
 `ir.model.access` and `ir.rule` entries seeded by install hooks
 aren't tagged with the owning module, so they linger after
