@@ -1,12 +1,17 @@
-NAME: str = "reports"
-DISPLAY_NAME: str = "Report Builder"
-VERSION: tuple[int, ...] = (0, 2, 0)
-SUMMARY: str = "User-defined reports with secure SQL compilation and Excel export."
-CATEGORY: str = "System"
-AUTHOR: str = "pyvelm"
-DEPENDS: list[str] = ["base", "admin"]
-DATA: list[str] = [
-    "views/report.py",
-    "views/menu.py",
-]
-INSTALL_HOOK: str = "reports.hooks:install"
+"""reports module manifest."""
+from pyvelm.manifest import Manifest
+
+manifest = (
+    Manifest.make("reports")
+    .version(0, 2, 0)
+    .display_name("Report Builder")
+    .summary("User-defined reports with secure SQL compilation and Excel export.")
+    .category("System")
+    .author("pyvelm")
+    .depends("base", "admin")
+    .data(
+        "views/report.py",
+        "views/menu.py",
+    )
+    .install_hook("reports.hooks:install")
+)

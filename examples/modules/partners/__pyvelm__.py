@@ -1,12 +1,17 @@
-NAME: str = "partners"
-VERSION: tuple[int, ...] = (0, 4, 0)
-SUMMARY: str = "Companies, contacts, and the partner directory."
-CATEGORY: str = "Business"
-AUTHOR: str = "pyvelm"
-DEPENDS: list[str] = ["base"]
-DATA: list[str] = [
-    "views/partner.py",
-    "views/menu.py",
-]
-INSTALL_HOOK: str = "partners.hooks:install"
-SYNC_HOOK: str = "partners.hooks:sync"
+"""partners module manifest."""
+from pyvelm.manifest import Manifest
+
+manifest = (
+    Manifest.make("partners")
+    .version(0, 4, 0)
+    .summary("Companies, contacts, and the partner directory.")
+    .category("Business")
+    .author("pyvelm")
+    .depends("base")
+    .data(
+        "views/partner.py",
+        "views/menu.py",
+    )
+    .install_hook("partners.hooks:install")
+    .sync_hook("partners.hooks:sync")
+)

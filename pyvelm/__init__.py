@@ -28,6 +28,8 @@ from .fields import (
 from . import builders
 from . import loader
 from . import types
+from . import models
+from .manifest import Manifest
 from .model import BaseModel
 from .registry import Registry
 # NOTE: ServerAction, AutomatedAction, CronJob, Message, MailThread are
@@ -75,6 +77,7 @@ __all__ = [
     "Float",
     "Html",
     "Integer",
+    "Manifest",
     "Many2many",
     "Many2one",
     "Monetary",
@@ -84,5 +87,6 @@ __all__ = [
     "builders",
     "depends",
     "loader",
+    "models",
     "types",
 ]

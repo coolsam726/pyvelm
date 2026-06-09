@@ -9,10 +9,10 @@ backward compatibility; new code should prefer ``continent_id``,
 which is the authoritative parent in the geo hierarchy.
 """
 
-from pyvelm import BaseModel, Char, Integer, Many2one, One2many, depends
+from pyvelm import Char, Integer, Many2one, One2many, depends, models
 
 
-class Country(BaseModel):
+class Country(models.Model):
     _inherit = "res.country"
 
     continent_id = Many2one("res.continent", ondelete="SET NULL")

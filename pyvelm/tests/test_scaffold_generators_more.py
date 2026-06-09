@@ -177,6 +177,29 @@ class ManifestAndInitTests(unittest.TestCase):
             )
             self.assertTrue(append_manifest_data(manifest, "views/x.py"))
 
+    def test_append_manifest_fluent_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            mod = _demo_module(Path(tmp))
+            manifest = mod / "__pyvelm__.py"
+            manifest.write_text(
+                textwrap.dedent(
+                    """
+                    from pyvelm.manifest import Manifest
+
+                    manifest = (
+                        Manifest.make("demo")
+                        .version(0, 1, 0)
+                        .depends("base")
+                    )
+                    """
+                ),
+                encoding="utf-8",
+            )
+            self.assertTrue(append_manifest_data(manifest, "views/x.py"))
+            text = manifest.read_text(encoding="utf-8")
+            self.assertIn('"views/x.py"', text)
+            self.assertIn(".data(", text)
+
     def test_append_models_init_without_trailing_newline(self):
         with tempfile.TemporaryDirectory() as tmp:
             init = Path(tmp) / "__init__.py"

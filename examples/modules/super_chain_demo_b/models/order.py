@@ -1,10 +1,10 @@
 """Outermost extension: ``self.super().button_cancel()`` (Odoo-style alias)."""
 from __future__ import annotations
 
-from pyvelm import BaseModel
+from pyvelm import models
 
 
-class DemoOrderExtB(BaseModel):
+class DemoOrderExtB(models.Model):
     _inherit = "super_chain.order"
 
     def button_cancel(self) -> dict:

@@ -1,11 +1,16 @@
-NAME: str = "crm"
-VERSION: tuple[int, ...] = (0, 1, 0)
-SUMMARY: str = "Sales pipeline, leads, and opportunity tracking."
-CATEGORY: str = "Business"
-AUTHOR: str = "pyvelm"
-DEPENDS: list[str] = ["base", "partners"]
-DATA: list[str] = [
-    "views/lead.py",
-    "views/menu.py",
-]
-INSTALL_HOOK: str = "crm.hooks:install"
+"""crm module manifest."""
+from pyvelm.manifest import Manifest
+
+manifest = (
+    Manifest.make("crm")
+    .version(0, 1, 0)
+    .summary("Sales pipeline, leads, and opportunity tracking.")
+    .category("Business")
+    .author("pyvelm")
+    .depends("base", "partners")
+    .data(
+        "views/lead.py",
+        "views/menu.py",
+    )
+    .install_hook("crm.hooks:install")
+)

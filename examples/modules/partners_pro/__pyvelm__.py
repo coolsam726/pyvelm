@@ -5,13 +5,15 @@ overrides `_compute_display_name` to prefix VIP partners with ★.
 Also patches the `partners.partner.list` view (view inheritance
 from Stage 4 is unchanged).
 """
-NAME: str = "partners_pro"
-VERSION: tuple[int, ...] = (0, 1, 0)
-SUMMARY: str = "VIP markers and richer display logic for partners."
-CATEGORY: str = "Business"
-AUTHOR: str = "pyvelm"
-DEPENDS: list[str] = ["partners"]
-DATA: list[str] = [
-    "views/partner.py",
-]
-INSTALL_HOOK: str = "partners_pro.hooks:install"
+from pyvelm.manifest import Manifest
+
+manifest = (
+    Manifest.make("partners_pro")
+    .version(0, 1, 0)
+    .summary("VIP markers and richer display logic for partners.")
+    .category("Business")
+    .author("pyvelm")
+    .depends("partners")
+    .data("views/partner.py")
+    .install_hook("partners_pro.hooks:install")
+)

@@ -78,9 +78,9 @@ def test_middle_extension_can_skip_override(super_chain_env):
 
     # Simulate a fourth module that adds a field but no button override.
     with reg.activate():
-        from pyvelm import BaseModel, Char
+        from pyvelm import Char, models
 
-        class DemoOrderExtC(BaseModel):
+        class DemoOrderExtC(models.Model):
             _inherit = "super_chain.order"
             extra = Char()
 

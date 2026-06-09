@@ -361,12 +361,24 @@ partner in a European country, two hops back.
 or replace compute implementations on a model someone else owns.
 No new table — the existing one gets `ALTER TABLE ADD COLUMN`.
 
+Declare extensions Odoo-style with ``from pyvelm import models`` and
+subclass :class:`~pyvelm.models.Model` (an alias of :class:`~pyvelm.BaseModel`):
+
+```python
+from pyvelm import models
+
+class MyExtension(models.Model):
+    _inherit = "res.partner"
+```
+
+New models with a ``_name`` use the same base: ``class Order(models.Model): _name = "sale.order"``.
+
 ```python
 # partners_pro/models/partner.py
-from pyvelm import BaseModel, Char, depends
+from pyvelm import Char, depends, models
 
 
-class PartnerPro(BaseModel):
+class PartnerPro(models.Model):
     _inherit = "res.partner"
 
     vip_note = Char()
@@ -393,7 +405,7 @@ with either Python's built-in `super()` or the Odoo-style recordset
 helper:
 
 ```python
-class PartnerPro(BaseModel):
+class PartnerPro(models.Model):
     _inherit = "res.partner"
 
     def write(self, vals):

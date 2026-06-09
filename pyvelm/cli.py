@@ -553,16 +553,17 @@ def _run_db_autogen(args: argparse.Namespace) -> None:
     mig_dir.mkdir(exist_ok=True)
     target.write_text(body)
     # Bump VERSION in __pyvelm__.py.
+    from .manifest import bump_version_in_manifest_text
+
     manifest = Path(spec.package_path) / "__pyvelm__.py"
     text = manifest.read_text()
-    old_v_repr = repr(tuple(cur_version))
-    new_v_repr = repr(tuple(new_version))
-    if old_v_repr not in text:
+    bumped = bump_version_in_manifest_text(text, tuple(cur_version), tuple(new_version))
+    if bumped is None:
         sys.exit(
-            f"Could not find VERSION = {old_v_repr} in {manifest}; "
+            f"Could not find VERSION {tuple(cur_version)!r} in {manifest}; "
             f"bump it manually."
         )
-    manifest.write_text(text.replace(old_v_repr, new_v_repr, 1))
+    manifest.write_text(bumped)
     print(f"Wrote {target}")
     print(f"Bumped VERSION: {cur_version} → {new_version}")
     if diff.is_empty:

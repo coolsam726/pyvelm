@@ -1,10 +1,10 @@
 """Middle extension: ``super().button_cancel()`` then append audit note."""
 from __future__ import annotations
 
-from pyvelm import BaseModel, Char
+from pyvelm import Char, models
 
 
-class DemoOrderExtA(BaseModel):
+class DemoOrderExtA(models.Model):
     _inherit = "super_chain.order"
 
     cancel_note = Char(string="Cancel note")

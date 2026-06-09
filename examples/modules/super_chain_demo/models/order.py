@@ -1,10 +1,10 @@
 """Base ``super_chain.order`` — root of the ``button_cancel`` super() chain."""
 from __future__ import annotations
 
-from pyvelm import BaseModel, Char
+from pyvelm import Char, models
 
 
-class DemoOrder(BaseModel):
+class DemoOrder(models.Model):
     _name = "super_chain.order"
 
     name = Char(required=True, string="Reference")
