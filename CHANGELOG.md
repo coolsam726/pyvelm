@@ -7,6 +7,8 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.0.1] — 2026-06-01
+
 ### Added
 
 - **ORM super chaining** — `_inherit` stacks record an ordered
