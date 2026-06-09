@@ -15,6 +15,40 @@
 /* Class-based dark mode — toggled via <html class="dark"> */
 @variant dark (&:where(.dark, .dark *));
 
+/* Tailwind preflight sets `cursor: default` on buttons; use pointer on
+   every clearly interactive control unless disabled. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]):not(:disabled),
+  a[href],
+  label[for],
+  select:not(:disabled),
+  summary,
+  input[type="submit"]:not(:disabled),
+  input[type="button"]:not(:disabled),
+  input[type="reset"]:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled),
+  [data-pv-confirm],
+  [hx-get]:not([disabled]),
+  [hx-post]:not([disabled]),
+  [hx-put]:not([disabled]),
+  [hx-delete]:not([disabled]),
+  [hx-patch]:not([disabled]),
+  .nav-item {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  input:disabled,
+  select:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
 /* Custom theme tokens */
 @theme {
     --font-family-sans: Inter, ui-sans-serif, system-ui, sans-serif;
