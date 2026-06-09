@@ -375,7 +375,7 @@ def main():
                                  headers={"HX-Request": "true"})
             assert r.status_code == 204, (r.status_code, r.text)
             hx_redirect = r.headers.get("HX-Redirect") or ""
-            assert hx_redirect.startswith("/web/admin?pv_flash="), hx_redirect
+            assert hx_redirect.startswith("/web/apps?pv_flash="), hx_redirect
             with pool.connection() as side_conn:
                 row = side_conn.execute(
                     "SELECT version FROM ir_module WHERE name = 'base'"
@@ -396,7 +396,10 @@ def main():
             base_pv = client.get("/web/apps/base/uninstall-preview").json()
             assert base_pv["blockers"], "base must be uninstall-blocked"
             pp_pv = client.get("/web/apps/partners_pro/uninstall-preview").json()
-            assert any("_inherit" in b for b in pp_pv["blockers"]), pp_pv
+            assert not pp_pv["blockers"], (
+                "pure _inherit extensions are uninstallable; "
+                "block only the base owner while extensions remain"
+            )
             partners_pv = client.get("/web/apps/partners/uninstall-preview").json()
             assert any("crm" in b for b in partners_pv["blockers"]), partners_pv
             # crm has no reverse-deps and doesn't extend models, so
@@ -414,7 +417,7 @@ def main():
             )
             assert r_uninst.status_code == 204, r_uninst.text
             hx_uninst = r_uninst.headers.get("HX-Redirect") or ""
-            assert hx_uninst.startswith("/web/admin?pv_flash="), hx_uninst
+            assert hx_uninst.startswith("/web/apps?pv_flash="), hx_uninst
             with pool.connection() as side_conn:
                 # ir_module row gone.
                 row = side_conn.execute(

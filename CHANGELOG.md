@@ -11,6 +11,27 @@ out of the 0.x line.
 
 ### Added
 
+- **ORM super chaining** — `_inherit` stacks record an ordered
+  ``inherit_chain`` on the registry; model methods can call
+  ``self.super().write(vals)`` (Odoo / velmphp ergonomics) or plain
+  ``super().write(vals)`` to stack ``create`` / ``write`` / ``unlink``
+  and custom overrides across extension modules.
+
+### Changed
+
+- **Apps catalog states** — split version-gap **Upgrade** from schema **Sync**
+  (velmphp-style): up-to-date modules show **Installed**; **Upgrade** only when
+  migrations are pending; **Sync** highlighted when schema diff is detected.
+  Install/upgrade/sync/uninstall redirect back to ``/web/apps`` with a flash toast.
+- **Apps catalog Sync detection** — ``to_sync`` only when Sync would apply
+  actionable schema changes (not orphan columns or type drift).
+- **Apps uninstall protection** — bundled bootstrap modules and modules with
+  reverse dependencies show a disabled **Protected** button (velmphp-style).
+
+## [1.0.1] — 2026-06-01
+
+### Added
+
 - **Nested menu groups** — `m.group(...).children([...])` nests items and
   sub-groups under a parent; `parent=` is set automatically (explicit
   `parent=` still works for cross-module groups). The loader flattens

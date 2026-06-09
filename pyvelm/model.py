@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator
 from .database.sa_ddl import require_sa_connection
 from .domain_sa import domain_search_count_select, domain_search_select
 from .fields import Char, Field, Integer, Many2one, finalize_related_field
+from .inherit_super import bind_inherit_chain, make_super_proxy
 from .registry import active_registry
 from .timestamps import (
     apply_timestamp_vals,
@@ -143,6 +144,7 @@ class MetaModel(type):
 
                 install_timestamps(cls)
             _bind_compute_fields(cls, fields, namespace)
+            bind_inherit_chain(cls, parent=None)
             active_registry().register(cls)
         return cls
 
@@ -223,6 +225,8 @@ class MetaModel(type):
 
             install_timestamps(cls)
         _bind_compute_fields(cls, merged, namespace)
+
+        bind_inherit_chain(cls, parent=existing)
 
         # Replace registry entry with the extended class.
         reg.register(cls, module_name=reg._model_module.get(existing._name))
@@ -333,6 +337,36 @@ class BaseModel(metaclass=MetaModel):
             partner.sudo().write({"credit_limit": 0})
         """
         return self.__class__(self.env.sudo(flag), self._ids)
+
+    def super(self, origin_cls: type | None = None):
+        """Return a proxy for the next method in the ``_inherit`` stack.
+
+        Equivalent to Python's :func:`super` inside an overridden model
+        method, but callable as ``self.super().write(vals)`` (Odoo /
+        velmphp ``Model::super()`` ergonomics).  When *origin_cls* is
+        omitted, the defining class of the caller is inferred from the
+        call stack.
+
+            def write(self, vals):
+                self.super().write(vals)   # same as super().write(vals)
+        """
+        if origin_cls is None:
+            import inspect
+
+            from .inherit_super import defining_class_for_frame
+
+            frame = inspect.currentframe()
+            try:
+                caller = frame.f_back if frame is not None else None
+                if caller is not None:
+                    origin_cls = caller.f_locals.get("__class__")
+                    if origin_cls is None:
+                        origin_cls = defining_class_for_frame(type(self), caller)
+                if origin_cls is None:
+                    origin_cls = type(self)
+            finally:
+                del frame
+        return make_super_proxy(self, origin_cls)
 
     # ------ DDL ------
 

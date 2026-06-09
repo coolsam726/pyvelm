@@ -386,6 +386,43 @@ subclass, so `super()` works through the MRO the way you'd expect.
 Multiple modules can stack `_inherit` on the same target — each
 one becomes another link in the chain.
 
+### Super chaining (`create` / `write` / custom methods)
+
+Override a method and call the next implementation in the stack
+with either Python's built-in `super()` or the Odoo-style recordset
+helper:
+
+```python
+class PartnerPro(BaseModel):
+    _inherit = "res.partner"
+
+    def write(self, vals):
+        # before hooks …
+        super().write(vals)          # or: self.super().write(vals)
+        # after hooks …
+
+    def button_cancel(self):
+        # Odoo-style action override on a custom method
+        res = super().button_cancel()
+        # post-processing …
+        return res
+```
+
+Both forms walk the merged model MRO (including mixins such as
+`Vellum` or `MailThread` declared before `BaseModel`). The registry
+also records the linear `_inherit` stack — query it with
+`env.registry.inherit_chain("res.partner")` for introspection or
+module tooling.
+
+Stacked extensions run outermost-first: if modules A, B, and C all
+override `write` and call `super()`, a write on the final class runs
+C → B → A → base `BaseModel.write`.
+
+See the **`super_chain_demo`** example modules under
+`examples/modules/` (install `super_chain_demo`, `super_chain_demo_a`,
+`super_chain_demo_b`) for a runnable three-layer `button_cancel` stack
+tested in `pyvelm/tests/test_super_chain_example.py`.
+
 ## Multi-company scoping
 
 Setting `_company_scoped = True` on a model adds an implicit

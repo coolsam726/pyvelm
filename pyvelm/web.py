@@ -2797,10 +2797,7 @@ def create_app(
         from urllib.parse import quote
 
         message = _header_safe_text(result.get("message", "Module updated."))
-        from .home import home_url
-
-        flash_base = home_url() if home_url() != "/" else "/web/admin"
-        redirect = f"{flash_base}?pv_flash={quote(message, safe='')}"
+        redirect = f"/web/apps?pv_flash={quote(message, safe='')}"
         if request.headers.get("HX-Request") == "true":
             return Response(
                 status_code=204,

@@ -35,6 +35,8 @@ class Registry:
         # Which models were *extended* (via _inherit) by each module.
         # Maps  extension_module_name -> [model_name, ...]
         self._model_extensions: dict[str, list[str]] = {}
+        # Ordered _inherit stack per model (root class → latest extension).
+        self._inherit_chains: dict[str, tuple[type, ...]] = {}
         # Built by init_db:
         #   _edge_index[(listen_model, listen_attr)] ->
         #       [(dep_model, dep_field, HopEdge), ...]
@@ -76,7 +78,14 @@ class Registry:
         self._models[model_cls._name] = model_cls
         if module_name is not None:
             self._model_module[model_cls._name] = module_name
+        chain = getattr(model_cls, "_inherit_chain", None)
+        if chain:
+            self._inherit_chains[model_cls._name] = chain
         self._finalize_vellum_model(model_cls)
+
+    def inherit_chain(self, model_name: str) -> tuple[type, ...]:
+        """Return the ``_inherit`` stack for *model_name* (root → leaf)."""
+        return self._inherit_chains.get(model_name, ())
 
     def _finalize_vellum_model(self, model_cls: type) -> None:
         """Run Vellum class hooks after the metaclass has built ``_fields``."""

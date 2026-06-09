@@ -43,7 +43,7 @@
                 },
             });
             if (r.ok || r.status === 204) {
-                window.location.href = '/web/admin';
+                window.location.href = '/web/apps';
             } else {
                 const detail = await r.text().catch(() => r.statusText);
                 window.pvAlert(`Uninstall failed: ${detail}`,
@@ -60,7 +60,7 @@
         const xhr = e.detail.xhr;
         if (!e.detail.successful || !xhr) return;
         const path = e.detail.pathInfo?.requestPath || '';
-        if (!/\/web\/apps\/[^/]+\/(install|upgrade)$/.test(path)) return;
+        if (!/\/web\/apps\/[^/]+\/(install|upgrade|sync)$/.test(path)) return;
         const redirect = xhr.getResponseHeader('HX-Redirect');
         if (redirect) window.location.assign(redirect);
     });
