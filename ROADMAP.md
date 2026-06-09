@@ -16,7 +16,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 |---|---|
 | **Stable** | **v1.0.1** (2026-06-01) |
 | **Stack** | FastAPI + HTMX + Tailwind v4 + SQLAlchemy Core |
-| **Bundled modules** | `base`, `admin`, `console`, `vellum`, `workflow`, `reports`, `mail_compose`, `file_manager`, `technical`, `geo_data`, `document_layout` |
+| **Bundled modules** | `base`, `admin`, `console`, `workflow`, `reports`, `mail_compose`, `file_manager`, `technical`, `geo_data`, `document_layout` |
 | **Reference port** | velmphp **v1.0.1** + unreleased **v1.1.0** admin polish |
 
 ### Milestone overview
@@ -41,7 +41,6 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 | Rich email composer | `mail_compose` |
 | Document branding + PDF/HTML print | `document_layout` |
 | Dev editors for views / menus / attachments | `technical` |
-| Vellum ORM veneer (`env.query`, scopes, soft delete) | `vellum` |
 | Policy layer (`env.can()`) | `policy.py` |
 | Multi-DB routing preview | `database_routing.py` |
 | O2M Excel-style keyboard grid | `pv_o2m_grid.js` |

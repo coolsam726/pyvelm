@@ -75,8 +75,8 @@ Discovery uses the same module roots as the web app (`pyvelm.toml`
 | Command | Purpose |
 |---------|---------|
 | `make:module` | Empty addon skeleton (no models/views/menus) |
-| `make:model` | `models/<name>.py` + `models/__init__.py` import (`--vellum` for Vellum mixin) |
-| `make:view` | `views/<stem>.py` list + form + `DATA` entry (from model fields by default) |
+| `make:model` | `models/<name>.py` + `models/__init__.py` import |
+| `make:view` | `views/<stem>.py` with `ViewsData.make()` list + form + manifest `.data()` entry |
 | `make:menu` | `views/menu.py` (or `--append` to existing) |
 | `make:command` | `commands/<name>.py` Artisan command class |
 | `make:stubs` | Generate `.pyvelm/typing/` + create `pyrightconfig.json` when missing — see [IDE typing stubs](ide-typing.md) |
@@ -92,7 +92,6 @@ Typical workflow:
 cd my_erp
 pyvelm make:module inventory
 pyvelm make:model inventory.product --module=inventory
-pyvelm make:model blog.post --module=blog --vellum   # Vellum + _guarded scaffold
 pyvelm make:view inventory.product --module=inventory
 # Default: introspect stored fields → list columns + form sections
 # (booleans → toggle, O2m/M2m → widget="dialog"). Use --minimal for name-only stub.

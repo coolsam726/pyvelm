@@ -15,24 +15,27 @@ to its list view, drop `age`, and turn `active` into a toggle:
 
 ```python
 # partners_pro/views/partner.py
-from pyvelm.builders import (
-    inherit_view, op_remove, op_after, op_replace,
-)
+from pyvelm.builders import InheritView, ViewsData, op_after, op_remove, op_update
 
-VIEW_INHERITS = [
-    inherit_view(
-        "partner.list.pro",                  # name for the extension
-        "partners.partner.list",             # "<module>.<view_name>"
-        priority=20,
-        ops=[
-            op_remove(["fields", "age"]),
-            op_after (["fields", "country_id"], {"name": "tag_ids"}),
-            op_replace(["fields", "active"],
-                       {"name": "active", "widget": "toggle"}),
-        ],
-    ),
-]
+views_data = (
+    ViewsData.make()
+    .inherits(
+        InheritView.make("partner.list.pro")
+        .extends("partners.partner.list")   # "<module>.<view_name>"
+        .priority(20)
+        .operations(
+            [
+                op_remove(["fields", "age"]),
+                op_after(["fields", "country_id"], {"name": "tag_ids"}),
+                op_update(["fields", "active"], widget="toggle"),
+            ]
+        ),
+    )
+)
 ```
+
+Legacy ``VIEW_INHERITS = [inherit_view(...)]`` still loads. See
+``examples/modules/partners_pro/views/partner.py`` for every op kind.
 
 The loader picks this up when `partners_pro` installs. From then on,
 `GET /api/views/partners/partner.list` (or the HTML page) returns

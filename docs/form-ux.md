@@ -16,38 +16,42 @@ Long forms can mix flat **sections** (stacked cards) and **notebooks**
 ### Python builders
 
 ```python
-from pyvelm.builders import form_view, section, notebook, page, field
+from pyvelm.builders import Field, FormView, Notebook, Page, ViewsData
 
-form_view(
-    "country.form", "res.country",
-    sections=[
-        section("identity", "Identity", ["name", "code", "continent_id"]),
-        notebook(
+views_data = (
+    ViewsData.make()
+    .views(
+        FormView.make("country.form")
+        .model("res.country")
+        .section("identity", "Identity", ["name", "code", "continent_id"])
+        .notebook(
             "subdivisions",
-            title="Subdivisions",   # optional legend above the tab strip
-            pages=[
-                page(
-                    "states",
-                    "States / provinces",
-                    [field("state_ids", edit_toggle=True, list_view="state.compact")],
-                    cols=1,         # optional; defaults to form cols
-                ),
-                page(
-                    "cities",
-                    "Cities",
-                    [field("city_ids", edit_toggle=True, list_view="city.compact")],
-                ),
-            ],
+            Notebook.make("subdivisions")
+            .title("Subdivisions")
+            .page(
+                "states",
+                "States / provinces",
+                [Field.make("state_ids").edit_toggle().list_view("state.compact")],
+                cols=1,
+            )
+            .page(
+                "cities",
+                "Cities",
+                [Field.make("city_ids").edit_toggle().list_view("city.compact")],
+            ),
         ),
-    ],
+    )
 )
 ```
 
+Legacy ``form_view`` / ``section`` / ``notebook`` / ``page`` / ``field`` functions
+still work — see [Building UIs](views.md#legacy-function-helpers).
+
 | Builder | Purpose |
 |---------|---------|
-| `section(name, title, fields, *, cols=2)` | Single card of fields |
-| `notebook(name, pages, *, title=None)` | Tab container |
-| `page(name, title, fields, *, cols=None)` | One tab's field list |
+| `FormView.make(...).section(...)` | Single card of fields |
+| `Notebook.make(...).page(...)` | Tab container + tab pages |
+| `Field.make("x").edit_toggle()` | Per-field widget / O2M options |
 
 The **first page** is selected by default. The active tab is remembered per
 notebook in `localStorage` (key `pv-nb-<module>-<view>-<notebook_name>`).
@@ -93,8 +97,8 @@ See [Extending views](inheritance.md).
 | **`edit_toggle`** | One field can be edited as a **dialog table** or an **inline grid** without duplicating the field on two tabs |
 
 You can combine both: notebook tabs that each host an `edit_toggle` field.
-Live examples: `pyvelm/modules/geo_data/views/geo.py` (country form),
-`examples/modules/vellum_demo/views/note.py` (note → Comments tab).
+Live example: `pyvelm/modules/geo_data/views/geo.py` (country form with
+States / Cities notebook tabs).
 
 ---
 

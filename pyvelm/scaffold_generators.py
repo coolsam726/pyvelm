@@ -55,7 +55,7 @@ def modules_root_candidates(explicit: Path | None = None) -> list[Path]:
 
 
 def infer_module_for_model(model_name: str, roots: list[Path]) -> str:
-    """Resolve owning module from a technical model name (e.g. ``vellum.demo.comment``)."""
+    """Resolve owning module from a technical model name (e.g. ``crm.lead``)."""
     from . import loader
     from .registry import Registry
 
@@ -105,7 +105,7 @@ def resolve_module(
                 continue
     if not mod_name or not valid_name(mod_name):
         raise ValueError(
-            "Pass --module=<name>, a full model name (e.g. vellum.demo.comment), "
+            "Pass --module=<name>, a full model name (e.g. crm.lead), "
             "or run from inside <modules-root>/<module>/."
         )
     for root in candidates:
@@ -253,7 +253,6 @@ def generate_model(
     model_name: str,
     *,
     force: bool = False,
-    vellum: bool = False,
 ) -> Path:
     """Write ``models/<stem>.py`` and update ``models/__init__.py``."""
     stem = model_stem(model_name, module_name)
@@ -264,9 +263,7 @@ def generate_model(
             f"{target} already exists — pass --force to overwrite."
         )
     (module_path / "models").mkdir(exist_ok=True)
-    template = (
-        "snippets/model_vellum.py.template" if vellum else "snippets/model.py.template"
-    )
+    template = "snippets/model.py.template"
     body = _read_template(
         template,
         {

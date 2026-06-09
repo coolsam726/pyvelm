@@ -1,4 +1,4 @@
-"""Mass-assignment policy (``_fillable`` / ``_guarded``)."""
+"""Mass-assignment policy (``_fillable`` / ``_guarded``) for form writes."""
 from __future__ import annotations
 
 from typing import Any
@@ -11,18 +11,6 @@ def validate_mass_assignment_config(cls) -> None:
         raise TypeError(
             f"{cls._name}: declare either _fillable or _guarded, not both."
         )
-
-
-def apply_vellum_mass_assignment_defaults(cls) -> None:
-    """Default Laravel-style policy on Vellum models: guard system columns."""
-    if getattr(cls, "_fillable", None) is not None:
-        return
-    if getattr(cls, "_guarded", None) is not None:
-        return
-    from pyvelm.timestamps import timestamp_columns
-
-    guarded = ["id", *timestamp_columns(cls)]
-    cls._guarded = guarded
 
 
 def filter_mass_assignment(cls, vals: dict[str, Any]) -> dict[str, Any]:

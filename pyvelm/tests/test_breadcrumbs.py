@@ -48,32 +48,28 @@ def test_form_page_list_crumb_without_record_title():
     """Record title lives in the page heading; list crumb stays a link."""
     crumbs = build_breadcrumbs(
         _menu(),
-        "/web/views/vellum_demo/demo_note.form/record/7",
-        parent_href="/web/views/vellum_demo/demo_note.list",
-        parent_label="Demo notes",
+        "/web/views/sales/order.form/record/7",
+        parent_href="/web/views/sales/order.list",
+        parent_label="Orders",
     )
     assert crumbs == [
         {"label": "Home", "href": "/web/admin"},
-        {"label": "Demo notes", "href": "/web/views/vellum_demo/demo_note.list"},
+        {"label": "Orders", "href": "/web/views/sales/order.list"},
     ]
 
 
 def test_encode_view_nav_query_ref_and_bc():
     qs = encode_view_nav_query(
-        "vellum_demo",
-        "demo_comment.kanban",
+        "sales",
+        "order.kanban",
         search="hello",
-        group_by="note_id",
-        bc_stack=[("vellum_demo", "demo_comment.list")],
+        group_by="partner_id",
+        bc_stack=[("sales", "order.list")],
     )
-    assert "ref=vellum_demo%2Fdemo_comment.kanban" in qs or (
-        "ref=vellum_demo/demo_comment.kanban" in qs
-    )
-    assert "bc=vellum_demo%2Fdemo_comment.list" in qs or (
-        "bc=vellum_demo/demo_comment.list" in qs
-    )
+    assert "ref=sales%2Forder.kanban" in qs or ("ref=sales/order.kanban" in qs)
+    assert "bc=sales%2Forder.list" in qs or ("bc=sales/order.list" in qs)
     assert "search=hello" in qs
-    assert "group_by=note_id" in qs
+    assert "group_by=partner_id" in qs
 
 
 def test_parse_bc_param_roundtrip():
@@ -98,19 +94,19 @@ def test_build_form_breadcrumbs_from_kanban_with_history(monkeypatch):
     crumbs = build_form_breadcrumbs(
         _menu(),
         env=object(),
-        ref_module="vellum_demo",
-        ref_name="demo_comment.kanban",
-        bc_stack=[("vellum_demo", "demo_comment.list")],
+        ref_module="sales",
+        ref_name="order.kanban",
+        bc_stack=[("sales", "order.list")],
         search="x",
-        group_by="note_id",
+        group_by="partner_id",
     )
     assert crumbs[0] == {"label": "Home", "href": "/web/admin"}
     assert crumbs[1]["label"] == "Comments"
-    assert crumbs[1]["href"] == "/web/views/vellum_demo/demo_comment.list"
+    assert crumbs[1]["href"] == "/web/views/sales/order.list"
     assert crumbs[2]["label"] == "Kanban"
-    assert "demo_comment.kanban" in crumbs[2]["href"]
+    assert "order.kanban" in crumbs[2]["href"]
     assert "search=x" in crumbs[2]["href"]
-    assert "group_by=note_id" in crumbs[2]["href"]
+    assert "group_by=partner_id" in crumbs[2]["href"]
 
 
 def test_build_form_breadcrumbs_without_ref():

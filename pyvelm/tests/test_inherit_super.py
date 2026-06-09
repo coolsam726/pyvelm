@@ -4,7 +4,6 @@ from __future__ import annotations
 import unittest
 
 from pyvelm import BaseModel, Char, Registry, depends, models
-from pyvelm.vellum.mixin import Vellum
 
 
 class _FakeCache:
@@ -208,36 +207,6 @@ class InheritSuperChainTests(unittest.TestCase):
         env._in_compute = True
         cls(env, (1,))._compute_display_name()
         self.assertEqual(calls, ["ext_compute", "root_compute"])
-
-    def test_vellum_mixin_in_chain(self) -> None:
-        calls = self.calls
-
-        with self.reg.activate():
-            class Root(models.Model):
-                _name = "test.super.vellum"
-                name = Char()
-
-                def write(self, vals):
-                    calls.append("root")
-                    super().write(vals)
-
-        with self.reg.activate():
-            class Ext(Vellum, models.Model):
-                _inherit = "test.super.vellum"
-
-                def write(self, vals):
-                    calls.append("ext")
-                    super().write(vals)
-
-        cls = self.reg["test.super.vellum"]
-        env = _FakeEnv(self.reg)
-        cls(env, (1,)).write({"name": "x"})
-        self.assertIn("ext", calls)
-        self.assertIn("root", calls)
-        self.assertIn("basemodel_write", calls)
-        self.assertEqual(calls.index("ext"), 0)
-        self.assertLess(calls.index("root"), calls.index("basemodel_write"))
-
 
 if __name__ == "__main__":
     unittest.main()

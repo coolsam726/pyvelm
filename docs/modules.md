@@ -10,21 +10,21 @@ a self-contained piece other apps can depend on or extend.
 ```
 mymodule/
 ├── __init__.py          # can be empty
-├── __pyvelm__.py        # manifest (NAME, VERSION, DEPENDS, DATA, …)
+├── __pyvelm__.py        # manifest = Manifest.make("mymodule")…
 ├── models/
 │   ├── __init__.py      # imports every model file
 │   └── partner.py
 ├── views/
 │   ├── __init__.py
-│   ├── partner.py       # exports VIEWS = [...]
-│   └── menu.py          # optional MENUS = [...]
+│   ├── partner.py       # views_data = ViewsData.make()…
+│   └── menu.py          # menus on views_data or Menus builder
 ├── commands/            # optional Artisan CLI commands
 └── migrations/          # optional
     ├── __init__.py
     └── 0_1_to_0_2.py
 ```
 
-`pyvelm make:module` / `pyvelm new` create an **empty** shell (`DATA = []`).
+`pyvelm make:module` / `pyvelm new` create an **empty** shell (no `.data(...)` yet).
 Use `make:model`, `make:view`, and `make:menu` to add each layer — see
 [Console commands](console.md).
 
@@ -57,9 +57,9 @@ DATA: list[str] = ["views/partner.py", "views/tag.py"]
 INSTALL_HOOK: str = "partners.hooks:install"
 ```
 
-`DEPENDS` is what the loader uses to topologically order installs;
-`DATA` lists Python files whose module-level `VIEWS`, `VIEW_INHERITS`,
-and `MENUS` lists feed the declarative-data sync; `INSTALL_HOOK` is a
+``.depends(...)`` / `DEPENDS` is what the loader uses to topologically order installs;
+``.data(...)`` / `DATA` lists Python files whose ``views_data`` builder (or legacy
+`VIEWS`, `VIEW_INHERITS`, `MENUS`) feed the declarative-data sync; `INSTALL_HOOK` is a
 `pkg.mod:fn` reference to a function called once on first install (it
 gets the `Environment`).
 
@@ -102,10 +102,10 @@ from . import tag              # noqa: F401
 
 ```python
 # partners/models/partner.py
-from pyvelm import BaseModel, Char, Integer, Many2one
+from pyvelm import Char, Integer, Many2one, models
 
 
-class Partner(BaseModel):
+class Partner(models.Model):
     _name = "res.partner"
     name = Char(required=True)
     age = Integer()
@@ -293,7 +293,7 @@ loader.load_and_install(
 
 | Database state | Modules installed on boot |
 |----------------|---------------------------|
-| Fresh (empty `ir_module`) | Every module under **`pyvelm/modules/`** (e.g. `base`, `admin`, `reports`, `vellum`, …) |
+| Fresh (empty `ir_module`) | Every module under **`pyvelm/modules/`** (e.g. `base`, `admin`, `reports`, …) |
 | Already has installed rows | Only modules already in `ir_module` (sync/upgrade) |
 
 Other discovered addons (outside the bundled tree) appear in **Apps** for

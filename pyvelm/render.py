@@ -2421,7 +2421,7 @@ def parse_form_vals(model_cls, form_data, env=None) -> tuple[dict, dict]:
                 errors[fname] = "Must be a time (HH:MM)."
             else:
                 errors[fname] = "Invalid value."
-    from .vellum.fillable import filter_mass_assignment
+    from .mass_assignment import filter_mass_assignment
 
     vals = filter_mass_assignment(model_cls, vals)
     return vals, errors

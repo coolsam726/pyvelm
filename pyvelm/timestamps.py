@@ -52,7 +52,7 @@ def is_system_timestamp_field(model_cls, fname: str) -> bool:
     return fname in timestamp_columns(model_cls)
 
 
-# Backward-compatible alias (Vellum-era name).
+# Backward-compatible alias.
 is_vellum_timestamp_field = is_system_timestamp_field
 
 

@@ -176,7 +176,7 @@ omit = [
     # the gate reflects unit-testable framework modules.
     "pyvelm/model.py",
     # Declarative view/menu dict factories (ergonomic wrappers only).
-    "pyvelm/builders.py",
+    "pyvelm/builders/**",
     # Bundled module WEB_ROUTES registrars (route unit tests + HTTP smoke).
     "pyvelm/modules/**/web.py",
     # Cron-side workflow runners (engine covered by ``test_workflow.py``).
@@ -184,8 +184,6 @@ omit = [
     "pyvelm/workflow/escalation.py",
     "pyvelm/workflow/inbox.py",
     "pyvelm/workflow/history.py",
-    # Vellum slice (see ``pyvelm/modules/vellum/tests`` + ``test_vellum_all.py``).
-    "pyvelm/vellum/**",
 ]
 
 [tool.coverage.report]

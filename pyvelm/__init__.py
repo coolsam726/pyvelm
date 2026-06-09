@@ -58,8 +58,7 @@ from .registry import Registry
 # ``pyvelm-cron`` prepends these automatically so the CLI sees the
 # framework modules even if the operator only set PYVELM_MODULE_ROOTS
 # to their app's addons. The ``console`` module ships Artisan-style
-# generators (``make:module``, ``make:command``). Import Vellum via
-# ``from pyvelm.vellum import Vellum`` (bundled ``vellum`` module marker).
+# generators (``make:module``, ``make:command``).
 BUILTIN_MODULE_ROOTS: list[_Path] = [_Path(__file__).parent / "modules"]
 
 

@@ -15,7 +15,7 @@ class MakeViewCommand(Command):
     name = "make:view"
     description = "Create list + form views for a model"
     signature = (
-        "make:view {model : Model technical name (e.g. vellum.demo.comment)} "
+        "make:view {model : Model technical name (e.g. crm.lead)} "
         "{--module= : Owning module (inferred from model when omitted)} "
         "{--modules-root= : Addon roots directory (default: pyvelm.toml or .env)} "
         "{--minimal : Stub with name only (default: build from model fields)} "

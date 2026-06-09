@@ -121,7 +121,7 @@ class ModuleSpec:
 
 
 def module_display_name(name: str, explicit: str | None = None) -> str:
-    """Readable Apps label. ``NAME`` stays the technical id (``vellum_demo``)."""
+    """Readable Apps label. ``NAME`` stays the technical id (``geo_data``)."""
     if explicit and str(explicit).strip():
         return str(explicit).strip()
     return " ".join(part.capitalize() for part in name.split("_") if part)

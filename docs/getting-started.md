@@ -119,14 +119,14 @@ That creates `./app/modules/tasks/` with a working stub:
 ```
 tasks/
 ├── __init__.py
-├── __pyvelm__.py          # manifest with NAME=tasks, DEPENDS=["base"]
+├── __pyvelm__.py          # manifest = Manifest.make("tasks").depends("base")…
 ├── hooks.py               # one-time install hook
 ├── models/
 │   ├── __init__.py
 │   └── tasks.py           # `class Entry(BaseModel)`
 ├── views/
 │   ├── __init__.py
-│   ├── tasks.py           # list + form views
+│   ├── tasks.py           # views_data = ViewsData.make()…
 │   └── menu.py            # sidebar group + item
 └── migrations/
     └── __init__.py
@@ -164,9 +164,10 @@ outside an init'd tree.
 ## What's next
 
 - **[Declaring models](models.md)** — the field reference, computed
-  fields, model inheritance.
-- **[Building UIs](views.md)** — list / form / kanban arches,
-  widgets, search and filtering.
+  fields, `_inherit` extensions, `super()` chaining.
+- **[Building UIs](views.md)** — fluent view builders, list / form /
+  kanban arches, widgets, search and filtering.
+- **[Modules](modules.md)** — `Manifest.make()`, `views_data`, menus.
 - **[Form UX](form-ux.md)** — notebooks, Ctrl+S, save toasts, opening
   related records in a dialog.
 - **[Extending views](inheritance.md)** — patching another module's

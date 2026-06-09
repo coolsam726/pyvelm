@@ -11,19 +11,13 @@ Requires PYVELM_DSN (copy .env.example to .env). Default mode is
 Open http://localhost:8000/ (landing) or /login — admin / admin.
 Optional: PYVELM_HOME_URL=/ to use the site root as the signed-in home.
 
-Sidebar **Vellum demo** (notes, comments, soft deletes) and **Feedback signals**
-(narrative-first feedback analysis) load with this server.
+Sidebar **Feedback signals** (narrative-first feedback analysis) loads with
+this server.
 
 **Date / datetime / time pickers** are on example forms — open any record in
-**CRM → All Leads**, **Partners**, **Feedback intakes**, or **Vellum demo → Demo notes**
-and click Edit. **Date** uses the Flowbite calendar; **Datetime** opens one popup
-(calendar + time); **Time** is a styled time input.
-
-Vellum smoke test (same module roots, no full DB wipe)::
-
-    python examples/vellum_smoke.py
-
-See docs/vellum.md in the repo for the user guide.
+**CRM → All Leads**, **Partners**, or **Feedback intakes** and click Edit.
+**Date** uses the Flowbite calendar; **Datetime** opens one popup (calendar +
+time); **Time** is a styled time input.
 """
 from __future__ import annotations
 

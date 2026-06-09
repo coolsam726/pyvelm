@@ -106,12 +106,10 @@ class EnvironmentUnitTests(unittest.TestCase):
 
         return reg
 
-    def test_query_and_sudo_idempotent(self):
+    def test_sudo_idempotent(self):
         reg = self._minimal_registry()
         conn = MagicMock()
         env = Environment(conn, reg, uid=2)
-        qb = env.query("test.thing")
-        self.assertEqual(qb.env, env)
         self.assertIs(env.sudo(False), env)
         env2 = env.sudo(True)
         self.assertTrue(env2._acl_bypass)
