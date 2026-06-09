@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import unittest
 
-from pyvelm import BaseModel, Char, Registry, depends
+from pyvelm import BaseModel, Char, Registry, depends, models
 from pyvelm.vellum.mixin import Vellum
 
 
@@ -71,7 +71,7 @@ class InheritSuperChainTests(unittest.TestCase):
         calls = type(self).calls
 
         with self.reg.activate():
-            class Root(BaseModel):
+            class Root(models.Model):
                 _name = "test.super.root"
                 name = Char()
 
@@ -80,7 +80,7 @@ class InheritSuperChainTests(unittest.TestCase):
                     super().write(vals)
 
         with self.reg.activate():
-            class ExtA(BaseModel):
+            class ExtA(models.Model):
                 _inherit = "test.super.root"
                 note_a = Char()
 
@@ -97,12 +97,12 @@ class InheritSuperChainTests(unittest.TestCase):
                         super().write(vals)
 
         with self.reg.activate():
-            class ExtB(BaseModel):
+            class ExtB(models.Model):
                 _inherit = "test.super.root"
                 note_b = Char()
 
         with self.reg.activate():
-            class ExtC(BaseModel):
+            class ExtC(models.Model):
                 _inherit = "test.super.root"
                 note_c = Char()
 
@@ -144,7 +144,7 @@ class InheritSuperChainTests(unittest.TestCase):
         calls = self.calls
 
         with self.reg.activate():
-            class Root(BaseModel):
+            class Root(models.Model):
                 _name = "test.super.crud"
                 name = Char()
 
@@ -157,7 +157,7 @@ class InheritSuperChainTests(unittest.TestCase):
                     super().unlink()
 
         with self.reg.activate():
-            class Ext(BaseModel):
+            class Ext(models.Model):
                 _inherit = "test.super.crud"
 
                 def create(self, vals):
@@ -184,7 +184,7 @@ class InheritSuperChainTests(unittest.TestCase):
         calls = self.calls
 
         with self.reg.activate():
-            class Root(BaseModel):
+            class Root(models.Model):
                 _name = "test.super.compute"
                 name = Char()
 
@@ -194,7 +194,7 @@ class InheritSuperChainTests(unittest.TestCase):
                     super()._compute_display_name()
 
         with self.reg.activate():
-            class Ext(BaseModel):
+            class Ext(models.Model):
                 _inherit = "test.super.compute"
                 tag = Char()
 
@@ -213,7 +213,7 @@ class InheritSuperChainTests(unittest.TestCase):
         calls = self.calls
 
         with self.reg.activate():
-            class Root(BaseModel):
+            class Root(models.Model):
                 _name = "test.super.vellum"
                 name = Char()
 
@@ -222,7 +222,7 @@ class InheritSuperChainTests(unittest.TestCase):
                     super().write(vals)
 
         with self.reg.activate():
-            class Ext(Vellum, BaseModel):
+            class Ext(Vellum, models.Model):
                 _inherit = "test.super.vellum"
 
                 def write(self, vals):

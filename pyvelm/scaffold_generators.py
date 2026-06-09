@@ -163,26 +163,50 @@ def _read_template(rel_path: str, variables: dict[str, str]) -> str:
 
 
 def append_manifest_data(manifest_path: Path, entry: str) -> bool:
-    """Append a path to ``DATA`` if missing. Returns True when changed."""
+    """Append a data path to the manifest if missing. Returns True when changed."""
     text = manifest_path.read_text(encoding="utf-8")
     quoted = f'"{entry}"'
-    if quoted in text:
+    if quoted in text or f"'{entry}'" in text:
         return False
+
+    match = re.search(r"\.data\(([^)]*)\)", text)
+    if match:
+        inner = match.group(1).strip()
+        replacement = (
+            f".data({quoted})"
+            if not inner
+            else f".data({inner}, {quoted})"
+        )
+        new_text = text[: match.start()] + replacement + text[match.end() :]
+        manifest_path.write_text(new_text, encoding="utf-8")
+        return True
+
     match = re.search(
         r"DATA:\s*list\[str\]\s*=\s*\[(.*?)\]",
         text,
         flags=re.DOTALL,
     )
-    if not match:
-        raise ValueError(f"Could not find DATA list in {manifest_path}")
-    inner = match.group(1).strip()
-    if inner:
-        insertion = f"{match.group(1).rstrip()}\n    {quoted},\n"
-    else:
-        insertion = f"\n    {quoted},\n"
-    new_text = text[: match.start(1)] + insertion + text[match.end(1) :]
-    manifest_path.write_text(new_text, encoding="utf-8")
-    return True
+    if match:
+        inner = match.group(1).strip()
+        if inner:
+            insertion = f"{match.group(1).rstrip()}\n    {quoted},\n"
+        else:
+            insertion = f"\n    {quoted},\n"
+        new_text = text[: match.start(1)] + insertion + text[match.end(1) :]
+        manifest_path.write_text(new_text, encoding="utf-8")
+        return True
+
+    match = re.search(r"\.depends\([^)]+\)", text)
+    if match:
+        new_text = (
+            text[: match.end()] + f"\n    .data({quoted})" + text[match.end() :]
+        )
+        manifest_path.write_text(new_text, encoding="utf-8")
+        return True
+
+    raise ValueError(
+        f"Could not find DATA list or .data() in {manifest_path}"
+    )
 
 
 def append_models_init(init_path: Path, stem: str) -> bool:

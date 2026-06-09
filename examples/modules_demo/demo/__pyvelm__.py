@@ -11,11 +11,14 @@ Uninstall via the Apps catalog drops the ir_module row but does NOT
 roll back the seeded partners / leads, because those records live
 on tables owned by other modules.
 """
+from pyvelm.manifest import Manifest
 
-NAME: str = "demo"
-VERSION: tuple[int, ...] = (0, 1, 0)
-SUMMARY: str = "Sample partners, leads, and supporting data for live testing."
-CATEGORY: str = "Demo"
-AUTHOR: str = "pyvelm"
-DEPENDS: list[str] = ["base", "partners", "partners_pro", "crm"]
-INSTALL_HOOK: str = "demo.hooks:install"
+manifest = (
+    Manifest.make("demo")
+    .version(0, 1, 0)
+    .summary("Sample partners, leads, and supporting data for live testing.")
+    .category("Demo")
+    .author("pyvelm")
+    .depends("base", "partners", "partners_pro", "crm")
+    .install_hook("demo.hooks:install")
+)

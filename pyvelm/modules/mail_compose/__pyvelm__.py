@@ -1,11 +1,18 @@
-NAME: str = "mail_compose"
-VERSION: tuple[int, ...] = (0, 1, 1)
-SUMMARY: str = "Rich email composer with templates, multi-recipient, Cc/Bcc, and attachments."
-CATEGORY: str = "Workflows"
-AUTHOR: str = "pyvelm"
-DEPENDS: list[str] = ["base", "admin"]
-DATA: list[str] = [
-    "views/compose.py",
-    "views/menu.py",
-]
-INSTALL_HOOK: str = "mail_compose.hooks:install"
+"""mail_compose module manifest."""
+from pyvelm.manifest import Manifest
+
+manifest = (
+    Manifest.make("mail_compose")
+    .version(0, 1, 1)
+    .summary(
+        "Rich email composer with templates, multi-recipient, Cc/Bcc, and attachments."
+    )
+    .category("Workflows")
+    .author("pyvelm")
+    .depends("base", "admin")
+    .data(
+        "views/compose.py",
+        "views/menu.py",
+    )
+    .install_hook("mail_compose.hooks:install")
+)

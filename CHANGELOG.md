@@ -7,6 +7,20 @@ out of the 0.x line.
 
 ## Unreleased
 
+### Added
+
+- **`pyvelm.models.Model`** — Odoo-style ``from pyvelm import models`` base class
+  for new models (``_name``) and ``_inherit`` extensions.
+- **Fluent module manifests** — ``Manifest.make("partners").version(0, 1, 0).depends(...)``
+  velmphp-style builder assigned to ``manifest`` in ``__pyvelm__.py``; legacy
+  ``NAME`` / ``VERSION`` constants remain supported.
+
+### Changed
+
+- **Module scaffolds** — ``pyvelm make:module`` and generators patch fluent
+  ``.data(...)`` chains; migration CLI bumps ``.version(...)`` as well as
+  legacy ``VERSION`` tuples.
+
 ## [1.0.1] — 2026-06-01
 
 ### Added

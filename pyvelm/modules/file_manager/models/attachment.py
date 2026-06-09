@@ -8,13 +8,13 @@ string and the renderer falls back to the textual card.
 
 from __future__ import annotations
 
-from pyvelm import BaseModel, Char, Many2one, depends
+from pyvelm import Char, Many2one, depends, models
 
 
 _IMAGE_MIME_PREFIX = "image/"
 
 
-class Attachment(BaseModel):
+class Attachment(models.Model):
     _inherit = "ir.attachment"
 
     # Non-stored Char: the value is derived from id + mimetype at read

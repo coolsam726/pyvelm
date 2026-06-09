@@ -9,28 +9,27 @@ When this module moves into pyvelm core, the manifest path becomes
 ``pyvelm.modules.document_layout``; app code should depend on ``document_layout``
 and import from ``document_layout.api``.
 """
+from pyvelm.manifest import Manifest
 
-NAME: str = "document_layout"
-DISPLAY_NAME: str = "Document Layouts"
-VERSION: tuple[int, ...] = (0, 3, 0)
-SUMMARY: str = "Configurable company document layout + record-to-PDF printing."
-DESCRIPTION: str = (
-    "A configurable external document layout (logo, address, accent colour, "
-    "paper format, layout variant) plus a registry + print route that renders "
-    "any record to a branded PDF via wkhtmltopdf. Other modules register their "
-    "printable documents (invoices, receipts, delivery slips) against it."
+manifest = (
+    Manifest.make("document_layout")
+    .version(0, 3, 0)
+    .display_name("Document Layouts")
+    .summary("Configurable company document layout + record-to-PDF printing.")
+    .description(
+        "A configurable external document layout (logo, address, accent colour, "
+        "paper format, layout variant) plus a registry + print route that renders "
+        "any record to a branded PDF via wkhtmltopdf. Other modules register their "
+        "printable documents (invoices, receipts, delivery slips) against it."
+    )
+    .category("Technical")
+    .author("savannabits")
+    .depends("base")
+    .data(
+        "views/company.py",
+        "views/menu.py",
+    )
+    .install_hook("document_layout.hooks:install")
+    .sync_hook("document_layout.hooks:sync")
+    .web_routes("document_layout.web:register_routes")
 )
-CATEGORY: str = "Technical"
-AUTHOR: str = "savannabits"
-
-DEPENDS: list[str] = ["base"]
-
-DATA: list[str] = [
-    "views/company.py",
-    "views/menu.py",
-]
-
-INSTALL_HOOK: str = "document_layout.hooks:install"
-SYNC_HOOK: str = "document_layout.hooks:sync"
-
-WEB_ROUTES: str = "document_layout.web:register_routes"

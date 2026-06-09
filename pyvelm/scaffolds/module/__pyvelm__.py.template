@@ -1,19 +1,17 @@
 """{{name}} module manifest."""
+from pyvelm.manifest import Manifest
 
-NAME: str = "{{name}}"
-DISPLAY_NAME: str = "{{display_name}}"
-VERSION: tuple[int, ...] = (0, 1, 0)
-SUMMARY: str = "{{display_name}} — describe what it does in one line."
-DESCRIPTION: str = ""
-CATEGORY: str = "Apps"
-AUTHOR: str = ""
-
-DEPENDS: list[str] = ["base"]
-
-# Declarative data (views, menus). Add paths when you run make:view / make:menu.
-DATA: list[str] = []
-
-# Optional install hook — runs once on first install.
-# INSTALL_HOOK: str = "{{name}}.hooks:install"
-# Optional: override auto-discovery from seeders/__init__.py
-# SEEDERS: list[str] = ["{{name}}.seeders:DatabaseSeeder"]
+manifest = (
+    Manifest.make("{{name}}")
+    .version(0, 1, 0)
+    .display_name("{{display_name}}")
+    .summary("{{display_name}} — describe what it does in one line.")
+    .category("Apps")
+    .depends("base")
+    # Declarative data (views, menus). Add paths when you run make:view / make:menu.
+    # .data("views/partner.py", "views/menu.py")
+    # Optional install hook — runs once on first install.
+    # .install_hook("{{name}}.hooks:install")
+    # Optional: override auto-discovery from seeders/__init__.py
+    # .seeders("{{name}}.seeders:DatabaseSeeder")
+)

@@ -30,37 +30,45 @@ Use `make:model`, `make:view`, and `make:menu` to add each layer — see
 
 ## The manifest
 
-`__pyvelm__.py` is plain Python — module-level constants the loader
-reads. The minimum is two keys:
+`__pyvelm__.py` is plain Python. Assign a fluent builder to
+``manifest`` (velmphp-style):
+
+```python
+from pyvelm.manifest import Manifest
+
+manifest = (
+    Manifest.make("partners")
+    .version(0, 1, 0)
+    .depends("base")
+    .data("views/partner.py", "views/tag.py")
+    .install_hook("partners.hooks:install")
+    .summary("Companies, contacts, and the partner directory.")
+    .category("Business")
+)
+```
+
+Legacy module-level constants remain supported for older addons:
 
 ```python
 NAME: str = "partners"
 VERSION: tuple[int, ...] = (0, 1, 0)
-```
-
-Most modules also declare:
-
-```python
 DEPENDS: list[str] = ["base"]
 DATA: list[str] = ["views/partner.py", "views/tag.py"]
 INSTALL_HOOK: str = "partners.hooks:install"
 ```
 
-Everything else is optional. `DEPENDS` is what the loader uses to
-topologically order installs; `DATA` lists Python files whose
-module-level `VIEWS`, `VIEW_INHERITS`, and `MENUS` lists feed the
-declarative-data sync; `INSTALL_HOOK` is a `pkg.mod:fn` reference
-to a function called once on first install (it gets the
-`Environment`).
+`DEPENDS` is what the loader uses to topologically order installs;
+`DATA` lists Python files whose module-level `VIEWS`, `VIEW_INHERITS`,
+and `MENUS` lists feed the declarative-data sync; `INSTALL_HOOK` is a
+`pkg.mod:fn` reference to a function called once on first install (it
+gets the `Environment`).
 
-Optional **`WEB_ROUTES`** registers module-owned FastAPI endpoints when
-`create_app()` starts — no edits to `serve.py`. See
-[Custom HTTP routes](#custom-http-routes) below.
+Optional **`.web_routes("pkg.web:register_routes")`** registers
+module-owned FastAPI endpoints when `create_app()` starts — no edits to
+`serve.py`. See [Custom HTTP routes](#custom-http-routes) below.
 
-`pyvelm.types.Manifest` is a TypedDict that documents every
-recognised key. Annotating each global with its declared type lets
-your IDE catch typos like `DEPNEDS` at edit time. The loader
-ignores the annotations.
+`pyvelm.Manifest` is the fluent builder class; `pyvelm.types.Manifest`
+is a TypedDict documenting every recognised key for type checkers.
 
 For **model and view technical names** (`env["res.partner"]`,
 `view="lead.list"`), run [`pyvelm make:stubs`](ide-typing.md) to
@@ -115,7 +123,7 @@ entries — lives in Python files referenced by `DATA`:
 
 ```python
 # partners/__pyvelm__.py
-DATA = ["views/partner.py", "views/menu.py"]
+manifest = Manifest.make("partners").data("views/partner.py", "views/menu.py")
 ```
 
 The loader executes each file and harvests the module-level lists:

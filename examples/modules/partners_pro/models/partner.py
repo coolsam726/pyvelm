@@ -4,10 +4,10 @@ Demonstrates Stage 7 _inherit:
   - adds a `vip_note` Char field to the base partner model
   - overrides `_compute_display_name` to prefix VIP partners
 """
-from pyvelm import BaseModel, Char, Many2one, depends
+from pyvelm import Char, Many2one, depends, models
 
 
-class PartnerPro(BaseModel):
+class PartnerPro(models.Model):
     """Extension: adds VIP fields and method override to res.partner."""
 
     _inherit = "res.partner"

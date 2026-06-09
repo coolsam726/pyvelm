@@ -1,7 +1,18 @@
 """Module discovery, dependency resolution, and install/migrate.
 
-A pyvelm module is a Python package containing a `__pyvelm__.py` manifest
-with at least:
+A pyvelm module is a Python package containing a `__pyvelm__.py` manifest.
+Preferred style (velmphp-like fluent builder)::
+
+    from pyvelm.manifest import Manifest
+
+    manifest = (
+        Manifest.make("partners")
+        .version(0, 1, 0)
+        .depends("base")
+        .data("views/partner.py")
+    )
+
+Legacy module-level constants remain supported::
 
     NAME = "partners"
     VERSION = (0, 1, 0)
@@ -126,45 +137,85 @@ def _import_attr(dotted: str):
     return getattr(mod, attr)
 
 
-def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
-    manifest = pkg_path / "__pyvelm__.py"
-    if not manifest.is_file():
-        return None
+def _exec_manifest_module(pkg_path: Path) -> Any:
+    manifest_path = pkg_path / "__pyvelm__.py"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(manifest_path)
     spec_obj = importlib.util.spec_from_file_location(
-        f"_pyvelm_manifest_{pkg_path.name}", manifest
+        f"_pyvelm_manifest_{pkg_path.name}", manifest_path
     )
     if spec_obj is None or spec_obj.loader is None:
-        return None
+        raise ImportError(f"Could not load manifest at {manifest_path}")
     mod = importlib.util.module_from_spec(spec_obj)
     spec_obj.loader.exec_module(mod)
+    return mod
 
-    if not hasattr(mod, "NAME"):
-        raise ValueError(f"Manifest at {manifest} is missing NAME")
-    if not hasattr(mod, "VERSION"):
-        raise ValueError(f"Manifest at {manifest} is missing VERSION")
 
-    name = mod.NAME
-    version = tuple(mod.VERSION)
-    depends = list(getattr(mod, "DEPENDS", []))
-    package = getattr(mod, "PACKAGE", pkg_path.name)
-    models_pkg = getattr(mod, "MODELS_PACKAGE", f"{package}.models")
-    migrations_pkg = getattr(mod, "MIGRATIONS_PACKAGE", f"{package}.migrations")
-    install_dotted = getattr(mod, "INSTALL_HOOK", None)
+def _manifest_dict_from_module(mod: Any, manifest_path: Path) -> dict[str, Any]:
+    from .manifest import Manifest as ManifestBuilder
+
+    for attr in ("manifest", "MANIFEST"):
+        value = getattr(mod, attr, None)
+        if isinstance(value, ManifestBuilder):
+            return value.to_dict()
+
+    if hasattr(mod, "NAME"):
+        if not hasattr(mod, "VERSION"):
+            raise ValueError(f"Manifest at {manifest_path} is missing VERSION")
+        return {
+            "NAME": mod.NAME,
+            "VERSION": tuple(mod.VERSION),
+            "DEPENDS": list(getattr(mod, "DEPENDS", [])),
+            "DATA": list(getattr(mod, "DATA", [])),
+            "MODELS": list(getattr(mod, "MODELS", [])),
+            "SEEDERS": list(getattr(mod, "SEEDERS", [])),
+            "COMMANDS": list(getattr(mod, "COMMANDS", [])),
+            "SUMMARY": getattr(mod, "SUMMARY", ""),
+            "DESCRIPTION": getattr(mod, "DESCRIPTION", ""),
+            "DISPLAY_NAME": getattr(mod, "DISPLAY_NAME", ""),
+            "CATEGORY": getattr(mod, "CATEGORY", ""),
+            "AUTHOR": getattr(mod, "AUTHOR", ""),
+            "ICON": getattr(mod, "ICON", ""),
+            "PACKAGE": getattr(mod, "PACKAGE", ""),
+            "MODELS_PACKAGE": getattr(mod, "MODELS_PACKAGE", ""),
+            "MIGRATIONS_PACKAGE": getattr(mod, "MIGRATIONS_PACKAGE", ""),
+            "INSTALL_HOOK": getattr(mod, "INSTALL_HOOK", None),
+            "SYNC_HOOK": getattr(mod, "SYNC_HOOK", None),
+            "WEB_ROUTES": getattr(mod, "WEB_ROUTES", None),
+            "CATALOG_ACCESS_MODEL": getattr(mod, "CATALOG_ACCESS_MODEL", ""),
+            "CATALOG_ACCESS_PERM": getattr(mod, "CATALOG_ACCESS_PERM", ""),
+            "CATALOG_ACCESS_POLICY": getattr(mod, "CATALOG_ACCESS_POLICY", ""),
+        }
+
+    raise ValueError(
+        f"Manifest at {manifest_path} must assign a "
+        f"``Manifest`` instance to ``manifest`` or declare legacy NAME/VERSION."
+    )
+
+
+def _module_spec_from_dict(data: dict[str, Any], pkg_path: Path) -> ModuleSpec:
+    name = data["NAME"]
+    version = tuple(data["VERSION"])
+    depends = list(data.get("DEPENDS", []))
+    package = data.get("PACKAGE") or pkg_path.name
+    models_pkg = data.get("MODELS_PACKAGE") or f"{package}.models"
+    migrations_pkg = data.get("MIGRATIONS_PACKAGE") or f"{package}.migrations"
+    install_dotted = data.get("INSTALL_HOOK")
     install_hook = _import_attr(install_dotted) if install_dotted else None
     from .seeding import resolve_module_seeders
 
     seeders = resolve_module_seeders(
         package,
         pkg_path,
-        list(getattr(mod, "SEEDERS", [])),
+        list(data.get("SEEDERS", [])),
     )
-    sync_dotted = getattr(mod, "SYNC_HOOK", None)
+    sync_dotted = data.get("SYNC_HOOK")
     sync_hook = _import_attr(sync_dotted) if sync_dotted else None
-    web_routes = getattr(mod, "WEB_ROUTES", None)
+    web_routes = data.get("WEB_ROUTES")
     if web_routes is not None:
         web_routes = str(web_routes).strip() or None
-    data = list(getattr(mod, "DATA", []))
-    command_refs = list(getattr(mod, "COMMANDS", []))
+    data_paths = list(data.get("DATA", []))
+    command_refs = list(data.get("COMMANDS", []))
 
     return ModuleSpec(
         name=name,
@@ -178,20 +229,29 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
         sync_hook=sync_hook,
         web_routes=web_routes,
         package_path=pkg_path,
-        data=data,
+        data=data_paths,
         display_name=module_display_name(
-            name, getattr(mod, "DISPLAY_NAME", None)
+            name, data.get("DISPLAY_NAME") or None
         ),
-        summary=getattr(mod, "SUMMARY", ""),
-        description=getattr(mod, "DESCRIPTION", ""),
-        category=getattr(mod, "CATEGORY", ""),
-        author=getattr(mod, "AUTHOR", ""),
-        icon=getattr(mod, "ICON", ""),
-        catalog_access_model=getattr(mod, "CATALOG_ACCESS_MODEL", ""),
-        catalog_access_perm=getattr(mod, "CATALOG_ACCESS_PERM", ""),
-        catalog_access_policy=getattr(mod, "CATALOG_ACCESS_POLICY", ""),
+        summary=data.get("SUMMARY", ""),
+        description=data.get("DESCRIPTION", ""),
+        category=data.get("CATEGORY", ""),
+        author=data.get("AUTHOR", ""),
+        icon=data.get("ICON", ""),
+        catalog_access_model=data.get("CATALOG_ACCESS_MODEL", ""),
+        catalog_access_perm=data.get("CATALOG_ACCESS_PERM", ""),
+        catalog_access_policy=data.get("CATALOG_ACCESS_POLICY", ""),
         command_refs=command_refs,
     )
+
+
+def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
+    manifest_path = pkg_path / "__pyvelm__.py"
+    if not manifest_path.is_file():
+        return None
+    mod = _exec_manifest_module(pkg_path)
+    data = _manifest_dict_from_module(mod, manifest_path)
+    return _module_spec_from_dict(data, pkg_path)
 
 
 def discover(roots: list[Path | str]) -> dict[str, ModuleSpec]:

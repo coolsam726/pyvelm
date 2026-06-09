@@ -5,7 +5,7 @@ layout variant / paper format.
 """
 from __future__ import annotations
 
-from pyvelm import BaseModel, Char, depends, Integer
+from pyvelm import Char, depends, Integer, models
 
 from ..constants import DOCUMENT_LAYOUT_CHOICES, GOOGLE_FONT_CHOICES, GOOGLE_FONTS
 
@@ -17,7 +17,7 @@ __all__ = [
 ]
 
 
-class ResCompanyDocumentLayout(BaseModel):
+class ResCompanyDocumentLayout(models.Model):
     _inherit = "res.company"
 
     document_layout = Char(

@@ -1,11 +1,11 @@
 """Chatter + workflow display fields on partners (requires workflow module at runtime)."""
 from __future__ import annotations
 
-from pyvelm import BaseModel, Char, depends
+from pyvelm import Char, depends, models
 from pyvelm.mail import MailThread
 
 
-class PartnerWorkflow(MailThread, BaseModel):
+class PartnerWorkflow(MailThread, models.Model):
     _inherit = "res.partner"
 
     workflow_state = Char(compute="_compute_workflow_display", string="Workflow")
