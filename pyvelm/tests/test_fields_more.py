@@ -88,7 +88,7 @@ class LabelHelperTests(unittest.TestCase):
 
 class FieldBaseTests(unittest.TestCase):
     def test_descriptor_on_class_returns_field(self):
-        f = Char()
+        f = Char.bare()
         self.assertIs(Char.__get__(f, None, object), f)
 
     def test_bind_related_clears_column(self):
@@ -202,7 +202,7 @@ class FieldBaseTests(unittest.TestCase):
         self.assertEqual(env.cache.get("test.m6", 1, "total"), 99)
 
     def test_base_to_python_passthrough(self):
-        self.assertEqual(Field().to_python("raw"), "raw")
+        self.assertEqual(Field.bare().to_python("raw"), "raw")
 
     def test_set_readonly_raises(self):
         reg = Registry()
@@ -271,7 +271,7 @@ class ScalarFieldCoercionTests(unittest.TestCase):
             Code(language="brainfuck")
 
     def test_html_sanitizes(self):
-        f = Html()
+        f = Html.bare()
         self.assertIsNone(f.to_python(""))
         self.assertIsNone(f.to_sql_param(None))
         with patch("pyvelm.html_sanitizer.sanitize_html", return_value="<p>ok</p>"):
@@ -279,23 +279,23 @@ class ScalarFieldCoercionTests(unittest.TestCase):
             self.assertEqual(f.to_sql_param("x"), "<p>ok</p>")
 
     def test_integer_float_boolean(self):
-        self.assertIsNone(Integer().to_python(None))
-        self.assertEqual(Integer().to_python(3), 3)
-        self.assertEqual(Float().to_python("1.5"), 1.5)
-        self.assertTrue(Boolean().to_python(1))
+        self.assertIsNone(Integer.bare().to_python(None))
+        self.assertEqual(Integer.bare().to_python(3), 3)
+        self.assertEqual(Float.bare().to_python("1.5"), 1.5)
+        self.assertTrue(Boolean.bare().to_python(1))
 
     def test_datetime_date_time_params(self):
-        dt = Datetime()
+        dt = Datetime.bare()
         self.assertIsNone(dt.to_sql_param(""))
         val = datetime(2026, 1, 2, 3, 4)
         self.assertEqual(dt.to_sql_param(val), val)
         self.assertEqual(dt.to_sql_param(date(2026, 1, 2)), datetime(2026, 1, 2, 0, 0))
         self.assertEqual(dt.to_sql_param("2026-01-02T03:04"), datetime(2026, 1, 2, 3, 4))
-        self.assertEqual(Date().to_sql_param(date(2026, 1, 2)), date(2026, 1, 2))
-        self.assertEqual(Date().to_sql_param(datetime(2026, 1, 2, 3, 4)), date(2026, 1, 2))
-        self.assertEqual(Time().to_sql_param("08:30"), time(8, 30))
-        self.assertEqual(Time().to_sql_param(datetime(2026, 1, 2, 8, 30)), time(8, 30))
-        self.assertEqual(Time().to_sql_param("08:30:45"), time(8, 30, 45))
+        self.assertEqual(Date.bare().to_sql_param(date(2026, 1, 2)), date(2026, 1, 2))
+        self.assertEqual(Date.bare().to_sql_param(datetime(2026, 1, 2, 3, 4)), date(2026, 1, 2))
+        self.assertEqual(Time.bare().to_sql_param("08:30"), time(8, 30))
+        self.assertEqual(Time.bare().to_sql_param(datetime(2026, 1, 2, 8, 30)), time(8, 30))
+        self.assertEqual(Time.bare().to_sql_param("08:30:45"), time(8, 30, 45))
 
     def test_monetary_round_with_edges(self):
         m = Monetary(currency_field="currency_id")
@@ -350,10 +350,10 @@ class ScalarFieldCoercionTests(unittest.TestCase):
 
 class Many2oneFieldTests(unittest.TestCase):
     def test_many2one_labels_and_sql_param(self):
-        f = Many2one("res.partner")
+        f = Many2one.bare("res.partner")
         f.bind("sale.order", "partner_id")
         self.assertEqual(f.string, "Partner")
-        f2 = Many2one("res.partner")
+        f2 = Many2one.bare("res.partner")
         f2.bind("x", "partner")
         self.assertEqual(f2.string, "Partner")
         empty_rs = MagicMock()
@@ -404,7 +404,7 @@ class Many2oneFieldTests(unittest.TestCase):
         reg, Partner, Country, *_ = _stack_registry()
         env = _env(reg)
         partner = Partner(env, (1,))
-        f = Many2one("test.country")
+        f = Many2one.bare("test.country")
         f.related = "country_id"
         f.comodel_name = "test.country"
         f.bind("test.partner", "mirror_country_id")
@@ -545,10 +545,10 @@ class One2manyMany2manyTests(unittest.TestCase):
             partner.line_ids = [1, 2]
 
     def test_one2many_labels_and_no_column(self):
-        f = One2many("test.line", "partner_id")
+        f = One2many.bare("test.line", "partner_id")
         f.bind("test.partner", "line_ids")
         self.assertEqual(f.string, "Lines")
-        f2 = One2many("test.line", "partner_id")
+        f2 = One2many.bare("test.line", "partner_id")
         f2.bind("test.partner", "lines")
         self.assertEqual(f2.string, "Lines")
         with self.assertRaises(RuntimeError):
@@ -589,10 +589,10 @@ class One2manyMany2manyTests(unittest.TestCase):
             Many2many.normalize_ids([MagicMock(_ids=(1, 2))])
 
     def test_many2many_labels_and_to_sql_param(self):
-        f = Many2many("test.tag")
+        f = Many2many.bare("test.tag")
         f.bind("test.partner", "tag_ids")
         self.assertEqual(f.string, "Tags")
-        f2 = Many2many("test.tag")
+        f2 = Many2many.bare("test.tag")
         f2.bind("test.partner", "tags")
         self.assertEqual(f2.string, "Tags")
         with self.assertRaises(NotImplementedError):
@@ -705,7 +705,7 @@ class FinalizeRelatedTests(unittest.TestCase):
                 finalize_related_field(Partner, f)
 
     def test_finalize_noop_without_related(self):
-        f = Char()
+        f = Char.bare()
         finalize_related_field(object(), f)
 
 

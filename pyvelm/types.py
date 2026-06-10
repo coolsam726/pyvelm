@@ -61,6 +61,7 @@ from typing import Any, Literal, TypedDict, Union
 # registry with a new hint means adding the string here too.
 
 WidgetHint = Literal[
+    # Boolean
     "toggle",
     # Relational (One2many / Many2many) — edit UX on parent forms:
     # ``dialog`` (default when a comodel form view exists): chips or
@@ -69,6 +70,18 @@ WidgetHint = Literal[
     "dialog",
     "inline",
     "table",
+    # Scalar presentation — ``Char`` and ``Text`` accept the same hints;
+    # use ``text`` on a ``Char`` column to render a multiline textarea.
+    "text",
+    "html",
+    "code",
+    "image",
+    "file_url",
+    "color",
+    "model",
+    # Attachment pickers (Many2one / Many2many)
+    "file",
+    "files",
 ]
 
 

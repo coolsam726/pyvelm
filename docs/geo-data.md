@@ -18,13 +18,16 @@ pip install pyvelm[geo]
 Then install the module from **Apps**, or include it in your
 `loader.load_and_install(...)` call. Whenever `pyvelm[geo]` is present,
 the bundled `GeographyDatabaseSeeder` runs on **install**, **upgrade**,
-and **Sync** (continents → countries → states → cities; idempotent).
+and **Sync**. By default only **continents** and your **detected country**
+are inserted (`PYVELM_GEO_SEED_LEVEL=bootstrap`). Set
+``PYVELM_GEO_COUNTRY=KE`` to pin the country when auto-detection is wrong.
 Without the geo extras, the module installs but seeding is skipped until
 you ``pip install pyvelm[geo]`` and Sync or run ``pyvelm db seed geo_data``.
 
 You can also open **Settings → Geography → Countries** and click
-**Seed geography data** (superuser). The seed reads `geonamescache` +
-`pycountry` in one transaction.
+**Seed geography data** (superuser). That starts a **background** import of
+all countries, states, and cities from `geonamescache` + `pycountry` — a
+toast confirms it started; refresh the list after about a minute.
 
 The seed is **idempotent**: existing rows are matched on their
 natural keys (continent `code`, country `code`, state `code`, city
@@ -34,10 +37,15 @@ load, install/upgrade/Sync skips the seeder when ~200+ countries are
 already present. Use **Seed geography data** or `seed_reference_data()`
 to force a refresh (countries are patched with upstream field updates).
 
-For faster CI, pytest sets `PYVELM_GEO_SEED_LEVEL=countries` (continents +
-countries only). Production installs use the default `full` level (includes
-states and cities). Override with `PYVELM_GEO_SEED_LEVEL=full` in the
-environment when you need the complete dataset in tests.
+| `PYVELM_GEO_SEED_LEVEL` | What install/Sync seeds |
+|-------------------------|-------------------------|
+| `bootstrap` (default) | 7 continents + detected country (or `PYVELM_GEO_COUNTRY`) |
+| `countries` | Continents + all ~250 countries |
+| `states` | Above + ISO subdivisions |
+| `full` | Above + major cities |
+
+For faster CI, pytest sets `PYVELM_GEO_SEED_LEVEL=countries`. Use
+**Seed geography data** or `geo_seed_level="full"` for the complete dataset.
 
 ## Models
 

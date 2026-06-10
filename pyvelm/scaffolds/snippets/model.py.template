@@ -6,7 +6,8 @@ from pyvelm import Char, models
 class {{class_name}}(models.Model):
     _name = "{{model}}"
 
-    name = Char(required=True)
+    name = Char().required()
+    # equivalent: name = Char(required=True)
 
     # Fluent search (same ACL/rules as search()):
     # env["{{model}}"].query().where("name", "ilike", "Acme").limit(20).get()
