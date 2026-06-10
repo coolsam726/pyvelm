@@ -94,7 +94,7 @@ source.
 | 1.3 | **List bulk actions** | `bulk_actions` arch | **Done (v1.3.0)** — row checkboxes, select-all, bulk bar, default bulk delete when unlink allowed |
 | 1.4 | **`DetailView` + `row_actions`** | `DetailView.php`, `ListRowAction` | **Done (v1.3.0)** — read-only record page; list links via `detail_view` |
 | 1.5 | **`ActionForm` / view-actions** | `ViewActionFormController` | Toolbar quick-add/edit mini-forms at `/web/view-actions/...` |
-| 1.6 | **Bundled `partners` module** | `modules/partners/` | Ship in wheel: list, detail, form, kanban, graph, pivot, dashboard; demo page actions |
+| 1.6 | **Bundled `contacts` module** | `modules/contacts/` | Ship in wheel: `res.partner` list/form + menu; example `partners` extends for kanban/tags/workflow |
 | 1.7 | **Currency import** | `CurrencyImportService` | On-demand world currencies (RESTcountries or bundled fallback); Settings action |
 | 1.8 | **Geo bootstrap polish** | `GeoCountryDetector` | **Done** — `PYVELM_GEO_COUNTRY`; bootstrap install; background full seed |
 | 1.9 | **Protected modules** | `AppsCatalog` | Block uninstall of `geo_data`, `file_manager`, etc. with clear blockers in Apps UI |

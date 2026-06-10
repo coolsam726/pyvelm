@@ -78,7 +78,7 @@ def workflow_env(pyvelm_dsn):
         env._acl_bypass = True
         install_named_modules(
             env,
-            ["admin", "workflow", "partners"],
+            ["admin", "workflow", "contacts"],
             list(BUILTIN_MODULE_ROOTS) + [examples],
         )
     conn = db.open_connection()
@@ -95,7 +95,7 @@ def test_workflow_start_and_transition(workflow_env):
     if "workflow.definition" not in workflow_env.registry:
         pytest.skip("workflow module not installed")
     if "res.partner" not in workflow_env.registry:
-        pytest.skip("res.partner not installed (need examples/modules)")
+        pytest.skip("res.partner not installed (need contacts module)")
     env = workflow_env
     Definition = env["workflow.definition"]
     Partner = env["res.partner"]

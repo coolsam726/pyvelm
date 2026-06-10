@@ -7,6 +7,14 @@ out of the 0.x line.
 
 ## Unreleased
 
+### Added
+
+- **Bundled `contacts` module** — ships ``res.partner`` in the wheel with list/form
+  views, sidebar menu, and install hooks. The example ``partners`` addon now
+  ``_inherit``s the bundled model for demo fields (tags, age, workflow display).
+  ``workflow`` depends on ``contacts``; the admin dashboard links to
+  ``/web/views/contacts/partner.list``.
+
 ## [1.3.1] — 2026-06-10
 
 ### Added
