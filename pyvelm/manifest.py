@@ -68,6 +68,7 @@ class Manifest:
         self._catalog_access_model = ""
         self._catalog_access_perm = ""
         self._catalog_access_policy = ""
+        self._bootstrap = True
 
     @classmethod
     def make(cls, name: str) -> Manifest:
@@ -184,6 +185,11 @@ class Manifest:
         self._catalog_access_policy = policy
         return self
 
+    def bootstrap(self, value: bool = True) -> Manifest:
+        """When ``False``, the module is opt-in via Apps (not fresh-DB bootstrap)."""
+        self._bootstrap = value
+        return self
+
     def to_dict(self) -> dict[str, Any]:
         if not self._version:
             raise ValueError(f"Manifest for {self._name!r} is missing version().")
@@ -229,6 +235,8 @@ class Manifest:
             out["CATALOG_ACCESS_PERM"] = self._catalog_access_perm
         if self._catalog_access_policy:
             out["CATALOG_ACCESS_POLICY"] = self._catalog_access_policy
+        if not self._bootstrap:
+            out["BOOTSTRAP"] = False
         return out
 
 

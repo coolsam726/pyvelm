@@ -4601,6 +4601,19 @@ def create_app(
                         theme_env = senv.with_company(int(raw_co))
                     except (TypeError, ValueError):
                         theme_env = senv
+                from pyvelm.request_env import audit_context_from_request
+
+                theme_env = theme_env.with_context(
+                    **audit_context_from_request(request)
+                )
+                if "ir.login.log" in env.registry:
+                    from system_audit.login import log_login_event
+
+                    log_login_event(
+                        theme_env,
+                        event="login_failure",
+                        email=login_val or None,
+                    )
                 return HTMLResponse(
                     render_login_page(
                         error="Invalid username or password.",
@@ -4621,6 +4634,20 @@ def create_app(
             # still resolves the FK.
             home_company = users.company_id
             home_company_id = home_company.id if home_company else None
+            if "ir.login.log" in senv.registry:
+                from pyvelm.request_env import audit_context_from_request
+                from system_audit.login import log_login_event
+
+                audit_env = senv.with_context(
+                    **audit_context_from_request(request)
+                )
+                audit_env.uid = uid
+                log_login_event(
+                    audit_env,
+                    event="login_success",
+                    email=login_val or None,
+                    user_id=uid,
+                )
 
         response = RedirectResponse(next_url, status_code=303)
         response.set_cookie(_SESSION_COOKIE, token, **session_cookie)
@@ -4641,7 +4668,7 @@ def create_app(
 
     @app.post("/logout")
     def logout(request: Request):
-        from pyvelm.session_auth import revoke_session
+        from pyvelm.session_auth import resolve_session_uid, revoke_session
 
         token = request.cookies.get(_SESSION_COOKIE)
         if token:
@@ -4649,6 +4676,26 @@ def create_app(
                 env = Environment(
                     conn, registry=_active_registry(request), uid=None,
                 )
+                uid = resolve_session_uid(env, token)
+                if uid and "ir.login.log" in env.registry:
+                    from pyvelm.request_env import audit_context_from_request
+                    from system_audit.login import log_login_event
+
+                    users = env.sudo()["res.users"].browse([uid])
+                    email = None
+                    if users:
+                        users.ensure_one()
+                        email = users.login or users.name
+                    audit_env = env.with_context(
+                        **audit_context_from_request(request)
+                    )
+                    audit_env.uid = uid
+                    log_login_event(
+                        audit_env,
+                        event="logout",
+                        email=email,
+                        user_id=uid,
+                    )
                 revoke_session(env, token)
         response = RedirectResponse("/login", status_code=303)
         response.delete_cookie(_SESSION_COOKIE, path="/")

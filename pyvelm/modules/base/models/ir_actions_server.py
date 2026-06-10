@@ -60,7 +60,7 @@ class ServerAction(models.Model):
             )
 
         kind = self.action_type
-        if kind not in ("write", "create", "unlink", "code"):
+        if kind not in ("write", "create", "unlink", "code", "audit_purge"):
             raise ValueError(
                 f"ir.actions.server {self.name!r}: unknown action_type {kind!r}"
             )
@@ -82,6 +82,11 @@ class ServerAction(models.Model):
             if not records:
                 return
             records.unlink()
+
+        elif kind == "audit_purge":
+            from system_audit.retention import purge_audit_logs
+
+            purge_audit_logs(env)
 
         elif kind == "code":
             code_src = self.code or ""

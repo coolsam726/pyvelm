@@ -1003,6 +1003,14 @@ class BaseModel(metaclass=MetaModel):
         AutomationEngine.fire(self.env, self._name, "on_create", new_record)
         from .workflow.runtime import maybe_auto_start_workflow
         maybe_auto_start_workflow(self.env, new_record)
+        if "ir.audit.log" in self.env.registry:
+            from system_audit.listener import fire_on_create
+
+            fire_on_create(
+                self.env,
+                new_record,
+                {**column_vals, **m2m_vals},
+            )
         return new_record
 
     def write(self, vals: dict[str, Any]) -> None:
@@ -1023,6 +1031,18 @@ class BaseModel(metaclass=MetaModel):
         before_m2m_peers = {
             fname: self._snapshot_m2m_peers(fname) for fname in m2m_vals
         }
+        audit_before_by_id: dict[int, dict] | None = None
+        if "ir.audit.log" in self.env.registry:
+            from system_audit.listener import snapshot_record
+
+            audit_field_names = list(column_vals) + list(m2m_vals)
+            audit_before_by_id = {
+                rid: snapshot_record(
+                    self.__class__(self.env, (rid,)),
+                    audit_field_names,
+                )
+                for rid in self._ids
+            }
         from . import mail_tracking
 
         tracked_cols = mail_tracking.tracked_field_names(
@@ -1091,11 +1111,33 @@ class BaseModel(metaclass=MetaModel):
         # Fire on_write automation rules after the write is committed to cache.
         from .automation import AutomationEngine
         AutomationEngine.fire(self.env, self._name, "on_write", self)
+        if audit_before_by_id is not None:
+            from system_audit.listener import fire_on_write
+
+            fire_on_write(
+                self.env,
+                self,
+                {**column_vals, **m2m_vals},
+                before_by_id=audit_before_by_id,
+            )
 
     def unlink(self) -> None:
         if not self._ids:
             return
         self.env.check_access(self._name, "unlink")
+        audit_before_by_id: dict[int, dict] | None = None
+        if "ir.audit.log" in self.env.registry:
+            from system_audit.listener import fire_on_unlink, snapshot_record
+
+            audit_before_by_id = {
+                rid: snapshot_record(self.__class__(self.env, (rid,)))
+                for rid in self._ids
+            }
+            fire_on_unlink(
+                self.env,
+                self,
+                before_by_id=audit_before_by_id,
+            )
         self._cascade_unlink_m2o_referrers()
         self._set_null_m2o_referrers()
         self._invalidate_before_unlink()
