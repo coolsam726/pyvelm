@@ -142,7 +142,8 @@ Steps:
    ```
 
    Use `--no-changelog` to only sync the two Python version files, or
-   `--no-docs` to skip `docs/index.md` / `ROADMAP.md` / release page.
+   `--no-docs` to skip `README.md`, `docs/index.md`, `ROADMAP.md`, and the
+   release page.
    Verify with `python scripts/bump_version.py --check` (also run in CI).
 3. **Commit + annotated tag** (message = CHANGELOG section):
 

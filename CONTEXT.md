@@ -1,6 +1,8 @@
-# Project context — pyvelm v1.2.0
+# Project context — pyvelm v1.3.1
 
 Building an Odoo-style ERP framework in Python.
+
+**v1.3.1 (released 2026-06-10)** — dependency-scoped IDE model autocomplete, dev-server stub refresh, and `bump_version.sh`. See [docs/releases/v1.3.1.md](docs/releases/v1.3.1.md).
 
 **v1.2.0 (released 2026-06-10)** — fluent ORM field builders
 (`Char().required()`); nested `PvDialog` create stack; geo bootstrap seeding
