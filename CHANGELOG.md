@@ -7,6 +7,19 @@ out of the 0.x line.
 
 ## Unreleased
 
+### Changed
+
+- **Coverage gate** raised to **98%** (`pyproject.toml`, CI).
+
+### Added
+
+- **Schema DX (Filament-style)** — view ``Field.make()`` chains accept callables for
+  ``visible``, ``required``, ``readonly``, and ``hidden``; ``*_when`` helpers wrap
+  Odoo domains. ``live()`` / ``live(on_blur)`` / ``live(debounce=…)`` re-render forms
+  via HTMX; ``visible_js()`` uses Alpine ``$get`` / ``pvFormVal``.
+- **ORM ``index()`` / ``unique()``** — fluent field chains and model ``_sql_indexes`` /
+  ``_sql_uniques``; ``Blueprint.unique()`` and alter-time ``index()`` / ``unique()``.
+
 ## [1.3.2] — 2026-06-10
 
 ### Added

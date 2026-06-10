@@ -36,7 +36,12 @@ class OrmFieldBuilder:
     def build(self) -> Field:
         """Materialize without re-entering fluent ``__new__``."""
         field = object.__new__(self._field_cls)
-        self._field_cls.__init__(field, *self._args, **self._kwargs)
+        kwargs = dict(self._kwargs)
+        constraint_keys = ("index", "index_name", "unique", "unique_name")
+        constraint_kw = {k: kwargs.pop(k) for k in constraint_keys if k in kwargs}
+        self._field_cls.__init__(field, *self._args, **kwargs)
+        for key, value in constraint_kw.items():
+            setattr(field, key, value)
         return field
 
     def _set(self, key: str, value: Any) -> OrmFieldBuilder:
@@ -71,6 +76,18 @@ class OrmFieldBuilder:
 
     def tracking(self, value: bool = True) -> OrmFieldBuilder:
         return self._set("tracking", value)
+
+    def index(self, name: str | None = None) -> OrmFieldBuilder:
+        self._kwargs["index"] = True
+        if name is not None:
+            self._kwargs["index_name"] = name
+        return self
+
+    def unique(self, name: str | None = None) -> OrmFieldBuilder:
+        self._kwargs["unique"] = True
+        if name is not None:
+            self._kwargs["unique_name"] = name
+        return self
 
     # --- ``Char`` / ``Text`` ---
 

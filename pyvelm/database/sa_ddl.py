@@ -540,6 +540,70 @@ def execute_sql(
     return conn.execute(sql, params)
 
 
+def collect_model_sql_indexes(model_cls) -> list[tuple[str, tuple[str, ...]]]:
+    """Return ``(index_name, column_names)`` for a model class."""
+    table = model_cls._table
+    out: list[tuple[str, tuple[str, ...]]] = []
+    seen: set[str] = set()
+    for field in model_cls._fields.values():
+        if not field.is_stored or not field.column or field.name == "id":
+            continue
+        if getattr(field, "unique", False):
+            continue
+        if getattr(field, "index", False):
+            name = getattr(field, "index_name", None) or f"{table}_{field.column}_idx"
+            if name not in seen:
+                seen.add(name)
+                out.append((name, (field.column,)))
+    for entry in getattr(model_cls, "_sql_indexes", ()) or ():
+        if isinstance(entry, (list, tuple)) and len(entry) == 2:
+            name, cols = entry
+            cols_t = tuple(cols)
+        else:
+            continue
+        if name not in seen:
+            seen.add(name)
+            out.append((str(name), cols_t))
+    return out
+
+
+def collect_model_sql_uniques(model_cls) -> list[tuple[str, tuple[str, ...]]]:
+    """Return ``(unique_name, column_names)`` for field and model declarations."""
+    table = model_cls._table
+    out: list[tuple[str, tuple[str, ...]]] = []
+    seen: set[str] = set()
+    for field in model_cls._fields.values():
+        if not field.is_stored or not field.column or field.name == "id":
+            continue
+        if getattr(field, "unique", False):
+            name = getattr(field, "unique_name", None) or f"{table}_{field.column}_uniq"
+            if name not in seen:
+                seen.add(name)
+                out.append((name, (field.column,)))
+    for entry in getattr(model_cls, "_sql_uniques", ()) or ():
+        if isinstance(entry, (list, tuple)) and len(entry) == 2:
+            name, cols = entry
+            cols_t = tuple(cols)
+        else:
+            continue
+        if name not in seen:
+            seen.add(name)
+            out.append((str(name), cols_t))
+    return out
+
+
+def ensure_model_indexes_and_uniques(conn, model_cls, *, cap=None) -> None:
+    """Create declared indexes and uniques (idempotent on Postgres/SQLite)."""
+    from .sa_alter import execute_create_index, execute_create_unique
+
+    cap = cap or dialect_capabilities(getattr(conn, "dialect_name", "postgresql"))
+    table = model_cls._table
+    for name, cols in collect_model_sql_indexes(model_cls):
+        execute_create_index(conn, name, table, cols, cap=cap)
+    for name, cols in collect_model_sql_uniques(model_cls):
+        execute_create_unique(conn, name, table, cols, cap=cap)
+
+
 def count_null_rows(conn, table: str, column: str) -> int:
     """Count NULL values in a column via SQLAlchemy Core."""
     from sqlalchemy import column as sa_column

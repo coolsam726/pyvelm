@@ -1684,6 +1684,67 @@ def create_app(
             headers=_form_save_toast_headers(rec, created=True),
         )
 
+    async def _form_live_response(
+        request: Request,
+        env: Environment,
+        view,
+        record_or_none,
+        *,
+        mode: str,
+    ) -> HTMLResponse:
+        from .render import parse_form_vals, render_form_page
+
+        form = await request.form()
+        cls = env.registry[view.model]
+        vals, _ = parse_form_vals(cls, form, env)
+        return HTMLResponse(
+            render_form_page(
+                view,
+                record_or_none,
+                env,
+                mode=mode,
+                body_only=True,
+                submitted=vals,
+                form_playback=form,
+                in_dialog=_form_in_dialog(request),
+                current_path=str(request.url.path),
+                **_form_list_nav(request),
+            )
+        )
+
+    @app.post("/web/views/{module}/{name}/live", response_class=HTMLResponse)
+    async def web_form_live_new(
+        module: str,
+        name: str,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        view = _require_form_view(_load_view(env, module, name))
+        if not env.has_access(view.model, "create"):
+            raise PermissionError(f"You cannot create {view.model} records.")
+        return await _form_live_response(request, env, view, None, mode="new")
+
+    @app.post(
+        "/web/views/{module}/{name}/record/{record_id}/live",
+        response_class=HTMLResponse,
+    )
+    async def web_form_live_edit(
+        module: str,
+        name: str,
+        record_id: int,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        view = _require_form_view(_load_view(env, module, name))
+        if not env.has_access(view.model, "write"):
+            raise PermissionError(f"You cannot edit {view.model} records.")
+        rec = _load_record(env, view, record_id)
+        return await _form_live_response(request, env, view, rec, mode="edit")
+
     # ---- graph / pivot interactive data endpoints ----
     #
     # Both return plain JSON so the Alpine toolbar components can

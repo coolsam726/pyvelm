@@ -2482,6 +2482,7 @@ def _form_section_html(
     cols: int = 2,
     *,
     view_module: str | None = None,
+    view_name: str | None = None,
 ) -> list[dict]:
     """Build the per-field HTML for one section.
 
@@ -2494,18 +2495,41 @@ def _form_section_html(
     doesn't lose what they typed in unrelated fields. Both default to
     empty.
     """
+    from pyvelm.schema_eval import (
+        SchemaContext,
+        parse_live_spec,
+        spec_required,
+        spec_visible,
+    )
+
     errors = errors or {}
     submitted = submitted or {}
     prefill = prefill or {}
+    schema_ctx = SchemaContext(
+        env=env,
+        record=record_or_none,
+        submitted=submitted,
+        mode=mode,
+    )
     fields_spec = list(section_spec.get("fields", []))
     # Spec enrichment (URLs for relationship widgets) is harmless in
     # display mode and required by the O2m table widget, so always run.
     fields_spec = _enrich_specs_for_edit(
         env, model_cls, fields_spec, view_module=view_module
     )
+    record_id = record_or_none.id if record_or_none and record_or_none._ids else None
+    live_base = None
+    if view_module and view_name and mode in ("edit", "new"):
+        if record_id is not None:
+            live_base = f"/web/views/{view_module}/{view_name}/record/{record_id}/live"
+        else:
+            live_base = f"/web/views/{view_module}/{view_name}/live"
+
     cells: list[dict] = []
     for spec in fields_spec:
         fname = spec["name"]
+        if not spec_visible(spec, schema_ctx):
+            continue
         if fname not in model_cls._fields:
             # Pure-widget entries (no backing field on the host model).
             # ``widget="attachment"`` is the first of these — generic
@@ -2535,7 +2559,8 @@ def _form_section_html(
         field = model_cls._fields[fname]
         label = spec.get("label") or field.string or fname
         hint = spec.get("widget")
-        ro = spec_readonly(spec, field)
+        ro = spec_readonly(spec, field, schema_ctx)
+        req = spec_required(spec, field, schema_ctx)
         try:
             from pyvelm.timestamps import is_system_timestamp_field
         except ImportError:
@@ -2617,16 +2642,31 @@ def _form_section_html(
                 if ek.startswith(prefix):
                     field_error = msg
                     break
+        live_cfg = parse_live_spec(spec.get("live")) if mode in ("edit", "new") else None
+        live_post = None
+        live_trigger = None
+        if live_cfg and live_base:
+            driver_qs = f"?driver={fname}"
+            live_post = f"{live_base}{driver_qs}"
+            if live_cfg.get("on_blur"):
+                live_trigger = "blur"
+            elif live_cfg.get("debounce"):
+                live_trigger = f"change delay:{live_cfg['debounce']}ms"
+            else:
+                live_trigger = "change"
         cells.append(
             {
                 "name": fname,
                 "label": label,
-                "required": getattr(field, "required", False),
+                "required": req,
                 "readonly": ro,
                 "error": field_error,
                 "wide": cell_span >= cols,
                 "colspan": cell_span,
                 "html": renderer(value, spec_with_rec, field),
+                "visible_js": spec.get("visible_js"),
+                "live_post": live_post,
+                "live_trigger": live_trigger,
             }
         )
     return cells
@@ -2645,6 +2685,7 @@ def _form_layout_cells(
     form_playback,
     cols: int,
     view_module: str | None,
+    view_name: str | None = None,
 ) -> list[dict]:
     """Render a field list (section or notebook page) to form cells."""
     section_spec = {"fields": fields_spec}
@@ -2660,6 +2701,7 @@ def _form_layout_cells(
         form_playback=form_playback,
         cols=cols,
         view_module=view_module,
+        view_name=view_name,
     )
 
 
@@ -2706,6 +2748,7 @@ def _form_sections(
                             form_playback=form_playback,
                             cols=page_cols,
                             view_module=view.module,
+                            view_name=view.name,
                         ),
                     }
                 )
@@ -2739,6 +2782,7 @@ def _form_sections(
                     form_playback=form_playback,
                     cols=section_cols,
                     view_module=view.module,
+                    view_name=view.name,
                 ),
             }
         )

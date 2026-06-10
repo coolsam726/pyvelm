@@ -198,8 +198,8 @@ class MigrationSchemaCompileTests(unittest.TestCase):
         bp = Blueprint("demo", cap, create=False)
         with self.assertRaises(RuntimeError):
             bp.id()
-        with self.assertRaises(RuntimeError):
-            bp.index("name")
+        bp.index("name")
+        self.assertEqual(len(bp._alter_ops), 1)
         with self.assertRaises(RuntimeError):
             bp.primary_key("name")
 
@@ -278,6 +278,30 @@ class MigrationSchemaCompileTests(unittest.TestCase):
         Schema(env).create("partner_fk", _tbl)
         joined = "\n".join(executed).upper()
         self.assertIn("FOREIGN KEY", joined)
+
+    def test_unique_on_alter_compiles(self):
+        for dialect in _DIALECTS:
+            with self.subTest(dialect=dialect):
+                env, executed = self._env(dialect)
+
+                def _alter(t):
+                    t.unique("email")
+
+                Schema(env).table("demo_unique", _alter)
+                joined = "\n".join(executed).upper()
+                self.assertIn("UNIQUE", joined)
+                self.assertIn("EMAIL", joined)
+
+    def test_column_spec_unique_fluent(self):
+        env, executed = self._env("postgresql")
+
+        def _alter(t):
+            t.string("sku", nullable=False).unique("demo_sku_uniq")
+
+        Schema(env).table("demo_sku", _alter)
+        joined = "\n".join(executed).upper()
+        self.assertIn("UNIQUE", joined)
+        self.assertIn("SKU", joined)
 
     def test_create_primary_key_constraint(self):
         env, executed = self._env("postgresql")

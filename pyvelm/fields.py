@@ -111,11 +111,19 @@ class Field:
         related: str | None = None,
         readonly: bool = False,
         tracking: bool = False,
+        index: bool = False,
+        index_name: str | None = None,
+        unique: bool = False,
+        unique_name: str | None = None,
     ) -> None:
         self.string = string
         self.required = required
         self.default = default
         self.tracking = bool(tracking)
+        self.index = bool(index)
+        self.index_name = index_name
+        self.unique = bool(unique)
+        self.unique_name = unique_name
         self.name: str | None = None
         self.model_name: str | None = None
         self._column_override = column
@@ -951,8 +959,13 @@ def finalize_related_field(model_cls, field: Field) -> None:
             )
 
 
-def spec_readonly(spec: dict, field: Field) -> bool:
-    """View-level ``readonly`` on the spec wins; else the field flag."""
-    if spec.get("readonly") is not None:
-        return bool(spec["readonly"])
+def spec_readonly(spec: dict, field: Field, ctx=None) -> bool:
+    """View-level ``readonly`` wins; supports callables when *ctx* is passed."""
+    if ctx is not None:
+        from .schema_eval import spec_readonly_schema
+
+        return spec_readonly_schema(spec, field, ctx)
+    raw = spec.get("readonly")
+    if raw is not None and not callable(raw) and not isinstance(raw, (list, tuple)):
+        return bool(raw)
     return bool(getattr(field, "readonly", False))

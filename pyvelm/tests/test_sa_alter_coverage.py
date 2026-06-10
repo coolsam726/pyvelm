@@ -13,6 +13,7 @@ from pyvelm.database.migration_sql import (
 from pyvelm.database.sa_alter import (
     compile_add_foreign_key,
     compile_create_index,
+    compile_create_unique,
     compile_drop_column,
     compile_drop_constraint,
     compile_rename_column,
@@ -45,6 +46,13 @@ class SaAlterCompileTests(unittest.TestCase):
         self.assertIn("CREATE INDEX", mysql)
         mssql = compile_create_index("ix", "t", cols, dialect_capabilities("mssql"))
         self.assertNotIn("IF NOT EXISTS", mssql)
+
+    def test_compile_create_unique(self):
+        cols = ("email",)
+        pg = compile_create_unique("uq", "t", cols, dialect_capabilities("postgresql"))
+        self.assertIn("UNIQUE INDEX IF NOT EXISTS", pg)
+        sqlite = compile_create_unique("uq", "t", cols, dialect_capabilities("sqlite"))
+        self.assertIn("IF NOT EXISTS", sqlite)
 
     def test_compile_drop_column(self):
         pg = compile_drop_column("t", "c", dialect_capabilities("postgresql"))

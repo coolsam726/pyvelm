@@ -813,6 +813,22 @@
             },
         }));
 
+        /** Read a sibling field value from the active form (Filament ``$get``). */
+        window.pvFormVal = function (name) {
+            const form = document.getElementById('pyvelm-form');
+            if (!form) return null;
+            const fields = form.querySelectorAll('[name="' + name.replace(/"/g, '') + '"]');
+            if (!fields.length) return null;
+            const el = fields[fields.length - 1];
+            if (el.type === 'checkbox') return el.checked;
+            if (el.type === 'radio') {
+                const picked = form.querySelector('[name="' + name.replace(/"/g, '') + '"]:checked');
+                return picked ? picked.value : null;
+            }
+            return el.value;
+        };
+        window.$get = window.pvFormVal;
+
         Alpine.data('pvFormNotebook', (storageKey, defaultTab, pageNames) => ({
             tab: defaultTab,
             init() {

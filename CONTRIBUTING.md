@@ -42,7 +42,7 @@ Published docs use [mike](https://github.com/jimporter/mike) on `gh-pages`
 
 ## Test coverage
 
-CI runs `pytest --cov=pyvelm` with a **90%** floor (`fail_under` in
+CI runs `pytest --cov=pyvelm` with a **98%** floor (`fail_under` in
 `pyproject.toml`; the measured tree is ~**91%** today). The gate covers
 unit-testable framework code without gaming the metric.
 

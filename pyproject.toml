@@ -187,8 +187,8 @@ omit = [
 ]
 
 [tool.coverage.report]
-# Measured on framework core + addon hooks/web registrars (~91% today).
-fail_under = 90
+# Measured on framework core + addon hooks/web registrars.
+fail_under = 98
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
