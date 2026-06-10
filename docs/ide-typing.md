@@ -35,11 +35,24 @@ views (`VIEWS` / `VIEW_INHERITS` in `DATA` files).
 .pyvelm/typing/
 ├── py.typed                 # PEP 561 marker for this tree
 ├── __init__.pyi             # re-exports ModelName, QualifiedViewName, …
-├── names.pyi                # Literal unions for models and views
+├── names.pyi                # Literal unions for models and views (global)
 ├── models_stubs.pyi         # per-model recordset stub classes (navigation)
+├── scopes/                  # per-module stubs (dependency-scoped literals)
+│   └── partners/
+│       ├── names.pyi        # only partners + DEPENDS models/views
+│       └── pyvelm/          # same env/fields/builders layout as above
 ├── pyvelm/
+│   ├── model.pyi            # BaseModel _name / _inherit literals
+│   ├── models.pyi           # models.Model (inherits model.pyi)
 │   ├── env.pyi              # Environment.__getitem__ overloads
-│   └── registry.pyi         # Registry.__getitem__ overloads
+│   ├── registry.pyi         # Registry.__getitem__ overloads
+│   ├── security.pyi         # grant_model_access(model=…)
+│   ├── fields.pyi           # Many2one/One2many/Many2many comodel + OrmFieldBuilder
+│   ├── field_builders.pyi   # OrmFieldBuilder.comodel("…")
+│   └── builders/
+│       ├── menus.pyi        # menu item view= / model=
+│       ├── views.pyi        # ListView.make(…).model(…)
+│       └── legacy.pyi       # list_view(…, model, …) factories
 └── README.md                # short reminder to re-run make:stubs
 ```
 
@@ -58,7 +71,7 @@ read from paths listed in the manifest (`.data(...)` or legacy `DATA`), from
 
 | Name | Example | Use |
 |------|---------|-----|
-| `ModelName` | `"res.partner"`, `"crm.lead"` | Model technical names |
+| `ModelName` | `"res.partner"`, `"crm.lead"` | Model technical names (scoped per module — see below) |
 | `QualifiedViewName` | `"crm.lead.list"` | `module.view_name` (globally unique) |
 | `ViewName` / `ViewSlug` | `"lead.list"` | Short name within a module (menus, `form_view=`) |
 
@@ -85,9 +98,22 @@ pyvelm make:stubs --app-only
 ```
 
 `make:stubs` **merges** keys into an existing `pyrightconfig.json` (`include`,
-`stubPath`, `extraPaths`, `typeCheckingMode`) without dropping your custom
-settings. Delete the file manually if you need a full reset after moving the
-stub directory.
+`stubPath`, `extraPaths`, `executionEnvironments`, `typeCheckingMode`) without
+dropping your custom settings. Delete the file manually if you need a full reset
+after moving the stub directory.
+
+### Dependency-scoped model autocomplete
+
+When you edit files inside an addon package (e.g. `examples/modules/partners/`),
+Pylance uses a **per-module execution environment** so `ModelName` only lists
+models declared in that module **and** every module in its `DEPENDS` chain
+(direct and indirect). Sibling addons you do not depend on are excluded — editing
+`partners` will not suggest `crm.lead` unless `crm` is reachable through
+`DEPENDS`.
+
+The global `.pyvelm/typing/names.pyi` still lists every discovered model (useful
+for hooks, scripts, and explicit `from names import ModelName`). Files outside
+any discovered addon directory keep that global union.
 
 ## Editor setup
 
@@ -116,18 +142,25 @@ appear to do nothing.
 }
 ```
 
-- **`stubPath`** — merges `pyvelm/env.pyi`, `fields.pyi`, `builders.pyi`
-  with the installed package (`env["…"]`, `Many2one("…")`, `view="…"`).
+- **`stubPath`** — merges `pyvelm/env.pyi`, `fields.pyi`, `builders/views.pyi`,
+  `builders/legacy.pyi`, `security.pyi`, `builders/menus.pyi` with the installed
+  package (`env["…"]`, `ListView.make(…).model("…")`, `Many2one("…")`, …).
 - **`extraPaths`** — lets you `from names import ModelName` in app code.
 
 Where completions apply:
 
 | Location | Example |
 |----------|---------|
-| `Many2one("…")` | Comodel technical name |
+| `ListView.make(…).model("…")` | Model technical name |
+| `list_view("n", "…", fields=[…])` | Model technical name (legacy) |
+| `grant_model_access(env, "…")` | Model technical name (hooks) |
+| `_name = "…"` / `_inherit = "…"` | Model technical name on `models.Model` |
+| `Many2one("…")` / `One2many("…", …)` / `Many2many("…")` | Comodel technical name |
+| `Many2one().comodel("…")` | Comodel technical name (fluent field builder) |
 | `m.item(…, view="…")` | Short view name (`ViewSlug`) |
 | `env["…"]` | Model technical name (when `env` is typed as `Environment`) |
 | `env.query("…")` | Model technical name → `Query` |
+| `env.registry["…"]` | Model technical name → model class |
 | `Char().required()` | Fluent ORM field chains return `OrmFieldBuilder` (v1.3+) |
 | `recordset.query()` | Returns `Query` (chain methods from `pyvelm.query`) |
 | `Query.where(…)` field arg | Plain `str` — field names are not literal-unions yet |

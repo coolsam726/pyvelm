@@ -59,6 +59,10 @@ class MakeStubsCommand(Command):
             f"{len(index.qualified_views)} qualified views"
         )
         config_root = project or Path.cwd()
-        if write_pyrightconfig(config_root, stubs_dir=written):
+        if write_pyrightconfig(
+            config_root,
+            stubs_dir=written,
+            module_roots=index.module_roots,
+        ):
             self.info(f"Updated {config_root / 'pyrightconfig.json'}")
         return 0

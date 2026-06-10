@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -33,6 +34,8 @@ class StubIndex:
     qualified_views: list[str] = field(default_factory=list)
     view_slugs: list[str] = field(default_factory=list)
     view_models: dict[str, str] = field(default_factory=dict)
+    # ``(module_name, package_path_relative_to_project)`` for Pyright scopes.
+    module_roots: list[tuple[str, str]] = field(default_factory=list)
 
 
 def default_stubs_dir(project_root: Path | None = None) -> Path:
@@ -73,6 +76,7 @@ def write_pyrightconfig(
     *,
     stubs_dir: Path,
     create_only: bool = False,
+    module_roots: list[tuple[str, str]] | None = None,
 ) -> bool:
     """Write or refresh ``pyrightconfig.json`` (include paths + stub dirs).
 
@@ -94,6 +98,12 @@ def write_pyrightconfig(
         "pythonVersion": "3.10",
         "typeCheckingMode": "basic",
     }
+    if module_roots is not None:
+        desired["executionEnvironments"] = (
+            _execution_environments(stub_path, module_roots)
+            if module_roots
+            else []
+        )
     if target.is_file():
         try:
             current = json.loads(target.read_text(encoding="utf-8"))
@@ -167,6 +177,118 @@ def load_stub_index(
     return registry, specs, index
 
 
+def dependency_closure(
+    module_name: str,
+    specs: dict[str, ModuleSpec],
+) -> frozenset[str]:
+    """Return *module_name* plus every direct and indirect ``DEPENDS`` module."""
+    visited: set[str] = set()
+    stack = [module_name]
+    while stack:
+        current = stack.pop()
+        if current in visited or current not in specs:
+            continue
+        visited.add(current)
+        stack.extend(specs[current].depends)
+    return frozenset(visited)
+
+
+def index_for_modules(
+    modules: frozenset[str],
+    index: StubIndex,
+) -> StubIndex:
+    """Filter *index* to models and views declared in *modules*."""
+    models = sorted(
+        name
+        for name, owner in index.model_modules.items()
+        if owner in modules
+    )
+    qualified_views = [
+        view
+        for view in index.qualified_views
+        if view.split(".", 1)[0] in modules
+    ]
+    view_slugs = sorted(
+        {
+            view.split(".", 1)[1]
+            for view in qualified_views
+            if "." in view
+        }
+    )
+    return StubIndex(
+        models=models,
+        model_modules={
+            name: owner
+            for name, owner in index.model_modules.items()
+            if owner in modules
+        },
+        qualified_views=qualified_views,
+        view_slugs=view_slugs,
+        view_models={
+            view: model
+            for view, model in index.view_models.items()
+            if view in qualified_views
+        },
+    )
+
+
+def _execution_environments(
+    stub_path: str,
+    module_roots: list[tuple[str, str]],
+) -> list[dict[str, Any]]:
+    """Pyright execution environments — longest module roots win first."""
+    envs: list[dict[str, Any]] = []
+    for module_name, rel_root in sorted(
+        module_roots,
+        key=lambda item: len(item[1]),
+        reverse=True,
+    ):
+        scope_stub = f"{stub_path}/scopes/{module_name}"
+        envs.append(
+            {
+                "root": rel_root,
+                "stubPath": scope_stub,
+                "extraPaths": [scope_stub, stub_path],
+                "pythonVersion": "3.10",
+            }
+        )
+    return envs
+
+
+def _infer_project_root(
+    modules_root: Path | None,
+    output_dir: Path,
+) -> Path | None:
+    """Best-effort project root for relative module paths in pyrightconfig."""
+    parent = output_dir.parent
+    if parent.name == ".pyvelm" and (parent.parent / "pyvelm.toml").is_file():
+        return parent.parent.resolve()
+    if modules_root is not None:
+        for ancestor in (modules_root.resolve(), *modules_root.resolve().parents):
+            if (ancestor / "pyvelm.toml").is_file():
+                return ancestor
+    return None
+
+
+def _module_roots_for_pyright(
+    specs: dict[str, ModuleSpec],
+    project_root: Path | None,
+) -> list[tuple[str, str]]:
+    if project_root is None:
+        return []
+    roots: list[tuple[str, str]] = []
+    project = project_root.resolve()
+    for spec in specs.values():
+        if spec.package_path is None:
+            continue
+        try:
+            rel = spec.package_path.resolve().relative_to(project).as_posix()
+        except ValueError:
+            continue
+        roots.append((spec.name, rel))
+    return sorted(roots, key=lambda item: item[1])
+
+
 def generate_stubs(
     output_dir: Path,
     *,
@@ -174,7 +296,7 @@ def generate_stubs(
     include_bundled: bool = True,
 ) -> tuple[Path, StubIndex]:
     """Write stub files under ``output_dir``; return path and the symbol index."""
-    _registry, _specs, index = load_stub_index(modules_root=modules_root)
+    _registry, specs, index = load_stub_index(modules_root=modules_root)
     if not include_bundled:
         bundled = _bundled_model_prefixes()
         index.models = [m for m in index.models if not _is_bundled(m, bundled)]
@@ -199,20 +321,52 @@ def generate_stubs(
 
     out = output_dir.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    pyvelm_pkg = out / "pyvelm"
+    _write_stub_tree(out, index, include_readme=True)
+
+    project_root = _infer_project_root(modules_root, out)
+    index.module_roots = _module_roots_for_pyright(specs, project_root)
+
+    scopes_dir = out / "scopes"
+    if scopes_dir.is_dir():
+        shutil.rmtree(scopes_dir)
+    for module_name in sorted(specs):
+        closure = dependency_closure(module_name, specs)
+        scoped = index_for_modules(closure, index)
+        _write_stub_tree(scopes_dir / module_name, scoped)
+
+    return out, index
+
+
+def _write_stub_tree(
+    target: Path,
+    index: StubIndex,
+    *,
+    include_readme: bool = False,
+) -> None:
+    """Write the standard ``.pyvelm/typing`` layout under *target*."""
+    target.mkdir(parents=True, exist_ok=True)
+    pyvelm_pkg = target / "pyvelm"
     pyvelm_pkg.mkdir(parents=True, exist_ok=True)
 
-    (out / "py.typed").write_text("", encoding="utf-8")
-    (out / "__init__.pyi").write_text(_render_package_init(), encoding="utf-8")
-    (out / "names.pyi").write_text(_render_names(index), encoding="utf-8")
-    (out / "models_stubs.pyi").write_text(
+    (target / "py.typed").write_text("", encoding="utf-8")
+    if include_readme:
+        (target / "__init__.pyi").write_text(_render_package_init(), encoding="utf-8")
+    (target / "names.pyi").write_text(_render_names(index), encoding="utf-8")
+    (target / "models_stubs.pyi").write_text(
         _render_model_record_stubs(index), encoding="utf-8"
+    )
+    (pyvelm_pkg / "model.pyi").write_text(_render_model_stubs(), encoding="utf-8")
+    (pyvelm_pkg / "models.pyi").write_text(
+        _render_models_module_stubs(), encoding="utf-8"
     )
     (pyvelm_pkg / "registry.pyi").write_text(
         _render_registry_stubs(index), encoding="utf-8"
     )
     (pyvelm_pkg / "env.pyi").write_text(_render_env_stubs(index), encoding="utf-8")
     (pyvelm_pkg / "fields.pyi").write_text(_render_fields_stubs(), encoding="utf-8")
+    (pyvelm_pkg / "field_builders.pyi").write_text(
+        _render_field_builders_stubs(), encoding="utf-8"
+    )
     legacy_builders_stub = pyvelm_pkg / "builders.pyi"
     if legacy_builders_stub.is_file():
         legacy_builders_stub.unlink()
@@ -222,8 +376,11 @@ def generate_stubs(
     if legacy_init_stub.is_file():
         legacy_init_stub.unlink()
     (builders_pkg / "menus.pyi").write_text(_render_menus_stubs(), encoding="utf-8")
-    (out / "README.md").write_text(_render_readme(), encoding="utf-8")
-    return out, index
+    (builders_pkg / "views.pyi").write_text(_render_views_stubs(), encoding="utf-8")
+    (builders_pkg / "legacy.pyi").write_text(_render_legacy_stubs(), encoding="utf-8")
+    (pyvelm_pkg / "security.pyi").write_text(_render_security_stubs(), encoding="utf-8")
+    if include_readme:
+        (target / "README.md").write_text(_render_readme(), encoding="utf-8")
 
 
 def _bundled_model_prefixes() -> frozenset[str]:
@@ -327,6 +484,54 @@ def _render_model_record_stubs(index: StubIndex) -> str:
     return "\n".join(lines)
 
 
+def _render_model_stubs() -> str:
+    """Augment ``pyvelm.model.BaseModel`` — ``_name`` / ``_inherit`` literals."""
+    return '''\
+# AUTO-GENERATED by pyvelm make:stubs — do not edit.
+from typing import ClassVar
+
+from pyvelm.model import BaseModel as _BaseModel
+
+from ..names import ModelName
+
+
+class BaseModel(_BaseModel):
+    _name: ClassVar[ModelName | str]
+    _inherit: ClassVar[ModelName | str]
+'''
+
+
+def _render_models_module_stubs() -> str:
+    """Augment ``pyvelm.models.Model`` (inherits typed ``BaseModel`` stub)."""
+    return '''\
+# AUTO-GENERATED by pyvelm make:stubs — do not edit.
+from pyvelm.model import BaseModel as _BaseModel
+
+
+class Model(_BaseModel):
+    """Base class for model definitions and ``_inherit`` extensions."""
+'''
+
+
+def _render_field_builders_stubs() -> str:
+    """Augment fluent ORM field builders — ``.comodel("…")`` suggests ``ModelName``."""
+    return '''\
+# AUTO-GENERATED by pyvelm make:stubs — do not edit.
+from typing import overload
+
+from pyvelm.field_builders import OrmFieldBuilder as _OrmFieldBuilder
+
+from ..names import ModelName
+
+
+class OrmFieldBuilder(_OrmFieldBuilder):
+    @overload
+    def comodel(self, name: ModelName) -> OrmFieldBuilder: ...
+    @overload
+    def comodel(self, name: str) -> OrmFieldBuilder: ...
+'''
+
+
 def _render_registry_stubs(_index: StubIndex) -> str:
     return '''\
 # AUTO-GENERATED by pyvelm make:stubs — do not edit.
@@ -397,6 +602,8 @@ from ..names import ModelName
 
 class Many2one(_Many2one):
     @overload
+    def __new__(cls) -> OrmFieldBuilder: ...
+    @overload
     def __new__(cls, comodel_name: ModelName) -> OrmFieldBuilder: ...
     @overload
     def __new__(cls, comodel_name: str) -> OrmFieldBuilder: ...
@@ -428,6 +635,8 @@ class Many2one(_Many2one):
 
 class One2many(_One2many):
     @overload
+    def __new__(cls) -> OrmFieldBuilder: ...
+    @overload
     def __new__(cls, comodel_name: ModelName, inverse_name: str) -> OrmFieldBuilder: ...
     @overload
     def __new__(cls, comodel_name: str, inverse_name: str) -> OrmFieldBuilder: ...
@@ -454,6 +663,8 @@ class One2many(_One2many):
 
 
 class Many2many(_Many2many):
+    @overload
+    def __new__(cls) -> OrmFieldBuilder: ...
     @overload
     def __new__(cls, comodel_name: ModelName) -> OrmFieldBuilder: ...
     @overload
@@ -618,6 +829,329 @@ def menu_item(
 '''
 
 
+_BUILDER_MODEL_CLASSES: tuple[str, ...] = (
+    "ListViewBuilder",
+    "FormViewBuilder",
+    "DetailViewBuilder",
+    "KanbanViewBuilder",
+    "GraphViewBuilder",
+    "PivotViewBuilder",
+    "ChartWidgetBuilder",
+    "TableWidgetBuilder",
+    "StatWidgetBuilder",
+)
+
+
+def _stub_builder_model_method(class_name: str) -> list[str]:
+    """Overload ``model()`` on a fluent view/widget builder class."""
+    return [
+        f"class {class_name}:",
+        "    @overload",
+        f"    def model(self, model: ModelName) -> {class_name}: ...",
+        "    @overload",
+        f"    def model(self, model: str) -> {class_name}: ...",
+        "",
+    ]
+
+
+def _render_views_stubs() -> str:
+    """Augment ``pyvelm.builders.views`` — ``.model("…")`` suggests ``ModelName``."""
+    lines = [
+        "# AUTO-GENERATED by pyvelm make:stubs — do not edit.",
+        "from typing import overload",
+        "",
+        "from ...names import ModelName",
+        "",
+    ]
+    for class_name in _BUILDER_MODEL_CLASSES:
+        lines.extend(_stub_builder_model_method(class_name))
+    return "\n".join(lines)
+
+
+def _render_legacy_stubs() -> str:
+    """Augment ``pyvelm.builders.legacy`` view factories — ``model=`` suggests ``ModelName``."""
+    return '''\
+# AUTO-GENERATED by pyvelm make:stubs — do not edit.
+from typing import Any, overload
+
+from pyvelm.types import (
+    ArchKanbanCard,
+    DashboardColspan,
+    DashboardWidget,
+    FieldRefLike,
+    FormLayoutItem,
+    FormView,
+    GraphView,
+    KanbanView,
+    ListView,
+    PivotView,
+    ViewRef,
+)
+
+from ...names import ModelName
+
+
+@overload
+def list_view(
+    name: str,
+    model: ModelName,
+    fields: list[FieldRefLike],
+    *,
+    title: str | None = None,
+    form_view: str | None = None,
+    record_href: str | None = None,
+    create_href: str | None = None,
+    page_actions: list[dict] | None = None,
+    sequence: str | None = None,
+    domain: list | None = None,
+    priority: int = 16,
+) -> ListView: ...
+@overload
+def list_view(
+    name: str,
+    model: str,
+    fields: list[FieldRefLike],
+    *,
+    title: str | None = None,
+    form_view: str | None = None,
+    record_href: str | None = None,
+    create_href: str | None = None,
+    page_actions: list[dict] | None = None,
+    sequence: str | None = None,
+    domain: list | None = None,
+    priority: int = 16,
+) -> ListView: ...
+
+
+@overload
+def form_view(
+    name: str,
+    model: ModelName,
+    sections: list[FormLayoutItem],
+    *,
+    title: str | None = None,
+    header_actions: list[dict] | None = None,
+    cols: int | None = None,
+    priority: int = 16,
+) -> FormView: ...
+@overload
+def form_view(
+    name: str,
+    model: str,
+    sections: list[FormLayoutItem],
+    *,
+    title: str | None = None,
+    header_actions: list[dict] | None = None,
+    cols: int | None = None,
+    priority: int = 16,
+) -> FormView: ...
+
+
+@overload
+def kanban_view(
+    name: str,
+    model: ModelName,
+    *,
+    card: ArchKanbanCard | None = None,
+    group_by: str | None = None,
+    sequence: str | None = None,
+    form_view: str | None = None,
+    title: str | None = None,
+    priority: int = 16,
+) -> KanbanView: ...
+@overload
+def kanban_view(
+    name: str,
+    model: str,
+    *,
+    card: ArchKanbanCard | None = None,
+    group_by: str | None = None,
+    sequence: str | None = None,
+    form_view: str | None = None,
+    title: str | None = None,
+    priority: int = 16,
+) -> KanbanView: ...
+
+
+@overload
+def graph_view(
+    name: str,
+    model: ModelName,
+    *,
+    groupby: str,
+    measure: str,
+    chart: str = "bar",
+    title: str | None = None,
+    stacked: bool | None = None,
+    horizontal: bool | None = None,
+    domain: list | None = None,
+    priority: int = 16,
+) -> GraphView: ...
+@overload
+def graph_view(
+    name: str,
+    model: str,
+    *,
+    groupby: str,
+    measure: str,
+    chart: str = "bar",
+    title: str | None = None,
+    stacked: bool | None = None,
+    horizontal: bool | None = None,
+    domain: list | None = None,
+    priority: int = 16,
+) -> GraphView: ...
+
+
+@overload
+def pivot_view(
+    name: str,
+    model: ModelName,
+    *,
+    row_groupby: list[str],
+    col_groupby: list[str] | None = None,
+    measures: list[str],
+    title: str | None = None,
+    domain: list | None = None,
+    priority: int = 16,
+) -> PivotView: ...
+@overload
+def pivot_view(
+    name: str,
+    model: str,
+    *,
+    row_groupby: list[str],
+    col_groupby: list[str] | None = None,
+    measures: list[str],
+    title: str | None = None,
+    domain: list | None = None,
+    priority: int = 16,
+) -> PivotView: ...
+
+
+@overload
+def chart_widget(
+    widget_id: str,
+    *,
+    title: str | None = None,
+    model: ModelName | None = None,
+    groupby: str | None = None,
+    measure: str = "__count",
+    chart: str = "bar",
+    domain: list | None = None,
+    view: ViewRef | None = None,
+    colspan: DashboardColspan = 2,
+    perm: str = "read",
+) -> DashboardWidget: ...
+@overload
+def chart_widget(
+    widget_id: str,
+    *,
+    title: str | None = None,
+    model: str | None = None,
+    groupby: str | None = None,
+    measure: str = "__count",
+    chart: str = "bar",
+    domain: list | None = None,
+    view: ViewRef | None = None,
+    colspan: DashboardColspan = 2,
+    perm: str = "read",
+) -> DashboardWidget: ...
+
+
+@overload
+def table_widget(
+    widget_id: str,
+    *,
+    title: str | None = None,
+    model: ModelName | None = None,
+    fields: list[FieldRefLike] | None = None,
+    view: ViewRef | None = None,
+    columns: list[str] | None = None,
+    domain: list | None = None,
+    limit: int = 10,
+    order: str | None = None,
+    more_href: str | None = None,
+    colspan: DashboardColspan = 1,
+    perm: str = "read",
+) -> DashboardWidget: ...
+@overload
+def table_widget(
+    widget_id: str,
+    *,
+    title: str | None = None,
+    model: str | None = None,
+    fields: list[FieldRefLike] | None = None,
+    view: ViewRef | None = None,
+    columns: list[str] | None = None,
+    domain: list | None = None,
+    limit: int = 10,
+    order: str | None = None,
+    more_href: str | None = None,
+    colspan: DashboardColspan = 1,
+    perm: str = "read",
+) -> DashboardWidget: ...
+
+
+@overload
+def stat_widget(
+    widget_id: str,
+    *,
+    title: str,
+    model: ModelName,
+    measure: str = "__count",
+    domain: list | None = None,
+    href: str | None = None,
+    colspan: DashboardColspan = 1,
+    perm: str = "read",
+) -> DashboardWidget: ...
+@overload
+def stat_widget(
+    widget_id: str,
+    *,
+    title: str,
+    model: str,
+    measure: str = "__count",
+    domain: list | None = None,
+    href: str | None = None,
+    colspan: DashboardColspan = 1,
+    perm: str = "read",
+) -> DashboardWidget: ...
+'''
+
+
+def _render_security_stubs() -> str:
+    """Augment ``pyvelm.security`` — ``grant_model_access`` model arg."""
+    return '''\
+# AUTO-GENERATED by pyvelm make:stubs — do not edit.
+from typing import overload
+
+from pyvelm.env import Environment
+
+from ..names import ModelName
+
+
+@overload
+def grant_model_access(
+    env: Environment,
+    model: ModelName,
+    *,
+    admin: str | None = "crud",
+    user: str | None = "read",
+    public: str | None = None,
+) -> None: ...
+@overload
+def grant_model_access(
+    env: Environment,
+    model: str,
+    *,
+    admin: str | None = "crud",
+    user: str | None = "read",
+    public: str | None = None,
+) -> None: ...
+'''
+
+
 def _render_readme() -> str:
     return """\
 # Pyvelm typing stubs (generated)
@@ -633,8 +1167,11 @@ Point Pyright/Pylance at this directory from your project root
 ``pyrightconfig.json`` there (same defaults as ``pyvelm init``). It
 configures:
 
-- ``stubPath``: ``.pyvelm/typing`` (augments ``pyvelm.env`` / ``Registry`` / ``Query``)
+- ``stubPath``: ``.pyvelm/typing`` (augments ``pyvelm.model`` / ``env`` / ``fields`` /
+  ``field_builders`` / ``Registry`` / ``builders`` / ``security``)
 - ``extraPaths``: ``.pyvelm/typing`` (import ``ModelName``, ``QualifiedViewName``)
+- ``executionEnvironments``: per-addon roots under ``scopes/<module>/`` so
+  ``ModelName`` only lists models from that module and its ``DEPENDS`` chain
 
 Commit these files or gitignore ``.pyvelm/`` and regenerate locally.
 """
