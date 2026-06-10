@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from pyvelm import geo_utils
 from pyvelm.geo_utils import (
+    detect_geo_country_code,
     flag_emoji,
     geo_packages_available,
     require_geo_packages,
@@ -29,6 +30,33 @@ class FlagEmojiTests(unittest.TestCase):
         self.assertEqual(flag_emoji(None), "")
         self.assertEqual(flag_emoji("USA"), "")  # too long
         self.assertEqual(flag_emoji("U1"), "")   # non-alpha
+
+
+class DetectGeoCountryTests(unittest.TestCase):
+    def test_explicit_env_var(self):
+        with patch.dict("os.environ", {"PYVELM_GEO_COUNTRY": "ke"}, clear=False):
+            self.assertEqual(detect_geo_country_code(), "KE")
+
+    def test_tz_hint(self):
+        with patch.dict(
+            "os.environ",
+            {"PYVELM_GEO_COUNTRY": "", "TZ": "Africa/Nairobi"},
+            clear=False,
+        ):
+            self.assertEqual(detect_geo_country_code(), "KE")
+
+    def test_returns_none_when_unknown(self):
+        with patch.dict(
+            "os.environ",
+            {"PYVELM_GEO_COUNTRY": "", "TZ": ""},
+            clear=False,
+        ):
+            with patch("pyvelm.geo_utils.locale.getlocale", return_value=(None, None)):
+                with patch(
+                    "pyvelm.geo_utils.locale.getdefaultlocale",
+                    return_value=(None, None),
+                ):
+                    self.assertIsNone(detect_geo_country_code())
 
 
 class GeoPackageAvailabilityTests(unittest.TestCase):

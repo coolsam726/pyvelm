@@ -1112,11 +1112,9 @@ def _edit_char(value, spec, field):
     )
 
 
-@widget(Text, mode="edit")
-def _edit_textarea(value, spec, field):
+def _edit_textarea_markup(value, spec, field) -> Markup:
     val = escape(str(value)) if value is not None else ""
     placeholder = escape(field.string or spec["name"])
-    # Text fields get a resizable textarea instead of a single-line input.
     return Markup(
         f'<textarea name="{escape(spec["name"])}" rows="3" '
         f'placeholder="{placeholder}" '
@@ -1124,6 +1122,19 @@ def _edit_textarea(value, spec, field):
         f"{_readonly_marker(spec)}{_required_marker(field)}>"
         f"{val}</textarea>"
     )
+
+
+@widget(Text, mode="edit")
+@widget(Char, hint="text", mode="edit")
+def _edit_textarea(value, spec, field):
+    return _edit_textarea_markup(value, spec, field)
+
+
+@widget(Char, hint="text")
+def _display_text_multiline(value, spec, field):
+    if value is None or value == "":
+        return Markup("")
+    return Markup(f'<pre class="whitespace-pre-wrap text-sm">{escape(str(value))}</pre>')
 
 
 def _render_html_editor_widget(value, spec, *, readonly: bool) -> Markup:
@@ -1162,12 +1173,14 @@ def _render_html_editor_widget(value, spec, *, readonly: bool) -> Markup:
 
 
 @widget(Text, hint="html")
+@widget(Char, hint="html")
 @widget(Html)
 def _render_html_body(value, spec, field):
     return _render_html_editor_widget(value, spec, readonly=True)
 
 
 @widget(Text, hint="html", mode="edit")
+@widget(Char, hint="html", mode="edit")
 @widget(Html, mode="edit")
 def _edit_html_body(value, spec, field):
     if spec.get("readonly"):
@@ -1217,12 +1230,14 @@ def _render_code_editor_widget(value, spec, field, *, readonly: bool) -> Markup:
 
 
 @widget(Text, hint="code")
+@widget(Char, hint="code")
 @widget(Code)
 def _render_code_body(value, spec, field):
     return _render_code_editor_widget(value, spec, field, readonly=True)
 
 
 @widget(Text, hint="code", mode="edit")
+@widget(Char, hint="code", mode="edit")
 @widget(Code, mode="edit")
 def _edit_code_body(value, spec, field):
     if spec.get("readonly"):

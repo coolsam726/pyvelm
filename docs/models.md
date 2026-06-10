@@ -21,6 +21,40 @@ class Partner(models.Model):
     country_id = Many2one("res.country", ondelete="SET NULL")
 ```
 
+### Fluent field chains (v1.2+)
+
+ORM fields also support method chaining when you call the field type with
+**no constructor kwargs** (or, for relations, only the comodel / inverse
+positional args):
+
+```python
+class Partner(models.Model):
+    _name = "res.partner"
+
+    name = Char().required().string("Name").tracking()
+    age = Integer().default(0)
+    country_id = Many2one("res.country").required().ondelete("SET NULL")
+    child_ids = One2many("res.partner").inverse("parent_id").list_view("child.list")
+```
+
+`Char().required()` works because `required` is a **builder method**, not the
+`required` bool on an already-built field (calling `.required()` on a live
+`Field` instance would hit the bool attribute and fail).
+
+Constructor kwargs remain fully supported and mix cleanly with views that use
+``pyvelm.builders.Field.make()`` for list/form archs — that is a **different**
+`Field` class (view presentation only).
+
+Common chain methods: `.string()`, `.required()`, `.default()`, `.readonly()`,
+`.tracking()`, `.compute()`, `.store()`, `.related()`, `.column()`;
+`Char`-specific `.size()`, `.choices()`; `Many2one` `.ondelete()`;
+`One2many` `.inverse()`, `.list_view()`, `.form_view()`; `Many2many`
+`.relation()`, `.column1()`, `.column2()`.
+
+Outside a model class (unit tests, manual field setup), use ``Char.bare()`` to
+get a concrete field instance — ``Char()`` alone returns a builder.
+``Char.make()`` is an alias for ``Char()`` when starting a chain.
+
 The class lives inside a module's `models/` package; the loader picks
 it up when the module installs. See [Modules](modules.md) for the
 packaging story.

@@ -46,8 +46,9 @@ views_data = (
                     "url": "/web/geo-data/seed",
                     "method": "POST",
                     "confirm": (
-                        "Load continents, countries, states, and major cities from "
-                        "geonamescache? Requires pyvelm[geo]. This may take a minute."
+                        "Import all countries, states, and major cities in the "
+                        "background? Requires pyvelm[geo]. You can keep working; "
+                        "refresh this list when the toast says it is done."
                     ),
                     "perm": "write",
                 },

@@ -101,6 +101,10 @@ class MetaModel(type):
         if _inherit and not _name_val:
             return mcs._build_extension(name, bases, namespace, _inherit)
 
+        from .field_builders import materialize_namespace_fields
+
+        materialize_namespace_fields(namespace)
+
         cls = super().__new__(mcs, name, bases, namespace)
 
         # Collect fields from this class and its bases.
@@ -114,9 +118,12 @@ class MetaModel(type):
 
         # Auto-inject company_id for company-scoped models.
         if namespace.get("_company_scoped") and "company_id" not in fields:
-            co_field = Many2one("res.company")
+            from .field_builders import materialize_field
+
+            co_field = materialize_field(Many2one("res.company"))
             co_field.bind(namespace.get("_name") or "", "company_id")
             fields["company_id"] = co_field
+            setattr(cls, "company_id", co_field)
 
         if _name_val:
             _inject_id(_name_val, fields)
@@ -182,6 +189,10 @@ class MetaModel(type):
         clean_ns["_name"] = existing._name
         clean_ns["_table"] = existing._table
 
+        from .field_builders import materialize_namespace_fields
+
+        materialize_namespace_fields(clean_ns)
+
         cls = super().__new__(mcs, ext_name, new_bases, clean_ns)
 
         # Shallow-copy Field descriptors so rebinding compute deps on the
@@ -192,8 +203,11 @@ class MetaModel(type):
             cloned = copy(field)
             cloned.bind(existing._name, attr_name)
             merged[attr_name] = cloned
-        for attr_name, attr_value in list(namespace.items()):
-            if isinstance(attr_value, Field):
+        for attr_name, attr_value in list(clean_ns.items()):
+            if isinstance(attr_value, Field) and attr_name not in (
+                "_name",
+                "_table",
+            ):
                 attr_value.bind(existing._name, attr_name)
                 merged[attr_name] = attr_value
         _inject_id(existing._name, merged)

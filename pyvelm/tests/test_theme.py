@@ -77,6 +77,19 @@ def test_apply_request_scope_reads_company_cookie():
     assert scoped.company_id == 42
 
 
+def test_char_text_widget_uses_textarea():
+    from pyvelm.fields import Char
+    from pyvelm.render import find_renderer
+
+    field = Char.bare()
+    spec = {"name": "notes"}
+    renderer = find_renderer(field, "text", mode="edit")
+    html = str(renderer("line one\nline two", spec, field))
+    assert "<textarea" in html
+    assert 'name="notes"' in html
+    assert "line one" in html
+
+
 def test_color_widget_initializes_from_stored_hex():
     from pyvelm.render import _render_color_widget
 

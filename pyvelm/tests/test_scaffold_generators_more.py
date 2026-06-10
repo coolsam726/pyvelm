@@ -423,10 +423,10 @@ class ResolveModuleTests(unittest.TestCase):
 
 class FieldViewRefTests(unittest.TestCase):
     def test_widget_refs(self):
-        self.assertIn("toggle", _field_view_ref("active", Boolean()))
-        self.assertIn("dialog", _field_view_ref("lines", One2many("x", "y")))
-        self.assertIn("dialog", _field_view_ref("tags", Many2many("x")))
-        self.assertEqual(_field_view_ref("name", Char()), '"name"')
+        self.assertIn("toggle", _field_view_ref("active", Boolean.bare()))
+        self.assertIn("dialog", _field_view_ref("lines", One2many.bare("x", "y")))
+        self.assertIn("dialog", _field_view_ref("tags", Many2many.bare("x")))
+        self.assertEqual(_field_view_ref("name", Char.bare()), '"name"')
 
 
 class BuildViewScaffoldEdgeTests(unittest.TestCase):
@@ -545,7 +545,7 @@ class BuildViewScaffoldTests(unittest.TestCase):
 
             class CodeOnly(BaseModel):
                 _name = "demo.code_only"
-                code = Char()
+                code = Char.bare()
 
         lines, sections = build_view_scaffold_from_model(reg, "demo.code_only")
         self.assertIn('"code"', lines)

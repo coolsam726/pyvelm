@@ -1,6 +1,11 @@
-# Project context — pyvelm v1.1.1
+# Project context — pyvelm v1.2.0
 
 Building an Odoo-style ERP framework in Python.
+
+**v1.2.0 (released 2026-06-10)** — fluent ORM field builders
+(`Char().required()`); nested `PvDialog` create stack; geo bootstrap seeding
+(`PYVELM_GEO_SEED_LEVEL=bootstrap`); background full geography import;
+`WidgetHint` expansion for `Char` widgets. See [docs/releases/v1.2.0.md](docs/releases/v1.2.0.md).
 
 **v1.1.1 (released 2026-06-09)** — patch: `pyvelm make:module` supplies
 `display_name`; `make:model` / `make:menu` / `make:command` generator fixes;

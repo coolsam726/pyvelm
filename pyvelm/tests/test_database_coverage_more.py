@@ -1056,23 +1056,23 @@ class DdlRemainingGapsTests(unittest.TestCase):
         from pyvelm.database.sa_ddl import sort_models_for_table_setup
         from pyvelm.fields import Char, Many2one
 
-        related_parent = Many2one("missing.parent")
+        related_parent = Many2one.bare("missing.parent")
         related_parent.related = "x"
         related_parent.is_stored = True
-        ghost = Many2one("ghost.model")
+        ghost = Many2one.bare("ghost.model")
         ghost.is_stored = True
 
         class Parent:
             _name = "parent.model"
             _table = "parent_model"
-            _fields = {"name": Char()}
+            _fields = {"name": Char.bare()}
 
         class Child:
             _name = "child.model"
             _table = "child_model"
             _fields = {
-                "name": Char(),
-                "parent_id": Many2one("parent.model"),
+                "name": Char.bare(),
+                "parent_id": Many2one.bare("parent.model"),
                 "related_parent_id": related_parent,
                 "ghost_id": ghost,
             }

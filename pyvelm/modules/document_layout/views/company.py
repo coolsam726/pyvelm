@@ -4,13 +4,6 @@ from typing import Any, cast
 
 from pyvelm.builders import Field, FormView, ListView, ViewsData
 
-
-def _w(name: str, widget: str):
-    # `color`/`file_url` are real registered widgets but aren't in pyvelm's
-    # WidgetHint literal — cast past the type checker (framework typing gap).
-    return Field.make(name).widget(cast(Any, widget))
-
-
 views_data = (
     ViewsData.make()
     .views(
@@ -25,14 +18,14 @@ views_data = (
             "layout",
             "Document Layout",
             [
-                _w("document_designer", "design_button"),
+                Field.make("document_designer").widget(cast(Any, "design_button")),
                 "document_layout",
                 "paper_format",
                 "google_font",
-                _w("logo_url", "file_url"),
+                Field.make("logo_url").widget("file_url"),
                 "document_logo_height",
-                _w("primary_color", "color"),
-                _w("secondary_color", "color"),
+                Field.make("primary_color").widget("color"),
+                Field.make("secondary_color").widget("color"),
             ],
         )
         .section(
