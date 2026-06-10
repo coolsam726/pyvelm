@@ -327,6 +327,15 @@ class BaseModel(metaclass=MetaModel):
             ids = (ids,)
         return self.__class__(self.env, tuple(ids))
 
+    def query(self):
+        """Return a fluent :class:`~pyvelm.query.Query` for this model.
+
+        Uses the registry class behind this recordset (safe after ``_inherit``).
+        """
+        from .query import Query
+
+        return Query.for_model(self.__class__, self.env)
+
     def sudo(self, flag: bool = True) -> "BaseModel":
         """Return this recordset bound to a sudo env (see ``Environment.sudo``).
 

@@ -124,6 +124,7 @@ nav:
           - pyvelm.depends: api/depends.md
           - pyvelm.registry: api/registry.md
           - pyvelm.env: api/env.md
+          - pyvelm.query: api/query.md
           - pyvelm.domain: api/domain.md
       - Modules & loader:
           - pyvelm.manifest: api/manifest.md

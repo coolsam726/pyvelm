@@ -18,6 +18,9 @@ out of the 0.x line.
   ``Field.make()``, ``ViewsData.make()`` (velmphp / Filament-style); assign
   ``views_data`` in DATA files. Legacy ``list_view`` / ``field`` functions
   remain supported.
+- **Query builder** — Eloquent-style ``env["model"].query()`` / ``env.query("model")``
+  on the registry's effective model; ``where``, ``or_where``, ``order_by``,
+  ``paginate``, ``pluck``, etc. delegate to ``search()`` (ACL + record rules).
 
 ### Removed
 
