@@ -48,6 +48,12 @@ def _build_app(*, runtime_env: str | None = None):
 
     env_mode = apply_runtime_env(runtime_env)
 
+    from pyvelm.stub_generators import maybe_refresh_dev_stubs
+
+    _refreshed, stub_msg = maybe_refresh_dev_stubs(runtime_env=env_mode)
+    if stub_msg:
+        print(stub_msg)
+
     database = create_database_from_dsn(dsn, pool_size=4)
     with database.connect() as conn:
         reg = Registry()

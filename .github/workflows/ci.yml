@@ -49,6 +49,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[test,geo]"
 
+      - name: Verify pyproject.version matches pyvelm.__version__
+        run: python scripts/bump_version.py --check
+
       - name: Create Postgres test database
         run: PGPASSWORD=pyvelm psql -h localhost -U pyvelm -d pyvelm -c "CREATE DATABASE pyvelm_test;"
 

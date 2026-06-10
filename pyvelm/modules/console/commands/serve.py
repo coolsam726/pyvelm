@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from pyvelm.console import Command
 from pyvelm.runtime import DEVELOPMENT
 from pyvelm.scaffolder import find_project_root
@@ -23,6 +25,7 @@ class ServeCommand(Command):
         "{--port=8000 : TCP port} "
         "{--env=development : Runtime mode (development, production, dev, prod)} "
         "{--reload : Auto-reload on code changes (development only)} "
+        "{--no-stubs : Do not regenerate IDE stubs on startup (dev only)} "
         "{--app= : ASGI import string for --reload (e.g. app.serve:app)}"
     )
 
@@ -32,8 +35,11 @@ class ServeCommand(Command):
         port: str = "8000",
         env: str = DEVELOPMENT,
         reload: bool = False,
+        no_stubs: bool = False,
         app: str | None = None,
     ) -> int:
+        if no_stubs:
+            os.environ["PYVELM_STUBS_ON_SERVE"] = "0"
         try:
             port_i = int(port)
         except (TypeError, ValueError):

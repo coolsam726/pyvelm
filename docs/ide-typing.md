@@ -29,6 +29,11 @@ Older projects pick up the config file on the first `make:stubs` run.
 Regenerate stubs whenever you add, rename, or remove models or declarative
 views (`VIEWS` / `VIEW_INHERITS` in `DATA` files).
 
+In **development**, the dev server refreshes stubs automatically on startup
+(including each `--reload` cycle) so IDE literals stay current while you edit
+models. Disable with ``PYVELM_STUBS_ON_SERVE=0`` or ``pyvelm serve --no-stubs``.
+Production mode never runs stub generation.
+
 ## What gets generated
 
 ```

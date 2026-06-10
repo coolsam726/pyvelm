@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from pyvelm.stub_generators import (
     dependency_closure,
@@ -14,6 +16,8 @@ from pyvelm.stub_generators import (
     generate_stubs,
     index_for_modules,
     load_stub_index,
+    maybe_refresh_dev_stubs,
+    stubs_on_serve_enabled,
     write_pyrightconfig,
 )
 from pyvelm.tests._isolation import purge_import_prefix
@@ -319,6 +323,35 @@ class StubGeneratorTests(unittest.TestCase):
 
         text = _render_field_builders_stubs()
         self.assertIn("def comodel(self, name: ModelName)", text)
+
+    def test_stubs_on_serve_enabled_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("PYVELM_STUBS_ON_SERVE", None)
+            self.assertTrue(stubs_on_serve_enabled())
+        with patch.dict(os.environ, {"PYVELM_STUBS_ON_SERVE": "0"}):
+            self.assertFalse(stubs_on_serve_enabled())
+
+    def test_maybe_refresh_dev_stubs_skips_production(self):
+        refreshed, msg = maybe_refresh_dev_stubs(runtime_env="production")
+        self.assertFalse(refreshed)
+        self.assertEqual(msg, "")
+
+    @patch("pyvelm.stub_generators.generate_stubs")
+    def test_maybe_refresh_dev_stubs_runs_in_development(self, generate):
+        from pyvelm.stub_generators import StubIndex
+
+        generate.return_value = (Path("/tmp/out"), StubIndex(models=["demo.item"]))
+        with patch.dict(os.environ, {"PYVELM_STUBS_ON_SERVE": "1"}):
+            with patch(
+                "pyvelm.stub_generators.write_pyrightconfig", return_value=False,
+            ):
+                with patch(
+                    "pyvelm.scaffolder.find_project_root", return_value=None,
+                ):
+                    refreshed, msg = maybe_refresh_dev_stubs(runtime_env="development")
+        self.assertTrue(refreshed)
+        self.assertIn("IDE stubs refreshed", msg)
+        generate.assert_called_once()
 
     def _dependency_chain_project(self, tmp: Path) -> Path:
         root = tmp / "erp"

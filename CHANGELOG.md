@@ -9,6 +9,13 @@ out of the 0.x line.
 
 ### Added
 
+- **Dev server stub refresh** — development ``pyvelm serve`` / ``app.serve``
+  / ``examples.serve`` regenerate ``.pyvelm/typing/`` on startup (and on each
+  ``--reload`` import). Opt out with ``PYVELM_STUBS_ON_SERVE=0`` or
+  ``pyvelm serve --no-stubs``.
+- **Release version bump script** — ``./scripts/bump_version.sh <X.Y.Z>`` updates
+  ``pyproject.toml``, ``pyvelm.__version__``, finalizes ``CHANGELOG.md``, and
+  refreshes docs pointers; ``--check`` verifies the Python files agree (CI).
 - **IDE model-name autocomplete** — `pyvelm make:stubs` now augments fluent
   ``ListView.make(…).model("…")``, legacy ``list_view(…, model, …)``,
   ``grant_model_access(env, "…")``, plus existing ``env["…"]``,
