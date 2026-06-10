@@ -834,12 +834,12 @@ def test_user_unlink_lifecycle_event(pyvelm_dsn: str):
                 "password": "secret",
             }
         )
-        user_id = user.ids[0]
         user.unlink()
-        deleted = env["ir.user.lifecycle"].search(
-            [("user_id", "=", user_id), ("event", "=", "deleted")]
-        )
+        deleted = env["ir.user.lifecycle"].search([("event", "=", "deleted")])
         assert deleted
+        deleted.ensure_one()
+        # FK is nulled after unlink; the event row itself is the audit trail.
+        assert not deleted.user_id
     finally:
         conn.close()
         db.dispose()
