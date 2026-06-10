@@ -5,27 +5,66 @@ and **kanban**. You declare each one as a Python dict in a module's
 data file — no Jinja, no JSX. The framework owns the templates and
 dispatches every field through a widget registry to produce HTML.
 
+**Preferred style:** assign a fluent ``views_data`` builder in each DATA file
+(see [Modules → Data files](modules.md#data-files)). Legacy ``VIEWS = [list_view(...)]``
+lists still load unchanged.
+
 A new view appears in the app as soon as you bump the module version
 and reinstall. Want it linked from the sidebar? Declare an
 [`ir.ui.menu` entry](modules.md#sidebar-menus) pointing at the URL.
 
-## List views
+## Fluent builders
 
 ```python
 # partners/views/partner.py
-from pyvelm.builders import list_view, field
+from pyvelm.builders import Field, FormView, ListView, ViewsData
 
-VIEWS = [
-    list_view(
-        "partner.list", "res.partner",
-        fields=["name", "code", "country_id",
-                field("active", widget="toggle")],
-        form_view="partner.form",            # makes rows clickable
-    ),
-]
+views_data = (
+    ViewsData.make()
+    .views(
+        ListView.make("partner.list")
+        .model("res.partner")
+        .columns(
+            [
+                "name",
+                "code",
+                "country_id",
+                Field.make("active").toggle(),
+            ]
+        )
+        .form_view("partner.form"),   # makes rows clickable
+        FormView.make("partner.form")
+        .model("res.partner")
+        .section("identity", "Identity", ["name", "code", "country_id", "active"]),
+    )
+)
 ```
 
-That's enough to get a sortable, paginated, searchable table at
+``Field.make("name").toggle()``, ``.widget("dialog")``, ``.readonly()``,
+``.columns([...])``, and similar chain on field specs inside form sections.
+``ListView.make(...)``, ``FormView.make(...)``, ``KanbanView.make(...)``,
+``GraphView.make(...)``, and ``InheritView.make(...)`` cover the other view
+types.
+
+Menus belong on the same builder or a sibling DATA file:
+
+```python
+from pyvelm.builders import Menus, ViewsData
+
+m = Menus("partners")
+views_data = ViewsData.make().menus(
+    m.group("business", "Business", icon="home").children([
+        m.item("business.partners", "Partners").view("partner.list"),
+    ]),
+)
+```
+
+See ``examples/modules/partners/views/`` for a full module using fluent
+declarations end to end.
+
+## List views
+
+The fluent list view above is enough to get a sortable, paginated, searchable table at
 `/web/views/partners/partner.list`. The toolbar above the rows ships
 with:
 
@@ -35,15 +74,15 @@ Pin a list to a subset of records with ``domain`` on the arch (ANDed
 with toolbar search and filter chips — same as graph/pivot views):
 
 ```python
-list_view(
-    "partner.active", "res.partner",
-    fields=["name", "code"],
-    form_view="partner.form",
-    domain=[("active", "=", True)],
-)
+ListView.make("partner.active")
+.model("res.partner")
+.columns(["name", "code"])
+.form_view("partner.form")
+.domain([("active", "=", True)])
 ```
 
-Or in raw dict form: ``arch={"fields": [...], "domain": [("stage", "=", "won")]}``.
+Or with legacy helpers: ``list_view("partner.active", "res.partner", fields=[...], domain=[...])``.
+Raw dict form: ``arch={"fields": [...], "domain": [("stage", "=", "won")]}``.
 
 This applies to **standalone list pages** only. Embedded One2many sub-grids use
 ``list_view`` / ``columns`` instead — see [One2many on parent forms](one2many-forms.md).
@@ -63,11 +102,10 @@ Add a `sequence` field on the model and reference it in the arch to
 turn on **row-level drag reorder**:
 
 ```python
-list_view(
-    "tag.list", "res.tag",
-    sequence="sequence",            # field name; enables the drag handle
-    fields=["name"],
-)
+ListView.make("tag.list")
+.model("res.tag")
+.columns(["name"])
+.sequence("sequence")                 # field name; enables the drag handle
 ```
 
 The renderer adds a handle column on the left and forces sort by
@@ -105,17 +143,21 @@ Each `notebook(...)` has a `name` and `pages=[page(...), ...]`; each
 One2many sub-grids with different `list_view` values.
 
 ```python
-from pyvelm.builders import form_view, section, notebook, page, field
+from pyvelm.builders import Field, FormView, Notebook, Page, ViewsData
 
-form_view(
-    "partner.form", "res.partner",
-    sections=[
-        section("identity", "Identity", ["name", "code"]),
-        notebook("relations", pages=[
-            page("children", "Contacts", ["child_ids"]),
-            page("tags", "Tags", [field("tag_ids", widget="dialog")]),
-        ]),
-    ],
+views_data = (
+    ViewsData.make()
+    .views(
+        FormView.make("partner.form")
+        .model("res.partner")
+        .section("identity", "Identity", ["name", "code"])
+        .notebook(
+            "relations",
+            Notebook.make()
+            .page("children", "Contacts", ["child_ids"])
+            .page("tags", "Tags", [Field.make("tag_ids").widget("dialog")]),
+        ),
+    )
 )
 ```
 
@@ -200,19 +242,19 @@ Quick reference:
 | Let the user pick dialog vs inline | `edit_toggle=True` (+ `list_view` / `columns`) |
 
 ```python
-section(
+FormView.make("note.form")
+.model("my.note")
+.section(
     "relations",
     "Relations",
     [
-        field("tag_ids", widget="dialog"),
-        field(
-            "comment_ids",
-            widget="dialog",
-            edit_toggle=True,
-            list_view="comment.compact",
-            form_view="comment.form",
-            columns=["body", "active"],
-        ),
+        Field.make("tag_ids").widget("dialog"),
+        Field.make("comment_ids")
+        .widget("dialog")
+        .edit_toggle()
+        .list_view("comment.compact")
+        .form_view("comment.form")
+        .columns(["body", "active"]),
     ],
 )
 ```
@@ -246,20 +288,25 @@ filter, group-by, and pagination toolbar as a list view (field
 metadata is taken from a sibling list view when one exists).
 
 ```python
-from pyvelm.builders import kanban_view, card, field
+from pyvelm.builders import Field, KanbanCard, KanbanView, ViewsData
 
-kanban_view(
-    "lead.kanban", "crm.lead",
-    title="Pipeline",
-    card=card(
-        "name",                          # field name → card heading
-        subtitle="salesperson",
-        fields=["partner_id", "expected_revenue"],
-        badges=[field("priority"), "stage"],
-    ),
-    group_by="stage",                    # one column per distinct value
-    sequence="sequence",                 # drag-reorder within/across columns
-    form_view="lead.form",               # cards link to this form
+views_data = (
+    ViewsData.make()
+    .views(
+        KanbanView.make("lead.kanban")
+        .model("crm.lead")
+        .title("Pipeline")
+        .card(
+            KanbanCard.make()
+            .title("name")
+            .subtitle("salesperson")
+            .fields(["partner_id", "expected_revenue"])
+            .badges([Field.make("priority"), "stage"])
+        )
+        .group_by("stage")
+        .sequence("sequence")
+        .form_view("lead.form"),
+    )
 )
 ```
 
@@ -285,10 +332,35 @@ name (`name`, falling back to `display_name` or `#id`).
 Set `title` explicitly when the default is wrong:
 
 ```python
-list_view("lead.list", "crm.lead",
-          title="All Leads",            # default would just be "Leads"
-          fields=["name", "stage", …])
+ListView.make("lead.list")
+.model("crm.lead")
+.title("All Leads")                     # default would just be "Leads"
+.columns(["name", "stage", …])
 ```
+
+## Legacy function helpers
+
+The original function API remains available and delegates to the same fluent
+classes:
+
+```python
+from pyvelm.builders import field, form_view, list_view, section
+
+VIEWS = [
+    list_view(
+        "partner.list", "res.partner",
+        fields=["name", field("active", widget="toggle")],
+        form_view="partner.form",
+    ),
+    form_view(
+        "partner.form", "res.partner",
+        sections=[section("identity", "Identity", ["name", "code"])],
+    ),
+]
+```
+
+``field("x", widget="toggle")`` and ``Field.make("x").toggle()`` are equivalent.
+New scaffolds and bundled modules use the fluent style; migrate when convenient.
 
 ## Custom widgets
 

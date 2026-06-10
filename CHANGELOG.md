@@ -19,8 +19,18 @@ out of the 0.x line.
   ``views_data`` in DATA files. Legacy ``list_view`` / ``field`` functions
   remain supported.
 
+### Removed
+
+- **Vellum** — optional ORM mixin, query builder, bundled ``vellum`` module,
+  ``vellum_demo`` example, and ``--vellum`` scaffold flag. Mass-assignment
+  (``_fillable`` / ``_guarded``) remains in ``pyvelm.mass_assignment`` for
+  form writes.
+
 ### Changed
 
+- **Documentation** — guides updated for fluent manifests/builders,
+  ``models.Model``, ORM super chaining, mass assignment, and Vellum removal;
+  [docs/releases/unreleased.md](docs/releases/unreleased.md).
 - **Module scaffolds** — ``pyvelm make:module`` and generators patch fluent
   ``.data(...)`` chains; migration CLI bumps ``.version(...)`` as well as
   legacy ``VERSION`` tuples.

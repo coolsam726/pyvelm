@@ -578,7 +578,7 @@ class GenerateModelTests(unittest.TestCase):
     def tearDown(self):
         purge_import_prefix("demo")
 
-    def test_generate_model_and_vellum(self):
+    def test_generate_model(self):
         with tempfile.TemporaryDirectory() as tmp:
             mod = _demo_module(Path(tmp))
             path = generate_model(mod, "demo", "partner")
@@ -587,10 +587,8 @@ class GenerateModelTests(unittest.TestCase):
             self.assertIn("demo.partner", text)
             with self.assertRaises(FileExistsError):
                 generate_model(mod, "demo", "partner")
-            vpath = generate_model(
-                mod, "demo", "note", force=True, vellum=True
-            )
-            self.assertIn("Vellum", vpath.read_text(encoding="utf-8"))
+            path2 = generate_model(mod, "demo", "note", force=True)
+            self.assertIn("demo.note", path2.read_text(encoding="utf-8"))
 
 
 class GenerateViewsTests(unittest.TestCase):

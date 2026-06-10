@@ -1,17 +1,18 @@
 # Declaring models
 
-A pyvelm model is a Python class. You subclass `BaseModel`, set a
-dotted `_name`, and declare fields as class attributes. The framework
-takes care of the schema (a Postgres table named `<dotted_to_snake>`),
+A pyvelm model is a Python class. Subclass :class:`~pyvelm.models.Model`
+(Odoo-style ``from pyvelm import models``) or :class:`~pyvelm.BaseModel`
+directly, set a dotted `_name`, and declare fields as class attributes. The
+framework takes care of the schema (a Postgres table named `<dotted_to_snake>`),
 the SQL plumbing, and the recordset machinery.
 
 ## A first model
 
 ```python
-from pyvelm import BaseModel, Char, Integer, Boolean, Many2one
+from pyvelm import Char, Integer, Boolean, Many2one, models
 
 
-class Partner(BaseModel):
+class Partner(models.Model):
     _name = "res.partner"
 
     name = Char(required=True, string="Name")
@@ -41,9 +42,6 @@ adults = env["res.partner"].search([("age", ">=", 18)])
 for r in adults:
     print(r.name)
 ```
-
-For optional Eloquent-style queries (`env.query`, scopes, eager load,
-soft deletes), see **[Vellum](vellum.md)**.
 
 Collection search paths support universal quantification with a fourth
 leaf element: `("tag_ids.name", "!=", "VIP", {"all": True})` — every
@@ -172,7 +170,7 @@ Partner.search(["!", ("active", "=", False)])
 inactive (including rows where `active` is NULL, depending on your data).
 
 The legacy **`("__or__", "=", [sub_leaves…])`** leaf still works (list search
-and Vellum `.where_any()` emit it); the compiler expands it to `|` groups.
+emits it); the compiler expands it to `|` groups.
 For example, `("__or__", "=", [("name", "ilike", t), ("code", "ilike", t)])`
 is the same as `"|", ("name", "ilike", t), ("code", "ilike", t)`.
 
@@ -305,9 +303,23 @@ Customize column names with ``_CREATED_AT`` / ``_UPDATED_AT``. New columns appea
 on **Apps → Upgrade** or ``pyvelm db migrate`` (additive DDL). Forms render
 timestamp fields as read-only in edit mode.
 
-[Vellum](vellum.md) models inherit the same behavior and default
-``_guarded = ["id", "created_at", "updated_at"]`` so API callers cannot spoof
-them.
+Use ``_guarded = ["id", "created_at", "updated_at"]`` (or ``_fillable``) on
+models exposed to HTTP forms so callers cannot spoof system columns.
+
+### Mass assignment (`_fillable` / `_guarded`)
+
+HTTP form writes pass through ``pyvelm.mass_assignment`` before they reach
+``write()``:
+
+| Policy | Behaviour |
+|--------|-----------|
+| ``_fillable = ["name", "email"]`` | Only listed keys are kept |
+| ``_guarded = ["id", "created_at"]`` | Listed keys are dropped |
+| ``_guarded = ["*"]`` | All keys dropped (read-only via forms) |
+| ``_strict_fillable = True`` | Blocked keys raise ``ValueError`` instead of being silently dropped |
+
+Declare **either** ``_fillable`` **or** ``_guarded``, not both. The registry
+validates this at model registration.
 
 ## Computed fields
 
@@ -421,7 +433,7 @@ class PartnerPro(models.Model):
 ```
 
 Both forms walk the merged model MRO (including mixins such as
-`Vellum` or `MailThread` declared before `BaseModel`). The registry
+`MailThread` declared before `BaseModel`). The registry
 also records the linear `_inherit` stack — query it with
 `env.registry.inherit_chain("res.partner")` for introspection or
 module tooling.

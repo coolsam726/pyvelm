@@ -99,7 +99,6 @@ class DomainCompileTests(unittest.TestCase):
 
     def test_all_comparison_uses_inverted_op(self):
         from pyvelm import Integer
-        from pyvelm.vellum import Vellum
 
         reg = Registry()
         with reg.activate():
@@ -108,7 +107,7 @@ class DomainCompileTests(unittest.TestCase):
                 _name = "test.tag_scored"
                 score = Integer()
 
-            class PartnerScored(Vellum, BaseModel):
+            class PartnerScored(BaseModel):
                 _name = "test.partner_scored"
                 tag_ids = Many2many("test.tag_scored")
 

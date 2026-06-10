@@ -39,33 +39,33 @@ Define columns **only on the parent form** (or on the model field). Same
 entries as a list view `arch["fields"]`: bare names or `field(...)` dicts.
 
 ```python
-from pyvelm.builders import field, form_view, section
+from pyvelm.builders import Field, FormView, ViewsData
 
-form_view(
-    "note.form", "vellum.demo.note",
-    sections=[
-        section(
-            "comments",
-            "Comments",
+views_data = (
+    ViewsData.make()
+    .views(
+        FormView.make("order.form")
+        .model("sales.order")
+        .section(
+            "lines",
+            "Lines",
             [
-                field(
-                    "comment_ids",
-                    widget="dialog",
-                    columns=["body", field("active", widget="toggle")],
-                    form_view="demo_comment.form",
-                ),
+                Field.make("line_ids")
+                .widget("dialog")
+                .columns(["product_id", Field.make("active").toggle()])
+                .form_view("order.line.form"),
             ],
         ),
-    ],
+    )
 )
 ```
 
 On the **model** (default for every form that shows the field):
 
 ```python
-comment_ids = One2many(
-    "vellum.demo.comment",
-    "note_id",
+line_ids = One2many(
+    "sales.order.line",
+    "order_id",
     columns=["body", "active"],
     form_view="demo_comment.form",
 )
@@ -78,7 +78,7 @@ comment_ids = One2many(
 ### `list_view` — reuse a registered list view
 
 Point at an existing **`view_type="list"`** declaration (in the module's
-`VIEWS` and synced to `ir.ui.view`). The embedded table uses that view's
+``views_data`` / `VIEWS` and synced to `ir.ui.view`). The embedded table uses that view's
 **columns** and its optional **`sequence`** field for drag handles.
 
 **On the model:**
@@ -281,20 +281,23 @@ targets notebook fields with paths like
 
 ```python
 # views/move_line.py
-VIEWS = [
-    list_view(
-        "move.line.invoice", "account.move.line",
-        fields=["product_id", "quantity", "price_unit", "tax_ids"],
-        form_view="move.line.invoice.form",
-    ),
-    list_view(
-        "move.line.entry", "account.move.line",
-        fields=["account_id", "debit", "credit", "name"],
-        form_view="move.line.entry.form",
-    ),
-    form_view("move.line.invoice.form", "account.move.line", sections=[...]),
-    form_view("move.line.entry.form", "account.move.line", sections=[...]),
-]
+from pyvelm.builders import FormView, ListView, ViewsData
+
+views_data = (
+    ViewsData.make()
+    .views(
+        ListView.make("move.line.invoice")
+        .model("account.move.line")
+        .columns(["product_id", "quantity", "price_unit", "tax_ids"])
+        .form_view("move.line.invoice.form"),
+        ListView.make("move.line.entry")
+        .model("account.move.line")
+        .columns(["account_id", "debit", "credit", "name"])
+        .form_view("move.line.entry.form"),
+        FormView.make("move.line.invoice.form").model("account.move.line").section(...),
+        FormView.make("move.line.entry.form").model("account.move.line").section(...),
+    )
+)
 
 # models/move.py
 class AccountMove(BaseModel):
@@ -312,20 +315,17 @@ class AccountMoveLine(BaseModel):
 
 ```python
 # views/journal_entry.py — only entry lines on this form
-form_view(
-    "entry.form", "account.journal.entry",
-    sections=[
-        section(
-            "lines", "Lines",
-            [field("line_ids", widget="inline", list_view="move.line.entry")],
-        ),
-    ],
+FormView.make("entry.form")
+.model("account.journal.entry")
+.section(
+    "lines",
+    "Lines",
+    [Field.make("line_ids").widget("inline").list_view("move.line.entry")],
 )
 ```
 
-Live example in the repo: `examples/modules/vellum_demo/views/note.py` —
-`demo_comment.compact` list vs `list_view="demo_comment.compact"` on
-`comment_ids`.
+See `pyvelm/modules/geo_data/views/geo.py` for notebook tabs with embedded
+One2many sub-grids.
 
 ---
 
@@ -365,7 +365,7 @@ arch overrides them.
 
 ## Deploying view changes
 
-- Declarative views live in module `DATA` files (`VIEWS = [...]`).
+- Declarative views live in module `DATA` files (``views_data`` or legacy ``VIEWS``).
 - After editing, bump the module version and run **`pyvelm db migrate`** or
   **Apps → Sync** so `ir.ui.view` rows update.
 - Hard-refresh the browser on the parent form.

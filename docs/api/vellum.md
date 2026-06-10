@@ -1,3 +1,0 @@
-# pyvelm.vellum
-
-::: pyvelm.vellum

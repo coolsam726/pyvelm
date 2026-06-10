@@ -174,20 +174,6 @@ class MakeModelCommandMoreTests(unittest.TestCase):
 
         cls.Command = MakeModelCommand
 
-    def test_success_with_vellum(self):
-        cmd = self.Command()
-        cmd._ctx = _ctx()
-        with patch(
-            "console.commands.make_model.resolve_module",
-            return_value=("demo", Path("/root"), Path("/root/demo")),
-        ), patch(
-            "console.commands.make_model.generate_model",
-            return_value=Path("/root/demo/models/item.py"),
-        ):
-            code = cmd.handle("item", module="demo", vellum=True, force=True)
-        self.assertEqual(code, 0)
-        self.assertEqual(cmd._ctx.line.call_count, 2)
-
     def test_file_exists_returns_error(self):
         cmd = self.Command()
         cmd._ctx = _ctx()

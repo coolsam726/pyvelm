@@ -110,8 +110,9 @@ ORM and HTTP boundaries.
 ## Web layer: views as data
 
 Views are records. `ir.ui.view` stores `(module, name, model,
-view_type, arch)`; a module declares views in its `__pyvelm__.py`
-under a `VIEWS = [...]` list, and the loader upserts them by
+view_type, arch)`; a module declares views in DATA files via a fluent
+``views_data`` builder (``.views(...)`` / ``.inherits(...)``) or legacy
+``VIEWS`` / ``VIEW_INHERITS`` lists, and the loader upserts them by
 `(module, name)` on every install pass. There is no separate "view
 migration" — re-declaring rewrites the record.
 
@@ -154,7 +155,8 @@ addresses.
 ## Module lifecycle
 
 A pyvelm app is a set of modules, each a Python package with a
-`__pyvelm__.py` manifest declaring `NAME`, `VERSION`, and `DEPENDS`. The
+`__pyvelm__.py` manifest — typically ``manifest = Manifest.make("name").version(...).depends(...)``
+(legacy ``NAME`` / ``VERSION`` / ``DEPENDS`` constants still work). The
 loader (`pyvelm/loader.py`) discovers them under one or more roots,
 topo-sorts by `DEPENDS`, and installs each module's schema and
 migrations into a `Registry`.

@@ -136,6 +136,11 @@ class StubGeneratorTests(unittest.TestCase):
             self.assertIn("ModelName", env_stub)
             fields_stub = (written / "pyvelm" / "fields.pyi").read_text(encoding="utf-8")
             self.assertIn("comodel_name: ModelName", fields_stub)
+            menus_stub = written / "pyvelm" / "builders" / "menus.pyi"
+            self.assertTrue(menus_stub.is_file())
+            self.assertNotIn("Field", menus_stub.read_text(encoding="utf-8"))
+            self.assertFalse((written / "pyvelm" / "builders.pyi").exists())
+            self.assertFalse((written / "pyvelm" / "builders" / "__init__.pyi").exists())
             self.assertGreater(len(index.models), 0)
 
 

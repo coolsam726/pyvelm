@@ -90,11 +90,11 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Unreleased: releases/unreleased.md
   - Guides:
       - Getting started: getting-started.md
       - Database layer (v1.0): multi-database.md
       - Declaring models: models.md
-      - Vellum (optional ORM): vellum.md
       - Building UIs: views.md
       - Form UX: form-ux.md
       - One2many on forms: one2many-forms.md
@@ -125,8 +125,8 @@ nav:
           - pyvelm.registry: api/registry.md
           - pyvelm.env: api/env.md
           - pyvelm.domain: api/domain.md
-          - pyvelm.vellum: api/vellum.md
       - Modules & loader:
+          - pyvelm.manifest: api/manifest.md
           - pyvelm.loader: api/loader.md
           - pyvelm.builders: api/builders.md
           - pyvelm.types: api/types.md

@@ -34,17 +34,6 @@ class RegistryHelperTests(unittest.TestCase):
         self.assertEqual(names, {"test.alpha", "test.beta"})
         self.assertEqual(reg.models_of("mod_a"), [Alpha])
 
-    def test_finalize_vellum_import_error_is_ignored(self):
-        reg = Registry()
-        with reg.activate():
-
-            class Plain(BaseModel):
-                _name = "test.plain"
-
-        with patch.dict("sys.modules", {"pyvelm.vellum.mixin": None}):
-            reg.register(Plain)
-        self.assertIn("test.plain", reg)
-
     def test_init_db_without_active_registry(self):
         """``init_db`` must pass the registry into DDL (no contextvar required)."""
         from pyvelm.tests.support.db import open_database

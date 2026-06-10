@@ -63,8 +63,8 @@ pytest pyvelm/tests/test_http_smoke.py -v          # minimal HTTP smoke
 PYVELM_RUN_FULL_BASIC=1 pytest pyvelm/tests/test_zzz_integration_smoke.py -v  # full examples/basic.py
 ```
 
-Vellum slice tests under `pyvelm/modules/vellum/tests/` are collected via
-`pyvelm/tests/test_vellum_all.py` (the `pyvelm.modules` package is not
+Bundled module tests under `pyvelm/modules/*/tests/` may need a shim when the
+`pyvelm.modules` package is not
 importable as a normal namespace).
 
 `document_layout` module tests: `test_document_layout_all.py` +

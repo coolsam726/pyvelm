@@ -12,9 +12,10 @@ declare data, not API.
 - **Recordsets & fields** — the ORM core. Start with
   [`pyvelm.model`](model.md) (BaseModel + recordsets), then
   [`pyvelm.fields`](fields.md) (Char / Integer / Many2one / …).
-- **Modules & loader** — how `__pyvelm__.py` manifests get picked up,
-  installed, and upgraded.
-- **Views & rendering** — view inheritance + the HTMX/Jinja renderer.
+- **Modules & loader** — ``Manifest.make()`` manifests, ``views_data``
+  builders, install/upgrade via [`pyvelm.loader`](loader.md).
+- **Views & rendering** — [`pyvelm.builders`](builders.md) fluent view/menu
+  declarations, view inheritance, HTMX/Jinja renderer.
 - **Workflows** — server actions, automation rules, cron, mail.
 - **HTTP & CLI** — the FastAPI app factory and the `pyvelm-cron`
   background runner.

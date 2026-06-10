@@ -5,9 +5,6 @@ from typing import TYPE_CHECKING, Any
 from .registry import Registry
 from .policy import eval_policy
 
-if TYPE_CHECKING:
-    from pyvelm.vellum.query import QueryBuilder
-
 
 _MISSING = object()
 
@@ -91,22 +88,6 @@ class Environment:
     def __getitem__(self, model_name: str):
         model_cls = self.registry[model_name]
         return model_cls(self, ())
-
-    def query(self, model_name: str) -> "QueryBuilder":
-        """Vellum query builder for *model_name* (the registry's merged class).
-
-        Prefer this over importing a model class from a specific module when
-        models are extended via ``_inherit`` — the technical name is stable;
-        the Python class in any one ``models/`` file may not be.
-
-        Example::
-
-            posts = env.query("blog.post").where("views", ">", 100).get()
-        """
-        from pyvelm.vellum.query import QueryBuilder
-
-        model_cls = self.registry[model_name]
-        return QueryBuilder(model_cls=model_cls, env=self)
 
     def _derive(self, *, context: dict, acl_bypass: bool) -> "Environment":
         """Build a sibling env sharing conn + registry + value cache.

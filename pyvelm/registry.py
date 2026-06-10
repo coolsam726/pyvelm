@@ -81,19 +81,17 @@ class Registry:
         chain = getattr(model_cls, "_inherit_chain", None)
         if chain:
             self._inherit_chains[model_cls._name] = chain
-        self._finalize_vellum_model(model_cls)
+        from .mass_assignment import validate_mass_assignment_config
+
+        if (
+            getattr(model_cls, "_fillable", None) is not None
+            or getattr(model_cls, "_guarded", None) is not None
+        ):
+            validate_mass_assignment_config(model_cls)
 
     def inherit_chain(self, model_name: str) -> tuple[type, ...]:
         """Return the ``_inherit`` stack for *model_name* (root → leaf)."""
         return self._inherit_chains.get(model_name, ())
-
-    def _finalize_vellum_model(self, model_cls: type) -> None:
-        """Run Vellum class hooks after the metaclass has built ``_fields``."""
-        try:
-            from pyvelm.vellum.mixin import finalize_vellum_model
-        except ImportError:
-            return
-        finalize_vellum_model(model_cls)
 
     def models_of(self, module_name: str) -> list[type]:
         """Models contributed by a single module, in registration order."""
