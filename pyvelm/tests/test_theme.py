@@ -29,6 +29,30 @@ def test_company_theme_css_empty_when_invalid():
     assert company_theme_css("not-a-color") == ""
 
 
+def test_apply_request_scope_ignores_invalid_company_cookie():
+    from types import SimpleNamespace
+
+    from pyvelm.env import Environment
+    from pyvelm.request_env import COMPANY_COOKIE, apply_request_scope
+
+    class _Conn:
+        def cursor(self):
+            raise RuntimeError("not used")
+
+    env = Environment(_Conn(), registry=SimpleNamespace(), uid=None).with_company(7)
+    request = SimpleNamespace(
+        cookies={COMPANY_COOKIE: "bad"},
+        headers={},
+    )
+    scoped = apply_request_scope(
+        env,
+        request,
+        resolve_session=lambda _e, _t: None,
+        resolve_basic=lambda _e, _h: None,
+    )
+    assert scoped.company_id == 7
+
+
 def test_apply_request_scope_reads_company_cookie():
     from types import SimpleNamespace
 

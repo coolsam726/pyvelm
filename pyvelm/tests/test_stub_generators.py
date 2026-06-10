@@ -146,6 +146,118 @@ class StubGeneratorTests(unittest.TestCase):
             self.assertFalse((written / "pyvelm" / "builders" / "__init__.pyi").exists())
             self.assertGreater(len(index.models), 0)
 
+    def test_default_stubs_dir(self):
+        from pyvelm.stub_generators import default_stubs_dir
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertTrue(str(default_stubs_dir(root)).endswith(".pyvelm/typing"))
+
+    def test_discover_include_paths_defaults_to_dot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "proj"
+            root.mkdir()
+            (root / "pyvelm.toml").write_text('modules_root = "/abs/outside"\n', encoding="utf-8")
+            includes = discover_include_paths(root)
+            self.assertEqual(includes, [])
+
+    def test_discover_include_paths_pyvelm_toml(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "erp"
+            root.mkdir()
+            mods = root / "custom" / "modules"
+            mods.mkdir(parents=True)
+            (root / "pyvelm.toml").write_text('modules_root = "custom/modules"\n', encoding="utf-8")
+            includes = discover_include_paths(root)
+            self.assertIn("custom/modules", includes)
+
+    def test_write_pyrightconfig_outside_stub_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            stubs = Path("/tmp/outside-stubs")
+            stubs.mkdir(exist_ok=True)
+            self.assertTrue(write_pyrightconfig(root, stubs_dir=stubs))
+            cfg = json.loads((root / "pyrightconfig.json").read_text(encoding="utf-8"))
+            self.assertIn(str(stubs.resolve()), cfg["stubPath"])
+
+    def test_write_pyrightconfig_invalid_json_and_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            (root / "pyrightconfig.json").write_text("{bad", encoding="utf-8")
+            stubs = root / ".pyvelm" / "typing"
+            stubs.mkdir(parents=True)
+            self.assertTrue(write_pyrightconfig(root, stubs_dir=stubs))
+            desired = {
+                "include": discover_include_paths(root),
+                "stubPath": ".pyvelm/typing",
+                "extraPaths": [".pyvelm/typing"],
+                "pythonVersion": "3.10",
+                "typeCheckingMode": "basic",
+            }
+            cfg = json.loads((root / "pyrightconfig.json").read_text(encoding="utf-8"))
+            for key, val in desired.items():
+                self.assertEqual(cfg[key], val)
+            self.assertFalse(write_pyrightconfig(root, stubs_dir=stubs))
+
+    def test_default_pyrightconfig_variables(self):
+        from pyvelm.stub_generators import default_pyrightconfig_variables
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vars_ = default_pyrightconfig_variables(root)
+            self.assertIn("include_json", vars_)
+
+    def test_load_stub_index_view_inherits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._mini_project(Path(tmp))
+            modules_root = root / "app" / "modules"
+            (modules_root / "demo" / "views" / "item.py").write_text(
+                textwrap.dedent(
+                    """
+                    from pyvelm.builders import list_view
+
+                    VIEWS = [
+                        list_view("item.list", "demo.item", fields=["name"]),
+                    ]
+                    VIEW_INHERITS = [
+                        {"name": "item.list.ext", "inherit": "demo.item.list", "operations": []},
+                    ]
+                    """
+                ),
+                encoding="utf-8",
+            )
+            _reg, _specs, index = load_stub_index(modules_root=modules_root)
+            self.assertIn("demo.item.list.ext", index.qualified_views)
+
+    def test_generate_stubs_removes_legacy_builders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._mini_project(Path(tmp))
+            modules_root = root / "app" / "modules"
+            out = root / ".pyvelm" / "typing"
+            legacy = out / "pyvelm" / "builders.pyi"
+            legacy.parent.mkdir(parents=True, exist_ok=True)
+            legacy.write_text("old", encoding="utf-8")
+            (legacy.parent / "builders" / "__init__.pyi").parent.mkdir(parents=True, exist_ok=True)
+            (legacy.parent / "builders" / "__init__.pyi").write_text("old", encoding="utf-8")
+            generate_stubs(out, modules_root=modules_root, include_bundled=False)
+            self.assertFalse(legacy.exists())
+            self.assertFalse((legacy.parent / "builders" / "__init__.pyi").exists())
+
+    def test_literal_union_helpers(self):
+        from pyvelm.stub_generators import (
+            _escape_literal,
+            _literal_members,
+            _literal_union,
+        )
+
+        empty = _literal_union("M", [])
+        self.assertIn("nothing discovered", empty)
+        big = _literal_union("M", [f"m{i}" for i in range(500)])
+        self.assertIn("truncated", big)
+        self.assertIn(_escape_literal('a"b'), _literal_members(['a"b']))
+
 
 if __name__ == "__main__":
     unittest.main()

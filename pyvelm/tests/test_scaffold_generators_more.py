@@ -706,6 +706,9 @@ class GenerateMenuTests(unittest.TestCase):
                 item_name="demo.other",
                 append=True,
             )
+            appended = path.read_text(encoding="utf-8")
+            self.assertIn('parent="main.main"', appended)
+            self.assertIn("demo.other.list", appended)
 
     def test_generate_menu_duplicate_returns_existing(self):
         with tempfile.TemporaryDirectory() as tmp:

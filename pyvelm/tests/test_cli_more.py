@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from pyvelm import Registry
 from pyvelm.cli import (
+    _build_db_env_and_spec,
     _build_parser,
     _default_module_roots,
     _dsn_display,
@@ -486,6 +487,352 @@ class MainParserTests(unittest.TestCase):
         ):
             bootstrap_command_env(ctx)
         self.assertIsNotNone(ctx.env)
+
+
+class CliRemainingCoverageTests(unittest.TestCase):
+    def test_default_module_roots_env_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            extra = Path(tmp) / "extra"
+            extra.mkdir()
+            with (
+                patch("pyvelm.BUILTIN_MODULE_ROOTS", []),
+                patch("pyvelm.scaffolder.find_modules_root", return_value=None),
+                patch.dict(os.environ, {"PYVELM_MODULE_ROOTS": str(extra)}, clear=False),
+            ):
+                roots = _default_module_roots()
+            self.assertEqual(len(roots), 1)
+
+    def test_resolve_module_roots_without_explicit(self):
+        with patch("pyvelm.cli._default_module_roots", return_value=[Path("/a")]):
+            self.assertEqual(_resolve_module_roots(Namespace(roots=None)), [Path("/a")])
+
+    def test_new_materialise_file_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "modules"
+            root.mkdir()
+            (root / "tasks").mkdir()
+            with (
+                patch("pyvelm.cli.Path.cwd", return_value=Path(tmp)),
+                patch("pyvelm.scaffolder.find_modules_root", return_value=root),
+                patch("pyvelm.scaffolder.materialise", side_effect=FileExistsError),
+                self.assertRaises(SystemExit),
+            ):
+                _run_new(Namespace(name="tasks", modules_root=None))
+
+    def test_build_db_env_missing_dsn(self):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            self.assertRaises(SystemExit),
+        ):
+            _build_db_env_and_spec(Namespace(module="demo", roots=None))
+
+    def test_build_db_env_success(self):
+        spec = _demo_spec()
+        conn = MagicMock()
+        with (
+            patch.dict(os.environ, {"PYVELM_DSN": "postgresql://localhost/db"}),
+            patch("pyvelm.cli._resolve_module_roots", return_value=[]),
+            patch("pyvelm.cli.loader.discover", return_value={"demo": spec}),
+            patch("pyvelm.cli.loader.resolve_order", return_value=[spec]),
+            patch("pyvelm.cli.loader._load_models") as load_models,
+            patch(
+                "pyvelm.database.create_database_from_dsn",
+                return_value=MagicMock(open_connection=MagicMock(return_value=conn)),
+            ),
+        ):
+            env, got_spec, got_conn = _build_db_env_and_spec(
+                Namespace(module="demo", roots=None)
+            )
+        load_models.assert_called_once()
+        self.assertIs(got_spec, spec)
+        self.assertIs(got_conn, conn)
+        self.assertIsNotNone(env)
+
+    def test_db_diff_full_output(self):
+        env, spec, conn = MagicMock(), MagicMock(), MagicMock()
+        alt = MagicMock()
+        alt.kind = "set_not_null"
+        alt.table = "t"
+        alt.column = "c"
+        alt.cli_line.return_value = "  ~ t.c"
+        diff = MagicMock(
+            is_empty=False,
+            new_tables=[("t_new", [])],
+            new_columns=[("t", "c", object(), True, "text")],
+            alterations=[alt],
+            orphan_columns=[("t", "old")],
+        )
+        with (
+            patch("pyvelm.cli._build_db_env_and_spec", return_value=(env, spec, conn)),
+            patch("pyvelm.db_autogen.compute_diff", return_value=diff),
+            patch("pyvelm.db_autogen.count_null_rows", return_value=0),
+            patch("builtins.print"),
+        ):
+            _run_db_diff(Namespace(module="demo"))
+
+    def test_db_autogen_with_views(self):
+        env, spec, conn = MagicMock(), _demo_spec(), MagicMock()
+        diff = MagicMock(is_empty=False)
+        with (
+            patch("pyvelm.cli._build_db_env_and_spec", return_value=(env, spec, conn)),
+            patch("pyvelm.db_autogen.compute_diff", return_value=diff),
+            patch(
+                "pyvelm.scaffold_generators.models_affected_by_diff",
+                return_value={"demo.item"},
+            ),
+            patch(
+                "pyvelm.scaffold_generators.ensure_views_for_models",
+                return_value=[Path("/tmp/view.py")],
+            ),
+            patch("pyvelm.db_autogen.render_migration", return_value="# stub\n"),
+            patch("pyvelm.db_autogen.next_minor_version", return_value=(0, 2, 0)),
+            patch("pyvelm.db_autogen.migration_filename", return_value="0_1_to_0_2.py"),
+            patch("builtins.print") as printed,
+        ):
+            with tempfile.TemporaryDirectory() as tmp:
+                spec.package_path = Path(tmp)
+                (spec.package_path / "migrations").mkdir()
+                (spec.package_path / "__pyvelm__.py").write_text(
+                    "NAME = 'demo'\nVERSION = (0, 1, 0)\nDEPENDS = []\n",
+                    encoding="utf-8",
+                )
+                _run_db_autogen(
+                    Namespace(
+                        module="demo",
+                        dry_run=True,
+                        target_version="0.2.0",
+                        with_views=True,
+                    )
+                )
+        text = " ".join(str(c) for call in printed.call_args_list for c in call.args)
+        self.assertIn("Created view", text)
+
+    def test_db_autogen_refuse_overwrite_and_bump_fail(self):
+        env, spec, conn = MagicMock(), _demo_spec(), MagicMock()
+        diff = MagicMock(is_empty=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp)
+            mig = pkg / "migrations"
+            mig.mkdir()
+            (mig / "0_1_to_0_2.py").write_text("# existing\n", encoding="utf-8")
+            (pkg / "__pyvelm__.py").write_text(
+                "NAME = 'demo'\nVERSION = (0, 1, 0)\nDEPENDS = []\n",
+                encoding="utf-8",
+            )
+            spec.package_path = pkg
+            with (
+                patch("pyvelm.cli._build_db_env_and_spec", return_value=(env, spec, conn)),
+                patch("pyvelm.db_autogen.compute_diff", return_value=diff),
+                patch("pyvelm.db_autogen.render_migration", return_value="# m\n"),
+                patch("pyvelm.db_autogen.next_minor_version", return_value=(0, 2, 0)),
+                patch("pyvelm.db_autogen.migration_filename", return_value="0_1_to_0_2.py"),
+            ):
+                with self.assertRaises(SystemExit):
+                    _run_db_autogen(
+                        Namespace(
+                            module="demo",
+                            dry_run=False,
+                            target_version=None,
+                            with_views=False,
+                        )
+                    )
+            (mig / "0_1_to_0_2.py").unlink()
+            with (
+                patch("pyvelm.cli._build_db_env_and_spec", return_value=(env, spec, conn)),
+                patch("pyvelm.db_autogen.compute_diff", return_value=diff),
+                patch("pyvelm.db_autogen.render_migration", return_value="# m\n"),
+                patch("pyvelm.db_autogen.next_minor_version", return_value=(0, 2, 0)),
+                patch("pyvelm.db_autogen.migration_filename", return_value="0_1_to_0_2.py"),
+                patch("pyvelm.manifest.bump_version_in_manifest_text", return_value=None),
+                patch("builtins.print"),
+                self.assertRaises(SystemExit),
+            ):
+                _run_db_autogen(
+                    Namespace(
+                        module="demo",
+                        dry_run=False,
+                        target_version=None,
+                        with_views=False,
+                    )
+                )
+
+    def test_db_autogen_empty_diff_note(self):
+        env, spec, conn = MagicMock(), _demo_spec(), MagicMock()
+        diff = MagicMock(is_empty=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp)
+            (pkg / "migrations").mkdir()
+            (pkg / "__pyvelm__.py").write_text(
+                "NAME = 'demo'\nVERSION = (0, 1, 0)\nDEPENDS = []\n",
+                encoding="utf-8",
+            )
+            spec.package_path = pkg
+            with (
+                patch("pyvelm.cli._build_db_env_and_spec", return_value=(env, spec, conn)),
+                patch("pyvelm.db_autogen.compute_diff", return_value=diff),
+                patch("pyvelm.db_autogen.render_migration", return_value="# m\n"),
+                patch("pyvelm.db_autogen.next_minor_version", return_value=(0, 2, 0)),
+                patch("pyvelm.db_autogen.migration_filename", return_value="0_1_to_0_2.py"),
+                patch("pyvelm.manifest.bump_version_in_manifest_text", return_value="bumped"),
+                patch("builtins.print") as printed,
+            ):
+                _run_db_autogen(
+                    Namespace(
+                        module="demo",
+                        dry_run=False,
+                        target_version=None,
+                        with_views=False,
+                    )
+                )
+        text = " ".join(str(c) for call in printed.call_args_list for c in call.args)
+        self.assertIn("no-op", text)
+
+    def test_db_migrate_shim_and_fresh(self):
+        from pyvelm.cli import _run_db_migrate_fresh, _run_db_migrate_shim
+
+        with (
+            patch("pyvelm.cli._resolve_module_roots", return_value=[]),
+            patch("pyvelm.cli.run_migrate") as migrate,
+            patch("builtins.print"),
+        ):
+            _run_db_migrate_shim(
+                Namespace(all=True, only_module=None, database_key=None, roots=None)
+            )
+        migrate.assert_called_once()
+        with (
+            patch("pyvelm.cli._resolve_module_roots", return_value=[]),
+            patch("pyvelm.cli.run_db_migrate_fresh") as fresh,
+        ):
+            _run_db_migrate_fresh(
+                Namespace(all=False, only_module="demo", yes=True, dry_run=True, roots=None)
+            )
+        fresh.assert_called_once()
+
+    def test_run_db_nuke(self):
+        from pyvelm.cli import _run_db_nuke
+
+        spec = _demo_spec()
+        with (
+            patch("pyvelm.cli._guard_destructive_schema_command"),
+            patch.dict(os.environ, {"PYVELM_DSN": "postgresql://localhost/db"}),
+            patch("pyvelm.cli._resolve_module_roots", return_value=[]),
+            patch("pyvelm.cli._ordered_specs_for_install", return_value=[spec]),
+            patch("pyvelm.database.nuke_dsn_from_env", return_value="postgresql://localhost/db"),
+            patch("pyvelm.cli._confirm_nuke"),
+            patch("pyvelm.cli._wipe_schema"),
+            patch("pyvelm.cli._execute_db_install", return_value=[{"name": "demo"}]),
+            patch("pyvelm.cli._print_install_results"),
+            patch("builtins.print"),
+        ):
+            _run_db_nuke(Namespace(schema="public", yes=True, roots=None))
+
+    def test_run_db_seed_and_status(self):
+        from pyvelm.cli import _run_db_seed, _run_db_status
+
+        with (
+            patch("pyvelm.cli._resolve_module_roots", return_value=[]),
+            patch("pyvelm.cli.run_db_seed") as seed,
+        ):
+            _run_db_seed(Namespace(module="demo", roots=None))
+        seed.assert_called_once()
+        conn_cm = MagicMock()
+        conn_cm.__enter__ = MagicMock(return_value=MagicMock())
+        conn_cm.__exit__ = MagicMock(return_value=False)
+        fresh = _demo_spec("fresh")
+        old = _demo_spec("old")
+        old.version = (0, 2, 0)
+        ok = _demo_spec("ok")
+        with (
+            patch.dict(os.environ, {"PYVELM_DSN": "postgresql://localhost/db"}),
+            patch("pyvelm.cli._resolve_module_roots", return_value=[]),
+            patch(
+                "pyvelm.cli.loader.discover",
+                return_value={"fresh": fresh, "old": old, "ok": ok},
+            ),
+            patch("pyvelm.cli.loader.resolve_order", return_value=[fresh, old, ok]),
+            patch(
+                "pyvelm.database.create_database_from_dsn",
+                return_value=MagicMock(connect=MagicMock(return_value=conn_cm)),
+            ),
+            patch(
+                "pyvelm.cli._read_installed_versions",
+                return_value={"old": "0.1.0", "ok": "0.1.0"},
+            ),
+            patch("builtins.print") as printed,
+        ):
+            _run_db_status(Namespace(roots=None))
+        text = " ".join(str(c) for call in printed.call_args_list for c in call.args)
+        self.assertIn("not installed", text)
+        self.assertIn("upgrade", text)
+        self.assertIn("ok", text)
+
+    def test_bootstrap_command_env_missing_dsn(self):
+        ctx = MagicMock(roots=[])
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            self.assertRaises(SystemExit),
+        ):
+            bootstrap_command_env(ctx)
+
+    def test_print_command_section_empty(self):
+        from pyvelm.cli import _print_command_section
+
+        with patch("builtins.print") as printed:
+            _print_command_section("Empty:", [])
+        printed.assert_not_called()
+
+    def test_command_list_no_module_commands(self):
+        with patch("pyvelm.cli._command_registry") as reg_fn:
+            reg_fn.return_value.all.return_value = []
+            with patch("builtins.print") as printed:
+                _run_command_list(None)
+        text = " ".join(str(c) for call in printed.call_args_list for c in call.args)
+        self.assertIn("(none registered)", text)
+
+    def test_try_dispatch_edge_cases(self):
+        self.assertFalse(_try_dispatch_module_command([]))
+        self.assertFalse(_try_dispatch_module_command(["init"]))
+        with (
+            patch("pyvelm.cli._command_registry") as reg_fn,
+            patch("pyvelm.cli.bootstrap_command_env"),
+        ):
+            reg = MagicMock()
+            reg.names.return_value = ["demo:run"]
+            reg.run.side_effect = RuntimeError("boom")
+            reg_fn.return_value = reg
+            with self.assertRaises(SystemExit) as ctx:
+                _try_dispatch_module_command(["demo:run"])
+            self.assertIn("boom", str(ctx.exception))
+
+    def test_load_dotenv_with_path(self):
+        with (
+            patch("dotenv.find_dotenv", return_value="/tmp/.env"),
+            patch("dotenv.load_dotenv") as load,
+        ):
+            _load_dotenv()
+        load.assert_called_once_with("/tmp/.env")
+
+    def test_main_dispatches(self):
+        with (
+            patch("pyvelm.cli._load_dotenv"),
+            patch("pyvelm.cli._try_dispatch_module_command", return_value=False),
+            patch("pyvelm.cli._build_parser") as bp,
+        ):
+            parser = MagicMock()
+            handler = MagicMock()
+            parser.parse_args.return_value = Namespace(command="cron", func=handler)
+            bp.return_value = parser
+            main()
+        handler.assert_called_once()
+
+    def test_main_early_return_on_module_command(self):
+        with (
+            patch("pyvelm.cli._load_dotenv"),
+            patch("pyvelm.cli._try_dispatch_module_command", return_value=True),
+            patch("pyvelm.cli._build_parser") as bp,
+        ):
+            main()
+        bp.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ class MakeModelCommand(Command):
         force: bool = False,
     ) -> int:
         try:
-            mod_name, _root, mod_path = resolve_module(module)
+            mod_name, _root, mod_path = resolve_module(module, model_name=model)
             path = generate_model(mod_path, mod_name, model, force=force)
         except (ValueError, FileExistsError) as exc:
             self.error(str(exc))

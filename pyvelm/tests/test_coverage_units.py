@@ -119,6 +119,77 @@ class StorageTests(unittest.TestCase):
                 Path("/tmp/pyvelm-attachments").resolve(),
             )
 
+    def test_serverless_tmp_attachment_dir_preserved(self):
+        with patch.dict(
+            os.environ,
+            {"VERCEL": "1", "PYVELM_ATTACHMENT_DIR": "/tmp/custom-attachments"},
+            clear=True,
+        ):
+            backend = LocalStorageBackend()
+            self.assertEqual(
+                backend.root,
+                Path("/tmp/custom-attachments").resolve(),
+            )
+
+    def test_serverless_postgres_backend_resolve_exception(self):
+        with patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
+            with patch(
+                "pyvelm.database.app_dsn_from_env",
+                side_effect=RuntimeError("fail"),
+            ):
+                reset_backend_cache()
+                b = get_backend()
+                self.assertIsInstance(b, LocalStorageBackend)
+
+    def test_invalid_storage_key_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backend = LocalStorageBackend(root=tmp)
+            with self.assertRaises(ValueError):
+                backend.load("/etc/passwd")
+            with self.assertRaises(ValueError):
+                backend.load("../escape")
+
+    def test_delete_missing_key_noop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backend = LocalStorageBackend(root=tmp)
+            backend.delete("aa/bb/nonexistent_file")
+
+    def test_delete_tidy_empty_shard_dirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backend = LocalStorageBackend(root=tmp)
+            key = backend.save("tidy.txt", b"x")
+            backend.delete(key)
+            self.assertFalse((Path(tmp) / key.split("/")[0]).exists())
+
+    def test_delete_rmdir_oserror_stops_cleanup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            backend = LocalStorageBackend(root=tmp)
+            key = backend.save("busy.txt", b"x")
+            with patch.object(Path, "rmdir", side_effect=OSError("busy")):
+                backend.delete(key)
+            self.assertFalse(backend._full_path(key).exists())
+
+    def test_db_backend_delete_noop(self):
+        DbStorageBackend().delete("")
+
+    def test_get_backend_cached(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {"PYVELM_ATTACHMENT_BACKEND": "local", "PYVELM_ATTACHMENT_DIR": tmp},
+                clear=True,
+            ):
+                reset_backend_cache()
+                first = get_backend()
+                second = get_backend()
+                self.assertIs(first, second)
+
+    def test_unknown_backend_raises(self):
+        with patch.dict(os.environ, {"PYVELM_ATTACHMENT_BACKEND": "s3"}, clear=True):
+            reset_backend_cache()
+            with self.assertRaises(RuntimeError):
+                get_backend()
+
 
 class ServerHelperTests(unittest.TestCase):
     def test_apply_runtime_env(self):

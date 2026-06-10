@@ -256,17 +256,10 @@ def _run_new(args: argparse.Namespace) -> None:
     # module's parent is in place; the module itself must not exist.
     modules_root.mkdir(parents=True, exist_ok=True)
     target = modules_root / name
-    from .loader import module_display_name
+    from .scaffolder import module_scaffold_variables
 
     try:
-        materialise(
-            "module",
-            target,
-            variables={
-                "name": name,
-                "display_name": module_display_name(name),
-            },
-        )
+        materialise("module", target, variables=module_scaffold_variables(name))
     except FileExistsError:
         sys.exit(
             f"{target} already exists — pick a different module name "

@@ -192,6 +192,17 @@ class SessionAuthTests(unittest.TestCase):
             uses_stateless_sessions.cache_clear()
             self.assertTrue(uses_stateless_sessions())
 
+    def test_sqlite_tmp_dsn_without_serverless_runtime(self):
+        with mock.patch.dict(
+            os.environ,
+            {"PYVELM_DSN": "sqlite:////tmp/pyvelm-demo.db"},
+            clear=True,
+        ), mock.patch(
+            "pyvelm.session_auth.is_serverless_runtime", return_value=False
+        ):
+            uses_stateless_sessions.cache_clear()
+            self.assertTrue(uses_stateless_sessions())
+
     def test_verify_returns_none_when_db_sessions(self):
         clean = {
             k: v
@@ -312,6 +323,111 @@ class SessionAuthTests(unittest.TestCase):
             uses_stateless_sessions.cache_clear()
             # Should fall through without raising
             uses_stateless_sessions()
+
+    def test_sqlite_tmp_path_exception_in_stateless_check(self):
+        with mock.patch.dict(
+            os.environ,
+            {"PYVELM_DSN": "sqlite:////tmp/demo.db"},
+            clear=False,
+        ), mock.patch(
+            "pyvelm.database.capabilities_from_dsn",
+            side_effect=RuntimeError("fail"),
+        ):
+            uses_stateless_sessions.cache_clear()
+            uses_stateless_sessions()
+
+    def test_resolve_stateless_invalid_cookie(self):
+        reg = Registry()
+        env = Environment(mock.Mock(), reg, uid=None)
+        with _vercel_env():
+            self.assertIsNone(resolve_session_uid(env, "v1.not-valid.not-valid"))
+
+    def test_resolve_stateless_inactive_user(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Users(BaseModel):
+                _name = "res.users"
+
+        env = Environment(mock.Mock(), reg, uid=None)
+        rs = mock.Mock()
+        rs.__bool__ = mock.Mock(return_value=False)
+        model = mock.Mock()
+        model.search = mock.Mock(return_value=rs)
+        sudo_env = mock.Mock()
+        sudo_env.__getitem__ = mock.Mock(return_value=model)
+        env.sudo = mock.Mock(return_value=sudo_env)
+
+        with _vercel_env():
+            token = mint_session_cookie(1)
+            self.assertIsNone(resolve_session_uid(env, token))
+
+    def test_resolve_db_mode_no_users_model(self):
+        clean = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("PYVELM_DSN", "PYVELM_STATELESS_SESSIONS", "VERCEL")
+        }
+        with mock.patch.dict(os.environ, clean, clear=True):
+            uses_stateless_sessions.cache_clear()
+            reg = Registry()
+            env = Environment(mock.Mock(), reg, uid=None)
+            self.assertIsNone(resolve_session_uid(env, "db-token"))
+
+    def test_resolve_db_mode_user_not_found(self):
+        clean = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("PYVELM_DSN", "PYVELM_STATELESS_SESSIONS", "VERCEL")
+        }
+        with mock.patch.dict(os.environ, clean, clear=True):
+            uses_stateless_sessions.cache_clear()
+            reg = Registry()
+            with reg.activate():
+
+                class Users(BaseModel):
+                    _name = "res.users"
+
+            env = Environment(mock.Mock(), reg, uid=None)
+            rs = mock.Mock()
+            rs.__bool__ = mock.Mock(return_value=False)
+            model = mock.Mock()
+            model.search = mock.Mock(return_value=rs)
+            sudo_env = mock.Mock()
+            sudo_env.__getitem__ = mock.Mock(return_value=model)
+            env.sudo = mock.Mock(return_value=sudo_env)
+            self.assertIsNone(resolve_session_uid(env, "missing-token"))
+
+    def test_revoke_session_without_users_model(self):
+        clean = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("PYVELM_DSN", "PYVELM_STATELESS_SESSIONS", "VERCEL")
+        }
+        with mock.patch.dict(os.environ, clean, clear=True):
+            uses_stateless_sessions.cache_clear()
+            reg = Registry()
+            env = Environment(mock.Mock(), reg, uid=None)
+            revoke_session(env, "db-token")
+
+    def test_verify_invalid_payload_encoding(self):
+        with _vercel_env():
+            import base64
+            import hmac
+            import hashlib
+
+            from pyvelm.session_auth import _SESSION_VERSION, session_signing_key
+
+            payload = b"not-valid-ascii:\xff"
+            sig = hmac.new(
+                session_signing_key(), payload, hashlib.sha256
+            ).digest()
+            token = (
+                f"{_SESSION_VERSION}."
+                f"{base64.urlsafe_b64encode(payload).decode().rstrip('=')}."
+                f"{base64.urlsafe_b64encode(sig).decode().rstrip('=')}"
+            )
+            self.assertIsNone(verify_session_cookie(token))
 
 
 if __name__ == "__main__":

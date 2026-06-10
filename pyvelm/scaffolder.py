@@ -34,6 +34,13 @@ def valid_name(name: str) -> bool:
     return bool(_NAME_RE.match(name))
 
 
+def module_scaffold_variables(name: str) -> dict[str, str]:
+    """Substitution map for the bundled ``module`` scaffold."""
+    from .loader import module_display_name
+
+    return {"name": name, "display_name": module_display_name(name)}
+
+
 def materialise(
     scaffold_kind: str,
     target: Path,

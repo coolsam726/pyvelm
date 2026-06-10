@@ -46,6 +46,14 @@ class ScaffolderTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 materialise("no-such-scaffold-xyz", target, variables={"name": "x"})
 
+    def test_module_scaffold_variables(self):
+        from pyvelm.scaffolder import module_scaffold_variables
+
+        self.assertEqual(
+            module_scaffold_variables("partners"),
+            {"name": "partners", "display_name": "Partners"},
+        )
+
     def test_materialise_module_scaffold(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "demo_mod"
