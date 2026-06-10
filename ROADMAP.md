@@ -14,7 +14,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 
 | | |
 |---|---|
-| **Stable** | **v1.0.1** (2026-06-01) |
+| **Stable** | **v1.1.0** (2026-06-09) |
 | **Stack** | FastAPI + HTMX + Tailwind v4 + SQLAlchemy Core |
 | **Bundled modules** | `base`, `admin`, `console`, `workflow`, `reports`, `mail_compose`, `file_manager`, `technical`, `geo_data`, `document_layout` |
 | **Reference port** | velmphp **v1.0.1** + unreleased **v1.1.0** admin polish |
@@ -25,9 +25,10 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 |-----------|------|--------|
 | **v1.0.0** | Portable DB layer, seeders, Schema migrations, stable PyPI | **Done** |
 | **v1.0.1** | Nested menus, versioned docs, MySQL/MariaDB WIP | **Done** |
-| **v1.1** | velmphp shell parity — audit, bulk actions, detail views, reference `partners` | **Planned** |
-| **v1.2** | ORM extension ergonomics — mixins, `super()`, model discovery | **Planned** |
-| **v1.3** | Multi-DB routing (preview → production), Oracle/MSSQL smoke | **Planned** (see [docs/multi-database.md](docs/multi-database.md)) |
+| **v1.1.0** | Fluent manifests/builders, `models.Model`, query builder, Vellum removal | **Done** |
+| **v1.2** | velmphp shell parity — audit, bulk actions, detail views, reference `partners` | **Planned** |
+| **v1.3** | ORM extension ergonomics — mixins, model discovery | **Planned** |
+| **v1.4** | Multi-DB routing (preview → production), Oracle/MSSQL smoke | **Planned** (see [docs/multi-database.md](docs/multi-database.md)) |
 
 ---
 
@@ -65,7 +66,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 | Model auto-discovery from `models/` | rc1 | `models/__init__.py` imports |
 | Read-only code display (Prism) | v1.1.0 | CodeMirror edit only |
 | Theme toggle pill UI | v1.1.0 | icon button |
-| Dark mode surface tokens | updated | **synced (unreleased)** |
+| Dark mode surface tokens | updated | **synced (v1.1.0)** |
 
 ---
 
@@ -77,7 +78,7 @@ source.
 
 | # | Item | velmphp ref | Notes |
 |---|------|-------------|-------|
-| 1.1 | **Dark mode tokens** | `velm-tokens.css` `.dark` | **Done (unreleased)** — lifted surfaces (`gray-800`/`900`), not OLED black |
+| 1.1 | **Dark mode tokens** | `velm-tokens.css` `.dark` | **Done (v1.1.0)** — lifted surfaces (`gray-800`/`900`), not OLED black |
 | 1.2 | **`system_audit` module** | `packages/modules/modules/system_audit/` | `ir.audit.log`, `ir.login.log`, `ir.user.lifecycle`; optional `PYVELM_AUDIT_DSN`; retention cron; CSV export |
 | 1.3 | **List bulk actions** | `bulk_actions` arch | Row checkboxes, select-all, bulk bar, default bulk delete when unlink allowed |
 | 1.4 | **`DetailView` + `row_actions`** | `DetailView.php`, `ListRowAction` | Read-only record page separate from form; list links via `detail_view` |
@@ -170,4 +171,4 @@ Port velmphp demo addons into `examples/` or a `pyvelm-demos` extra:
 4. Update [CHANGELOG.md](CHANGELOG.md) under **Unreleased**; cut `v1.x.y` when a
    tier slice is complete.
 
-**Last synced with velmphp:** 2026-06-09 (v1.0.1 + `feature/1.1.0-admin-polish` unreleased).
+**Last synced with velmphp:** 2026-06-09 (PyVELM **v1.1.0** shipped; velmphp admin polish still unreleased).

@@ -7,6 +7,8 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.1.0] — 2026-06-09
+
 ### Added
 
 - **`pyvelm.models.Model`** — Odoo-style ``from pyvelm import models`` base class
@@ -33,12 +35,18 @@ out of the 0.x line.
 
 - **Documentation** — guides updated for fluent manifests/builders,
   ``models.Model``, ORM super chaining, mass assignment, and Vellum removal;
-  [docs/releases/unreleased.md](docs/releases/unreleased.md).
+  [docs/releases/v1.1.0.md](docs/releases/v1.1.0.md).
 - **Module scaffolds** — ``pyvelm make:module`` and generators patch fluent
   ``.data(...)`` chains; migration CLI bumps ``.version(...)`` as well as
   legacy ``VERSION`` tuples.
 - **Bundled and example view files** — migrated to ``views_data`` fluent
   declarations; ``make:view`` scaffolds emit ``Field.make()`` / ``ListView.make()``.
+- **Bundled module models** — Stage 6 models (``ir.actions.server``, ``ir.cron``,
+  ``mail.message``, etc.) live under ``pyvelm/modules/*/models/`` with thin
+  package-root re-exports.
+- **Model naming** — bundled and example models use PascalCase classes and
+  ``res_partner.py``-style filenames aligned with Odoo conventions.
+- **Test coverage** — expanded unit tests; line coverage ~95%.
 
 ## [1.0.1] — 2026-06-01
 
@@ -49,22 +57,6 @@ out of the 0.x line.
   ``self.super().write(vals)`` (Odoo / velmphp ergonomics) or plain
   ``super().write(vals)`` to stack ``create`` / ``write`` / ``unlink``
   and custom overrides across extension modules.
-
-### Changed
-
-- **Apps catalog states** — split version-gap **Upgrade** from schema **Sync**
-  (velmphp-style): up-to-date modules show **Installed**; **Upgrade** only when
-  migrations are pending; **Sync** highlighted when schema diff is detected.
-  Install/upgrade/sync/uninstall redirect back to ``/web/apps`` with a flash toast.
-- **Apps catalog Sync detection** — ``to_sync`` only when Sync would apply
-  actionable schema changes (not orphan columns or type drift).
-- **Apps uninstall protection** — bundled bootstrap modules and modules with
-  reverse dependencies show a disabled **Protected** button (velmphp-style).
-
-## [1.0.1] — 2026-06-01
-
-### Added
-
 - **Nested menu groups** — `m.group(...).children([...])` nests items and
   sub-groups under a parent; `parent=` is set automatically (explicit
   `parent=` still works for cross-module groups). The loader flattens
@@ -74,16 +66,23 @@ out of the 0.x line.
 
 ### Changed
 
+- **Apps catalog states** — split version-gap **Upgrade** from schema **Sync**
+  (velmphp-style): up-to-date modules show **Installed**; **Upgrade** only when
+  migrations are pending; **Sync** highlighted when schema diff is detected.
+- **Apps catalog Sync detection** — ``to_sync`` only when Sync would apply
+  actionable schema changes (not orphan columns or type drift).
+- **Apps uninstall protection** — bundled bootstrap modules and modules with
+  reverse dependencies show a disabled **Protected** button (velmphp-style).
 - **Documentation** — v1.0 release notes, database/seeders/SQLite getting-started
   paths, and [multi-database.md](docs/multi-database.md) linked from the nav.
 - **docs CI** — `.github/workflows/docs.yml` uses **mike** on `v*` tags (and
   `workflow_dispatch`); PRs run `mkdocs build --strict` only.
-- **MySQL / MariaDB (v1.1 WIP)** — `DialectCapabilities` for `mysql`/`mariadb`,
+- **MySQL / MariaDB (WIP)** — `DialectCapabilities` for `mysql`/`mariadb`,
   DSN normalisation (`mysql+pymysql://`), portable DDL/type mapping, schema reset,
   MariaDB CI job + HTTP smoke. Requires `pymysql` (core dependency).
-- **Roadmap** — v1.1 targets **MySQL/MariaDB** portability; multi-DB routing
-  (``PYVELM_DATABASES`` preview) moves to **v1.3+** after Oracle and additional
-  backends pass install/smoke. See [multi-database.md](docs/multi-database.md).
+- **Roadmap** — multi-DB routing (``PYVELM_DATABASES`` preview) moves to
+  **v1.3+** after additional backends pass install/smoke. See
+  [multi-database.md](docs/multi-database.md).
 
 ## [1.0.0] — 2026-05-30
 

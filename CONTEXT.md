@@ -1,11 +1,12 @@
-# Project context — pyvelm v0.11.0
+# Project context — pyvelm v1.1.0
 
 Building an Odoo-style ERP framework in Python.
 
-**`main` (unreleased)** — fluent `Manifest.make()` / `ViewsData.make()`;
+**v1.1.0 (released 2026-06-09)** — fluent `Manifest.make()` / `ViewsData.make()`;
 `models.Model`; Eloquent-style `env["model"].query()` / `env.query()` on
-`pyvelm.query.Query` (core API, not Vellum); Vellum removed; ORM super
-chaining. See [docs/releases/unreleased.md](docs/releases/unreleased.md).
+`pyvelm.query.Query` (core API, not Vellum); Vellum removed; bundled models
+under `pyvelm/modules/*/models/`; ORM super chaining (since v1.0.1). See
+[docs/releases/v1.1.0.md](docs/releases/v1.1.0.md) and [CHANGELOG.md](CHANGELOG.md).
 Scaffolds: `make:model` emits `models.Model`; `make:stubs` overloads
 `env.query()` and `recordset.query()`.
 
