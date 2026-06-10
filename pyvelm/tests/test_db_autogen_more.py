@@ -8,13 +8,17 @@ from pyvelm.db_autogen import (
     ApplyResult,
     Diff,
     SchemaAlteration,
+    _blueprint_line_from_field,
+    _blueprint_lines_from_columns,
     _field_type_spec,
     _fetch_table_columns_inspector,
+    _model_cls_for_table,
     _normalize_inspector_type,
     _normalize_pg_column,
     _normalize_type_name,
     _q,
     _summary,
+    _syncable_summary,
     _types_match,
     _varchar_family,
     apply_schema_diff,
@@ -25,6 +29,7 @@ from pyvelm.db_autogen import (
     parse_version,
     render_migration,
 )
+from pyvelm.fields import Boolean, Float, Many2one, Text
 from pyvelm.fields import Char, Integer
 from pyvelm.tests.test_db_autogen_constraints import _mock_env, _partner_cls
 
@@ -50,6 +55,17 @@ class QuoteAndSummaryTests(unittest.TestCase):
 
     def test_q_with_single_quote(self):
         self.assertIn("'", _q("it's"))
+
+    def test_q_with_both_quotes(self):
+        self.assertIn("\\'", _q("it's \"fine\""))
+
+    def test_syncable_summary(self):
+        diff = Diff(
+            new_tables=[("t", [])],
+            alterations=[SchemaAlteration("t", "c", "set_not_null", "x")],
+        )
+        self.assertIn("new table", _syncable_summary(diff))
+        self.assertEqual(_syncable_summary(Diff()), "")
 
     def test_summary_empty(self):
         diff = Diff()
@@ -280,6 +296,67 @@ class ApplySchemaDiffIntegrationTests(unittest.TestCase):
         )
         result = apply_schema_diff(env, "partners")
         self.assertTrue(result.is_empty)
+
+
+class BlueprintHelperTests(unittest.TestCase):
+    def test_blueprint_line_from_field_variants(self):
+        self.assertIn("string", _blueprint_line_from_field(Char(required=True), "code", required=True))
+        self.assertIn("string", _blueprint_line_from_field(Text(), "note", required=False))
+        self.assertIn("integer", _blueprint_line_from_field(Integer(), "qty", required=False))
+        self.assertIn("boolean", _blueprint_line_from_field(Boolean(), "active", required=False))
+        self.assertIn("float", _blueprint_line_from_field(Float(), "amt", required=False))
+        m2o = Many2one("res.partner", ondelete="CASCADE")
+        m2o.comodel = "res.partner"
+        self.assertIn("foreign_id", _blueprint_line_from_field(m2o, "partner_id", required=True))
+
+    def test_blueprint_lines_from_sqlalchemy_columns(self):
+        from sqlalchemy import Boolean as SABool
+        from sqlalchemy import Column as SAColumn
+        from sqlalchemy import DateTime, Float, Integer, MetaData, String, Table, Text
+        from sqlalchemy import ForeignKey
+
+        meta = MetaData()
+        partner = Table("res_partner", meta, SAColumn("id", Integer, primary_key=True))
+        tbl = Table(
+            "demo",
+            meta,
+            SAColumn("id", Integer, primary_key=True),
+            SAColumn("name", String(64), nullable=False),
+            SAColumn("note", Text()),
+            SAColumn("qty", Integer()),
+            SAColumn("active", SABool()),
+            SAColumn("when", DateTime()),
+            SAColumn("amt", Float()),
+            SAColumn(
+                "partner_id",
+                Integer,
+                ForeignKey(partner.c.id, ondelete="CASCADE"),
+            ),
+        )
+        lines = _blueprint_lines_from_columns(list(tbl.columns))
+        joined = "\n".join(lines)
+        self.assertIn("string", joined)
+        self.assertIn("foreign_id", joined)
+        self.assertIn("timestamp", joined)
+
+    def test_model_cls_for_table(self):
+        reg = MagicMock()
+        cls = MagicMock(_table="res_partner")
+        reg._models = {"res.partner": cls}
+        self.assertIs(_model_cls_for_table(reg, "res_partner"), cls)
+        self.assertIsNone(_model_cls_for_table(reg, "missing"))
+
+    def test_apply_result_summary_skipped_cols(self):
+        r = ApplyResult(skipped_not_null=1, skipped_not_null_cols=["t.c (2 NULL)"])
+        self.assertIn("backfill", r.summary())
+
+    def test_compute_diff_drop_not_null_when_optional_in_model(self):
+        env = _mock_env(
+            [("id", "NO", "int4", "integer"), ("code", "NO", "text", "text")],
+            _partner_cls(required=False),
+        )
+        diff = compute_diff(env, "partners")
+        self.assertTrue(any(a.kind == "drop_not_null" for a in diff.alterations))
 
 
 if __name__ == "__main__":

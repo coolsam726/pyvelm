@@ -53,3 +53,19 @@ def test_register_jinja_globals_without_heroicons():
     with patch.object(icons, "heroicon_outline", None):
         icons.register_jinja_globals(env)
     env.globals.__setitem__.assert_not_called()
+
+
+def test_resolve_icon_when_heroicons_unavailable():
+    from pyvelm import icons
+
+    with patch.object(icons, "heroicon_outline", None):
+        assert resolve_icon("home") is None
+
+
+def test_resolve_icon_fallback_also_missing():
+    from heroicons import IconDoesNotExist
+    from pyvelm import icons
+
+    bad = MagicMock(side_effect=IconDoesNotExist("x"))
+    with patch.object(icons, "heroicon_outline", bad):
+        assert resolve_icon("not-a-real-icon-xyz") is None

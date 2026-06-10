@@ -186,6 +186,21 @@ class MakeModelCommandMoreTests(unittest.TestCase):
         ):
             self.assertEqual(cmd.handle("item"), 1)
 
+    def test_success_prints_next_steps(self):
+        cmd = self.Command()
+        cmd._ctx = _ctx()
+        out = Path("/root/demo/models/item.py")
+        with patch(
+            "console.commands.make_model.resolve_module",
+            return_value=("demo", Path("/root"), Path("/root/demo")),
+        ), patch(
+            "console.commands.make_model.generate_model",
+            return_value=out,
+        ):
+            self.assertEqual(cmd.handle("item"), 0)
+        cmd._ctx.info.assert_called_once()
+        self.assertGreaterEqual(cmd._ctx.line.call_count, 3)
+
 
 class MakeModuleCommandMoreTests(unittest.TestCase):
     @classmethod

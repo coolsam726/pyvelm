@@ -44,6 +44,69 @@ class ManifestBuilderTests(unittest.TestCase):
         bumped = bump_version_in_manifest_text(fluent, (0, 1, 0), (0, 2, 0))
         self.assertIn(".version(0, 2, 0)", bumped or "")
 
+    def test_empty_name_raises(self):
+        with self.assertRaises(ValueError):
+            Manifest.make("  ")
+
+    def test_version_tuple_and_hook_references(self):
+        def sync_hook() -> None:
+            pass
+
+        class Hooks:
+            @staticmethod
+            def install() -> None:
+                pass
+
+        class Partner:
+            pass
+
+        m = (
+            Manifest.make("full")
+            .version((1, 0))
+            .depends("base")
+            .models(Partner, "res.partner")
+            .seeders(Hooks, "full.seed:run")
+            .commands("full.cli:cmd")
+            .summary("s")
+            .description("d")
+            .display_name("Full")
+            .category("Cat")
+            .author("me")
+            .icon("icon")
+            .package(" full.pkg ")
+            .models_package(" models ")
+            .migrations_package(" migrations ")
+            .install_hook(Hooks, "install")
+            .sync_hook(sync_hook)
+            .web_routes(sync_hook)
+            .catalog_access("res.users", "write", policy="p")
+        )
+        d = m.to_dict()
+        self.assertEqual(d["VERSION"], (1, 0))
+        self.assertTrue(d["MODELS"][0].endswith(".Partner"))
+        self.assertEqual(d["SEEDERS"][1], "full.seed:run")
+        self.assertTrue(d["SEEDERS"][0].endswith(".Hooks"))
+        self.assertEqual(d["PACKAGE"], "full.pkg")
+        self.assertEqual(d["WEB_ROUTES"], f"{sync_hook.__module__}:{sync_hook.__qualname__}")
+
+    def test_version_conflicting_args_raises(self):
+        with self.assertRaises(ValueError):
+            Manifest.make("x").version((0, 1), 2)
+
+    def test_version_empty_raises(self):
+        with self.assertRaises(ValueError):
+            Manifest.make("x").version(())
+
+    def test_bump_version_no_match_returns_none(self):
+        self.assertIsNone(
+            bump_version_in_manifest_text("no version here", (9, 9), (1, 0))
+        )
+
+    def test_bump_version_fluent_with_whitespace(self):
+        fluent = 'manifest = Manifest.make("x").version(0 , 1 , 0)\n'
+        bumped = bump_version_in_manifest_text(fluent, (0, 1, 0), (0, 2, 0))
+        self.assertIn(".version(0, 2, 0)", bumped or "")
+
 
 class ManifestLoaderTests(unittest.TestCase):
     def _write_manifest(self, root: Path, name: str, body: str) -> Path:

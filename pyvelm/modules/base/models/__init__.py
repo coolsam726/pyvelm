@@ -6,7 +6,11 @@ from . import res_group  # noqa: F401
 from . import res_user  # noqa: F401
 from . import ir_model_access  # noqa: F401
 from . import ir_rule  # noqa: F401
-from . import actions  # noqa: F401
+from . import ir_actions_server  # noqa: F401
+from . import base_automation  # noqa: F401
+from . import ir_cron  # noqa: F401
+from . import mail_message  # noqa: F401
+from . import mail_template  # noqa: F401
 from . import res_company  # noqa: F401
 from . import res_currency  # noqa: F401
 from . import res_currency_rate  # noqa: F401

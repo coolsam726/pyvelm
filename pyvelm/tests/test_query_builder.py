@@ -189,6 +189,57 @@ class QueryBuilderTests(_QueryFixture):
         )
         self.assertEqual(active_only, ["Low", "High"])
 
+    def test_or_where_empty_domain_and_all_flag(self):
+        env = self._env()
+        self._seed(env)
+        first = (
+            env["test.query.post"]
+            .query()
+            .or_where("title", "Low")
+            .pluck("title")
+        )
+        self.assertEqual(first, ["Low"])
+        q = env["test.query.post"].query().or_where(
+            "tag_ids.name", "=", "VIP", all=True
+        )
+        self.assertEqual(q.domain[0][-1], {"all": True})
+
+    def test_where_null_and_where_any_edges(self):
+        env = self._env()
+        self._seed(env)
+        Post = env["test.query.post"]
+        self.assertEqual(Post.query().where_any([]).count(), 3)
+        merged = Post.query().where("active", True).where_any([("title", "=", "Off")])
+        self.assertTrue(len(merged.domain) > 1)
+        null_q = Post.query().where_null("title")
+        self.assertIn(("title", "=", None), null_q.domain)
+        self.assertEqual(Post.query().where_not_null("title").count(), 3)
+
+    def test_parse_predicate_two_arg_form(self):
+        env = self._env()
+        self._seed(env)
+        rows = env["test.query.post"].query().where("title", "High").pluck("title")
+        self.assertEqual(rows, ["High"])
+
+    def test_parse_predicate_three_arg_explicit_eq(self):
+        env = self._env()
+        self._seed(env)
+        rows = (
+            env["test.query.post"]
+            .query()
+            .where("title", "=", "High")
+            .pluck("title")
+        )
+        self.assertEqual(rows, ["High"])
+
+    def test_chunk_stops_on_empty_batch(self):
+        env = self._env()
+        self._seed(env)
+        batches = list(
+            env["test.query.post"].query().where("title", "Nope").chunk(2)
+        )
+        self.assertEqual(batches, [])
+
     def test_or_where_and_where_any(self):
         env = self._env()
         self._seed(env)
@@ -261,6 +312,11 @@ class QueryBuilderTests(_QueryFixture):
 
         with self.assertRaises(RecordNotFound):
             env.query("test.query.post").find_or_fail(99999)
+
+        self.assertEqual(
+            env.query("test.query.post").find_or_fail(first.id).title,
+            "High",
+        )
 
         self.assertEqual(Post.query().where("active", True).count(), 2)
         self.assertTrue(Post.query().where("featured", True).exists())

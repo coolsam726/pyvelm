@@ -208,5 +208,40 @@ class InheritSuperChainTests(unittest.TestCase):
         cls(env, (1,))._compute_display_name()
         self.assertEqual(calls, ["ext_compute", "root_compute"])
 
+    def test_defining_class_and_super_proxy_errors(self) -> None:
+        import sys
+
+        from pyvelm.inherit_super import (
+            bind_inherit_chain,
+            defining_class,
+            defining_class_for_frame,
+            make_super_proxy,
+        )
+
+        class Parent:
+            def method(self) -> None:
+                pass
+
+        class Child(Parent):
+            def method(self) -> None:
+                pass
+
+        bind_inherit_chain(Parent, None)
+        bind_inherit_chain(Child, Parent)
+        self.assertEqual(Child._inherit_chain, (Parent, Child))
+
+        self.assertIs(defining_class(Child, "method"), Child)
+        self.assertIs(defining_class(Child, "missing"), Child)
+
+        def capture() -> type:
+            frame = sys._getframe()
+            return defining_class_for_frame(Child, frame)
+
+        self.assertIs(capture(), Child)
+
+        proxy = make_super_proxy(_FakeEnv(self.reg), Child)
+        with self.assertRaises(TypeError):
+            proxy()
+
 if __name__ == "__main__":
     unittest.main()

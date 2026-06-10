@@ -454,6 +454,32 @@ class WorkflowRuntimeMoreTests(unittest.TestCase):
         env.transaction = MagicMock(side_effect=RuntimeError("boom"))
         workflow_runtime.maybe_auto_start_workflow(env, MagicMock(_name="wf.target"))
 
+    def test_maybe_auto_start_inner_no_definition(self):
+        env = MagicMock()
+        record = _row(id=1, _name="wf.target")
+        with patch.object(WorkflowEngine, "active_definition", return_value=None):
+            workflow_runtime._maybe_auto_start_workflow_inner(env, record)
+
+    def test_maybe_auto_start_inner_skips_without_auto_start(self):
+        env = MagicMock()
+        record = _row(id=1, _name="wf.target")
+        definition = _row(id=1, definition=json.dumps(_SAMPLE))
+        with patch.object(WorkflowEngine, "active_definition", return_value=definition), patch.object(
+            WorkflowEngine, "start"
+        ) as start:
+            workflow_runtime._maybe_auto_start_workflow_inner(env, record)
+        start.assert_not_called()
+
+    def test_maybe_auto_start_inner_skips_existing_instance(self):
+        env = MagicMock()
+        record = _row(id=1, _name="wf.target")
+        definition = _row(id=1, definition=json.dumps({**_SAMPLE, "auto_start": True}))
+        with patch.object(WorkflowEngine, "active_definition", return_value=definition), patch.object(
+            WorkflowEngine, "instance_for_record", return_value=_row(id=9)
+        ), patch.object(WorkflowEngine, "start") as start:
+            workflow_runtime._maybe_auto_start_workflow_inner(env, record)
+        start.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
