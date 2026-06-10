@@ -261,7 +261,7 @@ def discover(roots: list[Path | str]) -> dict[str, ModuleSpec]:
         rootp = Path(root)
         if not rootp.is_dir():
             continue
-        # Make the root importable so `partners.models.partner` etc. resolves.
+        # Make the root importable so `partners.models.res_partner` etc. resolves.
         rootp_str = str(rootp.resolve())
         if rootp_str not in sys.path:
             sys.path.insert(0, rootp_str)

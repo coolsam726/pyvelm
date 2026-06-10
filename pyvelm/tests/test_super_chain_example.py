@@ -47,8 +47,8 @@ def test_inherit_chain_loaded_in_order(super_chain_env):
     env = super_chain_env
     chain = env.registry.inherit_chain("super_chain.order")
     names = [cls.__name__ for cls in chain]
-    assert names == ["DemoOrder", "DemoOrderExtA", "DemoOrderExtB"]
-    assert env.registry["super_chain.order"].__name__ == "DemoOrderExtB"
+    assert names == ["SuperChainOrder", "SuperChainOrderExtA", "SuperChainOrderExtB"]
+    assert env.registry["super_chain.order"].__name__ == "SuperChainOrderExtB"
 
 
 def test_button_cancel_super_chain(super_chain_env):

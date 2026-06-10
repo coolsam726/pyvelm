@@ -1,1 +1,1 @@
-from . import lead  # noqa: F401
+from . import crm_lead  # noqa: F401
