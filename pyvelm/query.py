@@ -171,10 +171,10 @@ class Query:
 
     def first(self) -> "BaseModel":
         """First matching row, or an empty recordset."""
-        return self.limit(1).get()
+        return self._clone().limit(1).get()
 
     def find(self, record_id: int) -> "BaseModel":
-        return self.where("id", "=", int(record_id)).first()
+        return self._clone().where("id", "=", int(record_id)).limit(1).get()
 
     def find_or_fail(self, record_id: int) -> "BaseModel":
         rec = self.find(record_id)
@@ -202,7 +202,12 @@ class Query:
         page = max(1, int(page))
         per_page = max(1, int(per_page))
         total = self.count()
-        items = self.offset((page - 1) * per_page).limit(per_page).get()
+        items = (
+            self._clone()
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .get()
+        )
         return Page(items=items, total=total, page=page, per_page=per_page)
 
     def chunk(self, size: int) -> Iterator["BaseModel"]:
@@ -231,6 +236,14 @@ class Query:
 
     def _recordset(self) -> "BaseModel":
         return self._model_cls(self._env, ())
+
+    def _clone(self) -> "Query":
+        q = Query.for_model(self._model_cls, self._env)
+        q._domain = list(self._domain)
+        q._order = self._order
+        q._limit = self._limit
+        q._offset = self._offset
+        return q
 
     @staticmethod
     def _parse_predicate(
