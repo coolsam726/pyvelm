@@ -1,7 +1,7 @@
 # Building UIs
 
-pyvelm renders three kinds of views out of the box: **list**, **form**,
-and **kanban**. You declare each one as a Python dict in a module's
+pyvelm renders four primary record-oriented views out of the box: **list**,
+**form**, **detail**, and **kanban**. You declare each one as a Python dict in a module's
 data file — no Jinja, no JSX. The framework owns the templates and
 dispatches every field through a widget registry to produce HTML.
 
@@ -42,7 +42,8 @@ views_data = (
 
 ``Field.make("name").toggle()``, ``.widget("dialog")``, ``.readonly()``,
 ``.columns([...])``, and similar chain on field specs inside form sections.
-``ListView.make(...)``, ``FormView.make(...)``, ``KanbanView.make(...)``,
+``ListView.make(...)``, ``FormView.make(...)``, ``DetailView.make(...)``,
+``KanbanView.make(...)``,
 ``GraphView.make(...)``, and ``InheritView.make(...)`` cover the other view
 types.
 
@@ -111,7 +112,77 @@ ListView.make("tag.list")
 The renderer adds a handle column on the left and forces sort by
 `sequence ASC`. Dropping a row POSTs the new ordering to
 `/web/records/{module}/{name}/reorder` and the server rewrites the
-field.
+field. Lists with a `sequence` field **disable bulk selection** (drag
+reorder and checkboxes conflict).
+
+### Bulk actions
+
+When the user can unlink records and the list has no `sequence` field,
+the toolbar shows a **bulk action bar** after you select rows: checkboxes
+on each row, a select-all control in the header, and a default **Delete**
+action.
+
+Declare custom actions on the list arch:
+
+```python
+ListView.make("partner.list")
+.model("res.partner")
+.columns(["name", "code"])
+.bulk_actions([
+    {
+        "action": "unlink",
+        "label": "Delete",
+        "confirm": "Delete selected partners?",
+        "perm": "unlink",
+    },
+])
+```
+
+The browser POSTs `{action, ids}` to
+`/web/records/{module}/{name}/bulk`. Built-in actions today: `unlink`.
+Omit `bulk_actions` to keep the default delete-only bar when unlink is
+allowed.
+
+### Detail views and row actions
+
+Use a **detail view** for read-only record pages separate from the edit
+form. Row clicks open the detail view when the user has read access.
+
+```python
+from pyvelm.builders import DetailView, ListView, ViewsData
+
+views_data = (
+    ViewsData.make()
+    .views(
+        ListView.make("partner.list")
+        .model("res.partner")
+        .columns(["name", "code"])
+        .detail_view("partner.detail"),
+        DetailView.make("partner.detail")
+        .model("res.partner")
+        .form_view("partner.form")   # Edit button target
+        .section("identity", "Identity", ["name", "code", "country_id"]),
+    )
+)
+```
+
+Detail views live at `/web/views/{module}/{name}/record/{id}` (same URL
+shape as forms). Set `form_view` on the detail arch so the **Edit** button
+opens the paired form in edit mode.
+
+Per-row toolbar buttons (resolved like form header actions):
+
+```python
+ListView.make("partner.list")
+.model("res.partner")
+.columns(["name"])
+.row_actions([
+    {"label": "Mail", "method": "POST", "url": "/web/actions/..."},
+])
+```
+
+If `detail_view` is omitted, the list falls back to the first detail view
+registered for the same model, then to `form_view`.
 
 ### Available fields and widgets
 

@@ -1,18 +1,30 @@
 <tr data-record-id="{{ row.id }}"
     class="hover:bg-neutral-secondary transition-colors cursor-pointer"
     {{ row_extra | default('') | safe }}
+    {% set row_url = none %}
     {% if record_href and access.can_write %}
-    onclick="pvListRowNavigate(event, '{{ record_href.replace('{id}', row.id | string) }}')"
-    {% elif form_view_name %}
-    onclick="pvListRowNavigate(event, '/web/views/{{ view.module }}/{{ form_view_name }}/record/{{ row.id }}{% if list_nav_query %}?{{ list_nav_query }}{% endif %}')"
+    {% set row_url = record_href.replace('{id}', row.id | string) %}
+    {% elif detail_view_name and access.can_read %}
+    {% set row_url = '/web/views/' ~ view.module ~ '/' ~ detail_view_name ~ '/record/' ~ row.id ~ ('?' ~ list_nav_query if list_nav_query else '') %}
+    {% elif form_view_name and access.can_read %}
+    {% set row_url = '/web/views/' ~ view.module ~ '/' ~ form_view_name ~ '/record/' ~ row.id ~ ('?' ~ list_nav_query if list_nav_query else '') %}
+    {% endif %}
+    {% if row_url %}
+    onclick="pvListRowNavigate(event, '{{ row_url }}')"
     {% endif %}>
-    {# Leftmost checkbox — placeholder for future bulk selection. #}
     <td class="w-9 px-3 py-4 align-middle" onclick="event.stopPropagation()">
+        {% if bulk_enabled %}
+        <input type="checkbox"
+               class="rounded border-default w-3.5 h-3.5 cursor-pointer"
+               aria-label="Select row"
+               :checked="isSelected({{ row.id }})"
+               @change="toggleRow({{ row.id }})">
+        {% else %}
         <input type="checkbox" class="rounded border-default w-3.5 h-3.5 cursor-not-allowed opacity-40"
                disabled aria-label="Select row">
+        {% endif %}
     </td>
     {% if sequence_field %}
-    {# Drag handle cell — only on sequence-reorder rows. #}
     <td class="w-6 px-2 py-4 align-middle text-body-subtle"
         onclick="event.stopPropagation()">
         <span data-pv-row-handle draggable="true"
@@ -35,6 +47,18 @@
     {% endfor %}
     <td class="px-4 py-4 text-right whitespace-nowrap text-xs"
         onclick="event.stopPropagation()">
+        {% for act in row.row_actions or [] %}
+        {% if act.full_page or (act.method == 'GET' and not act.url.startswith('/web/views/' ~ view.module ~ '/' ~ view.name)) %}
+        <a href="{{ act.url }}"
+           class="text-fg-brand hover:underline font-medium mr-3">{{ act.label }}</a>
+        {% else %}
+        <button type="button"
+                class="text-fg-brand hover:underline font-medium mr-3"
+                hx-{{ act.method | lower }}="{{ act.url }}"
+                hx-swap="none"
+                {% if act.confirm %}hx-confirm="{{ act.confirm }}"{% endif %}>{{ act.label }}</button>
+        {% endif %}
+        {% endfor %}
         {% if record_href and access.can_write %}
         <a href="{{ record_href.replace('{id}', row.id | string) }}"
            class="text-fg-brand hover:underline font-medium mr-3"

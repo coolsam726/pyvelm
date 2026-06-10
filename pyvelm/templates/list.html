@@ -53,6 +53,8 @@
         swapTarget: '#pv-table-container',
         showColumns: true,
         bc: {{ bc_param | tojson }},
+        bulkEnabled: {{ bulk_enabled | default(false) | tojson }},
+        bulkActions: {{ bulk_actions | default([]) | tojson }},
     };
 </script>
 <div x-data="pvList(window._pvListCfg)"
@@ -63,6 +65,23 @@
     {% endif %}
 
     {% include "_pv_search_toolbar.html" %}
+
+    {% if bulk_enabled %}
+    <div x-show="selectedCount > 0" x-cloak
+         class="flex flex-wrap items-center gap-3 px-3 py-2 rounded-lg
+                bg-brand-soft border border-default text-sm">
+        <span class="font-medium text-heading"
+              x-text="selectedCount + ' selected'"></span>
+        <template x-for="act in bulkActions" :key="act.action">
+            <button type="button"
+                    class="px-3 py-1 text-xs font-semibold rounded-md
+                           border border-default bg-neutral-primary
+                           hover:bg-neutral-secondary transition"
+                    @click="runBulk(act)"
+                    x-text="act.label"></button>
+        </template>
+    </div>
+    {% endif %}
 
     {# Group-by chip (rendered separately from search chips because the
        grouping is a single-value mode rather than an AND-leaf). #}

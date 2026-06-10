@@ -7,6 +7,24 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.3.0] — 2026-06-09
+
+### Added
+
+- **List bulk actions** — row checkboxes, select-all, bulk action bar on list
+  pages. Default **Delete** when the user has unlink access and the list has no
+  ``sequence`` drag-reorder field. Custom actions via ``bulk_actions`` on the
+  list arch; POST ``/web/records/{module}/{name}/bulk`` with ``{action, ids}``.
+- **`DetailView`** — read-only record page (``view_type="detail"``) with the
+  same section/notebook layout as forms. Lists link via ``detail_view`` on the
+  list arch (or the first detail view for the model). **Edit** jumps to the
+  paired form when ``form_view`` is set.
+- **List `row_actions`** — per-row toolbar buttons resolved like form header
+  actions.
+- **IDE stubs for fluent ORM fields** — ``pyvelm make:stubs`` overloads
+  ``Char()``, ``Text()``, ``Integer()``, etc. to return ``OrmFieldBuilder`` so
+  ``Char().required()`` chains autocomplete in the editor.
+
 ## [1.2.0] — 2026-06-10
 
 ### Added

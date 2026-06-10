@@ -5,6 +5,7 @@ from typing import Any
 
 from pyvelm.types import (
     ArchDashboard,
+    ArchDetail,
     ArchForm,
     ArchGraph,
     ArchKanban,
@@ -16,6 +17,7 @@ from pyvelm.types import (
     DashboardWidget,
     FieldRefLike,
     FormLayoutItem,
+    DetailView,
     FormView,
     GraphView,
     KanbanView,
@@ -42,6 +44,9 @@ class ListViewBuilder:
         self._page_actions: list[dict] | None = None
         self._sequence: str | None = None
         self._domain: list | None = None
+        self._detail_view: str | None = None
+        self._bulk_actions: list[dict] | None = None
+        self._row_actions: list[dict] | None = None
         self._priority = 16
 
     @classmethod
@@ -87,6 +92,18 @@ class ListViewBuilder:
         self._domain = list(domain)
         return self
 
+    def detail_view(self, detail_view: str) -> ListViewBuilder:
+        self._detail_view = detail_view
+        return self
+
+    def bulk_actions(self, bulk_actions: list[dict]) -> ListViewBuilder:
+        self._bulk_actions = list(bulk_actions)
+        return self
+
+    def row_actions(self, row_actions: list[dict]) -> ListViewBuilder:
+        self._row_actions = list(row_actions)
+        return self
+
     def priority(self, priority: int) -> ListViewBuilder:
         self._priority = priority
         return self
@@ -109,6 +126,12 @@ class ListViewBuilder:
             arch["sequence"] = self._sequence
         if self._domain is not None:
             arch["domain"] = self._domain
+        if self._detail_view is not None:
+            arch["detail_view"] = self._detail_view
+        if self._bulk_actions:
+            arch["bulk_actions"] = list(self._bulk_actions)
+        if self._row_actions:
+            arch["row_actions"] = list(self._row_actions)
         return {
             "name": self._name,
             "model": self._model,
@@ -201,6 +224,103 @@ class FormViewBuilder:
             "name": self._name,
             "model": self._model,
             "view_type": "form",
+            "arch": arch,
+            "priority": self._priority,
+        }
+
+
+class DetailViewBuilder:
+    """Read-only record view — same layout as a form, no inline edit."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+        self._model: str | None = None
+        self._sections: list[FormLayoutItem] = []
+        self._title: str | None = None
+        self._header_actions: list[dict] | None = None
+        self._form_view: str | None = None
+        self._cols: int | None = None
+        self._priority = 16
+
+    @classmethod
+    def make(cls, name: str) -> DetailViewBuilder:
+        return cls(name)
+
+    def model(self, model: str) -> DetailViewBuilder:
+        self._model = model
+        return self
+
+    def title(self, title: str) -> DetailViewBuilder:
+        self._title = title
+        return self
+
+    def cols(self, cols: int) -> DetailViewBuilder:
+        self._cols = cols
+        return self
+
+    def form_view(self, form_view: str) -> DetailViewBuilder:
+        self._form_view = form_view
+        return self
+
+    def header_actions(self, header_actions: list[dict]) -> DetailViewBuilder:
+        self._header_actions = list(header_actions)
+        return self
+
+    def priority(self, priority: int) -> DetailViewBuilder:
+        self._priority = priority
+        return self
+
+    def section(
+        self,
+        name: str,
+        title: str,
+        fields: list[FieldRefLike | Any],
+        *,
+        cols: int | None = None,
+    ) -> DetailViewBuilder:
+        block = Section.make(name, title).fields(fields)
+        if cols is not None:
+            block.cols(cols)
+        self._sections.append(block.to_dict())
+        return self
+
+    def notebook(
+        self,
+        name: str,
+        title: str,
+        pages: list[Page | dict],
+        *,
+        cols: int | None = None,
+    ) -> DetailViewBuilder:
+        nb = Notebook.make(name).title(title).pages(
+            [p if isinstance(p, Page) else Page.make(p["name"], p.get("title", p["name"])).fields(p.get("fields", [])) for p in pages]  # type: ignore[arg-type]
+        )
+        entry = nb.to_dict()
+        if cols is not None:
+            entry["cols"] = cols
+        self._sections.append(entry)
+        return self
+
+    def sections(self, sections: list[FormLayoutItem]) -> DetailViewBuilder:
+        self._sections = list(sections)
+        return self
+
+    def to_dict(self) -> DetailView:
+        if not self._model:
+            raise ValueError(f"Detail view {self._name!r} is missing model().")
+        arch: ArchDetail = {"sections": self._sections}
+        if self._title is not None:
+            arch["title"] = self._title
+        if self._header_actions:
+            arch["header_actions"] = list(self._header_actions)
+        if self._form_view is not None:
+            arch["form_view"] = self._form_view
+        if self._cols is not None:
+            arch["cols"] = self._cols
+        return {
+            "name": self._name,
+            "model": self._model,
+            "view_type": "detail",
             "arch": arch,
             "priority": self._priority,
         }
@@ -785,6 +905,7 @@ class DashboardViewBuilder:
 # Public aliases (Filament / velmphp naming).
 ListView = ListViewBuilder
 FormView = FormViewBuilder
+DetailView = DetailViewBuilder
 KanbanView = KanbanViewBuilder
 GraphView = GraphViewBuilder
 PivotView = PivotViewBuilder
