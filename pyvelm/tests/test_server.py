@@ -81,6 +81,7 @@ class RunDevServerTests(unittest.TestCase):
             log_level="debug",
             reload=True,
             reload_dirs=["/tmp/pkg"],
+            reload_excludes=[".pyvelm"],
         )
 
     @patch("uvicorn.run")

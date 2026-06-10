@@ -53,6 +53,8 @@ def run_dev_server(
         kwargs["reload"] = True
         if reload_dirs:
             kwargs["reload_dirs"] = reload_dirs
+        # Stub regeneration writes under .pyvelm/ — exclude from the watcher.
+        kwargs["reload_excludes"] = [".pyvelm"]
         uvicorn.run(target, **kwargs)
     else:
         uvicorn.run(app, **kwargs)
@@ -118,6 +120,12 @@ def build_serve_app(
     dsn = require_dsn_from_env()
 
     env_mode = apply_runtime_env(runtime_env)
+
+    from .stub_generators import maybe_refresh_dev_stubs
+
+    refreshed, stub_msg = maybe_refresh_dev_stubs(runtime_env=env_mode)
+    if stub_msg:
+        print(stub_msg)
 
     database = create_database_from_dsn(dsn, pool_size=4)
     with database.connect() as conn:

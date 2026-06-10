@@ -131,10 +131,19 @@ three at build time and refuses to publish if they diverge.
 
 Steps:
 
-1. **Update `CHANGELOG.md`.** Move the "Unreleased" entries under
-   a new versioned heading. Note any breaking changes prominently.
-2. **Bump the version in both Python files** (`pyproject.toml` and
-   `pyvelm/__init__.py`).
+1. **Write release notes** under `## Unreleased` in `CHANGELOG.md`
+   (and optional highlights in `docs/releases/unreleased.md`).
+2. **Bump the version everywhere** (moves Unreleased → versioned heading,
+   updates `pyproject.toml`, `pyvelm.__version__`, docs pointers):
+
+   ```bash
+   ./scripts/bump_version.sh 1.4.0
+   # optional: ./scripts/bump_version.sh 1.4.0 --date 2026-06-15
+   ```
+
+   Use `--no-changelog` to only sync the two Python version files, or
+   `--no-docs` to skip `docs/index.md` / `ROADMAP.md` / release page.
+   Verify with `python scripts/bump_version.py --check` (also run in CI).
 3. **Commit + annotated tag** (message = CHANGELOG section):
 
    ```bash

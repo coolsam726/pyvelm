@@ -7,6 +7,7 @@ validate model and view string literals.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -36,6 +37,50 @@ class StubIndex:
     view_models: dict[str, str] = field(default_factory=dict)
     # ``(module_name, package_path_relative_to_project)`` for Pyright scopes.
     module_roots: list[tuple[str, str]] = field(default_factory=list)
+
+
+def stubs_on_serve_enabled() -> bool:
+    """Whether the dev server should refresh IDE stubs (``PYVELM_STUBS_ON_SERVE``)."""
+    raw = os.environ.get("PYVELM_STUBS_ON_SERVE", "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+def maybe_refresh_dev_stubs(
+    *,
+    runtime_env: str | None = None,
+) -> tuple[bool, str]:
+    """Regenerate ``.pyvelm/typing/`` during development app boot.
+
+    Called from ``build_serve_app`` / ``app.serve`` so ``--reload`` picks up
+    new models and views. Failures are non-fatal (message only). Returns
+    ``(refreshed, message)``.
+    """
+    from .runtime import get_runtime_env, is_development
+
+    if not is_development(get_runtime_env(runtime_env)):
+        return False, ""
+    if not stubs_on_serve_enabled():
+        return False, ""
+
+    from .scaffolder import find_project_root
+
+    project = find_project_root()
+    out_dir = default_stubs_dir(project)
+    try:
+        written, index = generate_stubs(out_dir, include_bundled=True)
+        if project is not None:
+            write_pyrightconfig(
+                project,
+                stubs_dir=written,
+                module_roots=index.module_roots,
+            )
+        return (
+            True,
+            f"IDE stubs refreshed ({len(index.models)} models, "
+            f"{len(index.qualified_views)} views) → {written}",
+        )
+    except Exception as exc:  # noqa: BLE001 — dev-only; must not block serve
+        return False, f"IDE stubs skipped: {exc}"
 
 
 def default_stubs_dir(project_root: Path | None = None) -> Path:
