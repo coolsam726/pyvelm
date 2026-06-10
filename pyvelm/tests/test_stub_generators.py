@@ -8,9 +8,11 @@ import unittest
 from pathlib import Path
 
 from pyvelm.stub_generators import (
+    dependency_closure,
     discover_include_paths,
     ensure_pyrightconfig,
     generate_stubs,
+    index_for_modules,
     load_stub_index,
     write_pyrightconfig,
 )
@@ -18,11 +20,15 @@ from pyvelm.tests._isolation import purge_import_prefix
 
 
 class StubGeneratorTests(unittest.TestCase):
+    _MODULE_PREFIXES = ("demo", "base_mod", "partners", "crm")
+
     def setUp(self):
-        purge_import_prefix("demo")
+        for prefix in self._MODULE_PREFIXES:
+            purge_import_prefix(prefix)
 
     def tearDown(self):
-        purge_import_prefix("demo")
+        for prefix in self._MODULE_PREFIXES:
+            purge_import_prefix(prefix)
 
     def _mini_project(self, tmp: Path) -> Path:
         root = tmp / "erp"
@@ -129,6 +135,8 @@ class StubGeneratorTests(unittest.TestCase):
             self.assertTrue((written / "py.typed").is_file())
             self.assertTrue((written / "names.pyi").is_file())
             self.assertTrue((written / "pyvelm" / "env.pyi").is_file())
+            self.assertTrue((written / "pyvelm" / "model.pyi").is_file())
+            self.assertTrue((written / "pyvelm" / "field_builders.pyi").is_file())
             names = (written / "names.pyi").read_text(encoding="utf-8")
             self.assertIn('"demo.item"', names)
             self.assertIn('"demo.item.list"', names)
@@ -137,11 +145,29 @@ class StubGeneratorTests(unittest.TestCase):
             self.assertIn("def query(self, model_name: ModelName) -> Query", env_stub)
             models_stub = (written / "models_stubs.pyi").read_text(encoding="utf-8")
             self.assertIn("def query(self) -> Query", models_stub)
+            model_stub = (written / "pyvelm" / "model.pyi").read_text(encoding="utf-8")
+            self.assertIn("_inherit: ClassVar[ModelName | str]", model_stub)
+            self.assertIn("_name: ClassVar[ModelName | str]", model_stub)
             fields_stub = (written / "pyvelm" / "fields.pyi").read_text(encoding="utf-8")
             self.assertIn("comodel_name: ModelName", fields_stub)
+            self.assertIn("def __new__(cls) -> OrmFieldBuilder", fields_stub)
             self.assertIn("OrmFieldBuilder", fields_stub)
+            builders_stub = (
+                written / "pyvelm" / "field_builders.pyi"
+            ).read_text(encoding="utf-8")
+            self.assertIn("def comodel(self, name: ModelName)", builders_stub)
             menus_stub = written / "pyvelm" / "builders" / "menus.pyi"
+            views_stub = written / "pyvelm" / "builders" / "views.pyi"
+            legacy_stub = written / "pyvelm" / "builders" / "legacy.pyi"
+            security_stub = written / "pyvelm" / "security.pyi"
             self.assertTrue(menus_stub.is_file())
+            self.assertTrue(views_stub.is_file())
+            self.assertTrue(legacy_stub.is_file())
+            self.assertTrue(security_stub.is_file())
+            self.assertIn("ModelName", views_stub.read_text(encoding="utf-8"))
+            self.assertIn("ListViewBuilder", views_stub.read_text(encoding="utf-8"))
+            self.assertIn("def list_view", legacy_stub.read_text(encoding="utf-8"))
+            self.assertIn("grant_model_access", security_stub.read_text(encoding="utf-8"))
             self.assertNotIn("Field", menus_stub.read_text(encoding="utf-8"))
             self.assertFalse((written / "pyvelm" / "builders.pyi").exists())
             self.assertFalse((written / "pyvelm" / "builders" / "__init__.pyi").exists())
@@ -258,6 +284,195 @@ class StubGeneratorTests(unittest.TestCase):
         big = _literal_union("M", [f"m{i}" for i in range(500)])
         self.assertIn("truncated", big)
         self.assertIn(_escape_literal('a"b'), _literal_members(['a"b']))
+
+    def test_render_views_stubs_model_overloads(self):
+        from pyvelm.stub_generators import _render_views_stubs
+
+        text = _render_views_stubs()
+        self.assertIn("class ListViewBuilder:", text)
+        self.assertIn("def model(self, model: ModelName) -> ListViewBuilder", text)
+        self.assertIn("class StatWidgetBuilder:", text)
+
+    def test_render_legacy_stubs_model_overloads(self):
+        from pyvelm.stub_generators import _render_legacy_stubs
+
+        text = _render_legacy_stubs()
+        self.assertIn("model: ModelName", text)
+        self.assertIn("def graph_view", text)
+
+    def test_render_security_stubs_model_overloads(self):
+        from pyvelm.stub_generators import _render_security_stubs
+
+        text = _render_security_stubs()
+        self.assertIn("def grant_model_access", text)
+        self.assertIn("model: ModelName", text)
+
+    def test_render_model_stubs_inherit_and_name(self):
+        from pyvelm.stub_generators import _render_model_stubs
+
+        text = _render_model_stubs()
+        self.assertIn("_inherit: ClassVar[ModelName | str]", text)
+        self.assertIn("_name: ClassVar[ModelName | str]", text)
+
+    def test_render_field_builders_stubs_comodel(self):
+        from pyvelm.stub_generators import _render_field_builders_stubs
+
+        text = _render_field_builders_stubs()
+        self.assertIn("def comodel(self, name: ModelName)", text)
+
+    def _dependency_chain_project(self, tmp: Path) -> Path:
+        root = tmp / "erp"
+        root.mkdir()
+        (root / "pyvelm.toml").write_text(
+            'modules_root = "app/modules"\n', encoding="utf-8"
+        )
+        modules = root / "app" / "modules"
+
+        def write_module(
+            name: str,
+            *,
+            depends: list[str],
+            model_name: str,
+            view_name: str,
+        ) -> None:
+            mod = modules / name
+            mod.mkdir(parents=True)
+            (mod / "__init__.py").write_text("", encoding="utf-8")
+            (mod / "models").mkdir(parents=True)
+            (mod / "views").mkdir(parents=True)
+            depends_repr = repr(depends)
+            (mod / "__pyvelm__.py").write_text(
+                textwrap.dedent(
+                    f"""
+                    NAME = "{name}"
+                    VERSION = (0, 1, 0)
+                    DEPENDS: list[str] = {depends_repr}
+                    DATA: list[str] = ["views/item.py"]
+                    """
+                ),
+                encoding="utf-8",
+            )
+            (mod / "models" / "__init__.py").write_text(
+                f"from . import item  # noqa: F401\n", encoding="utf-8"
+            )
+            (mod / "models" / "item.py").write_text(
+                textwrap.dedent(
+                    f"""
+                    from pyvelm import BaseModel, Char
+
+                    class Item(BaseModel):
+                        _name = "{model_name}"
+                        name = Char()
+                    """
+                ),
+                encoding="utf-8",
+            )
+            (mod / "views" / "item.py").write_text(
+                textwrap.dedent(
+                    f"""
+                    from pyvelm.builders import list_view
+
+                    VIEWS = [
+                        list_view("{view_name}", "{model_name}", fields=["name"]),
+                    ]
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+        write_module(
+            "base_mod",
+            depends=[],
+            model_name="base_mod.country",
+            view_name="country.list",
+        )
+        write_module(
+            "partners",
+            depends=["base_mod"],
+            model_name="res.partner",
+            view_name="partner.list",
+        )
+        write_module(
+            "crm",
+            depends=["partners"],
+            model_name="crm.lead",
+            view_name="lead.list",
+        )
+        return root
+
+    def test_dependency_closure_includes_transitive_deps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._dependency_chain_project(Path(tmp))
+            modules_root = root / "app" / "modules"
+            _reg, specs, _index = load_stub_index(modules_root=modules_root)
+            partners_closure = dependency_closure("partners", specs)
+            self.assertEqual(partners_closure, frozenset({"partners", "base_mod"}))
+            crm_closure = dependency_closure("crm", specs)
+            self.assertEqual(
+                crm_closure,
+                frozenset({"crm", "partners", "base_mod"}),
+            )
+
+    def test_index_for_modules_filters_models_and_views(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._dependency_chain_project(Path(tmp))
+            modules_root = root / "app" / "modules"
+            _reg, specs, index = load_stub_index(modules_root=modules_root)
+            partners_index = index_for_modules(
+                dependency_closure("partners", specs),
+                index,
+            )
+            self.assertIn("res.partner", partners_index.models)
+            self.assertIn("base_mod.country", partners_index.models)
+            self.assertNotIn("crm.lead", partners_index.models)
+            self.assertIn("partners.partner.list", partners_index.qualified_views)
+            self.assertIn("base_mod.country.list", partners_index.qualified_views)
+            self.assertNotIn("crm.lead.list", partners_index.qualified_views)
+
+    def test_generate_stubs_writes_dependency_scoped_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._dependency_chain_project(Path(tmp))
+            modules_root = root / "app" / "modules"
+            out = root / ".pyvelm" / "typing"
+            generate_stubs(out, modules_root=modules_root, include_bundled=False)
+            partners_names = (
+                out / "scopes" / "partners" / "names.pyi"
+            ).read_text(encoding="utf-8")
+            crm_names = (out / "scopes" / "crm" / "names.pyi").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn('"res.partner"', partners_names)
+            self.assertIn('"base_mod.country"', partners_names)
+            self.assertNotIn('"crm.lead"', partners_names)
+            self.assertIn('"crm.lead"', crm_names)
+            global_names = (out / "names.pyi").read_text(encoding="utf-8")
+            self.assertIn('"crm.lead"', global_names)
+
+    def test_write_pyrightconfig_adds_execution_environments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._dependency_chain_project(Path(tmp))
+            modules_root = root / "app" / "modules"
+            out = root / ".pyvelm" / "typing"
+            _written, index = generate_stubs(
+                out, modules_root=modules_root, include_bundled=False
+            )
+            self.assertTrue(
+                write_pyrightconfig(
+                    root,
+                    stubs_dir=out,
+                    module_roots=index.module_roots,
+                )
+            )
+            cfg = json.loads((root / "pyrightconfig.json").read_text(encoding="utf-8"))
+            envs = cfg["executionEnvironments"]
+            partners_env = next(
+                env for env in envs if env["root"] == "app/modules/partners"
+            )
+            self.assertEqual(
+                partners_env["stubPath"],
+                ".pyvelm/typing/scopes/partners",
+            )
+            self.assertIn(".pyvelm/typing/scopes/partners", partners_env["extraPaths"])
 
 
 if __name__ == "__main__":

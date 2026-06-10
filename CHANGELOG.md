@@ -7,6 +7,17 @@ out of the 0.x line.
 
 ## Unreleased
 
+### Added
+
+- **IDE model-name autocomplete** — `pyvelm make:stubs` now augments fluent
+  ``ListView.make(…).model("…")``, legacy ``list_view(…, model, …)``,
+  ``grant_model_access(env, "…")``, plus existing ``env["…"]``,
+  ``env.query("…")``, ``env.registry["…"]``, and relational field comodels.
+  Per-addon ``executionEnvironments`` in ``pyrightconfig.json`` scope
+  ``ModelName`` to each module and its transitive ``DEPENDS`` chain.
+  Model declarations: ``_name`` / ``_inherit`` on ``models.Model``, relational
+  field comodels (constructor and ``.comodel("…")`` fluent chains).
+
 ## [1.3.0] — 2026-06-09
 
 ### Added
