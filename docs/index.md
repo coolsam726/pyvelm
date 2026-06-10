@@ -8,13 +8,13 @@ dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
 bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on a
 portable **SQLAlchemy Core** database layer (PostgreSQL or SQLite), FastAPI, and Jinja2.
 
-**Latest release:** [v1.1.1](releases/v1.1.1.md) — `make:module` scaffold fix,
-generator hardening, ~99% test coverage. See [Unreleased](releases/unreleased.md)
-for work on `main` after the tag. Use the header picker for older doc versions
-([versioning](versioning.md)).
+**Latest release:** [v1.2.0](releases/v1.2.0.md) — fluent ORM field builders,
+nested create dialogs, geo bootstrap, widget hints. See
+[Unreleased](releases/unreleased.md) for work on `main` after the tag. Use the
+header picker for older doc versions ([versioning](versioning.md)).
 
 ```bash
-pip install pyvelm==1.1.1
+pip install pyvelm==1.2.0
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
@@ -60,7 +60,8 @@ python examples/basic.py
 
 | Version | Highlights |
 |---------|------------|
-| [Unreleased](releases/unreleased.md) | *(none yet after v1.1.1)* |
+| [Unreleased](releases/unreleased.md) | *(none yet after v1.2.0)* |
+| [v1.2.0](releases/v1.2.0.md) | **Fluent ORM fields**; **nested dialogs**; **geo bootstrap**; **`WidgetHint`** on `Char` |
 | [v1.1.1](releases/v1.1.1.md) | **`make:module` fix** (`display_name`); **generator** hardening; **~99%** test coverage |
 | [v1.1.0](releases/v1.1.0.md) | **Fluent manifests** (`Manifest.make`); **fluent view builders** (`ViewsData.make`); **`models.Model`**; **query builder**; **Vellum removed**; bundled model packaging |
 | [v1.0.1](releases/v1.0.1.md) | **ORM super chaining** (`self.super()`); **nested menu groups**; **mike** doc versions; MySQL/MariaDB WIP |
