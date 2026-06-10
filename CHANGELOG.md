@@ -7,6 +7,8 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.3.2] — 2026-06-10
+
 ### Added
 
 - **Bundled `contacts` module** — ships ``res.partner`` in the wheel with list/form
