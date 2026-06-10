@@ -1,9 +1,12 @@
 """Model ``{{model}}``."""
 
-from pyvelm import BaseModel, Char
+from pyvelm import Char, models
 
 
-class {{class_name}}(BaseModel):
+class {{class_name}}(models.Model):
     _name = "{{model}}"
 
     name = Char(required=True)
+
+    # Fluent search (same ACL/rules as search()):
+    # env["{{model}}"].query().where("name", "ilike", "Acme").limit(20).get()

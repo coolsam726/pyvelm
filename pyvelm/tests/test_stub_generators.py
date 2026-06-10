@@ -134,6 +134,9 @@ class StubGeneratorTests(unittest.TestCase):
             self.assertIn('"demo.item.list"', names)
             env_stub = (written / "pyvelm" / "env.pyi").read_text(encoding="utf-8")
             self.assertIn("ModelName", env_stub)
+            self.assertIn("def query(self, model_name: ModelName) -> Query", env_stub)
+            models_stub = (written / "models_stubs.pyi").read_text(encoding="utf-8")
+            self.assertIn("def query(self) -> Query", models_stub)
             fields_stub = (written / "pyvelm" / "fields.pyi").read_text(encoding="utf-8")
             self.assertIn("comodel_name: ModelName", fields_stub)
             menus_stub = written / "pyvelm" / "builders" / "menus.pyi"

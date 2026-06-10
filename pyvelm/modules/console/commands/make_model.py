@@ -28,4 +28,5 @@ class MakeModelCommand(Command):
         self.info(f"Created {path}")
         self.line(f"Next: pyvelm make:view {model} --module={mod_name}")
         self.line(f"       pyvelm db autogen {mod_name} --with-views")
+        self.line(f"       pyvelm make:stubs   # after views exist")
         return 0

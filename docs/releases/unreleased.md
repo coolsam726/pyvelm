@@ -109,8 +109,12 @@ and the ``super_chain_demo*`` example modules under ``examples/modules/``.
 
 ### Vellum removed
 
-The optional Vellum ORM mixin, ``env.query()``, bundled ``vellum`` module,
-``vellum_demo`` example, and ``--vellum`` scaffold flag are gone.
+The optional Vellum ORM mixin, bundled ``vellum`` module, ``vellum_demo``
+example, and ``--vellum`` scaffold flag are gone.
+
+**Query builder** — ``env["model"].query()`` and ``env.query("model")`` are
+**not** part of Vellum; they are the core ``pyvelm.query.Query`` API (see
+above).
 
 **Mass assignment** (``_fillable`` / ``_guarded``) remains in
 ``pyvelm.mass_assignment`` for HTTP form writes.

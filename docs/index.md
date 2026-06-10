@@ -10,7 +10,7 @@ portable **SQLAlchemy Core** database layer (PostgreSQL or SQLite), FastAPI, and
 
 **Latest release:** [v1.0.1](releases/v1.0.1.md) — nested menu groups, versioned
 docs (mike), MySQL/MariaDB portability (WIP). **On `main` (unreleased):**
-fluent manifests/builders, `models.Model`, Vellum removed — see
+fluent manifests/builders, `models.Model`, query builder, Vellum removed — see
 [Unreleased](releases/unreleased.md). Use the header picker for older doc
 versions ([versioning](versioning.md)).
 
@@ -61,7 +61,7 @@ python examples/basic.py
 
 | Version | Highlights |
 |---------|------------|
-| [Unreleased](releases/unreleased.md) | **Fluent manifests** (`Manifest.make`); **fluent view builders** (`ViewsData.make`); **`models.Model`**; **Vellum removed** |
+| [Unreleased](releases/unreleased.md) | **Fluent manifests** (`Manifest.make`); **fluent view builders** (`ViewsData.make`); **`models.Model`**; **query builder**; **Vellum removed** |
 | [v1.0.1](releases/v1.0.1.md) | **ORM super chaining** (`self.super()`); **nested menu groups**; **mike** doc versions; MySQL/MariaDB WIP |
 | [v1.0.0](releases/v1.0.0.md) | **Database layer** (Postgres + SQLite), **seeders**, **Schema** migrations, multi-DB routing preview |
 | [v0.26.2](releases/v0.26.2.md) | **Workflow** sidebar links — ``view_module="workflow"`` fixes 404 on Instances/Approvals/Tasks |
@@ -113,7 +113,8 @@ If you're new, read these in order:
 2. **[Database layer (v1.0)](multi-database.md)** — DSNs, dialects, SQLite vs
    Postgres, routing preview.
 3. **[Declaring models](models.md)** — fields, relationships,
-   computed values, `_inherit` + `super()` chaining, dotted search domains.
+   computed values, `_inherit` + `super()` chaining, dotted search domains,
+   Eloquent-style `.query()` builder.
 4. **[Building UIs](views.md)** — fluent `ViewsData` / `ListView.make()`;
    list, form, and kanban views;
    widgets; list `domain`; the search bar; row reorder.

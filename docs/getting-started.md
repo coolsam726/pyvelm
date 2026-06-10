@@ -114,30 +114,28 @@ modules root via the `pyvelm.toml` marker dropped by `pyvelm init`:
 pyvelm new tasks
 ```
 
-That creates `./app/modules/tasks/` with a working stub:
+That creates an **empty shell** under `./app/modules/tasks/` (manifest,
+`hooks.py`, empty `models/` and `views/` packages — no models or menus
+yet). Add code with generators:
 
-```
-tasks/
-├── __init__.py
-├── __pyvelm__.py          # manifest = Manifest.make("tasks").depends("base")…
-├── hooks.py               # one-time install hook
-├── models/
-│   ├── __init__.py
-│   └── tasks.py           # `class Entry(BaseModel)`
-├── views/
-│   ├── __init__.py
-│   ├── tasks.py           # views_data = ViewsData.make()…
-│   └── menu.py            # sidebar group + item
-└── migrations/
-    └── __init__.py
+```bash
+pyvelm make:model tasks.todo --module=tasks
+pyvelm make:view tasks.todo --module=tasks
+pyvelm make:menu --view=todo.list --module=tasks
+pyvelm make:stubs
 ```
 
-The stub uses generic names (`Entry`, `entries`) — customise them
-freely.
+`make:model` scaffolds `class Todo(models.Model)` (Odoo-style). After
+you have records, fluent searches use the same ACL path as `search()`:
+
+```python
+open_items = env["tasks.todo"].query().where("active", True).order_by("name").get()
+```
 
 Apply schema and register the module:
 
 ```bash
+pyvelm db autogen tasks --with-views
 pyvelm db migrate
 # or: docker compose up   # runs migrate, then app + cron
 ```
@@ -153,9 +151,10 @@ top bar under the default `apps` layout) once menus are synced. See
 
 For model changes later, see [Migrations workflow](migrations.md).
 
-Optional: run `pyvelm make:stubs` so your editor validates model and
-view string literals (creates `.pyvelm/typing/` and `pyrightconfig.json`
-when missing). See [IDE typing stubs](ide-typing.md).
+`make:stubs` (above) writes `.pyvelm/typing/` and merges
+`pyrightconfig.json` so your editor validates model and view string
+literals (including `env.query("tasks.todo")`). See
+[IDE typing stubs](ide-typing.md).
 
 See the [CLI reference](cli.md#pyvelm-new) for the full command
 shape, including the `--in <path>` override when you're working
@@ -164,7 +163,8 @@ outside an init'd tree.
 ## What's next
 
 - **[Declaring models](models.md)** — the field reference, computed
-  fields, `_inherit` extensions, `super()` chaining.
+  fields, `_inherit` extensions, `super()` chaining, Eloquent-style
+  `.query()` builder.
 - **[Building UIs](views.md)** — fluent view builders, list / form /
   kanban arches, widgets, search and filtering.
 - **[Modules](modules.md)** — `Manifest.make()`, `views_data`, menus.

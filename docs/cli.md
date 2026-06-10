@@ -131,9 +131,9 @@ After you add models and views, run:
 pyvelm make:stubs
 ```
 
-That generates `.pyvelm/typing/` (model/view `Literal` unions and
-`env[]` overloads) and creates `pyrightconfig.json` when the file does
-not exist yet. Full details: [IDE typing stubs](ide-typing.md).
+That generates `.pyvelm/typing/` (model/view `Literal` unions,
+`env[]` / `env.query()` overloads) and creates or merges
+`pyrightconfig.json`. Full details: [IDE typing stubs](ide-typing.md).
 
 ## Legacy `pyvelm-cron` entry point
 
@@ -162,7 +162,7 @@ The generated tree (empty shell — no models, views, or menus):
 ```
 tasks/
 ├── __init__.py
-├── __pyvelm__.py          # NAME=tasks, DATA=[] (fill via generators)
+├── __pyvelm__.py          # Manifest.make("tasks")… (fill .data() via generators)
 ├── hooks.py               # optional install(env) stub
 ├── models/
 │   └── __init__.py
