@@ -10,6 +10,7 @@ out of the 0.x line.
 ### Changed
 
 - **Coverage gate** raised to **98%** (`pyproject.toml`, CI).
+- **Schema DX tests** — ``schema_eval`` and ``field_builders`` at **100%** line coverage (domain paths, fluent ORM chains, live-form predicates).
 
 ### Added
 

@@ -3,8 +3,25 @@ from __future__ import annotations
 
 import unittest
 
-from pyvelm import BaseModel, Char, Integer, Many2one, One2many, Registry, models
-from pyvelm.field_builders import OrmFieldBuilder, materialize_field
+from pyvelm import (
+    BaseModel,
+    Char,
+    Code,
+    Integer,
+    Many2many,
+    Many2one,
+    Monetary,
+    One2many,
+    Registry,
+    Text,
+    models,
+)
+from pyvelm.field_builders import (
+    OrmFieldBuilder,
+    field_new,
+    materialize_field,
+    materialize_namespace_fields,
+)
 
 
 class OrmFieldBuilderUnitTests(unittest.TestCase):
@@ -34,6 +51,78 @@ class OrmFieldBuilderUnitTests(unittest.TestCase):
         self.assertEqual(f.comodel_name, "res.partner")
         self.assertEqual(f.inverse_name, "parent_id")
         self.assertEqual(f.list_view, "child.list")
+
+    def test_builder_scalar_and_relation_chains(self):
+        built = materialize_field(
+            Char()
+            .column("partner_code")
+            .compute("_compute_code")
+            .store(False)
+            .related("parent_id.code")
+            .readonly()
+            .size(64)
+            .choices(["a", "b"])
+        )
+        self.assertEqual(built._column_override, "partner_code")
+        self.assertEqual(built.compute, "_compute_code")
+        self.assertFalse(built.is_stored)
+        self.assertEqual(built.related, "parent_id.code")
+        self.assertTrue(built.readonly)
+        self.assertEqual(built.size, 64)
+        self.assertEqual(built.choices, [("a", "a"), ("b", "b")])
+
+        code = materialize_field(Code().language("python"))
+        self.assertEqual(code.language, "python")
+
+        money = materialize_field(Monetary().currency_field("currency_id"))
+        self.assertEqual(money.currency_field, "currency_id")
+
+        m2o = materialize_field(Many2one().comodel("res.partner").ondelete("CASCADE"))
+        self.assertEqual(m2o.comodel_name, "res.partner")
+        self.assertEqual(m2o.ondelete, "CASCADE")
+
+        bare_inverse = One2many().inverse("partner_id")
+        self.assertEqual(bare_inverse._kwargs["inverse_name"], "partner_id")
+
+        o2m = materialize_field(
+            One2many("res.partner", "partner_id").form_view(
+                ("partners", "partner.form")
+            )
+        )
+        self.assertEqual(o2m.comodel_name, "res.partner")
+        self.assertEqual(o2m.inverse_name, "partner_id")
+        self.assertEqual(o2m.form_view, ("partners", "partner.form"))
+
+        m2m = materialize_field(
+            Many2many("res.tags")
+            .relation("partner_tag_rel")
+            .column1("partner_id")
+            .column2("tag_id")
+        )
+        self.assertEqual(m2m._relation_override, "partner_tag_rel")
+        self.assertEqual(m2m._column1_override, "partner_id")
+        self.assertEqual(m2m._column2_override, "tag_id")
+
+    def test_materialize_field_passthrough(self):
+        plain = Char.bare(required=True)
+        self.assertIs(materialize_field(plain), plain)
+
+    def test_materialize_namespace_fields(self):
+        builder = Text().string("Notes")
+        namespace = {"notes": builder, "keep": 1}
+        materialize_namespace_fields(namespace)
+        self.assertIsInstance(namespace["notes"], Text)
+        self.assertEqual(namespace["notes"].string, "Notes")
+        self.assertEqual(namespace["keep"], 1)
+
+    def test_field_new_kwargs_and_builder(self):
+        direct = field_new(Char, required=True)
+        self.assertIsInstance(direct, Char)
+        builder = field_new(Char)
+        self.assertIsInstance(builder, OrmFieldBuilder)
+        with_args = field_new(Many2one, "res.country")
+        self.assertIsInstance(with_args, OrmFieldBuilder)
+        self.assertEqual(with_args._args, ("res.country",))
 
 
 class FluentModelDeclarationTests(unittest.TestCase):
