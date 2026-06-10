@@ -457,78 +457,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Highlights">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#fluent-module-manifests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Fluent module manifests
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#fluent-view-and-menu-builders" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Fluent view and menu builders
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#modelsmodel-base-class" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        models.Model base class
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#query-builder-eloquent-style" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Query builder (Eloquent-style)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#orm-super-chaining-v101" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        ORM super chaining (v1.0.1+)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#vellum-removed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Vellum removed
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2249,78 +2177,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Highlights">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#fluent-module-manifests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Fluent module manifests
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#fluent-view-and-menu-builders" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Fluent view and menu builders
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#modelsmodel-base-class" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        models.Model base class
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#query-builder-eloquent-style" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Query builder (Eloquent-style)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#orm-super-chaining-v101" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        ORM super chaining (v1.0.1+)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#vellum-removed" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Vellum removed
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2355,102 +2211,17 @@
 
 
 <h1 id="unreleased-main-branch">Unreleased (main branch)<a class="headerlink" href="#unreleased-main-branch" title="Permanent link">&para;</a></h1>
-<p>Features on <code>main</code> not yet tagged on PyPI. See also
+<p>Changes on <code>main</code> after the latest PyPI tag. See
 <a href="https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#unreleased">CHANGELOG</a>.</p>
 <hr />
 <h2 id="highlights">Highlights<a class="headerlink" href="#highlights" title="Permanent link">&para;</a></h2>
-<h3 id="fluent-module-manifests">Fluent module manifests<a class="headerlink" href="#fluent-module-manifests" title="Permanent link">&para;</a></h3>
-<p>Assign a velmphp-style builder to <code>manifest</code> in <code>__pyvelm__.py</code>:</p>
-<div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyvelm.manifest</span><span class="w"> </span><span class="kn">import</span> <span class="n">Manifest</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">manifest</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">Manifest</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="s2">&quot;partners&quot;</span><span class="p">)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">.</span><span class="n">version</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="o">.</span><span class="n">depends</span><span class="p">(</span><span class="s2">&quot;base&quot;</span><span class="p">)</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="o">.</span><span class="n">data</span><span class="p">(</span><span class="s2">&quot;views/partner.py&quot;</span><span class="p">,</span> <span class="s2">&quot;views/menu.py&quot;</span><span class="p">)</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="o">.</span><span class="n">install_hook</span><span class="p">(</span><span class="s2">&quot;partners.hooks:install&quot;</span><span class="p">)</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="o">.</span><span class="n">summary</span><span class="p">(</span><span class="s2">&quot;Companies, contacts, and the partner directory.&quot;</span><span class="p">)</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
-</span></code></pre></div>
-<p>Legacy <code>NAME</code> / <code>VERSION</code> / <code>DEPENDS</code> / <code>DATA</code> constants remain supported.
-<code>pyvelm make:module</code> and migration tooling patch <code>.version(...)</code> and
-<code>.data(...)</code> on fluent manifests.</p>
-<p>See <a href="../../modules/#the-manifest">Modules → The manifest</a>.</p>
-<h3 id="fluent-view-and-menu-builders">Fluent view and menu builders<a class="headerlink" href="#fluent-view-and-menu-builders" title="Permanent link">&para;</a></h3>
-<p>Declare views and menus with class-based builders (Filament / velmphp style):</p>
-<div class="highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyvelm.builders</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span><span class="p">,</span> <span class="n">FormView</span><span class="p">,</span> <span class="n">ListView</span><span class="p">,</span> <span class="n">Menus</span><span class="p">,</span> <span class="n">ViewsData</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">m</span> <span class="o">=</span> <span class="n">Menus</span><span class="p">(</span><span class="s2">&quot;partners&quot;</span><span class="p">)</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">views_data</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">ViewsData</span><span class="o">.</span><span class="n">make</span><span class="p">()</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="o">.</span><span class="n">views</span><span class="p">(</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        <span class="n">ListView</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="s2">&quot;partner.list&quot;</span><span class="p">)</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>        <span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="s2">&quot;res.partner&quot;</span><span class="p">)</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        <span class="o">.</span><span class="n">columns</span><span class="p">([</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="n">Field</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="s2">&quot;active&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">toggle</span><span class="p">()])</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>        <span class="o">.</span><span class="n">form_view</span><span class="p">(</span><span class="s2">&quot;partner.form&quot;</span><span class="p">),</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>        <span class="n">FormView</span><span class="o">.</span><span class="n">make</span><span class="p">(</span><span class="s2">&quot;partner.form&quot;</span><span class="p">)</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>        <span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="s2">&quot;res.partner&quot;</span><span class="p">)</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>        <span class="o">.</span><span class="n">section</span><span class="p">(</span><span class="s2">&quot;identity&quot;</span><span class="p">,</span> <span class="s2">&quot;Identity&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;code&quot;</span><span class="p">]),</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="p">)</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="o">.</span><span class="n">menus</span><span class="p">(</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s2">&quot;business&quot;</span><span class="p">,</span> <span class="s2">&quot;Business&quot;</span><span class="p">,</span> <span class="n">icon</span><span class="o">=</span><span class="s2">&quot;home&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">children</span><span class="p">([</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>            <span class="n">m</span><span class="o">.</span><span class="n">item</span><span class="p">(</span><span class="s2">&quot;business.partners&quot;</span><span class="p">,</span> <span class="s2">&quot;Partners&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="s2">&quot;partner.list&quot;</span><span class="p">),</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>        <span class="p">]),</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="p">)</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="p">)</span>
-</span></code></pre></div>
-<p>Legacy <code>list_view</code> / <code>field</code> / <code>section</code> functions still work and produce
-the same dicts. <code>make:view</code> scaffolds emit the fluent style.</p>
-<p>See <a href="../../views/">Building UIs</a> and <a href="../../modules/#data-files">Modules → Data files</a>.</p>
-<h3 id="modelsmodel-base-class"><code>models.Model</code> base class<a class="headerlink" href="#modelsmodel-base-class" title="Permanent link">&para;</a></h3>
-<p>Odoo-style authoring for new models and <code>_inherit</code> extensions:</p>
-<div class="highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyvelm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Char</span><span class="p">,</span> <span class="n">models</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">Partner</span><span class="p">(</span><span class="n">models</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">_inherit</span> <span class="o">=</span> <span class="s2">&quot;res.partner&quot;</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">vip_note</span> <span class="o">=</span> <span class="n">Char</span><span class="p">()</span>
-</span></code></pre></div>
-<p><code>models.Model</code> is an alias of :class:<code>~pyvelm.BaseModel</code>; use whichever reads
-naturally in your module.</p>
-<p>See <a href="../../models/#extending-an-existing-model">Declaring models → Extending an existing model</a>.</p>
-<h3 id="query-builder-eloquent-style">Query builder (Eloquent-style)<a class="headerlink" href="#query-builder-eloquent-style" title="Permanent link">&para;</a></h3>
-<p>Fluent searches on the registry's effective model — same security path as
-<code>search()</code>:</p>
-<div class="highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">posts</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">env</span><span class="p">[</span><span class="s2">&quot;blog.post&quot;</span><span class="p">]</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="o">.</span><span class="n">query</span><span class="p">()</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="s2">&quot;views&quot;</span><span class="p">,</span> <span class="s2">&quot;&gt;&quot;</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="o">.</span><span class="n">order_by</span><span class="p">(</span><span class="s2">&quot;published_at&quot;</span><span class="p">,</span> <span class="s2">&quot;desc&quot;</span><span class="p">)</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="o">.</span><span class="n">get</span><span class="p">()</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">)</span>
-</span></code></pre></div>
-<p>See <a href="../../models/#a-first-model">Declaring models → Query builder</a> and
-<code>pyvelm.query</code>.</p>
-<h3 id="orm-super-chaining-v101">ORM super chaining (v1.0.1+)<a class="headerlink" href="#orm-super-chaining-v101" title="Permanent link">&para;</a></h3>
-<p>Stacked <code>_inherit</code> extensions can call <code>super().write(vals)</code> or
-<code>self.super().write(vals)</code> to reach the next layer. The registry records
-<code>inherit_chain</code> for introspection.</p>
-<p>See <a href="../../models/#super-chaining-create-write-custom-methods">Declaring models → Super chaining</a>
-and the <code>super_chain_demo*</code> example modules under <code>examples/modules/</code>.</p>
-<h3 id="vellum-removed">Vellum removed<a class="headerlink" href="#vellum-removed" title="Permanent link">&para;</a></h3>
-<p>The optional Vellum ORM mixin, bundled <code>vellum</code> module, <code>vellum_demo</code>
-example, and <code>--vellum</code> scaffold flag are gone.</p>
-<p><strong>Query builder</strong> — <code>env["model"].query()</code> and <code>env.query("model")</code> are
-<strong>not</strong> part of Vellum; they are the core <code>pyvelm.query.Query</code> API (see
-above).</p>
-<p><strong>Mass assignment</strong> (<code>_fillable</code> / <code>_guarded</code>) remains in
-<code>pyvelm.mass_assignment</code> for HTTP form writes.</p>
+<p><em>No unreleased highlights yet — edit this page when features land on <code>main</code> after <strong>v1.1.0</strong>.</em></p>
 <hr />
 <h2 id="upgrade-from-pypi">Upgrade from PyPI<a class="headerlink" href="#upgrade-from-pypi" title="Permanent link">&para;</a></h2>
-<p>When these land in a release:</p>
-<div class="highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-U<span class="w"> </span>pyvelm
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>pyvelm<span class="w"> </span>db<span class="w"> </span>migrate
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pyvelm<span class="w"> </span>make:stubs<span class="w">    </span><span class="c1"># refresh IDE literals after view/model renames</span>
+<p>When the next release ships:</p>
+<div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-U<span class="w"> </span>pyvelm
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pyvelm<span class="w"> </span>db<span class="w"> </span>migrate
 </span></code></pre></div>
-<p>Review custom modules that used Vellum or legacy-only manifest constants;
-migrate to <code>Manifest.make()</code> and <code>ViewsData.make()</code> when convenient (not
-required — legacy forms still load).</p>
 
 
 
