@@ -13,6 +13,11 @@ out of the 0.x line.
 
 ### Added
 
+- **`system_audit` module** — opt-in IT audit trail: ``ir.audit.log`` (CRUD),
+  ``ir.login.log`` (login/logout/failure), ``ir.user.lifecycle`` (user events);
+  CSV export routes; daily retention cron (``audit_purge`` server action);
+  ``PYVELM_AUDIT_RETENTION_DAYS`` (default 90). Install from **Apps**.
+- **`Manifest.bootstrap(False)`** — bundled modules can skip fresh-DB auto-install.
 - **Schema DX (Filament-style)** — view ``Field.make()`` chains accept callables for
   ``visible``, ``required``, ``readonly``, and ``hidden``; ``*_when`` helpers wrap
   Odoo domains. ``live()`` / ``live(on_blur)`` / ``live(debounce=…)`` re-render forms

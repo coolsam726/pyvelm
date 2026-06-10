@@ -55,23 +55,6 @@ IR_MODULE_TABLE = "ir_module"
 _BUILTIN_MODULES_ROOT = Path(__file__).resolve().parent / "modules"
 
 
-def discover_bootstrap_module_names() -> frozenset[str]:
-    """Technical names of every bundled module under ``pyvelm/modules/``."""
-    if not _BUILTIN_MODULES_ROOT.is_dir():
-        return frozenset({"base", "admin"})
-    return frozenset(
-        p.name
-        for p in _BUILTIN_MODULES_ROOT.iterdir()
-        if p.is_dir() and (p / "__pyvelm__.py").is_file()
-    )
-
-
-# Auto-installed on a fresh database (empty ``ir_module``). Every other
-# discovered module (e.g. app addons outside ``pyvelm/modules/``) is opt-in
-# via **Apps** or ``pyvelm migrate --all``.
-BOOTSTRAP_MODULES: frozenset[str] = discover_bootstrap_module_names()
-
-
 def parse_module_roots_env(value: str) -> list[Path]:
     """Parse ``PYVELM_MODULE_ROOTS`` — comma- or colon-separated paths."""
     import re
@@ -185,12 +168,39 @@ def _manifest_dict_from_module(mod: Any, manifest_path: Path) -> dict[str, Any]:
             "CATALOG_ACCESS_MODEL": getattr(mod, "CATALOG_ACCESS_MODEL", ""),
             "CATALOG_ACCESS_PERM": getattr(mod, "CATALOG_ACCESS_PERM", ""),
             "CATALOG_ACCESS_POLICY": getattr(mod, "CATALOG_ACCESS_POLICY", ""),
+            "BOOTSTRAP": getattr(mod, "BOOTSTRAP", True),
         }
 
     raise ValueError(
         f"Manifest at {manifest_path} must assign a "
         f"``Manifest`` instance to ``manifest`` or declare legacy NAME/VERSION."
     )
+
+
+def discover_bootstrap_module_names() -> frozenset[str]:
+    """Bundled modules auto-installed on a fresh database.
+
+    Modules with ``BOOTSTRAP = False`` in their manifest (or
+    ``Manifest.bootstrap(False)``) are discovered but opt-in via Apps.
+    """
+    if not _BUILTIN_MODULES_ROOT.is_dir():
+        return frozenset({"base", "admin"})
+    names: list[str] = []
+    for pkg_path in _BUILTIN_MODULES_ROOT.iterdir():
+        manifest_path = pkg_path / "__pyvelm__.py"
+        if not pkg_path.is_dir() or not manifest_path.is_file():
+            continue
+        mod = _exec_manifest_module(pkg_path)
+        data = _manifest_dict_from_module(mod, manifest_path)
+        if data.get("BOOTSTRAP", True):
+            names.append(pkg_path.name)
+    return frozenset(names)
+
+
+# Auto-installed on a fresh database (empty ``ir_module``). Every other
+# discovered module (e.g. app addons outside ``pyvelm/modules/``) is opt-in
+# via **Apps** or ``pyvelm migrate --all``.
+BOOTSTRAP_MODULES: frozenset[str] = discover_bootstrap_module_names()
 
 
 def _module_spec_from_dict(data: dict[str, Any], pkg_path: Path) -> ModuleSpec:

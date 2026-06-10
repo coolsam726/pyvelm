@@ -52,7 +52,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 
 | Feature | velmphp | pyvelm today |
 |---------|---------|--------------|
-| `system_audit` module | v1.0.1 | — |
+| `system_audit` module | v1.0.1 | **Done (unreleased)** |
 | List `bulk_actions` | v1.1.0 | **Done (v1.3.0)** |
 | `DetailView` + `row_actions` | rc3+ | **Done (v1.3.0)** |
 | `ActionForm` / view-actions inline forms | v1.0.1 | URL actions only |
@@ -90,7 +90,7 @@ source.
 | # | Item | velmphp ref | Notes |
 |---|------|-------------|-------|
 | 1.1 | **Dark mode tokens** | `velm-tokens.css` `.dark` | **Done (v1.1.0)** — lifted surfaces (`gray-800`/`900`), not OLED black |
-| 1.2 | **`system_audit` module** | `packages/modules/modules/system_audit/` | `ir.audit.log`, `ir.login.log`, `ir.user.lifecycle`; optional `PYVELM_AUDIT_DSN`; retention cron; CSV export |
+| 1.2 | **`system_audit` module** | `packages/modules/modules/system_audit/` | **Done (unreleased)** — CRUD/login/lifecycle audit; retention cron; CSV export; opt-in via Apps |
 | 1.3 | **List bulk actions** | `bulk_actions` arch | **Done (v1.3.0)** — row checkboxes, select-all, bulk bar, default bulk delete when unlink allowed |
 | 1.4 | **`DetailView` + `row_actions`** | `DetailView.php`, `ListRowAction` | **Done (v1.3.0)** — read-only record page; list links via `detail_view` |
 | 1.5 | **`ActionForm` / view-actions** | `ViewActionFormController` | Toolbar quick-add/edit mini-forms at `/web/view-actions/...` |
@@ -111,7 +111,7 @@ source.
 | Slice | Items | Outcome |
 |-------|-------|---------|
 | **1.1-a** | 1.1 (done), 1.11 | Visual parity — dark mode + theme toggle |
-| **1.1-b** | 1.2 | Enterprise audit trail installable from Apps |
+| **1.1-b** | 1.2 | **Done (unreleased)** — Enterprise audit trail installable from Apps |
 | **1.1-c** | 1.3, 1.4, 1.5 | List/detail toolbar parity |
 | **1.1-d** | 1.6 | Reference `partners` module authors can copy |
 | **1.1-e** | 1.7, 1.8, 1.9, 1.10 | Bootstrap / settings polish |
