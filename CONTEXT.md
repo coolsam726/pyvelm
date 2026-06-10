@@ -2,6 +2,13 @@
 
 Building an Odoo-style ERP framework in Python.
 
+**`main` (unreleased)** — fluent `Manifest.make()` / `ViewsData.make()`;
+`models.Model`; Eloquent-style `env["model"].query()` / `env.query()` on
+`pyvelm.query.Query` (core API, not Vellum); Vellum removed; ORM super
+chaining. See [docs/releases/unreleased.md](docs/releases/unreleased.md).
+Scaffolds: `make:model` emits `models.Model`; `make:stubs` overloads
+`env.query()` and `recordset.query()`.
+
 **v0.11.0 (released 2026-05-26)** — **Email templates** (`mail.template`),
 **Html** field sanitizer, TipTap v3 + CodeMirror editor, live Jinja preview,
 form **cols** / **colspan** grid. Base **0.26.0**. See
@@ -695,8 +702,9 @@ Auth & deployment hardening wave (commits `9520446`, `095c768`,
     adds the columns + calls the same seed for upgraded installs.
     base bumped to 0.9.0.
 
-  ✅ **Bundled modules**: `base`, `admin`, `reports`, `console`, `vellum`, and
-  others ship inside the wheel at `pyvelm/modules/<name>/`.
+  ✅ **Bundled modules**: `base`, `admin`, `reports`, `console`, and others
+  ship inside the wheel at `pyvelm/modules/<name>/`. (The optional `vellum`
+  module was removed on `main`; mass assignment lives in `pyvelm.mass_assignment`.)
   `pyvelm.BUILTIN_MODULE_ROOTS` is the single-entry list apps prepend to
   their discovery roots; the `pyvelm-cron` CLI prepends it automatically. A poison
   `pyvelm/modules/__init__.py` prevents `pyvelm.modules.base` from

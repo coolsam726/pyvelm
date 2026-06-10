@@ -75,11 +75,11 @@ Discovery uses the same module roots as the web app (`pyvelm.toml`
 | Command | Purpose |
 |---------|---------|
 | `make:module` | Empty addon skeleton (no models/views/menus) |
-| `make:model` | `models/<name>.py` + `models/__init__.py` import |
+| `make:model` | `models/<name>.py` (`models.Model`) + `models/__init__.py` import |
 | `make:view` | `views/<stem>.py` with `ViewsData.make()` list + form + manifest `.data()` entry |
 | `make:menu` | `views/menu.py` (or `--append` to existing) |
 | `make:command` | `commands/<name>.py` Artisan command class |
-| `make:stubs` | Generate `.pyvelm/typing/` + create `pyrightconfig.json` when missing — see [IDE typing stubs](ide-typing.md) |
+| `make:stubs` | Generate `.pyvelm/typing/` + merge `pyrightconfig.json` — see [IDE typing stubs](ide-typing.md) |
 | `serve` | Run uvicorn (`--env development|production`, `--reload`, `--host`, `--port`) |
 | `test` | Run pytest (`--coverage`, `--integration`, extra args after `--`) |
 | `migrate` | Install/upgrade modules (bootstrap on fresh DB; `--all`, `--module`) |

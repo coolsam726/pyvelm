@@ -21,7 +21,7 @@ This writes:
 | Path | Purpose |
 |------|---------|
 | `.pyvelm/typing/` | Generated `.pyi` files (`ModelName`, view literals, `env[]` overloads) |
-| `pyrightconfig.json` | Created **only when missing** — points the checker at the stub directory |
+| `pyrightconfig.json` | Created when missing; **merged** on each run (`include`, `stubPath`, …) |
 
 `pyvelm init` already ships `pyrightconfig.json` and gitignores `.pyvelm/`.
 Older projects pick up the config file on the first `make:stubs` run.
@@ -50,7 +50,9 @@ views (`VIEWS` / `VIEW_INHERITS` in `DATA` files).
 3. `PYVELM_MODULE_ROOTS` from `.env`
 
 Models are loaded from each module's `models/` package; views and menus are
-read from paths listed in `DATA` (`.py` files exporting `VIEWS` / `VIEW_INHERITS`).
+read from paths listed in the manifest (`.data(...)` or legacy `DATA`), from
+`.py` files exporting `views_data` (`ViewsData.make()`) or legacy
+`VIEWS` / `VIEW_INHERITS` / `MENUS`.
 
 ### Symbol types
 
@@ -82,8 +84,10 @@ pyvelm make:stubs --modules-root=examples/modules --output=.pyvelm/typing
 pyvelm make:stubs --app-only
 ```
 
-An existing `pyrightconfig.json` is **never overwritten**. Delete it manually
-if you need to reset paths after moving the stub directory.
+`make:stubs` **merges** keys into an existing `pyrightconfig.json` (`include`,
+`stubPath`, `extraPaths`, `typeCheckingMode`) without dropping your custom
+settings. Delete the file manually if you need a full reset after moving the
+stub directory.
 
 ## Editor setup
 
@@ -123,6 +127,9 @@ Where completions apply:
 | `Many2one("…")` | Comodel technical name |
 | `m.item(…, view="…")` | Short view name (`ViewSlug`) |
 | `env["…"]` | Model technical name (when `env` is typed as `Environment`) |
+| `env.query("…")` | Model technical name → `Query` |
+| `recordset.query()` | Returns `Query` (chain methods from `pyvelm.query`) |
+| `Query.where(…)` field arg | Plain `str` — field names are not literal-unions yet |
 | Record fields | Not stubbed yet (`record.name` stays unstructured) |
 
 ### PyCharm
@@ -148,6 +155,7 @@ Pylance-based type checker that honours `pyrightconfig.json`.
 
 ```python
 company = env["res.company"]   # checked literal; stub recordset type
+active = env.query("res.company").where("active", True).get()
 cls = env.registry["res.company"]
 ```
 
@@ -190,7 +198,7 @@ resolution on top of that.
 | No completions anywhere | Type checking mode `off` → set **basic** or **standard** |
 | No completions in `examples/` | Re-run `make:stubs` so `include` lists `examples/modules` |
 | `Many2one` / `view=` still plain `str` | Reload window; confirm `stubPath` in `pyrightconfig.json` |
-| `env["…"]` not completing | `env` must be typed (`Environment`); ad-hoc untyped locals won't |
+| `env["…"]` / `env.query` not completing | `env` must be typed (`Environment`); ad-hoc untyped locals won't |
 | Stubs outdated | Re-run `make:stubs` after model/view changes |
 
 ## One2many field specs
@@ -207,6 +215,7 @@ documented in [One2many on parent forms](one2many-forms.md). Stubs autocomplete
 - Dynamic domains and runtime-built view refs are not analyzed.
 - Very large registries truncate the `Literal` union (see comment in `names.pyi`);
   narrow with `--modules-root` or `--app-only`.
-- Record **field** names on recordsets are not completed (only model/view strings).
+- Record **field** names on recordsets and in `Query.where("…")` are not
+  completed (only model/view strings).
 - The web app and `pyvelm db` commands do **not** auto-generate stubs on
   startup — run `make:stubs` explicitly (or add a pre-commit hook).

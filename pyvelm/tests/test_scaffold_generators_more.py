@@ -585,6 +585,7 @@ class GenerateModelTests(unittest.TestCase):
             self.assertTrue(path.is_file())
             text = path.read_text(encoding="utf-8")
             self.assertIn("demo.partner", text)
+            self.assertIn("models.Model", text)
             with self.assertRaises(FileExistsError):
                 generate_model(mod, "demo", "partner")
             path2 = generate_model(mod, "demo", "note", force=True)

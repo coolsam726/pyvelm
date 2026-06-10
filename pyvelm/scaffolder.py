@@ -131,6 +131,7 @@ Add models, views, and menus with generators:
   pyvelm make:view {module_name}.product --module={module_name}
   pyvelm make:menu --view=product.list --module={module_name}
   pyvelm db autogen {module_name} --with-views
+  pyvelm make:stubs
 
 Optional: pyvelm make:command {module_name}:hello --module={module_name}
 """.rstrip()
