@@ -46,6 +46,19 @@ class BumpVersionTests(unittest.TestCase):
             self.assertIn("## [1.0.0] — 2026-01-01", text)
             self.assertNotIn("## Unreleased\n\n### Added", text)
 
+    def test_finalize_changelog_skips_when_version_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            changelog = Path(tmp) / "CHANGELOG.md"
+            changelog.write_text(
+                "## Unreleased\n\n"
+                "## [1.3.1] — 2026-06-10\n\n### Added\n\n- **Done** — shipped.\n",
+                encoding="utf-8",
+            )
+            self.assertFalse(
+                self.bump.finalize_changelog(changelog, "1.3.1", "2026-06-11")
+            )
+            self.assertIn("## [1.3.1] — 2026-06-10", changelog.read_text(encoding="utf-8"))
+
     def test_finalize_changelog_rejects_empty_unreleased(self):
         with tempfile.TemporaryDirectory() as tmp:
             changelog = Path(tmp) / "CHANGELOG.md"
@@ -73,6 +86,21 @@ class BumpVersionTests(unittest.TestCase):
             self.assertEqual(self.bump.read_pyproject_version(root), "1.2.0")
             self.assertEqual(self.bump.read_init_version(root), "1.2.0")
             self.assertEqual(self.bump.check_versions(root), [])
+
+    def test_bump_readme_updates_latest_and_pip_pin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            readme = Path(tmp) / "README.md"
+            readme.write_text(
+                "**Latest: [v1.3.0](https://example.com/old)** — highlights.\n\n"
+                "```bash\npip install pyvelm==1.3.0\n```\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(self.bump.bump_readme(readme, "1.4.0", "2026-07-01"))
+            text = readme.read_text(encoding="utf-8")
+            self.assertIn("[v1.4.0]", text)
+            self.assertIn("CHANGELOG.md#140--2026-07-01", text)
+            self.assertIn("pip install pyvelm==1.4.0", text)
+            self.assertNotIn("1.3.0", text)
 
     def test_check_versions_detects_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:

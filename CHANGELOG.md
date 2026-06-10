@@ -7,6 +7,8 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.3.1] — 2026-06-10
+
 ### Added
 
 - **Dev server stub refresh** — development ``pyvelm serve`` / ``app.serve``

@@ -8,8 +8,9 @@ Usage::
     python scripts/bump_version.py --check
 
 Moves ``## Unreleased`` in ``CHANGELOG.md`` to ``## [X.Y.Z] — <date>``,
-updates ``pyproject.toml`` and ``pyvelm.__version__``, refreshes docs pointers,
-and creates ``docs/releases/vX.Y.Z.md`` when missing.
+updates ``pyproject.toml`` and ``pyvelm.__version__``, refreshes ``README.md``,
+``docs/index.md``, and related docs pointers, and creates
+``docs/releases/vX.Y.Z.md`` when missing.
 
 After bumping, commit, then::
 
@@ -114,12 +115,19 @@ def extract_unreleased_body(changelog_text: str) -> str:
     return body.strip()
 
 
+def _changelog_has_version(text: str, version: str) -> bool:
+    return bool(re.search(rf"^## \[{re.escape(version)}\]", text, re.MULTILINE))
+
+
 def finalize_changelog(path: Path, version: str, release_date: str) -> bool:
     text = path.read_text(encoding="utf-8")
+    if _changelog_has_version(text, version):
+        return False
     body = extract_unreleased_body(text)
     if not body:
         raise ValueError(
-            "CHANGELOG ## Unreleased is empty — add release notes before bumping"
+            "CHANGELOG ## Unreleased is empty — add release notes before bumping, "
+            f"or pass --no-changelog if {version!r} is already finalized"
         )
     after = text.split("## Unreleased", 1)[1]
     match = re.search(r"\n## \[", after)
@@ -201,6 +209,32 @@ pyvelm make:stubs
 See [CHANGELOG](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#{version.replace(".", "")}--{release_date}) for the full list.
 """
     path.write_text(body, encoding="utf-8")
+    return True
+
+
+def bump_readme(path: Path, version: str, release_date: str) -> bool:
+    """Update root ``README.md`` latest-version link and ``pip install`` pin."""
+    text = path.read_text(encoding="utf-8")
+    anchor = version.replace(".", "")
+    new = re.sub(
+        r"\*\*Latest: \[v[\d.]+\]\([^)]+\)\*\*",
+        (
+            f"**Latest: [v{version}]"
+            f"(https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md"
+            f"#{anchor}--{release_date})**"
+        ),
+        text,
+        count=1,
+    )
+    new = re.sub(
+        r"pip install pyvelm==[\d.]+",
+        f"pip install pyvelm=={version}",
+        new,
+        count=1,
+    )
+    if new == text:
+        return False
+    path.write_text(new, encoding="utf-8")
     return True
 
 
@@ -343,6 +377,7 @@ def bump_all(
         if rel:
             changed.append(f"docs/releases/v{version}.md")
         for rel_path, fn in (
+            ("README.md", lambda p: bump_readme(p, version, release_date)),
             ("docs/index.md", lambda p: bump_docs_index(p, version, release_date)),
             ("docs/releases/unreleased.md", lambda p: bump_unreleased_doc(p, version)),
             ("ROADMAP.md", lambda p: bump_roadmap(p, version, release_date)),
@@ -373,12 +408,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-changelog",
         action="store_true",
-        help="Only bump pyproject.toml and pyvelm/__init__.py",
+        help="Skip CHANGELOG finalization (only bump pyproject.toml and __init__.py)",
     )
     parser.add_argument(
         "--no-docs",
         action="store_true",
-        help="Skip docs/index.md, ROADMAP, CONTEXT, release page",
+        help="Skip README.md, docs/index.md, ROADMAP, CONTEXT, and release page",
     )
     parser.add_argument(
         "--check",
