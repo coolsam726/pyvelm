@@ -21,6 +21,19 @@ def compile_create_index(
     return f'CREATE INDEX "{name}" ON "{table}" ({cols})'
 
 
+def compile_create_unique(
+    name: str, table: str, columns: tuple[str, ...], cap
+) -> str:
+    cols = ", ".join(f'"{c}"' for c in columns)
+    if cap.name in ("postgresql", "sqlite"):
+        return (
+            f'CREATE UNIQUE INDEX IF NOT EXISTS "{name}" ON "{table}" ({cols})'
+        )
+    if cap.name == "mysql":
+        return f'CREATE UNIQUE INDEX "{name}" ON "{table}" ({cols})'
+    return f'CREATE UNIQUE INDEX "{name}" ON "{table}" ({cols})'
+
+
 def compile_drop_column(table: str, column: str, cap) -> str:
     tbl = ddl_quote_identifier(table, cap)
     col = ddl_quote_identifier(column, cap)
@@ -103,6 +116,20 @@ def execute_create_index(
     cap = cap or conn_capabilities(conn)
     require_sa_connection(conn).execute(
         text(compile_create_index(name, table, columns, cap))
+    )
+
+
+def execute_create_unique(
+    conn,
+    name: str,
+    table: str,
+    columns: tuple[str, ...],
+    *,
+    cap=None,
+) -> None:
+    cap = cap or conn_capabilities(conn)
+    require_sa_connection(conn).execute(
+        text(compile_create_unique(name, table, columns, cap))
     )
 
 

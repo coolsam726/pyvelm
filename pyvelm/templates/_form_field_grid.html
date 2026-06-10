@@ -8,6 +8,14 @@
     {% set cell_span = cell.colspan or (grid_cols if cell.wide else 1) %}
     <div data-field="{{ cell.name }}"
          {% if cell.error %}data-pv-field-error{% endif %}
+         {% if cell.visible_js %}x-show="{{ cell.visible_js }}" x-cloak{% endif %}
+         {% if cell.live_post and mode in ('edit', 'new') %}
+         hx-post="{{ cell.live_post }}"
+         hx-trigger="{{ cell.live_trigger }} from:find input, {{ cell.live_trigger }} from:find select, {{ cell.live_trigger }} from:find textarea"
+         hx-include="closest form"
+         hx-target="closest [data-pv-form-shell]"
+         hx-swap="innerHTML"
+         {% endif %}
          class="flex flex-col gap-1.5 min-w-0
             {% if cell.error %}pv-cell-error{% endif %}"
          style="--cell-span: {{ cell_span }};">

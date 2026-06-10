@@ -404,6 +404,7 @@ class BaseModel(metaclass=MetaModel):
             table_exists,
         )
         from .database.sa_ddl import (
+            ensure_model_indexes_and_uniques,
             execute_create_table,
             model_table_columns,
             referenced_tables_from_columns,
@@ -441,6 +442,7 @@ class BaseModel(metaclass=MetaModel):
         if created_now:
             from .database.introspection import clear_reflection_cache
 
+            ensure_model_indexes_and_uniques(conn, cls, cap=cap)
             clear_reflection_cache(conn)
             return
         from .database.introspection import clear_reflection_cache

@@ -43,6 +43,7 @@ from pyvelm.database import conn_capabilities
 from pyvelm.database.sa_alter import (
     execute_add_foreign_key,
     execute_create_index,
+    execute_create_unique,
     execute_drop_column,
     execute_drop_constraint,
     execute_rename_column,
@@ -87,6 +88,7 @@ SUPPORTED_ALTERATIONS: tuple[str, ...] = (
     "drop_constraint",
     "foreign_key",
     "index",
+    "unique",
     "primary_key",
 )
 
@@ -178,9 +180,10 @@ class _ColumnSpec:
         "fk_table",
         "fk_ondelete",
         "_cap",
+        "_bp",
     )
 
-    def __init__(self, name: str, col_type, *, cap) -> None:
+    def __init__(self, name: str, col_type, *, cap, bp: "Blueprint | None" = None) -> None:
         self.name = name
         self.col_type = col_type
         self.allows_null = False
@@ -189,6 +192,7 @@ class _ColumnSpec:
         self.fk_table: str | None = None
         self.fk_ondelete = "CASCADE"
         self._cap = cap
+        self._bp = bp
 
     def nullable(self, value: bool = True) -> _ColumnSpec:
         self.allows_null = value
@@ -203,6 +207,16 @@ class _ColumnSpec:
             self.server_default = sa_text(repr(value))
         else:
             self._client_default = value
+        return self
+
+    def index(self, name: str | None = None) -> _ColumnSpec:
+        if self._bp is not None:
+            self._bp._register_column_index(self.name, name=name)
+        return self
+
+    def unique(self, name: str | None = None) -> _ColumnSpec:
+        if self._bp is not None:
+            self._bp._register_column_unique(self.name, name=name)
         return self
 
     def references(self, table_name: str, *, ondelete: str = "CASCADE") -> _ColumnSpec:
@@ -256,8 +270,35 @@ class Blueprint:
         self._columns: list[Column] = []
         self._constraints: list = []
         self._indexes: list[tuple[str, tuple[str, ...]]] = []
+        self._uniques: list[tuple[str, tuple[str, ...]]] = []
         self._alter_ops: list[_AlterOp] = []
         self._deferred_fks: list[tuple[str, str, str, str]] = []
+
+    def _register_column_index(self, column: str, *, name: str | None = None) -> None:
+        iname = name or f"{self.table}_{column}_idx"
+        cols = (column,)
+        self._indexes.append((iname, cols))
+        if not self._create:
+            self._alter_ops.append(
+                _AlterOp(
+                    lambda t, c, cap, n=iname, cs=cols: execute_create_index(
+                        c, n, t, cs, cap=cap
+                    )
+                )
+            )
+
+    def _register_column_unique(self, column: str, *, name: str | None = None) -> None:
+        uname = name or f"{self.table}_{column}_uniq"
+        cols = (column,)
+        self._uniques.append((uname, cols))
+        if not self._create:
+            self._alter_ops.append(
+                _AlterOp(
+                    lambda t, c, cap, n=uname, cs=cols: execute_create_unique(
+                        c, n, t, cs, cap=cap
+                    )
+                )
+            )
 
     def id(self, name: str = "id") -> None:
         if not self._create:
@@ -329,10 +370,30 @@ class Blueprint:
         return self.foreign(name, big=True)
 
     def index(self, *column_names: str, name: str | None = None) -> None:
-        if not self._create:
-            raise RuntimeError("index() is only valid inside schema.create()")
         iname = name or f"{self.table}_{'_'.join(column_names)}_idx"
         self._indexes.append((iname, column_names))
+        if not self._create:
+            cols = tuple(column_names)
+            self._alter_ops.append(
+                _AlterOp(
+                    lambda t, c, cap, n=iname, cs=cols: execute_create_index(
+                        c, n, t, cs, cap=cap
+                    )
+                )
+            )
+
+    def unique(self, *column_names: str, name: str | None = None) -> None:
+        uname = name or f"{self.table}_{'_'.join(column_names)}_uniq"
+        self._uniques.append((uname, column_names))
+        if not self._create:
+            cols = tuple(column_names)
+            self._alter_ops.append(
+                _AlterOp(
+                    lambda t, c, cap, n=uname, cs=cols: execute_create_unique(
+                        c, n, t, cs, cap=cap
+                    )
+                )
+            )
 
     def primary_key(self, *column_names: str) -> None:
         if not self._create:
@@ -439,7 +500,7 @@ class Blueprint:
         )
         col_type = BigInteger() if use_big else Integer()
         spec = (
-            _ColumnSpec(name, col_type, cap=self._cap)
+            _ColumnSpec(name, col_type, cap=self._cap, bp=self)
             .nullable(nullable)
             .references(ref_table, ondelete=ondelete)
         )
@@ -474,7 +535,7 @@ class Blueprint:
         return spec
 
     def _add_column(self, name: str, col_type, *, nullable: bool) -> _ColumnSpec:
-        spec = _ColumnSpec(name, col_type, cap=self._cap).nullable(nullable)
+        spec = _ColumnSpec(name, col_type, cap=self._cap, bp=self).nullable(nullable)
         col = spec.build()
         if self._create:
             self._columns.append(col)
@@ -534,6 +595,8 @@ class Schema:
             )
         for iname, cols in bp._indexes:
             execute_create_index(self.conn, iname, table, cols, cap=self.cap)
+        for uname, cols in bp._uniques:
+            execute_create_unique(self.conn, uname, table, cols, cap=self.cap)
 
     def table(self, table: str, fn: TableCallback) -> None:
         bp = Blueprint(table, self.cap, create=False)

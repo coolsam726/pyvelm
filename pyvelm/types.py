@@ -121,9 +121,18 @@ class FieldRef(_FieldRefRequired, total=False):
 
     widget: WidgetHint
     label: str
-    readonly: bool
-    required: bool
-    visible: bool
+    readonly: bool | object
+    readonly_when: list
+    required: bool | object
+    required_when: list
+    visible: bool | object
+    visible_when: list
+    hidden: bool | object
+    visible_js: str
+    live: bool | int | str
+    depends_on: list[str]
+    options_domain: list | object
+    default: object
     # Form-grid only: how many columns of the surrounding section this
     # field's cell spans. ``"full"`` (or an integer >= the section's
     # ``cols``) makes the cell occupy the full row. Ignored on list /
