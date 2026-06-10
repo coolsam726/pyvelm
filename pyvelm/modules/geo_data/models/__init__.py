@@ -1,4 +1,4 @@
-from . import continent  # noqa: F401
-from . import country  # noqa: F401
-from . import state  # noqa: F401
-from . import city  # noqa: F401
+from . import res_continent  # noqa: F401
+from . import res_country  # noqa: F401
+from . import res_country_state  # noqa: F401
+from . import res_city  # noqa: F401

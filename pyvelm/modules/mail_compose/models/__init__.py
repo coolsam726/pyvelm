@@ -1,1 +1,1 @@
-from . import compose  # noqa: F401
+from . import mail_compose_message  # noqa: F401

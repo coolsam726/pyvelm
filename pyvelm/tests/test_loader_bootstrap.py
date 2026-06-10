@@ -81,9 +81,9 @@ def test_bootstrap_after_geo_data_and_partners(pyvelm_dsn: str):
         install_named_modules(env, ["admin", "geo_data"], roots)
         install_module_action(env, list(roots), "partners")
 
-    import base.models.country as base_country
+    import base.models.res_country as base_country
 
-    display = base_country.Country._fields["display_name"]
+    display = base_country.ResCountry._fields["display_name"]
     assert "flag_emoji" not in display.depends_on
 
 

@@ -113,6 +113,30 @@ class DialectHelperTests(unittest.TestCase):
             0,
         )
 
+    def test_postgresql_helpers(self):
+        self.assertIn("SERIAL", postgresql.serial_primary_key())
+        self.assertEqual(postgresql.timestamp_sql_type(), "timestamptz")
+        self.assertEqual(postgresql.now_sql(), "now()")
+        self.assertEqual(postgresql.string_sql_type(), "text")
+        self.assertTrue(postgresql.supports_create_table_if_not_exists())
+        sql = postgresql.append_search_pagination(
+            "SELECT 1",
+            base_table_sql="t",
+            limit=5,
+            offset=2,
+            order=None,
+        )
+        self.assertIn("LIMIT 5", sql)
+        self.assertIn("OFFSET 2", sql)
+        self.assertEqual(postgresql.bind_params((1, 2)), (1, 2))
+        conn = MagicMock()
+        postgresql.before_reset_all_tables(conn)
+        postgresql.after_reset_all_tables(conn)
+        self.assertIn(
+            "+psycopg",
+            postgresql.normalize_dsn("postgres://localhost/db") or "",
+        )
+
     def test_mysql_fetch_lastrowid(self):
         self.assertEqual(mysql.fetch_lastrowid(self._conn((3,)), "t"), 3)
 

@@ -1782,7 +1782,7 @@ def main():
                 assert disp.__name__ == "_render_monetary", disp
                 assert edit.__name__ == "_edit_monetary", edit
                 print("Monetary: subclass, round_with, widgets registered OK")
-            # partners_pro defines PartnerPro(_inherit="res.partner")
+            # partners_pro extends res.partner via _inherit (ResPartner)
             # which adds `vip_note` and overrides `_compute_display_name`.
             with pool.connection() as s7_conn:
                 from pyvelm import Environment as _Env7

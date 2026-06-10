@@ -1,1 +1,1 @@
-from . import company_ext  # _inherit res.company — document layout + address
+from . import res_company  # _inherit res.company — document layout + address

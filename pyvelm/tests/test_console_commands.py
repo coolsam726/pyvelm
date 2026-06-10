@@ -154,6 +154,20 @@ class ServeCommandTests(unittest.TestCase):
         self.assertEqual(code, 1)
 
     @patch("console.commands.serve.run_dev_server")
+    @patch("console.commands.serve.prepare_reload_import", return_value=["/tmp"])
+    @patch("console.commands.serve.guess_serve_import", return_value="app.serve:app")
+    def test_reload_with_guessed_app(self, _guess, _prep, run_server):
+        cmd = self.Command()
+        cmd._ctx = self._ctx()
+        code = cmd.handle(reload=True, port="8080")
+        self.assertEqual(code, 0)
+        run_server.assert_called_once()
+        kwargs = run_server.call_args.kwargs
+        self.assertTrue(kwargs["reload"])
+        self.assertEqual(kwargs["app"], "app.serve:app")
+        self.assertEqual(kwargs["port"], 8080)
+
+    @patch("console.commands.serve.run_dev_server")
     @patch("console.commands.serve.build_serve_app")
     def test_serve_without_reload(self, build_app, run_server):
         app = MagicMock()
@@ -229,6 +243,26 @@ class TestCommandTests(unittest.TestCase):
         if Path("pyvelm/tests").is_dir():
             self.assertEqual(default_test_path(), "pyvelm/tests")
 
+    def test_default_test_path_prefers_project_tests(self):
+        from console.commands.test import default_test_path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "pyvelm.toml").write_text("modules_root='m'\n", encoding="utf-8")
+            tests = root / "tests"
+            tests.mkdir()
+            with patch("console.commands.test.find_project_root", return_value=root):
+                self.assertEqual(default_test_path(), str(tests))
+
+    def test_default_test_path_falls_back_to_dot(self):
+        from console.commands.test import default_test_path
+
+        with patch("console.commands.test.find_project_root", return_value=None), patch(
+            "console.commands.test.Path"
+        ) as path_cls:
+            path_cls.return_value.is_dir.return_value = False
+            self.assertEqual(default_test_path(), ".")
+
     def test_missing_pytest_returns_error(self):
         cmd = self.Command()
         ctx = CommandContext()
@@ -260,6 +294,17 @@ class TestCommandTests(unittest.TestCase):
         self.assertIn("foo", args)
         self.assertIn("-m", args)
         self.assertEqual(args[args.index("-m") + 1], "not integration")
+
+    def test_coverage_flag_passed_to_pytest(self):
+        cmd = self.Command()
+        ctx = CommandContext()
+        cmd._ctx = ctx
+        with patch("pytest.main", return_value=0) as main:
+            code = cmd.run(ctx, ["--coverage", "--path", "pyvelm/tests"])
+        self.assertEqual(code, 0)
+        args = main.call_args[0][0]
+        self.assertIn("--cov=pyvelm", args)
+        self.assertIn("--cov-report=term-missing", args)
 
 
 if __name__ == "__main__":

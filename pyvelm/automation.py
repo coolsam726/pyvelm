@@ -1,36 +1,13 @@
-"""Automated-action trigger engine (Stage 6 Slice B).
-
-`base.automation` records attach a server action to a model-level ORM
-event.  The three supported trigger values are:
-
-  on_create  — fires after every successful create() on the model.
-  on_write   — fires after every successful write() on the model.
-  on_unlink  — fires before every unlink() on the model.
-
-The ORM calls `AutomationEngine.fire(env, model_name, event, records)`
-from within `BaseModel.create / write / unlink`.  The call is a no-op
-if `base.automation` is not in the registry (e.g. during early install).
-
-`base.automation` records are active (active=True) by default.
-Deactivating a rule suppresses it without deleting it.
-"""
+"""Automated-action engine and backward-compatible model re-export."""
 from __future__ import annotations
 
-from pyvelm import BaseModel, Boolean, Char, Many2one
+from pyvelm._bundled_path import ensure_builtin_modules_path
 
-
-# Valid trigger names.
-TRIGGERS = frozenset({"on_create", "on_write", "on_unlink"})
-
-
-class AutomatedAction(BaseModel):
-    _name = "base.automation"
-
-    name = Char(required=True)
-    model = Char(required=True)         # model _name this rule watches
-    trigger = Char(required=True)       # on_create / on_write / on_unlink
-    action_id = Many2one("ir.actions.server", ondelete="CASCADE")
-    active = Boolean(default=True)
+ensure_builtin_modules_path()
+from base.models.base_automation import (  # noqa: E402
+    TRIGGERS,
+    AutomatedAction,
+)
 
 
 class AutomationEngine:
@@ -38,17 +15,10 @@ class AutomationEngine:
 
     @staticmethod
     def fire(env, model_name: str, event: str, records) -> None:
-        """Run all active automation rules for (model_name, event).
-
-        Failures in individual actions are logged to stderr and do NOT
-        abort the calling ORM operation; automation side effects are
-        best-effort unless the action itself raises inside a transaction
-        that the caller manages.
-        """
+        """Run all active automation rules for (model_name, event)."""
         if "base.automation" not in env.registry:
             return
         if env._acl_bypass:
-            # Avoid recursive triggers while installing / migrating.
             return
 
         prev = env._acl_bypass
@@ -74,3 +44,6 @@ class AutomationEngine:
                     )
         finally:
             env._acl_bypass = prev
+
+
+__all__ = ["TRIGGERS", "AutomatedAction", "AutomationEngine"]

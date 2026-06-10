@@ -1,1 +1,1 @@
-from . import partner  # noqa: F401
+from . import res_partner  # noqa: F401
