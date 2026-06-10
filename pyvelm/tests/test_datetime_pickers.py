@@ -21,7 +21,7 @@ class _Form(dict):
 
 def test_render_date_picker_has_flowbite_attrs():
     html = str(
-        render_date_picker(date(2026, 4, 17), {"name": "due_on"}, Date())
+        render_date_picker(date(2026, 4, 17), {"name": "due_on"}, Date.bare())
     )
     assert "datepicker" in html
     assert 'datepicker-format="yyyy-mm-dd"' in html
@@ -71,7 +71,7 @@ def test_combine_datetime_form_values_legacy_split():
 
 def test_parse_datetime_field_single():
     form = _Form({"starts_at": "2026-05-01T10:00"})
-    value, err = _parse_datetime_field(form, "starts_at", Datetime(), env=None)
+    value, err = _parse_datetime_field(form, "starts_at", Datetime.bare(), env=None)
     assert err is None
     assert value == datetime(2026, 5, 1, 10, 0)
 
@@ -79,9 +79,9 @@ def test_parse_datetime_field_single():
 class _Model:
     _name = "test.picker"
     _fields = {
-        "due_on": Date(),
-        "starts_at": Datetime(),
-        "opens_at": Time(),
+        "due_on": Date.bare(),
+        "starts_at": Datetime.bare(),
+        "opens_at": Time.bare(),
     }
 
 

@@ -66,6 +66,40 @@ class Field:
     # process.
     private: bool = False
 
+    def __new__(cls, *args, **kwargs):
+        from .field_builders import field_new
+
+        return field_new(cls, *args, **kwargs)
+
+    @classmethod
+    def make(cls, *args, **kwargs):
+        """Start a fluent field chain (``Char.make().required()`` ≡ ``Char().required()``)."""
+        return cls(*args, **kwargs)
+
+    @classmethod
+    def bare(cls, *args, **kwargs):
+        """Return a field instance (for tests, SQLAlchemy columns, etc.).
+
+        ``Char()`` inside a model class body starts a fluent chain; outside
+        a model use ``Char.bare()`` when you need a concrete descriptor.
+        """
+        field = object.__new__(cls)
+        cls.__init__(field, *args, **kwargs)
+        return field
+
+    def __copy__(self):
+        duplicate = object.__new__(type(self))
+        duplicate.__dict__.update(self.__dict__)
+        return duplicate
+
+    def __deepcopy__(self, memo):
+        from copy import deepcopy
+
+        duplicate = object.__new__(type(self))
+        for key, value in self.__dict__.items():
+            duplicate.__dict__[key] = deepcopy(value, memo)
+        return duplicate
+
     def __init__(
         self,
         string: str | None = None,

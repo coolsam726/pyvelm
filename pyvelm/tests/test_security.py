@@ -34,7 +34,7 @@ class CharFieldTests(unittest.TestCase):
     def test_false_and_empty_normalize_to_none(self):
         from pyvelm.fields import Char
 
-        f = Char()
+        f = Char.bare()
         self.assertIsNone(f.to_python(False))
         self.assertIsNone(f.to_sql_param(False))
         self.assertIsNone(f.to_python(""))

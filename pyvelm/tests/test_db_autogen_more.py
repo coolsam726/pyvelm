@@ -143,7 +143,7 @@ class TypeHelperTests(unittest.TestCase):
         self.assertFalse(_types_match("integer", "text"))
 
     def test_field_type_spec(self):
-        f = Char()
+        f = Char.bare()
         self.assertEqual(_field_type_spec(f), "varchar(255)")
 
 
@@ -152,7 +152,7 @@ class ComputeDiffNewTableTests(unittest.TestCase):
         cls = MagicMock()
         cls._name = "res.partner"
         cls._table = "res_partner"
-        f = Char()
+        f = Char.bare()
         f.name = "name"
         f.column = "name"
         f.is_stored = True
@@ -301,10 +301,10 @@ class ApplySchemaDiffIntegrationTests(unittest.TestCase):
 class BlueprintHelperTests(unittest.TestCase):
     def test_blueprint_line_from_field_variants(self):
         self.assertIn("string", _blueprint_line_from_field(Char(required=True), "code", required=True))
-        self.assertIn("string", _blueprint_line_from_field(Text(), "note", required=False))
-        self.assertIn("integer", _blueprint_line_from_field(Integer(), "qty", required=False))
-        self.assertIn("boolean", _blueprint_line_from_field(Boolean(), "active", required=False))
-        self.assertIn("float", _blueprint_line_from_field(Float(), "amt", required=False))
+        self.assertIn("string", _blueprint_line_from_field(Text.bare(), "note", required=False))
+        self.assertIn("integer", _blueprint_line_from_field(Integer.bare(), "qty", required=False))
+        self.assertIn("boolean", _blueprint_line_from_field(Boolean.bare(), "active", required=False))
+        self.assertIn("float", _blueprint_line_from_field(Float.bare(), "amt", required=False))
         m2o = Many2one("res.partner", ondelete="CASCADE")
         m2o.comodel = "res.partner"
         self.assertIn("foreign_id", _blueprint_line_from_field(m2o, "partner_id", required=True))
@@ -409,23 +409,23 @@ class ComputeDiffFieldSkipTests(unittest.TestCase):
         cls = MagicMock()
         cls._name = "res.partner"
         cls._table = "res_partner"
-        id_f = Integer()
+        id_f = Integer.bare()
         id_f.name = "id"
         id_f.column = "id"
         id_f.is_stored = True
-        o2m = One2many("res.line", "partner_id")
+        o2m = One2many.bare("res.line", "partner_id")
         o2m.name = "line_ids"
         o2m.column = "line_ids"
         o2m.is_stored = True
-        m2m = Many2many("res.tag")
+        m2m = Many2many.bare("res.tag")
         m2m.name = "tag_ids"
         m2m.column = "tag_ids"
         m2m.is_stored = True
-        m2o = Many2one("res.country")
+        m2o = Many2one.bare("res.country")
         m2o.name = "country_id"
         m2o.column = "country_id"
         m2o.is_stored = True
-        code = Char()
+        code = Char.bare()
         code.name = "code"
         code.column = "code"
         code.is_stored = True

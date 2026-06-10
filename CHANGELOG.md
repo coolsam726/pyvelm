@@ -7,6 +7,27 @@ out of the 0.x line.
 
 ## Unreleased
 
+### Added
+
+- **Fluent ORM field builders** — chain model field options with
+  ``Char().required().string("Name")``, ``Many2one("res.country").ondelete(...)``,
+  ``One2many(...).inverse(...).list_view(...)``, etc. Constructor kwargs
+  unchanged. Distinct from ``pyvelm.builders.Field`` (view arch specs only).
+- **`WidgetHint` expansion** — IDE autocomplete for scalar widgets
+  (``text``, ``html``, ``code``, ``image``, ``file_url``, ``color``, ``model``,
+  ``file``, ``files``). ``Char`` fields accept the same hints as ``Text``
+  (e.g. ``widget="text"`` renders a textarea).
+
+### Fixed
+
+- **Nested `PvDialog` create flows** — opening a comodel form from inside
+  another dialog (e.g. continent while creating a country) restores the parent
+  dialog on save instead of closing both.
+- **Geo bootstrap seeding** — install/Sync defaults to ``PYVELM_GEO_SEED_LEVEL=bootstrap``
+  (continents + detected country via ``PYVELM_GEO_COUNTRY`` / TZ / locale).
+  **Seed geography data** runs the full import in a background thread and shows
+  an immediate toast.
+
 ## [1.1.1] — 2026-06-09
 
 ### Fixed

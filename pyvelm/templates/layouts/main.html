@@ -459,6 +459,7 @@
     <template x-if="open">
         <div>
             <div class="pv-fdialog-backdrop"
+                 :style="{ zIndex: 60 + _stack.length * 2 }"
                  @click="closeOnBackdrop && close()"></div>
             <div class="pv-fdialog-card"
                  :class="{
@@ -852,6 +853,7 @@
             _x: null, _y: null,           // current top-left position (px)
             _dragOffset: null,            // mousedown offset within title bar
             _resolve: null,               // onResult callback from opener
+            _stack: [],                   // suspended parent dialogs (nested create)
             _moveHandler: null,
             _upHandler: null,
 
@@ -916,15 +918,81 @@
             },
 
             get cardStyle() {
+                const z = 61 + this._stack.length * 2;
                 if (this._x === null || this._y === null) {
                     // Centered fallback before we measure the card.
-                    return 'left: 50%; top: 12vh; transform: translateX(-50%);';
+                    return `left: 50%; top: 12vh; transform: translateX(-50%); z-index: ${z};`;
                 }
-                return `left: ${this._x}px; top: ${this._y}px;`;
+                return `left: ${this._x}px; top: ${this._y}px; z-index: ${z};`;
+            },
+
+            _pushFrame() {
+                const content = this.$refs.content;
+                this._stack.push({
+                    mode: this.mode,
+                    title: this.title,
+                    message: this.message,
+                    variant: this.variant,
+                    confirmLabel: this.confirmLabel,
+                    cancelLabel: this.cancelLabel,
+                    recordUrl: this.recordUrl,
+                    closeOnBackdrop: this.closeOnBackdrop,
+                    _resolve: this._resolve,
+                    contentHtml: content ? content.innerHTML : '',
+                });
+            },
+
+            _reinitDialogContent(root) {
+                if (!root) return;
+                if (window.htmx && typeof window.htmx.process === 'function') {
+                    window.htmx.process(root);
+                }
+                if (window.Alpine && typeof window.Alpine.initTree === 'function') {
+                    window.Alpine.initTree(root);
+                }
+                if (typeof pvInitPickers === 'function') pvInitPickers();
+                if (typeof pvInitO2mGrids === 'function') pvInitO2mGrids(root);
+                if (typeof window.pvRefreshO2mEditToggles === 'function') {
+                    window.pvRefreshO2mEditToggles(root);
+                }
+            },
+
+            _popFrame(result) {
+                const cb = this._resolve;
+                const parent = this._stack.pop();
+                if (!parent) return false;
+                this._resolve = parent._resolve;
+                this.mode = parent.mode;
+                this.title = parent.title;
+                this.message = parent.message;
+                this.variant = parent.variant;
+                this.confirmLabel = parent.confirmLabel;
+                this.cancelLabel = parent.cancelLabel;
+                this.recordUrl = parent.recordUrl;
+                this.closeOnBackdrop = parent.closeOnBackdrop;
+                this.open = true;
+                this.loading = false;
+                this._x = null;
+                this._y = null;
+                this.$nextTick(() => {
+                    const content = this.$refs.content;
+                    if (content) {
+                        content.innerHTML = parent.contentHtml;
+                        this._reinitDialogContent(content);
+                    }
+                    this.center();
+                });
+                if (cb) {
+                    try { cb(result || null); } catch (_) {}
+                }
+                return true;
             },
 
             openPrompt(cfg) {
                 return new Promise(resolve => {
+                    if (this.open && this.mode === 'content') {
+                        this._pushFrame();
+                    }
                     const mode = cfg.mode === 'alert' ? 'alert' : 'confirm';
                     this.mode = mode;
                     this.variant = cfg.variant || (mode === 'alert' ? 'info' : 'danger');
@@ -957,6 +1025,9 @@
             },
 
             async openWith(cfg) {
+                if (this.open && this.mode === 'content') {
+                    this._pushFrame();
+                }
                 this.mode = 'content';
                 this.message = '';
                 this.title = cfg.title || '';
@@ -998,6 +1069,10 @@
             },
 
             closeWith(result) {
+                if (this._stack.length > 0) {
+                    this._popFrame(result);
+                    return;
+                }
                 const cb = this._resolve;
                 this._resolve = null;
                 this.open = false;
@@ -1008,6 +1083,7 @@
                 this.loading = false;
                 this._x = null;
                 this._y = null;
+                this._stack = [];
                 const content = this.$refs.content;
                 if (content) content.innerHTML = '';
                 if (cb) {

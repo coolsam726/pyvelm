@@ -239,7 +239,7 @@ class SeederHelperTests(unittest.TestCase):
             class Country(BaseModel):
                 _name = "res.country"
                 _table = "res_country"
-                code = Char()
+                code = Char.bare()
                 geoname_id = Integer()
 
         executed: list[str] = []
@@ -278,7 +278,7 @@ class SeederHelperTests(unittest.TestCase):
                 _table = "demo_row"
                 name = Char(required=True)
 
-            ghost = Char()
+            ghost = Char.bare()
             ghost.name = "ghost"
             ghost.column = "ghost"
             ghost.is_stored = True
@@ -366,7 +366,7 @@ class SeederHelperTests(unittest.TestCase):
             class Country(BaseModel):
                 _name = "res.country"
                 _table = "res_country"
-                code = Char()
+                code = Char.bare()
 
         conn = MagicMock()
         wire_sa_conn(

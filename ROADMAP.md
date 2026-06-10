@@ -27,7 +27,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 | **v1.0.1** | Nested menus, versioned docs, MySQL/MariaDB WIP | **Done** |
 | **v1.1.0** | Fluent manifests/builders, `models.Model`, query builder, Vellum removal | **Done** |
 | **v1.1.1** | `make:module` / generator fixes, ~99% test coverage | **Done** |
-| **v1.2** | velmphp shell parity — audit, bulk actions, detail views, reference `partners` | **Planned** |
+| **v1.2** | Fluent ORM fields, velmphp shell parity — audit, bulk actions, detail views, reference `partners` | **In progress** |
 | **v1.3** | ORM extension ergonomics — mixins, model discovery | **Planned** |
 | **v1.4** | Multi-DB routing (preview → production), Oracle/MSSQL smoke | **Planned** (see [docs/multi-database.md](docs/multi-database.md)) |
 
@@ -59,7 +59,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 | `$mixins` (`mail.thread` composable) | rc3 | class inheritance |
 | `static::super()` for `_inherit` stacks | rc3 | `self.super()` + `Registry.inherit_chain()` |
 | Currency import API | v1.0.1 | models + UI, no import |
-| Geo country bootstrap (`VELM_GEO_COUNTRY`, IP detect) | v1.0.1 | full seeder only |
+| Geo country bootstrap (`PYVELM_GEO_COUNTRY`, TZ/locale detect) | v1.2 | **Done** — bootstrap install + background full seed |
 | `mail` as installable module | v1.0.0 | core/base |
 | Protected bootstrap modules (uninstall blockers) | v1.0.1 | `base` only |
 | Per-module dashboard as default app entry | v1.0.1 | admin home only |
@@ -71,7 +71,16 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 
 ---
 
-## Tier 1 — v1.1 shell parity (velmphp 1.0.1 + 1.1.0)
+## Tier 0 — v1.2 ORM ergonomics (in progress)
+
+| # | Item | Status |
+|---|------|--------|
+| 0.1 | **Fluent ORM field chains** | **Done** — ``Char().required().tracking()``; ``Many2one("m").ondelete()``; metaclass materializes ``OrmFieldBuilder`` |
+| 0.2 | **IDE stubs for builders** | Planned — overload ``Char()`` return type in ``make:stubs`` |
+
+---
+
+## Tier 1 — v1.1 shell parity (velmphp 1.0.0 + 1.1.0)
 
 Target: a third-party author can install pyvelm, open the admin shell, and see
 the same list/form/toolbar patterns velmphp documents — without reading PHP
@@ -86,7 +95,7 @@ source.
 | 1.5 | **`ActionForm` / view-actions** | `ViewActionFormController` | Toolbar quick-add/edit mini-forms at `/web/view-actions/...` |
 | 1.6 | **Bundled `partners` module** | `modules/partners/` | Ship in wheel: list, detail, form, kanban, graph, pivot, dashboard; demo page actions |
 | 1.7 | **Currency import** | `CurrencyImportService` | On-demand world currencies (RESTcountries or bundled fallback); Settings action |
-| 1.8 | **Geo bootstrap polish** | `GeoCountryDetector` | `PYVELM_GEO_COUNTRY`; install seeds current country; full import on demand |
+| 1.8 | **Geo bootstrap polish** | `GeoCountryDetector` | **Done** — `PYVELM_GEO_COUNTRY`; bootstrap install; background full seed |
 | 1.9 | **Protected modules** | `AppsCatalog` | Block uninstall of `geo_data`, `file_manager`, etc. with clear blockers in Apps UI |
 | 1.10 | **Automation settings UX** | `base/views/automation.php` | Server actions + cron under Settings; code field read-only display |
 | 1.11 | **Theme toggle pill** | `velm-theme-toggle` CSS | Match velmphp sun/moon sliding toggle |

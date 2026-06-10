@@ -5,6 +5,7 @@ import logging
 import os
 from typing import Any
 
+from pyvelm.geo_utils import detect_geo_country_code
 from pyvelm.geo_utils import flag_emoji as _flag_emoji
 from pyvelm.geo_utils import geo_packages_available, require_geo_packages
 from pyvelm.seeding import (
@@ -24,7 +25,11 @@ _BULK_CHUNK = 500
 
 def _geo_seed_level(context: dict[str, Any]) -> str:
     return (
-        (context.get("geo_seed_level") or os.environ.get("PYVELM_GEO_SEED_LEVEL") or "full")
+        (
+            context.get("geo_seed_level")
+            or os.environ.get("PYVELM_GEO_SEED_LEVEL")
+            or "bootstrap"
+        )
         .strip()
         .lower()
     )
@@ -36,6 +41,10 @@ def _include_states(level: str) -> bool:
 
 def _include_cities(level: str) -> bool:
     return level == "full"
+
+
+def _include_all_countries(level: str) -> bool:
+    return level in ("full", "countries", "states")
 
 
 class ContinentSeeder(Seeder):
@@ -90,9 +99,14 @@ class CountrySeeder(Seeder):
             normalize_key="upper",
         )
         patch_existing = bool(context.get("patch_existing"))
+        only_codes = context.get("only_country_codes")
+        if only_codes is not None:
+            only_codes = {str(c).upper() for c in only_codes}
         to_insert: list[dict[str, Any]] = []
         patched = 0
         for iso2, payload in gc.get_countries().items():
+            if only_codes is not None and iso2 not in only_codes:
+                continue
             vals = {
                 "name": payload.get("name") or iso2,
                 "code": iso2,
@@ -265,6 +279,21 @@ class GeographyDatabaseSeeder(Seeder):
             return False
         if context.get("force"):
             return True
+        level = _geo_seed_level(context)
+        if level == "bootstrap":
+            if "res.continent" in env.registry:
+                continents = env["res.continent"].search_count([])
+                countries = (
+                    env["res.country"].search_count([])
+                    if "res.country" in env.registry
+                    else 0
+                )
+                if continents >= 7 and countries >= 1:
+                    log.info(
+                        "geo_data: bootstrap geography already present — skipping"
+                    )
+                    return False
+            return True
         if "res.country" in env.registry:
             if env["res.country"].search_count([]) >= _COUNTRIES_SEEDED_THRESHOLD:
                 log.info("geo_data: geography seed skipped — countries already loaded")
@@ -281,7 +310,27 @@ class GeographyDatabaseSeeder(Seeder):
         ctx = {"gc": gc, "inserted": counts, **context}
 
         continent_map = self.call(env, ContinentSeeder, **ctx)
-        countries = self.call(env, CountrySeeder, continents=continent_map, **ctx)
+        country_ctx = dict(ctx)
+        if _include_all_countries(level):
+            country_ctx.pop("only_country_codes", None)
+        else:
+            detected = (
+                context.get("geo_country_code")
+                or detect_geo_country_code()
+            )
+            if detected:
+                country_ctx["only_country_codes"] = {str(detected).upper()}
+                log.info(
+                    "geo_data: bootstrap — seeding country %s only", detected
+                )
+            else:
+                country_ctx["only_country_codes"] = set()
+                log.info(
+                    "geo_data: bootstrap — no country detected; continents only"
+                )
+        countries = self.call(
+            env, CountrySeeder, continents=continent_map, **country_ctx
+        )
 
         if _include_states(level):
             states = self.call(env, StateSeeder, countries=countries, **ctx)
