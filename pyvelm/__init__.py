@@ -31,6 +31,7 @@ from . import types
 from . import models
 from .manifest import Manifest
 from .model import BaseModel
+from .query import Page, Query, RecordNotFound
 from .registry import Registry
 # NOTE: ServerAction, AutomatedAction, CronJob, Message, MailThread are
 # NOT imported here because they define BaseModel subclasses which must
@@ -81,6 +82,9 @@ __all__ = [
     "Many2one",
     "Monetary",
     "One2many",
+    "Page",
+    "Query",
+    "RecordNotFound",
     "Registry",
     "Text",
     "builders",

@@ -37,11 +37,44 @@ print(alice.name, alice.age)
 # write
 alice.write({"age": 31})
 
-# search — returns a recordset
+# search — returns a recordset (domain list)
 adults = env["res.partner"].search([("age", ">=", 18)])
 for r in adults:
     print(r.name)
+
+# fluent query builder (Laravel Eloquent-style) — same ACL/rules path as search
+posts = (
+    env["blog.post"]
+    .query()
+    .where("active", "=", True)
+    .where("views", ">", 100)
+    .order_by("published_at", "desc")
+    .limit(20)
+    .get()
+)
+# env.query("blog.post") is equivalent — always uses the registry class after _inherit
 ```
+
+Use ``env["model.name"].query()`` or ``env.query("model.name")`` so queries hit
+the **effective** merged model, not a stale import from one module file.
+
+| Method | Purpose |
+|--------|---------|
+| ``where(field, op, value)`` / ``where(field, value)`` | AND constraint |
+| ``or_where(...)`` | OR with the current AND-group |
+| ``where_in`` / ``where_not_in`` / ``where_null`` | Common filters |
+| ``where_any([leaves…])`` | OR group of leaves |
+| ``order_by(field, "asc"\|"desc")`` | SQL ``ORDER BY`` |
+| ``limit`` / ``offset`` | Pagination |
+| ``get()`` | Recordset (runs ``search()``) |
+| ``first()`` / ``find(id)`` / ``find_or_fail(id)`` | Single row |
+| ``count()`` / ``exists()`` | Aggregates without loading rows |
+| ``pluck(field)`` / ``value(field)`` | Scalar lists |
+| ``paginate(page=, per_page=)`` | ``Page`` with ``items``, ``total``, ``last_page`` |
+| ``chunk(size)`` | Batch recordsets |
+
+All execution methods delegate to ``search()`` / ``search_count()`` — record rules,
+ACL, and company scope still apply.
 
 Collection search paths support universal quantification with a fourth
 leaf element: `("tag_ids.name", "!=", "VIP", {"all": True})` — every

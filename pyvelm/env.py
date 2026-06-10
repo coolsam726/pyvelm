@@ -89,6 +89,17 @@ class Environment:
         model_cls = self.registry[model_name]
         return model_cls(self, ())
 
+    def query(self, model_name: str):
+        """Fluent query builder for the registry's effective *model_name* class.
+
+        Prefer ``env["model.name"].query()`` when you already have a recordset;
+        both resolve ``registry[model_name]`` after ``_inherit`` merges.
+        """
+        from .query import Query
+
+        model_cls = self.registry[model_name]
+        return Query.for_model(model_cls, self)
+
     def _derive(self, *, context: dict, acl_bypass: bool) -> "Environment":
         """Build a sibling env sharing conn + registry + value cache.
 

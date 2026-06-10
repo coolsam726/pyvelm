@@ -79,6 +79,25 @@ naturally in your module.
 
 See [Declaring models → Extending an existing model](../models.md#extending-an-existing-model).
 
+### Query builder (Eloquent-style)
+
+Fluent searches on the registry's effective model — same security path as
+``search()``:
+
+```python
+posts = (
+    env["blog.post"]
+    .query()
+    .where("views", ">", 100)
+    .order_by("published_at", "desc")
+    .limit(20)
+    .get()
+)
+```
+
+See [Declaring models → Query builder](../models.md#a-first-model) and
+``pyvelm.query``.
+
 ### ORM super chaining (v1.0.1+)
 
 Stacked ``_inherit`` extensions can call ``super().write(vals)`` or
