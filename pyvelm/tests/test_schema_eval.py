@@ -1,8 +1,10 @@
 """Schema predicate evaluation and view field fluent builders."""
 from __future__ import annotations
 
+import inspect
 import unittest
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from pyvelm import BaseModel, Char, Many2one, Registry
 from pyvelm.builders import Field
@@ -13,10 +15,12 @@ from pyvelm.schema_eval import (
     SchemaContext,
     _call_predicate,
     _compare_leaf,
+    _eval_domain_tree,
     _resolve_leaf_value,
     parse_live_spec,
     record_matches_domain,
     resolve_schema_bool,
+    spec_readonly as spec_readonly_legacy,
     spec_readonly_schema,
     spec_required,
     spec_visible,
@@ -180,6 +184,159 @@ class SchemaEvalTests(unittest.TestCase):
             {"debounce": 100, "on_blur": True},
         )
         self.assertIsNone(parse_live_spec("nope"))
+
+    def test_schema_context_record_read_errors_and_empty_m2o(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Country(BaseModel):
+                _name = "test.schema.err.country"
+                code = Char()
+
+            class Partner(BaseModel):
+                _name = "test.schema.err.partner"
+                name = Char()
+                country_id = Many2one("test.schema.err.country")
+
+        empty_country = _FakeRecord(Country._fields, {})
+        empty_country._ids = ()
+        partner = _FakeRecord(
+            Partner._fields,
+            {"name": "Acme", "country_id": empty_country},
+        )
+        ctx = SchemaContext(env=None, record=partner, submitted={})
+        self.assertIsNone(ctx.get("country_id"))
+        self.assertIsNone(ctx.get("ghost", "fallback"))
+
+        class _Broken:
+            _ids = (1,)
+            _fields = Partner._fields
+
+            def __getattr__(self, name):
+                raise KeyError(name)
+
+        ctx2 = SchemaContext(env=None, record=_Broken(), submitted={})
+        self.assertIsNone(ctx2.get("name", None))
+
+    def test_call_predicate_when_signature_unavailable(self):
+        ctx = SchemaContext(env=None, submitted={"ok": True})
+
+        def _fn(context):
+            return context.get("ok")
+
+        with patch.object(inspect, "signature", side_effect=TypeError("n/a")):
+            self.assertTrue(_call_predicate(_fn, ctx))
+
+    def test_resolve_leaf_dotted_paths_and_compare_neq(self):
+        reg = Registry()
+        with reg.activate():
+
+            class State(BaseModel):
+                _name = "test.leaf.state"
+                code = Char()
+
+            class Country(BaseModel):
+                _name = "test.leaf.country2"
+                code = Char()
+                state_id = Many2one("test.leaf.state")
+
+            class Partner(BaseModel):
+                _name = "test.leaf.partner"
+                name = Char()
+                parent_id = Many2one("test.leaf.partner")
+                country_id = Many2one("test.leaf.country2")
+
+        state = _FakeRecord(State._fields, {"code": "CA"})
+        state._ids = (3,)
+        country = _FakeRecord(Country._fields, {"code": "US", "state_id": state})
+        country._ids = (2,)
+        ctx = SchemaContext(env=None, submitted={"country_id": country})
+        self.assertEqual(_resolve_leaf_value(ctx, "country_id.state_id.code"), "CA")
+
+        bare = _FakeRecord(Country._fields, {"code": "FR"})
+        bare._ids = ()
+        ctx2 = SchemaContext(env=None, submitted={"country_id": bare})
+        self.assertIsNone(_resolve_leaf_value(ctx2, "country_id.code"))
+
+        missing_head = SchemaContext(env=None, submitted={})
+        self.assertIsNone(_resolve_leaf_value(missing_head, "ghost.child"))
+
+        child = _FakeRecord(Partner._fields, {"name": "Child", "parent_id": None})
+        child._ids = (8,)
+        ctx_mid = SchemaContext(env=None, submitted={"partner_id": child})
+        self.assertIsNone(_resolve_leaf_value(ctx_mid, "partner_id.parent_id.name"))
+
+        class _BrokenParent:
+            _ids = (5,)
+            _fields = Partner._fields
+
+            def __getattr__(self, name):
+                if name == "parent_id":
+                    raise AttributeError(name)
+                raise KeyError(name)
+
+        broken = _FakeRecord(Partner._fields, {"name": "X", "parent_id": _BrokenParent()})
+        broken._ids = (6,)
+        ctx_err = SchemaContext(env=None, submitted={"partner_id": broken})
+        self.assertIsNone(_resolve_leaf_value(ctx_err, "partner_id.parent_id.name"))
+
+        ancestor = SimpleNamespace(_ids=(99,), id=99)
+        grandparent = SimpleNamespace(
+            _ids=(99,),
+            _fields=Partner._fields,
+            parent_id=ancestor,
+        )
+        parent = _FakeRecord(
+            Partner._fields,
+            {"name": "Parent", "parent_id": grandparent},
+        )
+        parent._ids = (9,)
+        child2 = _FakeRecord(
+            Partner._fields,
+            {"name": "Child", "parent_id": parent},
+        )
+        child2._ids = (10,)
+        ctx_m2o = SchemaContext(env=None, submitted={"partner_id": child2})
+        self.assertEqual(
+            _resolve_leaf_value(ctx_m2o, "partner_id.parent_id.parent_id"),
+            99,
+        )
+
+        class _Plain:
+            label = "vip"
+
+        ctx3 = SchemaContext(env=None, submitted={"meta": _Plain()})
+        self.assertEqual(_resolve_leaf_value(ctx3, "meta.label"), "vip")
+
+        self.assertTrue(_compare_leaf(1, "!=", 2))
+
+    def test_eval_domain_tree_invalid_node(self):
+        ctx = SchemaContext(env=None, submitted={})
+        with self.assertRaises(ValueError):
+            _eval_domain_tree(("?",), ctx)
+
+    def test_resolve_schema_bool_scalar_and_spec_branches(self):
+        ctx = SchemaContext(env=None, submitted={"flag": True})
+        self.assertTrue(resolve_schema_bool(1, ctx))
+        field = Char(required=False)
+        self.assertTrue(
+            spec_required({"required": True}, field, ctx)
+        )
+        self.assertTrue(
+            spec_readonly_schema({"readonly": True}, field, ctx)
+        )
+        self.assertTrue(spec_readonly_legacy({"readonly": True}, field))
+        self.assertFalse(
+            spec_readonly_legacy({"readonly": [("flag", "=", False)]}, field)
+        )
+        self.assertFalse(
+            spec_readonly_legacy({"readonly": lambda: True}, field)
+        )
+
+    def test_spec_visible_hidden_false_branch(self):
+        spec = {"name": "x", "hidden": False}
+        ctx = SchemaContext(env=None, submitted={})
+        self.assertTrue(spec_visible(spec, ctx))
 
 
 class OrmIndexUniqueTests(unittest.TestCase):
