@@ -46,6 +46,17 @@ class HomeUrlTests(unittest.TestCase):
         with patch.dict(os.environ, {"PYVELM_HOME_URL": "/"}):
             self.assertEqual(login_url(), "/login?next=%2F")
 
+    def test_empty_home_url_uses_default(self):
+        with patch.dict(os.environ, {"PYVELM_HOME_URL": ""}):
+            self.assertEqual(home_url(), DEFAULT_HOME_URL)
+
+    def test_relative_home_gets_leading_slash(self):
+        with patch.dict(os.environ, {"PYVELM_HOME_URL": "web/custom"}):
+            self.assertEqual(home_url(), "/web/custom")
+
+    def test_login_url_skips_next_when_dest_is_login(self):
+        self.assertEqual(login_url(next_path="/login"), "/login")
+
     def test_landing_flag(self):
         with patch.dict(os.environ, {"PYVELM_LANDING": "0"}):
             self.assertFalse(landing_enabled())

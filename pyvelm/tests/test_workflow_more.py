@@ -16,10 +16,13 @@ from pyvelm.workflow.engine import (
     _approvals_complete,
     _first,
     _initial_state,
+    _is_final_state,
     _load_json,
+    _maybe_advance_sequential,
     _post_chatter,
     _resolve_assignees,
     _split_form_values,
+    _state_label,
     _transition_by_key,
     _transition_ui,
     _user_may_act_on_approval,
@@ -479,6 +482,263 @@ class WorkflowRuntimeMoreTests(unittest.TestCase):
         ), patch.object(WorkflowEngine, "start") as start:
             workflow_runtime._maybe_auto_start_workflow_inner(env, record)
         start.assert_not_called()
+
+
+class WorkflowEngineCoverageTests(unittest.TestCase):
+    def test_parse_definition_dict_input(self):
+        self.assertEqual(parse_definition({"version": 2})["version"], 2)
+
+    def test_active_definition_and_available_transitions(self):
+        reg = _registry()
+        env = MagicMock()
+        env.registry = reg
+        env.uid = 2
+        definition = _row(definition=json.dumps(_SAMPLE))
+        instance = _row(
+            state="draft",
+            pending_transition=False,
+            definition_id=definition,
+            res_model="wf.target",
+            res_id=1,
+        )
+        instance.ensure_one = MagicMock()
+        with patch.object(WorkflowEngine, "active_definition", return_value=definition):
+            self.assertIs(WorkflowEngine.active_definition(env, "wf.target"), definition)
+        transitions = WorkflowEngine.available_transitions(env, instance)
+        self.assertEqual(len(transitions), 1)
+
+    def test_start_model_mismatch(self):
+        reg = _registry()
+        env = MagicMock()
+        env.registry = reg
+        definition = _row(definition=json.dumps({**_SAMPLE, "model": "other.model"}))
+        definition.ensure_one = MagicMock()
+        record = _row(id=1, _name="wf.target")
+        with self.assertRaises(WorkflowDefinitionError):
+            WorkflowEngine.start(env, record, definition)
+
+    def test_apply_transition_permission_and_record_patch(self):
+        reg = _registry()
+        defn = {
+            **_SAMPLE,
+            "transitions": [{
+                "key": "finish",
+                "label": "Finish",
+                "from": ["draft"],
+                "to": "done",
+                "kind": "user",
+                "form": {
+                    "fields": [
+                        {"name": "name", "label": "Name", "source": "record"},
+                    ],
+                },
+            }],
+        }
+        env = MagicMock()
+        env.registry = reg
+        env.uid = 9
+        definition = _row(definition=json.dumps(defn))
+        instance = _row(
+            id=5,
+            state="draft",
+            pending_transition=False,
+            stage_data="{}",
+            res_model="wf.target",
+            res_id=1,
+            definition_id=definition,
+        )
+        instance.ensure_one = MagicMock()
+        record = _row(id=1, message_post=MagicMock())
+        Target = MagicMock()
+        Target.browse.return_value = record
+        env.__getitem__ = lambda _e, n: Target
+        with patch("pyvelm.workflow.engine._user_may_trigger", return_value=False):
+            with self.assertRaises(PermissionError):
+                WorkflowEngine.apply_transition(env, instance, "finish", {"name": "x"}, user_id=9)
+        with patch("pyvelm.workflow.engine._user_may_trigger", return_value=True):
+            WorkflowEngine.apply_transition(env, instance, "finish", {"name": "x"}, user_id=2)
+        record.write.assert_called_once()
+
+    def test_apply_transition_pending_raises(self):
+        instance = _row(pending_transition="finish", definition_id=_row(definition="{}"))
+        instance.ensure_one = MagicMock()
+        with self.assertRaises(WorkflowDefinitionError):
+            WorkflowEngine.apply_transition(MagicMock(), instance, "finish", {})
+
+    def test_approve_not_pending_and_task_updates(self):
+        reg = _registry()
+        env = MagicMock()
+        env.registry = reg
+        env.uid = 2
+        approval = _row(status="done")
+        approval.ensure_one = MagicMock()
+        with self.assertRaises(WorkflowDefinitionError):
+            WorkflowEngine.approve(env, approval)
+
+        defn = {
+            **_SAMPLE,
+            "transitions": [{
+                "key": "submit",
+                "label": "Submit",
+                "from": ["draft"],
+                "to": "done",
+                "kind": "approval",
+                "approval": {"strategy": "any", "assignee_type": "user", "user_id": 2},
+            }],
+        }
+        definition = _row(definition=json.dumps(defn))
+        instance = _row(
+            id=1,
+            state="draft",
+            pending_transition="submit",
+            stage_data="{}",
+            res_model="wf.target",
+            res_id=1,
+            definition_id=definition,
+        )
+        approval2 = _row(
+            status="pending",
+            transition_key="submit",
+            instance_id=instance,
+            assignee_user_id=_row(id=2),
+            assignee_group_id=None,
+        )
+        approval2.ensure_one = MagicMock()
+        instance.ensure_one = MagicMock()
+        Task = MagicMock()
+        task = _row()
+        Task.search.return_value = _recordset(task)
+        Approval = MagicMock()
+        pending_rs = _recordset()
+        done_rs = _recordset(_row(status="approved"))
+        Approval.search.side_effect = [pending_rs, done_rs]
+        Target = MagicMock()
+        Target.browse.return_value = _row(message_post=MagicMock())
+        env.registry = {"workflow.task": object(), "workflow.approval": object(), "wf.target": object()}
+        env.__getitem__ = lambda _e, n: {
+            "workflow.task": Task,
+            "workflow.approval": Approval,
+            "wf.target": Target,
+        }[n]
+        WorkflowEngine.approve(env, approval2, approved=True)
+        task.write.assert_called_once()
+
+    def test_start_approval_sequential_and_tasks(self):
+        reg = _registry()
+        defn = {
+            **_SAMPLE,
+            "transitions": [{
+                "key": "submit",
+                "label": "Submit",
+                "from": ["draft"],
+                "to": "done",
+                "kind": "approval",
+                "approval": {
+                    "strategy": "sequential",
+                    "assignee_type": "user",
+                    "user_id": 2,
+                    "deadline_hours": 12,
+                },
+            }],
+        }
+        env = MagicMock()
+        env.registry = reg
+        env.uid = 2
+        definition = _row(definition=json.dumps(defn))
+        instance = _row(
+            id=1,
+            state="draft",
+            pending_transition=False,
+            stage_data="{}",
+            res_model="wf.target",
+            res_id=1,
+            definition_id=definition,
+        )
+        instance.ensure_one = MagicMock()
+        Target = MagicMock()
+        Target.browse.return_value = _row(write=MagicMock(), message_post=MagicMock())
+        Approval = MagicMock()
+        Task = MagicMock()
+        env.__getitem__ = lambda _e, n: {
+            "wf.target": Target,
+            "workflow.approval": Approval,
+            "workflow.task": Task,
+        }[n]
+        WorkflowEngine.apply_transition(env, instance, "submit", {})
+        Approval.create.assert_called()
+
+    def test_resolve_assignees_errors_and_admin_fallback(self):
+        env = MagicMock()
+        tr_bad = {"approval": {"assignee_type": "user"}}
+        with self.assertRaises(WorkflowDefinitionError):
+            _resolve_assignees(env, _row(res_model="wf.target", res_id=1), tr_bad, 1)
+
+        record = _row(owner_id=None)
+        Target = MagicMock()
+        Target.browse.return_value = record
+        env.__getitem__ = lambda _e, n: Target
+        tr_field = {"approval": {"assignee_type": "field", "user_field": "owner_id"}}
+        self.assertEqual(
+            _resolve_assignees(env, _row(res_model="wf.target", res_id=1), tr_field, 1),
+            [],
+        )
+
+        Group = MagicMock()
+        Group.search.return_value = _recordset()
+        env.__getitem__ = lambda _e, n: Group
+        tr_group = {"approval": {"assignee_type": "group", "strategy": "any"}}
+        self.assertEqual(
+            _resolve_assignees(env, _row(res_model="wf.target", res_id=1), tr_group, 1),
+            [],
+        )
+
+    def test_helper_edge_cases(self):
+        self.assertEqual(_initial_state(_SAMPLE), "draft")
+        with self.assertRaises(WorkflowDefinitionError):
+            _initial_state({"states": [{"key": "x", "label": "X"}]})
+        self.assertEqual(_state_label(_SAMPLE, "missing"), "missing")
+        self.assertFalse(_is_final_state(_SAMPLE, "draft"))
+        tr = {"key": "finish", "to": "done", "label": "Finish"}
+        self.assertIn("Approved", _approval_complete_message(_SAMPLE, tr))
+        partial = {**_SAMPLE, "states": _SAMPLE["states"][:-1] + [{"key": "review", "label": "Review"}]}
+        tr2 = {"key": "go", "to": "review", "label": "Go"}
+        self.assertIn("approved", _approval_complete_message(partial, tr2))
+
+    def test_approvals_complete_all_strategy_and_queue(self):
+        env = MagicMock()
+        inst = _row(id=1, stage_data="{}")
+        tr = {"key": "a", "approval": {"strategy": "all"}}
+        Approval = MagicMock()
+        Approval.search.side_effect = [
+            _recordset(),
+            _recordset(_row(status="approved"), _row(status="approved")),
+        ]
+        env.__getitem__ = lambda _e, n: Approval
+        self.assertTrue(_approvals_complete(env, inst, tr))
+
+        inst_q = _row(id=9, stage_data=json.dumps({"_wf_queue": [{"user_id": 2}]}))
+        Approval.search.side_effect = [_recordset()]
+        self.assertFalse(_approvals_complete(env, inst_q, tr))
+
+        inst2 = _row(id=2, stage_data="{}")
+        Approval.search.side_effect = [
+            _recordset(_row(status="pending")),
+        ]
+        self.assertFalse(_approvals_complete(env, inst2, tr))
+
+        inst3 = _row(id=3, stage_data="{}")
+        Approval.search.side_effect = [
+            _recordset(),
+            _recordset(_row(status="rejected")),
+        ]
+        self.assertFalse(_approvals_complete(env, inst3, tr))
+
+    def test_maybe_advance_sequential_empty_queue(self):
+        env = MagicMock()
+        instance = _row(id=1, stage_data=json.dumps({"_wf_queue": []}))
+        tr = {"key": "a", "approval": {"strategy": "sequential"}}
+        _maybe_advance_sequential(env, instance, tr)
+        instance.write.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -6,6 +6,8 @@ import unittest
 from pyvelm import BaseModel, Char, Integer, Many2one, One2many, Registry, Text
 from pyvelm.database import dialect_capabilities
 from pyvelm.domain import (
+    _parse_leaf,
+    _parse_polish,
     domain_to_sql,
     expand_or_groups,
     is_domain_leaf,
@@ -42,6 +44,39 @@ class DomainHelperTests(unittest.TestCase):
         self.assertTrue(is_domain_leaf(("name", "=", "x")))
         self.assertFalse(is_domain_leaf("&"))
         self.assertFalse(is_domain_leaf("not-a-leaf"))
+        self.assertFalse(is_domain_leaf((123, "=", "x")))
+
+    def test_normalize_domain_empty(self):
+        self.assertEqual(normalize_domain([]), [])
+
+    def test_normalize_domain_inserts_implicit_and_for_three_leaves(self):
+        norm = normalize_domain(
+            [("a", "=", 1), ("b", "=", 2), ("c", "=", 3)]
+        )
+        self.assertEqual(norm.count("&"), 2)
+        self.assertEqual(len(norm), 5)
+
+    def test_parse_polish_invalid_token(self):
+        with self.assertRaises(ValueError):
+            _parse_polish([123])
+
+    def test_iter_domain_leaves_not_operator(self):
+        leaves = list(iter_domain_leaves(["!", ("name", "=", "x")]))
+        self.assertEqual(leaves, [("name", "=", "x")])
+
+    def test_iter_domain_leaves_trailing_tokens(self):
+        from unittest.mock import patch
+
+        with patch(
+            "pyvelm.domain._parse_polish",
+            return_value=(("leaf", ("name", "=", "x")), 1),
+        ):
+            with self.assertRaises(ValueError):
+                list(iter_domain_leaves([("name", "=", "x"), ("other", "=", "y")]))
+
+    def test_parse_leaf_invalid(self):
+        with self.assertRaises(ValueError):
+            _parse_leaf("not-a-leaf")
 
     def test_expand_or_groups_empty_and_single(self):
         self.assertEqual(expand_or_groups([("__or__", "=", [])]), [])

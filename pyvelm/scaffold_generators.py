@@ -557,7 +557,7 @@ def generate_menu(
     item_label = item_label or view_name.split(".")[-1].replace("_", " ").title()
     item_block = (
         f'    m.item("{item_name}", "{item_label}", '
-        f'parent="{group}", view="{view_name}", sequence=10),\n'
+        f'parent="{group}.main", view="{view_name}", sequence=10),\n'
     )
     if menu_path.exists():
         if not append and not force:

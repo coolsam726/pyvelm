@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from pyvelm import BaseModel, Char, Environment, Many2many, Many2one, Registry
@@ -48,6 +49,11 @@ class ModelHasMailThreadTests(unittest.TestCase):
         _reg, Doc, *_ = _mail_registry()
         self.assertTrue(mail_tracking.model_has_mail_thread(Doc))
 
+    def test_import_error_returns_false(self):
+        _reg, Doc, *_ = _mail_registry()
+        with patch.dict("sys.modules", {"pyvelm.mail": None}):
+            self.assertFalse(mail_tracking.model_has_mail_thread(Doc))
+
 
 class TrackedFieldNamesTests(unittest.TestCase):
     def test_skips_private_and_related(self):
@@ -75,6 +81,11 @@ class NormalizeAndCompareTests(unittest.TestCase):
         rec = Partner(env, (5,))
         self.assertEqual(mail_tracking._normalize_scalar(field, rec), 5)
         self.assertEqual(mail_tracking._normalize_scalar(field, None), None)
+
+    def test_many2one_raw_int(self):
+        reg, Doc, _Partner, _Tag = _mail_registry()
+        field = Doc._fields["partner_id"]
+        self.assertEqual(mail_tracking._normalize_scalar(field, 7), 7)
 
     def test_normalize_many2one_empty_ids(self):
         reg, Doc, Partner, _T = _mail_registry()
@@ -156,6 +167,21 @@ class FormatFieldValueTests(unittest.TestCase):
         env.cache.set("test.track.partner", 5, "id", 5)
         self.assertEqual(mail_tracking.format_field_value(env, field, 5), "5")
 
+    def test_format_m2o_missing_record_and_display_name(self):
+        reg, Doc, Partner, _T = _mail_registry()
+        env = Environment(None, reg, uid=1)
+        field = Doc._fields["partner_id"]
+        stub_env = SimpleNamespace(
+            registry={
+                field.comodel_name: lambda _env, _ids: Partner(env, ()),
+            }
+        )
+        self.assertEqual(mail_tracking._format_m2o(stub_env, field, 99), "(empty)")
+        env.cache.set("test.track.partner", 7, "id", 7)
+        env.cache.set("test.track.partner", 7, "name", "")
+        env.cache.set("test.track.partner", 7, "display_name", "Shown")
+        self.assertEqual(mail_tracking._format_m2o(env, field, 7), "Shown")
+
     def test_format_m2m_multiple_and_name_only(self):
         reg, Doc, _P, Tag = _mail_registry()
         env = Environment(None, reg, uid=1)
@@ -166,6 +192,21 @@ class FormatFieldValueTests(unittest.TestCase):
         self.assertEqual(
             mail_tracking.format_field_value(env, field, (1, 2)), "A, 2"
         )
+
+    def test_format_m2m_missing_record_and_display_name(self):
+        reg, Doc, _P, Tag = _mail_registry()
+        env = Environment(None, reg, uid=1)
+        field = Doc._fields["tag_ids"]
+        stub_env = SimpleNamespace(
+            registry={
+                field.comodel_name: lambda _env, _ids: Tag(env, ()),
+            }
+        )
+        self.assertEqual(mail_tracking._format_m2m(stub_env, field, (99,)), "(empty)")
+        env.cache.set("test.track.tag", 4, "id", 4)
+        env.cache.set("test.track.tag", 4, "name", "")
+        env.cache.set("test.track.tag", 4, "display_name", "Tagged")
+        self.assertEqual(mail_tracking._format_m2m(env, field, (4,)), "Tagged")
 
     def test_format_scalar_false_is_empty(self):
         reg = Registry()

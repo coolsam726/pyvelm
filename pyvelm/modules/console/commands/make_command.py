@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from pyvelm.console import Command
+from pyvelm.scaffold_generators import _read_template
 from pyvelm.scaffolder import find_modules_root, valid_name
 
 
@@ -65,30 +66,15 @@ class MakeCommandCommand(Command):
             self.error(f"{target} already exists (use --force to overwrite).")
             return 1
         cls = _class_name(name)
-        body = _COMMAND_TEMPLATE.format(
-            class_name=cls,
-            command_name=name,
-            description=f"TODO: describe {name}",
+        body = _read_template(
+            "command.py.template",
+            {
+                "class_name": cls,
+                "command_name": name,
+                "description": f"TODO: describe {name}",
+            },
         )
         target.write_text(body, encoding="utf-8")
         self.info(f"Created {target}")
         self.line(f"Run: pyvelm {name}")
         return 0
-
-
-_COMMAND_TEMPLATE = '''\
-"""``pyvelm {command_name}``."""
-
-from pyvelm.console import Command
-
-
-class {class_name}(Command):
-    name = "{command_name}"
-    description = "{description}"
-    signature = "{command_name}"
-    # requires_db = True  # uncomment if the command needs PYVELM_DSN
-
-    def handle(self) -> int:
-        self.info("Not implemented yet.")
-        return 0
-'''

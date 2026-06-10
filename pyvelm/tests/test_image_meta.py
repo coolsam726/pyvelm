@@ -6,8 +6,9 @@ the test file stays self-contained (no binary blobs to manage).
 
 import struct
 import unittest
+from unittest.mock import patch
 
-from pyvelm.image_meta import read_image_dimensions
+from pyvelm.image_meta import _webp, read_image_dimensions
 
 
 def _make_png(width: int, height: int) -> bytes:
@@ -124,13 +125,53 @@ class ImageMetaTests(unittest.TestCase):
         self.assertGreater(dims[1], 0)
 
     def test_webp_unknown_chunk(self):
-        riff = b"RIFF" + struct.pack("<I", 4) + b"WEBP" + b"XXXX" + struct.pack("<I", 0)
+        body = b"\x00" * 14
+        riff = (
+            b"RIFF"
+            + struct.pack("<I", 4 + 4 + len(body))
+            + b"WEBP"
+            + b"XXXX"
+            + struct.pack("<I", len(body))
+            + body
+        )
+        self.assertGreaterEqual(len(riff), 30)
+        self.assertIsNone(read_image_dimensions(riff, "image/webp"))
+
+    def test_jpeg_eof_after_ff_fill(self):
+        self.assertIsNone(read_image_dimensions(b"\xff\xd8\xff\xff\xff", "image/jpeg"))
+
+    def test_webp_vp8_inner_short_length(self):
+        vp8 = (
+            b"RIFF"
+            + struct.pack("<I", 20)
+            + b"WEBP"
+            + b"VP8 "
+            + struct.pack("<I", 10)
+            + b"\x00\x00\x00"
+            + b"\x9d\x01\x2a"
+            + struct.pack("<HH", 64, 48)
+        )
+        with patch("pyvelm.image_meta.len", side_effect=[35, 29]):
+            self.assertIsNone(_webp(vp8))
+
+    def test_webp_vp8x_inner_short_length(self):
+        data = _make_webp_vp8x(10, 10)
+        with patch("pyvelm.image_meta.len", side_effect=[35, 29]):
+            self.assertIsNone(_webp(data))
+
+    def test_webp_vp8l_too_short(self):
+        riff = (
+            b"RIFF"
+            + struct.pack("<I", 16)
+            + b"WEBP"
+            + b"VP8L"
+            + struct.pack("<I", 4)
+            + b"\x2f\x00\x00\x00"
+        )
         self.assertIsNone(read_image_dimensions(riff, "image/webp"))
 
     def test_parse_exception_returns_none(self):
-        with unittest.mock.patch(
-            "pyvelm.image_meta._png", side_effect=RuntimeError("boom")
-        ):
+        with patch("pyvelm.image_meta._png", side_effect=RuntimeError("boom")):
             self.assertIsNone(read_image_dimensions(_make_png(1, 1), "image/png"))
 
     def test_gif_zero_dimensions(self):

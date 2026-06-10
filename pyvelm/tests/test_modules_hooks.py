@@ -185,6 +185,23 @@ class FileManagerHooksTests(unittest.TestCase):
         self.hooks.install(env)
         self.assertGreaterEqual(Access.create.call_count, 2)
 
+    def test_install_updates_existing_access_rows(self):
+        env = MagicMock()
+        admin = _admin_group()
+        user = MagicMock()
+        user.id = 2
+        existing = _recordset(MagicMock())
+        Group = MagicMock()
+        Group.search.side_effect = lambda domain: (
+            _recordset(admin) if domain == [("name", "=", "Admin")] else _recordset()
+        )
+        Access = MagicMock()
+        Access.search.return_value = existing
+        env.__getitem__ = lambda _s, k: Group if k == "res.groups" else Access
+        self.hooks.install(env)
+        existing.write.assert_called()
+        Access.create.assert_not_called()
+
 
 class WorkflowHooksTests(unittest.TestCase):
     @classmethod

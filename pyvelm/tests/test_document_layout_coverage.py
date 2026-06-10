@@ -231,6 +231,108 @@ class LogoAndFontTests(unittest.TestCase):
         with patch("httpx.get", side_effect=OSError("offline")):
             self.assertEqual(dl_layout._google_font_embed("Roboto"), "")
 
+    def test_google_font_skips_non_ttf_faces(self):
+        dl_layout._google_font_embed.cache_clear()
+        css = "@font-face{font-weight:400;src:url(https://x/font.woff2) format('woff2');}"
+        with patch("httpx.get", return_value=MagicMock(text=css)):
+            self.assertEqual(dl_layout._google_font_embed("Roboto"), "")
+
+    def test_logo_attachment_fetch_failure_and_http_error(self):
+        att = SimpleNamespace(
+            type="binary",
+            url="",
+            mimetype="image/png",
+            fetch_content=MagicMock(side_effect=RuntimeError("bad")),
+        )
+        Attachment = MagicMock()
+        Attachment.search.return_value = att
+        env = MagicMock()
+        env.registry = {"ir.attachment": Attachment}
+        env.sudo.return_value = env
+        env.__getitem__ = MagicMock(return_value=Attachment)
+        self.assertEqual(
+            dl_layout._logo_data_uri(env, "/api/attachment/3/download"),
+            "/api/attachment/3/download",
+        )
+        with patch("httpx.get", side_effect=OSError("offline")):
+            self.assertEqual(
+                dl_layout._logo_data_uri(env, "https://example.com/x.png"),
+                "https://example.com/x.png",
+            )
+
+
+class TemplateDirEdgeTests(unittest.TestCase):
+    def test_resolve_template_dir_skips_duplicate_candidates(self):
+        tpl = Path(dl_layout.__file__).resolve().parent / "templates"
+
+        def fake_resolve(self):
+            return tpl
+
+        with patch.object(Path, "resolve", fake_resolve):
+            d = dl_layout._resolve_template_dir()
+        self.assertEqual(d, tpl)
+
+    def test_resolve_template_dir_missing_raises(self):
+        with patch.object(Path, "is_file", return_value=False):
+            with self.assertRaises(FileNotFoundError):
+                dl_layout._resolve_template_dir()
+
+
+class LayoutHelpersTests(unittest.TestCase):
+    def test_paper_and_tint_helpers(self):
+        w, h = dl_layout.paper_css_size("Letter")
+        self.assertEqual(w, "215.9mm")
+        self.assertEqual(dl_layout.paper_content_min_height("bogus"), "265mm")
+        tinted = dl_layout.tint_color("#abc")
+        self.assertTrue(tinted.startswith("#"))
+
+    def test_apply_overrides_live_preview(self):
+        company = SimpleNamespace(id=1)
+        Company = MagicMock()
+        Company.search.return_value = company
+        Company.browse.return_value = company
+        env = MagicMock()
+        env.__getitem__ = MagicMock(return_value=Company)
+        base = _sample_company_ctx()
+        with patch.object(dl_layout, "_company_context", return_value=base):
+            with patch.object(dl_layout, "_google_font_embed", return_value="<style/>"):
+                html = dl_layout.render_layout_preview(
+                    env,
+                    company_id=1,
+                    overrides={
+                        "layout": "bold",
+                        "paper": "Letter",
+                        "color": "#ff0000",
+                        "secondary": "#00ff00",
+                        "font": "Roboto",
+                        "logo": "data:image/png;base64,xx",
+                    },
+                )
+        self.assertIn("doc-frame", html)
+
+    def test_designer_context_falls_back_to_first_company(self):
+        company = SimpleNamespace(
+            id=3,
+            name="Fallback",
+            document_layout="light",
+            paper_format="A4",
+            primary_color="#111",
+            secondary_color="#222",
+            google_font="",
+            logo_url="",
+        )
+        Company = MagicMock()
+        Company.search.side_effect = [
+            None,
+            company,
+        ]
+        env = MagicMock()
+        env.__getitem__ = MagicMock(return_value=Company)
+        cid, co, values, widgets, _choices = dl_layout._designer_context(env, 999)
+        self.assertEqual(cid, 3)
+        self.assertIs(co, company)
+        self.assertIn("logo", widgets)
+
 
 class LayoutPreviewExtrasTests(unittest.TestCase):
     def test_render_layout_preview_full_page(self):

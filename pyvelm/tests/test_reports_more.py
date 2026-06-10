@@ -189,6 +189,19 @@ class ReportCompileMoreTests(unittest.TestCase):
         self.assertIn("SELECT", compiled.sql)
         self.assertEqual(len(compiled.columns), 1)
 
+    def test_empty_or_param_filter_compacted(self):
+        defn = _detail_defn(
+            parameters=[{"name": "q", "type": "string"}],
+            parameter_filters=[
+                ("__or__", "|", [
+                    ["name", "ilike", {"param": "q"}],
+                    ["email", "ilike", {"param": "q"}],
+                ]),
+            ],
+        )
+        compiled = compile_report(defn, _partner_registry(), params={})
+        self.assertIn("SELECT", compiled.sql)
+
     def test_currency_column_adds_ccy_key(self):
         defn = _detail_defn(
             columns=[{

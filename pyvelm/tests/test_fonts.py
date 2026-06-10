@@ -12,6 +12,7 @@ from pyvelm.fonts import (
     company_font_context,
     google_fonts_stylesheet_url,
     normalize_font_family,
+    resolve_branding_company_id,
     resolve_font_family,
 )
 
@@ -49,6 +50,9 @@ class FontUrlTests(unittest.TestCase):
     def test_default_inter_url(self):
         url = google_fonts_stylesheet_url(DEFAULT_FONT_FAMILY)
         self.assertIn("family=Inter:wght@", url)
+
+    def test_invalid_font_returns_empty_url(self):
+        self.assertEqual(google_fonts_stylesheet_url("<script>"), "")
 
 
 class FontCssTests(unittest.TestCase):
@@ -147,6 +151,51 @@ class _FakeEnv:
         return _FakeEnvLevel(self._mgr)
 
 
+class FontBrandingResolutionTests(unittest.TestCase):
+    def test_resolve_branding_company_id_explicit(self):
+        self.assertEqual(resolve_branding_company_id(None, company_id=7), 7)
+
+    def test_resolve_branding_company_id_none_env(self):
+        self.assertIsNone(resolve_branding_company_id(None))
+
+    def test_resolve_branding_company_id_from_uid(self):
+        class _Home:
+            id = 3
+
+        class _User:
+            company_id = _Home()
+
+        class _Users:
+            def browse(self, _uid):
+                return _User()
+
+        class _Env:
+            company_id = None
+            uid = 1
+            registry = {"res.users", "res.company"}
+
+            def prime_current_user_cache(self):
+                return None
+
+            def __getitem__(self, name):
+                if name == "res.users":
+                    return _Users()
+                raise KeyError(name)
+
+        self.assertEqual(resolve_branding_company_id(_Env()), 3)
+
+    def test_resolve_branding_company_id_exception_swallowed(self):
+        class _Env:
+            company_id = None
+            uid = 1
+            registry = {"res.users", "res.company"}
+
+            def prime_current_user_cache(self):
+                raise RuntimeError("boom")
+
+        self.assertIsNone(resolve_branding_company_id(_Env()))
+
+
 class FontContextFromCompanyTests(unittest.TestCase):
     def test_company_font_overrides_env(self):
         os.environ["PYVELM_FONT_FAMILY"] = "Lato"
@@ -159,6 +208,30 @@ class FontContextFromCompanyTests(unittest.TestCase):
             self.assertIn("'Montserrat'", ctx["company_font_style"])
         finally:
             os.environ.pop("PYVELM_FONT_FAMILY", None)
+
+    def test_company_font_context_no_company_model_uses_env(self):
+        os.environ["PYVELM_FONT_FAMILY"] = "Roboto"
+        try:
+            env = _FakeEnv(_FakeCompanyManager(_FakeCompany()), has_company_model=False)
+            env.registry = set()
+            ctx = company_font_context(env, company_id=None)
+            self.assertEqual(ctx["company_font_family"], "Roboto")
+            self.assertIn("Roboto", ctx["company_font_stylesheet_url"])
+        finally:
+            os.environ.pop("PYVELM_FONT_FAMILY", None)
+
+    def test_company_font_context_missing_company_returns_default(self):
+        co = _FakeCompany(font_family="Roboto")
+        env = _FakeEnv(_FakeCompanyManager(co, exists=False))
+        ctx = company_font_context(env, company_id=1)
+        self.assertEqual(ctx["company_font_family"], DEFAULT_FONT_FAMILY)
+        self.assertEqual(ctx["company_font_style"], "")
+
+    def test_company_font_context_no_cid_no_env_font(self):
+        env = _FakeEnv(_FakeCompanyManager(_FakeCompany()), company_id=None, uid=None)
+        ctx = company_font_context(env)
+        self.assertEqual(ctx["company_font_family"], DEFAULT_FONT_FAMILY)
+        self.assertEqual(ctx["company_font_style"], "")
 
 
 class BrandingFontIntegrationTests(unittest.TestCase):

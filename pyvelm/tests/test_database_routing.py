@@ -211,6 +211,34 @@ class RequestDatabaseHelpersTests(unittest.TestCase):
 
         self.assertIs(get_request_database(app, req), default_db)
 
+    def test_get_request_pool_fallback_to_app_pool(self):
+        from pyvelm.database_routing import get_request_pool
+
+        app = MagicMock()
+        app.state.pool = MagicMock()
+        app.state.database = None
+        app.state.pool_map = None
+
+        req = MagicMock()
+        req.app = app
+        req.cookies.get.return_value = None
+        req.url.path = "/"
+        req.headers.get.return_value = "localhost"
+        req.scope = {"path": "/"}
+
+        self.assertIs(get_request_pool(app, req), app.state.pool)
+
+    def test_get_request_db_key_unknown_cookie_falls_back(self):
+        app = MagicMock()
+        app.state.pool_map = {DEFAULT_DB_KEY: MagicMock()}
+        req = MagicMock()
+        req.app = app
+        req.cookies.get.return_value = "unknown"
+        req.url.path = "/"
+        req.headers.get.return_value = "localhost"
+        req.scope = {"path": "/"}
+        self.assertEqual(get_request_db_key(req), DEFAULT_DB_KEY)
+
 
 class ConfigureAppDatabasesTests(unittest.TestCase):
     def test_attach_pool_map_and_catalog(self):
@@ -250,6 +278,28 @@ class ConfigureAppDatabasesTests(unittest.TestCase):
         self.assertEqual(labels["default"], "Default")
         self.assertEqual(labels["tenant"], "Tenant")
 
+    def test_list_selectable_without_catalog(self):
+        from pyvelm.database_routing import list_selectable_databases
+
+        app = MagicMock()
+        app.state.database_catalog = None
+        self.assertEqual(list_selectable_databases(app), [(DEFAULT_DB_KEY, "Default")])
+
+    def test_configure_skips_default_key_in_catalog(self):
+        from pyvelm.database_routing import configure_app_databases
+
+        app = MagicMock()
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"PYVELM_DATABASES": "default=postgresql://localhost/other"},
+            clear=False,
+        ), unittest.mock.patch(
+            "pyvelm.database_routing.create_database_from_dsn",
+            return_value=MagicMock(),
+        ) as create_db:
+            configure_app_databases(app, MagicMock(), MagicMock(), module_roots=[])
+        create_db.assert_not_called()
+
 
 class DatabaseRoutingRegistryTests(unittest.TestCase):
     def test_get_request_registry_uses_cache(self):
@@ -269,6 +319,71 @@ class DatabaseRoutingRegistryTests(unittest.TestCase):
         req.scope = {"path": "/"}
 
         self.assertIs(get_request_registry(app, req), cached)
+
+    def test_get_request_registry_no_cache(self):
+        from pyvelm.database_routing import get_request_registry
+
+        boot = MagicMock()
+        app = MagicMock()
+        app.state.registry_cache = None
+        app.state.registry = boot
+
+        req = MagicMock()
+        req.app = app
+        req.cookies.get.return_value = None
+        req.url.path = "/"
+        req.headers.get.return_value = "localhost"
+        req.scope = {"path": "/"}
+
+        self.assertIs(get_request_registry(app, req), boot)
+
+    def test_get_request_registry_lazy_load(self):
+        from pyvelm.database_routing import get_request_registry
+
+        loaded = MagicMock()
+        app = MagicMock()
+        app.state.registry_cache = {}
+        app.state.registry = MagicMock()
+        app.state.module_roots = ["/mods"]
+        tenant_db = MagicMock()
+        tenant_db.connect.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        tenant_db.connect.return_value.__exit__ = MagicMock(return_value=None)
+        app.state.pool_map = {DEFAULT_DB_KEY: MagicMock(), "tenant": tenant_db}
+
+        req = MagicMock()
+        req.app = app
+        req.cookies.get.return_value = "tenant"
+        req.url.path = "/"
+        req.headers.get.return_value = "localhost"
+        req.scope = {"path": "/"}
+
+        with patch(
+            "pyvelm.database_routing.load_registry_for_connection",
+            return_value=loaded,
+        ) as load_reg:
+            self.assertIs(get_request_registry(app, req), loaded)
+        load_reg.assert_called_once()
+        self.assertIs(app.state.registry_cache["tenant"], loaded)
+
+    def test_get_request_registry_db_none_fallback(self):
+        from pyvelm.database_routing import get_request_registry
+
+        boot = MagicMock()
+        app = MagicMock()
+        app.state.registry_cache = {}
+        app.state.registry = boot
+        app.state.module_roots = []
+        app.state.pool_map = {"orphan": MagicMock()}
+
+        req = MagicMock()
+        req.app = app
+        req.cookies.get.return_value = "orphan"
+        req.url.path = "/"
+        req.headers.get.return_value = "localhost"
+        req.scope = {"path": "/"}
+
+        with patch("pyvelm.database_routing.get_request_database", return_value=None):
+            self.assertIs(get_request_registry(app, req), boot)
 
     def test_load_registry_for_connection(self):
         from pyvelm.database_routing import load_registry_for_connection

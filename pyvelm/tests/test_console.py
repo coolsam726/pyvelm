@@ -37,6 +37,12 @@ class ParseSignatureTests(unittest.TestCase):
         self.assertEqual(parts[0].dest, "tag")
         self.assertEqual(parts[0].default, "beta")
 
+    def test_positional_with_default(self):
+        _name, parts = parse_signature("cmd {name=alice}")
+        self.assertFalse(parts[0].is_option)
+        self.assertEqual(parts[0].dest, "name")
+        self.assertEqual(parts[0].default, "alice")
+
     def test_flag_option(self):
         _, parts = parse_signature("cmd {--force}")
         self.assertTrue(parts[0].flag)
@@ -110,6 +116,17 @@ class CommandRegistryTests(unittest.TestCase):
         reg.register(SigOnly())
         self.assertEqual(reg.get("only:sig").name, "only:sig")
 
+    def test_register_empty_name_raises(self):
+        class NoName(Command):
+            signature = "ignored"
+
+            def handle(self, **kwargs) -> int:
+                return 0
+
+        with patch("pyvelm.console.parse_signature", return_value=("", [])):
+            with self.assertRaises(ValueError):
+                CommandRegistry().register(NoName())
+
     def test_print_list_empty(self):
         buf = io.StringIO()
         with patch("sys.stdout", buf):
@@ -180,6 +197,46 @@ class CommandValidationTests(unittest.TestCase):
 
         parser = _build_argparse(OptCmd())
         self.assertIn("--size", parser.format_help())
+
+    def test_build_argparse_required_option_with_default(self):
+        class OptCmd(Command):
+            signature = "opt:req {--limit}"
+
+            def handle(self, limit: str = "10", **kwargs) -> int:
+                return 0
+
+        with patch(
+            "pyvelm.console.parse_signature",
+            return_value=(
+                "opt:req",
+                [
+                    type(
+                        "_SigPart",
+                        (),
+                        {
+                            "dest": "limit",
+                            "is_option": True,
+                            "optional": False,
+                            "flag": False,
+                            "default": "10",
+                            "help": None,
+                        },
+                    )()
+                ],
+            ),
+        ):
+            parser = _build_argparse(OptCmd())
+        self.assertIn("--limit", parser.format_help())
+
+    def test_abstract_handle_body(self):
+        class Delegate(Command):
+            name = "delegate"
+            signature = "delegate"
+
+            def handle(self, **kwargs) -> int:
+                return Command.handle(self, **kwargs)
+
+        self.assertIsNone(Delegate().handle())
 
 
 if __name__ == "__main__":

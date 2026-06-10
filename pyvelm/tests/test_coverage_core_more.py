@@ -12,7 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from pyvelm import BaseModel, Char, Float, Integer, Many2many, Many2one, One2many, Registry
+from pyvelm import BaseModel, Char, Float, Integer, Many2many, Many2one, One2many, Registry, depends
 from pyvelm.domain import (
     _parse_polish,
     domain_to_sql,
@@ -294,6 +294,286 @@ class EnvironmentUnitTests(unittest.TestCase):
         env.notify_changed("test.thing", [], ["name"])
         env.cache.set("test.thing", 1, "name", "x")
         env.notify_changed("test.thing", [1], ["missing_field"])
+
+    def test_prime_cache_early_return_and_avatar(self):
+        env = Environment(MagicMock(), Registry(), uid=None)
+        env.prime_current_user_cache()
+
+        reg = Registry()
+        with reg.activate():
+
+            class Users(BaseModel):
+                _name = "res.users"
+                _table = "res_users"
+                name = Char()
+                login = Char()
+                company_id = Many2one("res.company")
+                group_ids = Many2many("res.groups")
+                avatar_url = Char()
+
+            class Company(BaseModel):
+                _name = "res.company"
+                _table = "res_company"
+                name = Char()
+
+            class Groups(BaseModel):
+                _name = "res.groups"
+                _table = "res_groups"
+                name = Char()
+
+        conn = MagicMock()
+        env2 = Environment(conn, reg, uid=1)
+        Users = reg["res.users"]
+        user_rs = MagicMock()
+        user_rs.ensure_one = MagicMock()
+        user_rs.name = "A"
+        user_rs.login = "a"
+        user_rs.company_id = 1
+        user_rs.avatar_url = "/x.png"
+        user_rs.group_ids = ()
+        with patch.object(Users, "search", return_value=user_rs):
+            env2.prime_current_user_cache()
+
+    def test_access_anonymous_and_missing_acl_models(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Partner(BaseModel):
+                _name = "res.partner"
+                _table = "res_partner"
+                name = Char()
+
+        conn = MagicMock()
+        env = Environment(conn, reg, uid=None)
+        self.assertTrue(env._access_granted("res.partner", "read"))
+        self.assertTrue(env.access_flags("res.partner")["read"])
+
+        reg2 = Registry()
+        with reg2.activate():
+
+            class Access(BaseModel):
+                _name = "ir.model.access"
+                _table = "ir_model_access"
+                model = Char()
+                perm_read = Char()
+                perm_write = Char()
+                group_id = Many2one("res.groups")
+
+            class Partner2(BaseModel):
+                _name = "res.partner"
+                _table = "res_partner"
+                name = Char()
+
+        env2 = Environment(conn, reg2, uid=None)
+        AccessCls = reg2["ir.model.access"]
+        with patch.object(AccessCls, "search", return_value=[]):
+            self.assertFalse(env2.has_access("res.partner", "read"))
+            with self.assertRaises(PermissionError) as ctx:
+                env2.check_access("res.partner", "write")
+            self.assertIn("anonymous", str(ctx.exception))
+
+    def test_can_string_model_and_policy_denied(self):
+        reg = self._minimal_registry()
+        env = Environment(MagicMock(), reg, uid=2)
+        with patch("pyvelm.env.eval_policy", return_value=True):
+            self.assertTrue(env.can("test.thing", "archive"))
+        with patch("pyvelm.env.eval_policy", return_value=False):
+            self.assertFalse(env.can("test.thing", "archive"))
+        reg3 = Registry()
+        with reg3.activate():
+
+            class Access(BaseModel):
+                _name = "ir.model.access"
+                _table = "ir_model_access"
+                model = Char()
+                perm_write = Char()
+                group_id = Many2one("res.groups")
+
+        env3 = Environment(MagicMock(), reg3, uid=2)
+        AccessCls = reg3["ir.model.access"]
+        with patch.object(AccessCls, "search", return_value=[]):
+            self.assertFalse(env3.can("test.thing", "archive", perm="write"))
+
+    def test_record_rules_anonymous_and_placeholders(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Rule(BaseModel):
+                _name = "ir.rule"
+                _table = "ir_rule"
+                model = Char()
+                perm_read = Char()
+                domain = Char()
+                group_id = Many2one("res.groups")
+
+            class Partner(BaseModel):
+                _name = "res.partner"
+                _table = "res_partner"
+                name = Char()
+
+        conn = MagicMock()
+
+        class RuleRS:
+            def __init__(self, _env, ids=(), items=()):
+                self.ids = list(ids)
+                self._items = items
+
+            def __iter__(self):
+                return iter(self._items)
+
+            def __bool__(self):
+                return bool(self._items)
+
+        RuleCls = reg["ir.rule"]
+        env = Environment(conn, reg, uid=None)
+        anon_rule = MagicMock()
+        anon_rule.domain = json.dumps([("id", ">", 0)])
+        with patch.object(RuleCls, "search", return_value=RuleRS(env, [1], [anon_rule])):
+            self.assertTrue(env.collect_record_rules("res.partner", "read"))
+
+        rule = MagicMock()
+        rule.domain = json.dumps([
+            ("company_id", "=", {"placeholder": "company_id"}),
+            ("id", "in", [{"placeholder": "uid"}, 99]),
+        ])
+        env_uid = Environment(conn, reg, uid=8)
+        env_uid._user_groups_cache = set()
+        with patch.object(RuleCls, "search", return_value=RuleRS(env_uid, [1], [rule])):
+            leaves = env_uid.with_context(company_id=7).collect_record_rules(
+                "res.partner", "read",
+            )
+        self.assertEqual(leaves[0][2], 7)
+        self.assertEqual(leaves[1][2][0], 8)
+
+        env3 = Environment(conn, reg, uid=5)
+        env3._user_groups_cache = set()
+        global_rule = MagicMock()
+        global_rule.domain = json.dumps([("id", ">", 0)])
+
+        with patch.object(RuleCls, "search", return_value=RuleRS(env3, [1], [global_rule])):
+            leaves2 = env3.collect_record_rules("res.partner", "read")
+        self.assertTrue(leaves2)
+
+        reg_only = Registry()
+        with reg_only.activate():
+
+            class P2(BaseModel):
+                _name = "res.partner"
+                name = Char()
+
+        env4 = Environment(conn, reg_only, uid=2)
+        self.assertEqual(env4.collect_record_rules("res.partner", "read"), [])
+
+        resolved = env._resolve_rule_leaves(["&", ("x", "=", 1)])
+        self.assertEqual(resolved[0], "&")
+
+    def test_transaction_exception_and_savepoint_edges(self):
+        conn = MagicMock()
+        conn.autocommit = True
+        env = Environment(conn, Registry())
+        with self.assertRaises(ValueError):
+            with env.transaction():
+                raise ValueError("boom")
+        conn.rollback.assert_called()
+
+        conn.reset_mock()
+        conn.autocommit = False
+        env._tx_depth = 1
+        executed: list[str] = []
+
+        def execute(sql, *args, **kwargs):
+            executed.append(str(sql))
+            if "RELEASE SAVEPOINT" in str(sql):
+                raise RuntimeError("release failed")
+
+        conn.execute = execute
+        with self.assertRaises(RuntimeError):
+            with env.transaction():
+                pass
+        self.assertTrue(any("ROLLBACK TO SAVEPOINT" in s for s in executed))
+
+        conn.reset_mock()
+        conn.execute = MagicMock()
+        env._tx_depth = 1
+        with self.assertRaises(RuntimeError):
+            with env.transaction():
+                raise RuntimeError("inner")
+        self.assertTrue(
+            any("ROLLBACK TO SAVEPOINT" in str(c) for c in conn.execute.call_args_list)
+        )
+
+    def test_compute_field_stored_flushes_sql(self):
+        reg = Registry()
+        with reg.activate():
+
+            class M(BaseModel):
+                _name = "test.m_cmp_env"
+                _table = "test_m_cmp_env"
+                total = Integer(compute="_compute_total", store=True)
+
+                @depends("id")
+                def _compute_total(self):
+                    for rid in self._ids:
+                        self.env.cache.set(
+                            "test.m_cmp_env", rid, "total", rid * 10,
+                        )
+
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        conn = MagicMock()
+        wire_sa_conn(conn, [])
+        env = Environment(conn, reg)
+        Model = reg["test.m_cmp_env"]
+        rec = Model(env, (3,))
+        env.compute_field(rec, Model._fields["total"])
+        conn.execute.assert_called()
+
+    def test_compute_field_missing_cache_raises(self):
+        reg = Registry()
+        with reg.activate():
+
+            class M(BaseModel):
+                _name = "test.m_cmp_miss"
+                _table = "test_m_cmp_miss"
+                total = Integer(compute="_compute_total", store=True)
+
+                @depends("id")
+                def _compute_total(self):
+                    pass
+
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        conn = MagicMock()
+        wire_sa_conn(conn, [])
+        env = Environment(conn, reg)
+        Model = reg["test.m_cmp_miss"]
+        with self.assertRaises(RuntimeError):
+            env.compute_field(Model(env, (1,)), Model._fields["total"])
+
+    def test_notify_changed_stored_dependent(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Dep(BaseModel):
+                _name = "test.dep"
+                _table = "test_dep"
+                total = Integer(compute="_compute_total", store=True)
+
+                @depends("id")
+                def _compute_total(self):
+                    for rid in self._ids:
+                        self.env.cache.set(self._name, rid, "total", 42)
+
+        from pyvelm.tests.support.sa_ddl import wire_sa_conn
+
+        conn = MagicMock()
+        wire_sa_conn(conn, [])
+        env = Environment(conn, reg)
+        edge = MagicMock()
+        edge.find_source_ids.return_value = [5]
+        reg._edge_index = {("test.src", "qty"): [("test.dep", "total", edge)]}
+        env.notify_changed("test.src", [1], ["qty"])
+        conn.execute.assert_called()
 
 
 # ---------------------------------------------------------------------------
@@ -1386,6 +1666,585 @@ class ReportSchemaCoverageTests(unittest.TestCase):
             validate_definition(defn, self.reg)
 
 
+class LoaderManifestAndDiscoverTests(unittest.TestCase):
+    def test_import_attr_dot_notation(self):
+        import pyvelm.console as console_mod
+
+        cls = _import_attr("pyvelm.console.Command")
+        self.assertIs(cls, console_mod.Command)
+
+    def test_manifest_missing_version_raises(self):
+        from pyvelm.loader import _exec_manifest_module, _manifest_dict_from_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / "bad"
+            pkg.mkdir()
+            (pkg / "__pyvelm__.py").write_text('NAME = "bad"\n', encoding="utf-8")
+            mod = _exec_manifest_module(pkg)
+            with self.assertRaises(ValueError):
+                _manifest_dict_from_module(mod, pkg / "__pyvelm__.py")
+
+    def test_manifest_invalid_raises(self):
+        from pyvelm.loader import _exec_manifest_module, _manifest_dict_from_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / "bad"
+            pkg.mkdir()
+            (pkg / "__pyvelm__.py").write_text("x = 1\n", encoding="utf-8")
+            mod = _exec_manifest_module(pkg)
+            with self.assertRaises(ValueError):
+                _manifest_dict_from_module(mod, pkg / "__pyvelm__.py")
+
+    def test_discover_skips_non_dir_and_duplicate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "file.txt").write_text("x", encoding="utf-8")
+            (root / "mod_a").mkdir()
+            (root / "mod_a" / "__pyvelm__.py").write_text(
+                'NAME = "dup"\nVERSION = (0, 1, 0)\nDEPENDS = []\n',
+                encoding="utf-8",
+            )
+            (root / "mod_b").mkdir()
+            (root / "mod_b" / "__pyvelm__.py").write_text(
+                'NAME = "dup"\nVERSION = (0, 1, 0)\nDEPENDS = []\n',
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                discover([root])
+
+    def test_resolve_order_missing_dependency(self):
+        child = ModuleSpec(
+            name="child", version=(0, 1, 0), depends=["missing"],
+            package="child", models_package="child.models", migrations_package=None,
+        )
+        with self.assertRaises(ValueError):
+            resolve_order({"child": child})
+
+    def test_resolve_order_cycle_detection(self):
+        a = ModuleSpec(
+            name="a", version=(0, 1, 0), depends=["b"],
+            package="a", models_package="a.models", migrations_package=None,
+        )
+        b = ModuleSpec(
+            name="b", version=(0, 1, 0), depends=["a"],
+            package="b", models_package="b.models", migrations_package=None,
+        )
+        with self.assertRaises(ValueError):
+            resolve_order({"a": a, "b": b})
+
+    def test_has_models_package_via_import(self):
+        from pyvelm.loader import _has_models_package
+
+        spec = ModuleSpec(
+            name="pyvelm", version=(0, 1, 0), depends=[],
+            package="pyvelm", models_package="pyvelm.loader", migrations_package=None,
+        )
+        self.assertTrue(_has_models_package(spec))
+
+
+class LoaderSyncAndMigrateTests(unittest.TestCase):
+    def test_reload_installed_models_empty_subset(self):
+        from pyvelm.loader import reload_installed_models
+
+        env = MagicMock()
+        env.conn.execute.return_value.fetchall.return_value = []
+        with (
+            patch("pyvelm.loader._ensure_ir_module"),
+            patch("pyvelm.loader.reload_models") as rm,
+        ):
+            reload_installed_models(env, {"tmp": ModuleSpec(
+                name="tmp", version=(0, 1, 0), depends=[],
+                package="tmp", models_package="tmp.models", migrations_package=None,
+            )})
+        rm.assert_not_called()
+
+    def test_reload_installed_models_subset(self):
+        from pyvelm.loader import reload_installed_models
+
+        spec = ModuleSpec(
+            name="tmp",
+            version=(0, 1, 0),
+            depends=[],
+            package="tmp",
+            models_package="tmp.models",
+            migrations_package=None,
+        )
+        env = MagicMock()
+        env.registry = Registry()
+        env.conn.execute.return_value.fetchall.return_value = [("tmp",)]
+        with (
+            patch("pyvelm.loader._ensure_ir_module"),
+            patch("pyvelm.loader.reload_models") as rm,
+        ):
+            reload_installed_models(env, {"tmp": spec, "other": spec})
+        rm.assert_called_once()
+
+    def test_load_models_without_package(self):
+        from pyvelm.loader import _load_models
+
+        reg = Registry()
+        spec = ModuleSpec(
+            name="cli_only",
+            version=(0, 1, 0),
+            depends=[],
+            package="cli_only",
+            models_package="cli_only.models",
+            migrations_package=None,
+            package_path=Path("/nonexistent/cli_only"),
+        )
+        _load_models(spec, reg)
+        self.assertTrue(spec.loaded)
+
+    def test_parse_migration_filename_empty_parts(self):
+        self.assertIsNone(_parse_migration_filename("_to_0_2"))
+        self.assertIsNone(_parse_migration_filename("0_1_to_"))
+
+    def test_run_migrations_no_package_file(self):
+        spec = ModuleSpec(
+            name="m",
+            version=(0, 2, 0),
+            depends=[],
+            package="unittest",
+            models_package="unittest.mock",
+            migrations_package="unittest.mock",
+        )
+        with patch("pyvelm.loader.importlib.import_module") as imp:
+            pkg = MagicMock()
+            pkg.__file__ = None
+            imp.return_value = pkg
+            _run_migrations(spec, MagicMock(), (0, 1, 0), (0, 2, 0))
+        imp.assert_called_once()
+
+    def test_run_migrations_import_error_and_migrate_fn(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / "m"
+            pkg.mkdir()
+            (pkg / "__init__.py").write_text("", encoding="utf-8")
+            mig = pkg / "migrations"
+            mig.mkdir()
+            (mig / "__init__.py").write_text("", encoding="utf-8")
+            (mig / "0_1_to_0_2.py").write_text(
+                "def migrate(env):\n    pass\n", encoding="utf-8",
+            )
+            spec = ModuleSpec(
+                name="m",
+                version=(0, 2, 0),
+                depends=[],
+                package="m",
+                models_package="m.models",
+                migrations_package="m.migrations",
+                package_path=pkg,
+            )
+            root = str(tmp)
+            if root not in sys.path:
+                sys.path.insert(0, root)
+            try:
+                for key in list(sys.modules):
+                    if key == "m" or key.startswith("m."):
+                        del sys.modules[key]
+                with self.assertRaises(RuntimeError):
+                    _run_migrations(spec, MagicMock(), (0, 1, 0), (0, 2, 0))
+            finally:
+                if root in sys.path:
+                    sys.path.remove(root)
+
+        spec2 = ModuleSpec(
+            name="none",
+            version=(0, 1, 0),
+            depends=[],
+            package="missing_pkg",
+            models_package="missing_pkg.models",
+            migrations_package="missing_pkg.migrations",
+        )
+        _run_migrations(spec2, MagicMock(), (0, 0, 0), (0, 1, 0))
+
+    def test_load_data_views_data_and_reload(self):
+        from pyvelm.builders.views_data import ViewsData
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / "pkg"
+            pkg.mkdir()
+            data_py = pkg / "views.py"
+            data_py.write_text(
+                textwrap.dedent(
+                    """
+                    from pyvelm.builders.views_data import ViewsData
+
+                    views_data = (
+                        ViewsData.make()
+                        .view({
+                            "name": "v",
+                            "model": "res.partner",
+                            "view_type": "list",
+                            "arch": {"fields": ["name"]},
+                        })
+                        .inherit({
+                            "name": "v.ext",
+                            "inherit": "pkg.v",
+                            "operations": [],
+                        })
+                    )
+                    """
+                ),
+                encoding="utf-8",
+            )
+            spec = ModuleSpec(
+                name="pkg",
+                version=(0, 1, 0),
+                depends=[],
+                package="pkg",
+                models_package="pkg.models",
+                migrations_package=None,
+                package_path=pkg,
+                data=["views.py"],
+            )
+            _load_data_files(spec)
+            self.assertEqual(len(spec.views), 1)
+            _load_data_files(spec)
+
+    def test_ensure_ir_module_duplicate_and_no_if_not_exists(self):
+        from pyvelm.loader import _ensure_ir_module
+
+        env = MagicMock()
+        with (
+            patch("pyvelm.database.table_exists", return_value=True),
+            patch("pyvelm.database.supports_create_table_if_not_exists", return_value=False),
+            patch("pyvelm.database.sa_ddl.execute_create_table") as create,
+        ):
+            _ensure_ir_module(env)
+        create.assert_not_called()
+
+        with (
+            patch("pyvelm.database.table_exists", return_value=False),
+            patch("pyvelm.database.supports_create_table_if_not_exists", return_value=True),
+            patch(
+                "pyvelm.database.sa_ddl.execute_create_table",
+                side_effect=RuntimeError("exists"),
+            ),
+            patch("pyvelm.database.is_duplicate_object_error", return_value=True),
+        ):
+            _ensure_ir_module(env)
+
+
+class LoaderViewsMenusWebTests(unittest.TestCase):
+    def test_sync_views_no_registry_model(self):
+        env = MagicMock()
+        env.registry = {}
+        spec = ModuleSpec(
+            name="pkg",
+            version=(0, 1, 0),
+            depends=[],
+            package="pkg",
+            models_package="pkg.models",
+            migrations_package=None,
+            views=[{"name": "v", "model": "x", "view_type": "list", "arch": {}}],
+        )
+        _sync_views(spec, env)
+
+    def test_sync_views_string_arch_and_update(self):
+        reg = Registry()
+        with reg.activate():
+
+            class View(BaseModel):
+                _name = "ir.ui.view"
+                _table = "ir_ui_view"
+                module = Char()
+                name = Char()
+                model = Char()
+                view_type = Char()
+                arch = Char()
+                priority = Integer()
+
+        env = MagicMock()
+        env.registry = reg
+        ViewM = MagicMock()
+        existing = MagicMock()
+        ViewM.search.side_effect = [existing, MagicMock(__bool__=lambda s: False)]
+        env.__getitem__ = lambda _s, n: ViewM
+        spec = ModuleSpec(
+            name="pkg",
+            version=(0, 1, 0),
+            depends=[],
+            package="pkg",
+            models_package="pkg.models",
+            migrations_package=None,
+            views=[{
+                "name": "p.list",
+                "model": "res.partner",
+                "view_type": "list",
+                "arch": '{"fields": ["name"]}',
+            }],
+        )
+        _sync_views(spec, env)
+        existing.write.assert_called_once()
+
+    def test_sync_view_inherits_update_existing(self):
+        reg = Registry()
+        with reg.activate():
+
+            class View(BaseModel):
+                _name = "ir.ui.view"
+                _table = "ir_ui_view"
+                module = Char()
+                name = Char()
+                model = Char()
+                view_type = Char()
+                arch = Char()
+                priority = Integer()
+                inherit_id = Many2one("ir.ui.view")
+                operations = Char()
+
+        env = MagicMock()
+        env.registry = reg
+        parent = MagicMock(id=3, model="res.partner", view_type="list")
+        parent_rs = MagicMock()
+        parent_rs.__bool__ = lambda s: True
+        parent_rs.ensure_one = MagicMock(return_value=parent)
+        existing = MagicMock()
+        ViewM = MagicMock()
+        ViewM.search.side_effect = [parent_rs, existing]
+        env.__getitem__ = lambda _s, n: ViewM
+        spec = ModuleSpec(
+            name="pkg",
+            version=(0, 1, 0),
+            depends=[],
+            package="pkg",
+            models_package="pkg.models",
+            migrations_package=None,
+            view_inherits=[{
+                "name": "p.ext",
+                "inherit": "pkg.p.list",
+                "operations": [],
+            }],
+        )
+        _sync_view_inherits(spec, env)
+        existing.write.assert_called_once()
+
+    def test_menu_sync_parent_without_dot_and_missing_parent(self):
+        menus = [
+            {"name": "child", "label": "C", "parent": "parent"},
+            {"name": "orphan", "label": "O", "parent": "pkg.missing"},
+        ]
+        ordered = _menu_sync_order(menus, "pkg")
+        self.assertEqual(ordered[0]["name"], "child")
+
+    def test_sync_menus_validation_and_update(self):
+        reg = Registry()
+        with reg.activate():
+
+            class Menu(BaseModel):
+                _name = "ir.ui.menu"
+                _table = "ir_ui_menu"
+                module = Char()
+                name = Char()
+                label = Char()
+                parent_id = Many2one("ir.ui.menu")
+                sequence = Integer()
+                href = Char()
+                icon = Char()
+                active = Char()
+                access_model = Char()
+                access_perm = Char()
+                access_policy = Char()
+                dev_only = Char()
+
+        env = MagicMock()
+        env.registry = reg
+        MenuM = MagicMock()
+        parent = MagicMock()
+        parent.id = 2
+        parent_rs = MagicMock()
+        parent_rs.__bool__ = lambda s: True
+        parent_rs.ensure_one = MagicMock(return_value=parent)
+        existing = MagicMock()
+        MenuM.search.side_effect = [parent_rs, existing]
+        env.__getitem__ = lambda _s, n: MenuM
+        spec = ModuleSpec(
+            name="pkg",
+            version=(0, 1, 0),
+            depends=[],
+            package="pkg",
+            models_package="pkg.models",
+            migrations_package=None,
+            menus=[{
+                "name": "child",
+                "label": "Child",
+                "parent": "base.root",
+            }],
+        )
+        _sync_menus(spec, env)
+        existing.write.assert_called_once()
+
+        MenuM.search.side_effect = [MagicMock(__bool__=lambda s: False)]
+        with self.assertRaises(ValueError):
+            _sync_menus(
+                ModuleSpec(
+                    name="pkg",
+                    version=(0, 1, 0),
+                    depends=[],
+                    package="pkg",
+                    models_package="pkg.models",
+                    migrations_package=None,
+                    menus=[{"name": "x", "label": "X", "parent": "base.missing"}],
+                ),
+                env,
+            )
+
+        spec_parent = ModuleSpec(
+            name="pkg",
+            version=(0, 1, 0),
+            depends=[],
+            package="pkg",
+            models_package="pkg.models",
+            migrations_package=None,
+            menus=[{"name": "x", "label": "X", "parent": "bad"}],
+        )
+        with self.assertRaises(ValueError):
+            _sync_menus(spec_parent, env)
+
+    def test_sync_view_inherits_missing_parent(self):
+        reg = Registry()
+        with reg.activate():
+
+            class View(BaseModel):
+                _name = "ir.ui.view"
+                _table = "ir_ui_view"
+                module = Char()
+                name = Char()
+                model = Char()
+                view_type = Char()
+                arch = Char()
+                priority = Integer()
+                inherit_id = Many2one("ir.ui.view")
+                operations = Char()
+
+        env = MagicMock()
+        env.registry = reg
+        ViewM = MagicMock()
+        ViewM.search.return_value = MagicMock(__bool__=lambda s: False)
+        env.__getitem__ = lambda _s, n: ViewM
+        spec = ModuleSpec(
+            name="pkg",
+            version=(0, 1, 0),
+            depends=[],
+            package="pkg",
+            models_package="pkg.models",
+            migrations_package=None,
+            view_inherits=[{"name": "e", "inherit": "pkg.missing", "operations": []}],
+        )
+        with self.assertRaises(ValueError):
+            _sync_view_inherits(spec, env)
+
+    def test_sync_menus_no_registry(self):
+        env = MagicMock()
+        env.registry = {}
+        spec = ModuleSpec(
+            name="pkg",
+            version=(0, 1, 0),
+            depends=[],
+            package="pkg",
+            models_package="pkg.models",
+            migrations_package=None,
+            menus=[{"name": "m", "label": "M"}],
+        )
+        _sync_menus(spec, env)
+
+    def test_register_web_routes_skips_uninstalled(self):
+        app = MagicMock()
+        app.state.pool = MagicMock()
+        conn_cm = MagicMock()
+        conn_cm.__enter__ = MagicMock(return_value=MagicMock())
+        conn_cm.__exit__ = MagicMock(return_value=False)
+        app.state.pool.connection.return_value = conn_cm
+        app.state.registry = Registry()
+        spec = ModuleSpec(
+            name="webmod",
+            version=(0, 1, 0),
+            depends=[],
+            package="webmod",
+            models_package="webmod.models",
+            migrations_package=None,
+            web_routes="pkg:fn",
+        )
+        registrar = MagicMock()
+        with (
+            patch("pyvelm.loader.discover", return_value={"webmod": spec}),
+            patch("pyvelm.loader.resolve_order", return_value=[spec]),
+            patch("pyvelm.loader._installed_module_names", return_value=set()),
+            patch("pyvelm.loader._import_attr", return_value=registrar),
+        ):
+            register_web_routes(app, [])
+        registrar.assert_not_called()
+
+    def test_register_web_routes_with_pool(self):
+        app = MagicMock()
+        app.state.pool = MagicMock()
+        conn_cm = MagicMock()
+        conn_cm.__enter__ = MagicMock(return_value=MagicMock())
+        conn_cm.__exit__ = MagicMock(return_value=False)
+        app.state.pool.connection.return_value = conn_cm
+        app.state.registry = Registry()
+        spec = ModuleSpec(
+            name="webmod",
+            version=(0, 1, 0),
+            depends=[],
+            package="webmod",
+            models_package="webmod.models",
+            migrations_package=None,
+            web_routes="pkg:fn",
+        )
+        registrar = MagicMock()
+        with (
+            patch("pyvelm.loader.discover", return_value={"webmod": spec}),
+            patch("pyvelm.loader.resolve_order", return_value=[spec]),
+            patch("pyvelm.loader._installed_module_names", return_value={"webmod"}),
+            patch("pyvelm.loader._import_attr", return_value=registrar),
+        ):
+            register_web_routes(app, [])
+        registrar.assert_called_once_with(app)
+
+    def test_load_commands_from_disk_and_discover_type_error(self):
+        from pyvelm.loader import _load_commands_from_package, discover_commands
+
+        with tempfile.TemporaryDirectory() as tmp:
+            mod_root = Path(tmp) / "mod"
+            (mod_root / "commands").mkdir(parents=True)
+            (mod_root / "commands" / "hello.py").write_text(
+                textwrap.dedent(
+                    """
+                    from pyvelm.console import Command
+
+                    class HelloCmd(Command):
+                        name = "hello:disk"
+                        description = "hi"
+
+                        def handle(self, ctx, args):
+                            return 0
+                    """
+                ),
+                encoding="utf-8",
+            )
+            spec = ModuleSpec(
+                name="mod",
+                version=(0, 1, 0),
+                depends=[],
+                package="mod",
+                models_package="mod.models",
+                migrations_package=None,
+                package_path=mod_root,
+                command_refs=["bad:Ref"],
+            )
+            with (
+                patch("pyvelm.loader.discover", return_value={"mod": spec}),
+                patch("pyvelm.loader.resolve_order", return_value=[spec]),
+                patch("pyvelm.loader._import_attr", return_value=object()),
+            ):
+                with self.assertRaises(TypeError):
+                    discover_commands([mod_root])
+            classes = _load_commands_from_package(spec)
+            self.assertTrue(classes)
+
+
 class LoaderInstallTests(unittest.TestCase):
     def test_install_fresh_module(self):
         from pyvelm.loader import install
@@ -1429,6 +2288,52 @@ class LoaderInstallTests(unittest.TestCase):
             results = install([spec], env)
         self.assertEqual(results[0]["name"], "tmp")
         conn.execute.assert_called()
+
+    def test_install_upgrade_path(self):
+        from pyvelm.loader import install
+
+        reg = Registry()
+        with reg.activate():
+
+            class Thing(BaseModel):
+                _name = "tmp.thing"
+                _table = "tmp_thing"
+                name = Char()
+
+        hook = MagicMock()
+        sync = MagicMock()
+        spec = ModuleSpec(
+            name="tmp",
+            version=(0, 2, 0),
+            depends=[],
+            package="tmp",
+            models_package="tmp.models",
+            migrations_package=None,
+            sync_hook=sync,
+        )
+        conn = MagicMock()
+        env = Environment(conn, reg)
+        applied = MagicMock()
+        applied.summary.return_value = "ok"
+        tx = MagicMock()
+        tx.__enter__ = MagicMock(return_value=env)
+        tx.__exit__ = MagicMock(return_value=False)
+        with (
+            patch.object(env, "transaction", return_value=tx),
+            patch("pyvelm.loader._ensure_ir_module"),
+            patch("pyvelm.loader._installed_version", return_value=(0, 1, 0)),
+            patch("pyvelm.loader._setup_module_schema"),
+            patch("pyvelm.loader._run_migrations"),
+            patch("pyvelm.loader._load_data_files"),
+            patch("pyvelm.loader._sync_views"),
+            patch("pyvelm.loader._sync_view_inherits"),
+            patch("pyvelm.loader._sync_menus"),
+            patch("pyvelm.loader._run_module_seeders"),
+            patch("pyvelm.db_autogen.apply_schema_diff", return_value=applied),
+        ):
+            install([spec], env)
+        sync.assert_called_once()
+        hook.assert_not_called()
 
 
 if __name__ == "__main__":

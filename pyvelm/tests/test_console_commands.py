@@ -50,7 +50,27 @@ class MakeModuleCommandTests(unittest.TestCase):
             ):
                 code = cmd.handle("tasks", str(root))
             self.assertEqual(code, 0)
-            mat.assert_called_once()
+            mat.assert_called_once_with(
+                "module",
+                root / "tasks",
+                variables={"name": "tasks", "display_name": "Tasks"},
+            )
+
+    def test_materialises_module_with_display_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "modules"
+            root.mkdir()
+            cmd = self.Command()
+            cmd._ctx = self._ctx()
+            with patch(
+                "console.commands.make_module.echo_next_steps_for_new"
+            ):
+                code = cmd.handle("partners", str(root))
+            self.assertEqual(code, 0)
+            manifest = (root / "partners" / "__pyvelm__.py").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn('.display_name("Partners")', manifest)
 
 
 class MakeViewCommandTests(unittest.TestCase):

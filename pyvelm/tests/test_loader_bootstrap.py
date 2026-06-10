@@ -1,6 +1,7 @@
 """Loader bootstrap install policy (bundled pyvelm/modules on fresh DB)."""
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 import unittest.mock
@@ -65,6 +66,61 @@ class SpecsToInstallTests(unittest.TestCase):
         ordered = [_spec("base"), _spec("reports", ["base"])]
         result = specs_to_install(env, ordered, install_all=True)
         self.assertEqual([s.name for s in result], ["base", "reports"])
+
+
+class LoaderBootstrapCoverageTests(unittest.TestCase):
+    def test_exec_manifest_missing_file(self):
+        from pyvelm.loader import _exec_manifest_module
+
+        with self.assertRaises(FileNotFoundError):
+            _exec_manifest_module(Path("/nonexistent/pkg"))
+
+    def test_exec_manifest_bad_spec(self):
+        from pyvelm.loader import _exec_manifest_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / "bad"
+            pkg.mkdir()
+            (pkg / "__pyvelm__.py").write_text("x = 1\n", encoding="utf-8")
+            with (
+                unittest.mock.patch(
+                    "importlib.util.spec_from_file_location",
+                    return_value=None,
+                ),
+                self.assertRaises(ImportError),
+            ):
+                _exec_manifest_module(pkg)
+
+    def test_discover_bootstrap_fallback_when_missing_dir(self):
+        from pyvelm.loader import discover_bootstrap_module_names
+
+        with unittest.mock.patch("pyvelm.loader._BUILTIN_MODULES_ROOT", Path("/nope")):
+            names = discover_bootstrap_module_names()
+        self.assertEqual(names, frozenset({"base", "admin"}))
+
+    def test_installed_version_parses_row(self):
+        from pyvelm.loader import _installed_version
+
+        env = MagicMock()
+        env.conn.execute.return_value.fetchone.return_value = ("1.2.3",)
+        self.assertEqual(_installed_version(env, "base"), (1, 2, 3))
+
+    def test_load_and_install_registers_policies(self):
+        from pyvelm.loader import load_and_install
+
+        spec = _spec("base")
+        env = MagicMock()
+        with (
+            unittest.mock.patch("pyvelm.policies.register_builtin_policies") as reg,
+            unittest.mock.patch("pyvelm.loader.discover", return_value={"base": spec}),
+            unittest.mock.patch("pyvelm.loader.resolve_order", return_value=[spec]),
+            unittest.mock.patch("pyvelm.loader.specs_to_install", return_value=[spec]),
+            unittest.mock.patch("pyvelm.loader._load_models"),
+            unittest.mock.patch("pyvelm.loader.install", return_value=[]),
+        ):
+            out = load_and_install([], env, install_all=True)
+        reg.assert_called_once()
+        self.assertEqual(out, [spec])
 
 
 @pytest.mark.integration

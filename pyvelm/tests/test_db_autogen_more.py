@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from pyvelm.db_autogen import (
     ApplyResult,
@@ -31,7 +31,7 @@ from pyvelm.db_autogen import (
 )
 from pyvelm.fields import Boolean, Float, Many2one, Text
 from pyvelm.fields import Char, Integer
-from pyvelm.tests.test_db_autogen_constraints import _mock_env, _partner_cls
+from pyvelm.tests.test_db_autogen_constraints import _code_field, _mock_env, _partner_cls
 
 
 class VersionHelperTests(unittest.TestCase):
@@ -357,6 +357,317 @@ class BlueprintHelperTests(unittest.TestCase):
         )
         diff = compute_diff(env, "partners")
         self.assertTrue(any(a.kind == "drop_not_null" for a in diff.alterations))
+
+
+class DiffHasSyncableTests(unittest.TestCase):
+    def test_diff_has_syncable_changes(self):
+        from pyvelm.db_autogen import diff_has_syncable_changes
+
+        env = _mock_env([], _partner_cls(required=True))
+        self.assertTrue(
+            diff_has_syncable_changes(env, Diff(new_tables=[("t", [])]))
+        )
+        self.assertTrue(
+            diff_has_syncable_changes(
+                env,
+                Diff(alterations=[SchemaAlteration("t", "c", "drop_not_null", "x")]),
+            )
+        )
+        with patch("pyvelm.db_autogen._column_has_nulls", return_value=False):
+            self.assertTrue(
+                diff_has_syncable_changes(
+                    env,
+                    Diff(alterations=[SchemaAlteration("t", "c", "set_not_null", "x")]),
+                )
+            )
+        with patch("pyvelm.db_autogen._column_has_nulls", return_value=True):
+            self.assertFalse(
+                diff_has_syncable_changes(
+                    env,
+                    Diff(alterations=[SchemaAlteration("t", "c", "set_not_null", "x")]),
+                )
+            )
+
+    def test_syncable_summary_not_null_kinds(self):
+        diff = Diff(
+            new_columns=[("t", "c", object(), True, "text")],
+            alterations=[
+                SchemaAlteration("t", "c", "set_not_null", "x"),
+                SchemaAlteration("t", "d", "drop_not_null", "y"),
+            ],
+        )
+        text = _syncable_summary(diff)
+        self.assertIn("new column", text)
+        self.assertIn("NOT NULL tighten", text)
+        self.assertIn("NOT NULL relax", text)
+
+
+class ComputeDiffFieldSkipTests(unittest.TestCase):
+    def test_skips_relation_and_id_fields(self):
+        from pyvelm.fields import Many2many, Many2one, One2many
+
+        cls = MagicMock()
+        cls._name = "res.partner"
+        cls._table = "res_partner"
+        id_f = Integer()
+        id_f.name = "id"
+        id_f.column = "id"
+        id_f.is_stored = True
+        o2m = One2many("res.line", "partner_id")
+        o2m.name = "line_ids"
+        o2m.column = "line_ids"
+        o2m.is_stored = True
+        m2m = Many2many("res.tag")
+        m2m.name = "tag_ids"
+        m2m.column = "tag_ids"
+        m2m.is_stored = True
+        m2o = Many2one("res.country")
+        m2o.name = "country_id"
+        m2o.column = "country_id"
+        m2o.is_stored = True
+        code = Char()
+        code.name = "code"
+        code.column = "code"
+        code.is_stored = True
+        cls._fields = {
+            "id": id_f,
+            "line_ids": o2m,
+            "tag_ids": m2m,
+            "country_id": m2o,
+            "code": code,
+        }
+        env = _mock_env(
+            [("id", "NO", "int4", "integer")],
+            cls,
+        )
+        diff = compute_diff(env, "partners")
+        self.assertTrue(any(c == "code" for _, c, *_ in diff.new_columns))
+        self.assertFalse(any(c == "id" for _, c, *_ in diff.new_columns))
+
+    def test_new_column_on_existing_table(self):
+        env = _mock_env(
+            [("id", "NO", "int4", "integer")],
+            _partner_cls(required=True),
+        )
+        diff = compute_diff(env, "partners")
+        self.assertTrue(diff.new_columns)
+
+
+class FetchColumnsInspectorTests(unittest.TestCase):
+    def test_fetch_via_sqlalchemy_connection(self):
+        from sqlalchemy.engine import Connection
+
+        conn = MagicMock()
+        conn._sa = MagicMock(spec=Connection)
+        conn.capabilities = MagicMock(name="postgresql")
+        with patch(
+            "pyvelm.db_autogen._fetch_table_columns_inspector",
+            return_value={"code": MagicMock()},
+        ) as insp:
+            from pyvelm.db_autogen import _fetch_table_columns
+
+            out = _fetch_table_columns(MagicMock(conn=conn), "res_partner")
+        insp.assert_called_once()
+        self.assertIn("code", out)
+
+    def test_fetch_inspector_sqlite_missing_table(self):
+        from pyvelm.database.dialects import dialect_capabilities
+
+        conn = MagicMock()
+        conn.capabilities = dialect_capabilities("sqlite")
+        conn.execute.return_value.fetchone.return_value = None
+        self.assertIsNone(_fetch_table_columns_inspector(conn, "missing"))
+
+    def test_fetch_inspector_no_such_table(self):
+        from pyvelm.database.dialects import dialect_capabilities
+
+        conn = MagicMock()
+        conn.capabilities = dialect_capabilities("postgresql")
+        conn._sa = MagicMock()
+        insp = MagicMock()
+        with (
+            patch("sqlalchemy.inspect", return_value=insp),
+            patch(
+                "pyvelm.database.introspection._inspector_table_name",
+                return_value="t",
+            ),
+            patch.object(insp, "get_columns", side_effect=__import__("sqlalchemy.exc", fromlist=["NoSuchTableError"]).NoSuchTableError("t")),
+        ):
+            self.assertIsNone(_fetch_table_columns_inspector(conn, "t"))
+
+    def test_fetch_inspector_postgres_path(self):
+        from pyvelm.database.dialects import dialect_capabilities
+
+        conn = MagicMock()
+        conn.capabilities = dialect_capabilities("postgresql")
+        conn._sa = MagicMock()
+        col = {"name": "code", "nullable": False, "type": MagicMock(__name__="String")}
+        insp = MagicMock()
+        insp.get_columns.return_value = [col]
+        with (
+            patch("sqlalchemy.inspect", return_value=insp),
+            patch(
+                "pyvelm.database.introspection._inspector_table_name",
+                return_value="res_partner",
+            ),
+        ):
+            cols = _fetch_table_columns_inspector(conn, "res_partner")
+        self.assertIn("code", cols)
+
+
+class RenderMigrationEdgeTests(unittest.TestCase):
+    def test_render_table_with_only_pk(self):
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.database.sa_ddl import primary_key_column
+
+        cap = dialect_capabilities("postgresql")
+        diff = Diff(new_tables=[("solo", [primary_key_column(cap)])])
+        body = render_migration(diff, (0, 1, 0), (0, 2, 0))
+        self.assertIn("pass", body)
+
+    def test_blueprint_skips_non_columns(self):
+        lines = _blueprint_lines_from_columns(["not-a-column"])
+        self.assertEqual(lines, [])
+
+    def test_blueprint_text_column(self):
+        from sqlalchemy import Column as SAColumn
+        from sqlalchemy import Integer, MetaData, Table, Text
+
+        meta = MetaData()
+        tbl = Table(
+            "w",
+            meta,
+            SAColumn("id", Integer, primary_key=True),
+            SAColumn("note", Text()),
+        )
+        lines = _blueprint_lines_from_columns(list(tbl.columns))
+        self.assertEqual(len(lines), 1)
+        self.assertIn("note", lines[0])
+
+    def test_blueprint_unknown_sqlalchemy_type(self):
+        from sqlalchemy import Column as SAColumn
+        from sqlalchemy import Integer, MetaData, Table
+        from sqlalchemy.types import UserDefinedType
+
+        class Weird(UserDefinedType):
+            pass
+
+        meta = MetaData()
+        tbl = Table(
+            "w",
+            meta,
+            SAColumn("id", Integer, primary_key=True),
+            SAColumn("x", Weird()),
+        )
+        lines = _blueprint_lines_from_columns(list(tbl.columns))
+        self.assertTrue(any("text" in line for line in lines))
+
+    def test_blueprint_line_fallback(self):
+        unknown = MagicMock()
+        line = _blueprint_line_from_field(unknown, "state", required=False)
+        self.assertIn("text", line)
+
+
+class ApplyNullabilityDialectTests(unittest.TestCase):
+    def test_apply_result_skipped_count_only(self):
+        r = ApplyResult(skipped_not_null=2)
+        self.assertIn("backfill", r.summary())
+
+    def test_oracle_and_mssql_nullability(self):
+        from pyvelm.database.dialects import dialect_capabilities
+        from pyvelm.db_autogen import _apply_nullability, _column_exists
+
+        env = _mock_env(
+            [("id", "NO", "int4", "integer"), ("code", "YES", "text", "text")],
+            _partner_cls(required=True),
+        )
+        diff = Diff(
+            alterations=[
+                SchemaAlteration("res_partner", "code", "set_not_null", "tighten"),
+                SchemaAlteration("res_partner", "code", "drop_not_null", "relax"),
+            ],
+        )
+        r = ApplyResult()
+        with (
+            patch("pyvelm.database._conn_capabilities", return_value=dialect_capabilities("oracle")),
+            patch("pyvelm.db_autogen._column_has_nulls", return_value=False),
+            patch("pyvelm.database.sa_ddl.execute_sql") as execute,
+        ):
+            _apply_nullability(env, diff, r)
+        self.assertEqual(r.set_not_null, 1)
+        self.assertEqual(r.drop_not_null, 1)
+        execute.assert_called()
+
+        r2 = ApplyResult()
+        with (
+            patch("pyvelm.database._conn_capabilities", return_value=dialect_capabilities("mssql")),
+            patch("pyvelm.db_autogen._column_has_nulls", return_value=False),
+            patch("pyvelm.database.sa_ddl.execute_sql"),
+        ):
+            _apply_nullability(env, diff, r2)
+        self.assertEqual(r2.set_not_null, 1)
+
+        with patch("pyvelm.database.column_exists", return_value=True):
+            self.assertTrue(_column_exists(env, "res_partner", "code"))
+
+
+class ApplySchemaDiffEdgeTests(unittest.TestCase):
+    def test_apply_skips_existing_column(self):
+        env = _mock_env(
+            [("id", "NO", "int4", "integer")],
+            _partner_cls(required=True),
+        )
+        empty = Diff()
+        col_diff = Diff(
+            new_columns=[("res_partner", "code", _code_field(required=True), True, "text")],
+        )
+        with (
+            patch("pyvelm.db_autogen.compute_diff", side_effect=[empty, col_diff, empty]),
+            patch("pyvelm.db_autogen._column_exists", return_value=True),
+            patch("pyvelm.db_autogen._apply_nullability"),
+            patch("pyvelm.database.table_exists", return_value=True),
+        ):
+            result = apply_schema_diff(env, "partners")
+        self.assertIsInstance(result, ApplyResult)
+
+    def test_apply_creates_missing_table_for_column(self):
+        env = _mock_env([], _partner_cls(required=True))
+        empty = Diff()
+        col_diff = Diff(
+            new_columns=[("res_partner", "code", _code_field(required=True), True, "text")],
+        )
+        with (
+            patch("pyvelm.db_autogen.compute_diff", side_effect=[empty, col_diff, empty]),
+            patch("pyvelm.db_autogen._column_exists", return_value=False),
+            patch("pyvelm.database.table_exists", return_value=False),
+            patch("pyvelm.db_autogen._model_cls_for_table", return_value=_partner_cls(required=True)),
+            patch("pyvelm.database.sa_ddl.execute_create_table"),
+            patch("pyvelm.database.sa_ddl.execute_add_column"),
+            patch("pyvelm.db_autogen._apply_nullability"),
+        ):
+            apply_schema_diff(env, "partners")
+
+    def test_apply_handles_duplicate_column_error(self):
+        env = _mock_env([], _partner_cls(required=True))
+        empty = Diff()
+        col_diff = Diff(
+            new_columns=[("res_partner", "code", _code_field(required=True), True, "text")],
+        )
+        with (
+            patch("pyvelm.db_autogen.compute_diff", side_effect=[empty, col_diff, empty]),
+            patch("pyvelm.db_autogen._column_exists", return_value=False),
+            patch("pyvelm.database.table_exists", return_value=True),
+            patch("pyvelm.db_autogen._apply_nullability"),
+            patch(
+                "pyvelm.database.sa_ddl.execute_add_column",
+                side_effect=RuntimeError("duplicate column"),
+            ),
+            patch("pyvelm.database.get_backend") as gb,
+        ):
+            backend = MagicMock()
+            backend.is_duplicate_column_error.return_value = True
+            gb.return_value = backend
+            apply_schema_diff(env, "partners")
 
 
 if __name__ == "__main__":

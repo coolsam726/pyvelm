@@ -8,6 +8,7 @@ from pyvelm.scaffolder import (
     echo_next_steps_for_new,
     find_modules_root,
     materialise,
+    module_scaffold_variables,
     valid_name,
 )
 
@@ -40,7 +41,7 @@ class MakeModuleCommand(Command):
         root.mkdir(parents=True, exist_ok=True)
         target = root / name
         try:
-            materialise("module", target, variables={"name": name})
+            materialise("module", target, variables=module_scaffold_variables(name))
         except FileExistsError:
             self.error(f"{target} already exists.")
             return 1

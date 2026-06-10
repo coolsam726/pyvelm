@@ -69,6 +69,13 @@ class WorkflowPolicyTests(unittest.TestCase):
             eval_policy(env, model_name="workflow.approval", action="view_any")
         )
 
+    @patch("pyvelm.policies.workflow.user_in_group", return_value=False)
+    def test_definition_view_any_denies_non_admin(self, _mock):
+        env = _FakeEnv()
+        self.assertFalse(
+            eval_policy(env, model_name="workflow.definition", action="view_any")
+        )
+
     @patch("pyvelm.policies.workflow.user_in_group", return_value=True)
     def test_definition_design_admin_only(self, _mock):
         env = _FakeEnv()
