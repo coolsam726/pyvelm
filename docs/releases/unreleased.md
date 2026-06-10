@@ -7,7 +7,7 @@ Changes on `main` after the latest PyPI tag. See
 
 ## Highlights
 
-_No unreleased highlights yet — edit this page when features land on `main` after **v1.1.0**._
+_No unreleased highlights yet — edit this page when features land on `main` after **v1.1.1**._
 
 ---
 

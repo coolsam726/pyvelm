@@ -14,7 +14,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 
 | | |
 |---|---|
-| **Stable** | **v1.1.0** (2026-06-09) |
+| **Stable** | **v1.1.1** (2026-06-09) |
 | **Stack** | FastAPI + HTMX + Tailwind v4 + SQLAlchemy Core |
 | **Bundled modules** | `base`, `admin`, `console`, `workflow`, `reports`, `mail_compose`, `file_manager`, `technical`, `geo_data`, `document_layout` |
 | **Reference port** | velmphp **v1.0.1** + unreleased **v1.1.0** admin polish |
@@ -26,6 +26,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 | **v1.0.0** | Portable DB layer, seeders, Schema migrations, stable PyPI | **Done** |
 | **v1.0.1** | Nested menus, versioned docs, MySQL/MariaDB WIP | **Done** |
 | **v1.1.0** | Fluent manifests/builders, `models.Model`, query builder, Vellum removal | **Done** |
+| **v1.1.1** | `make:module` / generator fixes, ~99% test coverage | **Done** |
 | **v1.2** | velmphp shell parity — audit, bulk actions, detail views, reference `partners` | **Planned** |
 | **v1.3** | ORM extension ergonomics — mixins, model discovery | **Planned** |
 | **v1.4** | Multi-DB routing (preview → production), Oracle/MSSQL smoke | **Planned** (see [docs/multi-database.md](docs/multi-database.md)) |
