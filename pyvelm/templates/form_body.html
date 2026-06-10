@@ -63,13 +63,36 @@ or (chatter_context and chatter_context.enabled)
                         bg-neutral-primary/95 backdrop-blur-sm border-b border-default/80">
                 <span class="inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider
                      px-2 py-0.5 rounded-full
-                     {% if mode == 'edit' %}bg-warning-soft text-warning-strong
+                     {% if is_detail %}bg-neutral-tertiary text-body-subtle
+                     {% elif mode == 'edit' %}bg-warning-soft text-warning-strong
                      {% elif mode == 'new' %}bg-success-soft text-success-strong
                      {% else %}bg-neutral-tertiary text-body-subtle{% endif %}">
-                    {{ mode }}
+                    {% if is_detail %}detail{% else %}{{ mode }}{% endif %}
                 </span>
                 <div class="flex items-center gap-2">
-                    {% if mode in ("display", "edit") and record_id %}
+                    {% if is_detail and record_id %}
+                    {% for act in header_actions or [] %}
+                    {% if act.full_page or (act.method == 'GET' and not act.url.startswith(base)) %}
+                    <a href="{{ act.url }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                      border border-default text-body rounded-md hover:bg-neutral-secondary transition">
+                        {{ act.label }}
+                    </a>
+                    {% else %}
+                    <button type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+                           border border-default text-body rounded-md hover:bg-neutral-secondary transition"
+                        hx-{{ act.method | lower }}="{{ act.url }}"
+                        {% if act.confirm %}hx-confirm="{{ act.confirm }}"{% endif %}
+                        hx-swap="none">{{ act.label }}</button>
+                    {% endif %}
+                    {% endfor %}
+                    {% if edit_form_href and access.can_write %}
+                    <a href="{{ edit_form_href }}"
+                       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
+                              rounded-md bg-fg-brand hover:opacity-90 transition">
+                        Edit
+                    </a>
+                    {% endif %}
+                    {% elif mode == "display" and record_id %}
                     {% for act in header_actions or [] %}
                     {% if act.full_page or (act.method == 'GET' and not act.url.startswith(base)) %}
                     <a href="{{ act.url }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
@@ -86,8 +109,6 @@ or (chatter_context and chatter_context.enabled)
                     </button>
                     {% endif %}
                     {% endfor %}
-                    {% endif %}
-                    {% if mode == "display" and record_id %}
                     {% if access.can_write %}
                     <button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white
                            rounded-md bg-fg-brand hover:opacity-90 transition" hx-get="{{ rec_edit_url }}"

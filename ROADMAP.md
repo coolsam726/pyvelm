@@ -14,7 +14,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 
 | | |
 |---|---|
-| **Stable** | **v1.1.1** (2026-06-09) |
+| **Stable** | **v1.3.0** (2026-06-09) |
 | **Stack** | FastAPI + HTMX + Tailwind v4 + SQLAlchemy Core |
 | **Bundled modules** | `base`, `admin`, `console`, `workflow`, `reports`, `mail_compose`, `file_manager`, `technical`, `geo_data`, `document_layout` |
 | **Reference port** | velmphp **v1.0.1** + unreleased **v1.1.0** admin polish |
@@ -28,8 +28,8 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 | **v1.1.0** | Fluent manifests/builders, `models.Model`, query builder, Vellum removal | **Done** |
 | **v1.1.1** | `make:module` / generator fixes, ~99% test coverage | **Done** |
 | **v1.2.0** | Fluent ORM fields, nested dialogs, geo bootstrap, widget hints | **Done** |
-| **v1.2.x** | velmphp shell parity — audit, bulk actions, detail views, reference `partners` | **Planned** |
-| **v1.3** | ORM extension ergonomics — mixins, model discovery | **Planned** |
+| **v1.3.0** | IDE field-builder stubs, list bulk actions, DetailView + row_actions | **Done** |
+| **v1.2.x** | velmphp shell parity — audit, reference `partners`, ActionForm | **Planned** |
 | **v1.4** | Multi-DB routing (preview → production), Oracle/MSSQL smoke | **Planned** (see [docs/multi-database.md](docs/multi-database.md)) |
 
 ---
@@ -53,8 +53,8 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 | Feature | velmphp | pyvelm today |
 |---------|---------|--------------|
 | `system_audit` module | v1.0.1 | — |
-| List `bulk_actions` | v1.1.0 | — |
-| `DetailView` + `row_actions` | rc3+ | form-only |
+| List `bulk_actions` | v1.1.0 | **Done (v1.3.0)** |
+| `DetailView` + `row_actions` | rc3+ | **Done (v1.3.0)** |
 | `ActionForm` / view-actions inline forms | v1.0.1 | URL actions only |
 | Bundled `partners` reference (graph/pivot/dashboard) | v1.0.1 | `examples/` only |
 | `$mixins` (`mail.thread` composable) | rc3 | class inheritance |
@@ -77,7 +77,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 | # | Item | Status |
 |---|------|--------|
 | 0.1 | **Fluent ORM field chains** | **Done (v1.2.0)** — ``Char().required().tracking()``; ``Many2one("m").ondelete()``; metaclass materializes ``OrmFieldBuilder`` |
-| 0.2 | **IDE stubs for builders** | Planned — overload ``Char()`` return type in ``make:stubs`` |
+| 0.2 | **IDE stubs for builders** | **Done (v1.3.0)** — overload ``Char()`` → ``OrmFieldBuilder`` in ``make:stubs`` |
 
 ---
 
@@ -91,8 +91,8 @@ source.
 |---|------|-------------|-------|
 | 1.1 | **Dark mode tokens** | `velm-tokens.css` `.dark` | **Done (v1.1.0)** — lifted surfaces (`gray-800`/`900`), not OLED black |
 | 1.2 | **`system_audit` module** | `packages/modules/modules/system_audit/` | `ir.audit.log`, `ir.login.log`, `ir.user.lifecycle`; optional `PYVELM_AUDIT_DSN`; retention cron; CSV export |
-| 1.3 | **List bulk actions** | `bulk_actions` arch | Row checkboxes, select-all, bulk bar, default bulk delete when unlink allowed |
-| 1.4 | **`DetailView` + `row_actions`** | `DetailView.php`, `ListRowAction` | Read-only record page separate from form; list links via `detail_view` |
+| 1.3 | **List bulk actions** | `bulk_actions` arch | **Done (v1.3.0)** — row checkboxes, select-all, bulk bar, default bulk delete when unlink allowed |
+| 1.4 | **`DetailView` + `row_actions`** | `DetailView.php`, `ListRowAction` | **Done (v1.3.0)** — read-only record page; list links via `detail_view` |
 | 1.5 | **`ActionForm` / view-actions** | `ViewActionFormController` | Toolbar quick-add/edit mini-forms at `/web/view-actions/...` |
 | 1.6 | **Bundled `partners` module** | `modules/partners/` | Ship in wheel: list, detail, form, kanban, graph, pivot, dashboard; demo page actions |
 | 1.7 | **Currency import** | `CurrencyImportService` | On-demand world currencies (RESTcountries or bundled fallback); Settings action |

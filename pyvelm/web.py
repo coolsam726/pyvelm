@@ -1150,6 +1150,60 @@ def create_app(
             rec.unlink()
         return HTMLResponse("")
 
+    @app.post("/web/records/{module}/{name}/bulk")
+    async def web_list_bulk(
+        module: str,
+        name: str,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        """Apply a bulk action to selected list rows (default: unlink)."""
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .render import _resolve_bulk_actions
+        from .views import resolve_arch
+
+        view = _load_view(env, module, name)
+        if view.view_type != "list":
+            raise HTTPException(status_code=400, detail="Not a list view")
+        try:
+            body = await request.json()
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+        action = (body.get("action") or "unlink").strip()
+        raw_ids = body.get("ids") or []
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise HTTPException(status_code=400, detail="ids required")
+        try:
+            ids = [int(i) for i in raw_ids]
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="ids must be integers") from exc
+
+        arch = resolve_arch(view)
+        allowed = {
+            a["action"]
+            for a in _resolve_bulk_actions(arch, env, model=view.model)
+        }
+        if action not in allowed:
+            raise HTTPException(status_code=403, detail=f"Bulk action {action!r} denied")
+
+        Model = env[view.model]
+        if action == "unlink":
+            if not env.has_access(view.model, "unlink"):
+                raise PermissionError(f"You cannot delete {view.model} records.")
+            with env.transaction():
+                recs = Model.browse(ids)
+                recs.unlink()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action {action!r}")
+
+        if request.headers.get("HX-Request"):
+            return Response(
+                status_code=200,
+                headers={"HX-Redirect": f"/web/views/{module}/{name}"},
+            )
+        return RedirectResponse(f"/web/views/{module}/{name}", status_code=303)
+
     @app.post("/web/records/{module}/{name}/reorder")
     async def web_row_reorder(
         module: str,
@@ -1360,7 +1414,13 @@ def create_app(
             return _login_redirect(request)
         from .render import render_form_page
 
-        view = _require_form_view(_load_view(env, module, name))
+        view = _load_view(env, module, name)
+        if view.view_type not in ("form", "detail"):
+            raise HTTPException(
+                400, f"View {module}.{name} is not a form or detail view"
+            )
+        if view.view_type == "detail" and not env.has_access(view.model, "read"):
+            raise PermissionError(f"You cannot read {view.model} records.")
         rec = _load_record(env, view, record_id)
         # HX-Request header set by HTMX -> return body fragment for
         # in-place swap; otherwise full page for direct navigation.

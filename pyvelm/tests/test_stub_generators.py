@@ -139,6 +139,7 @@ class StubGeneratorTests(unittest.TestCase):
             self.assertIn("def query(self) -> Query", models_stub)
             fields_stub = (written / "pyvelm" / "fields.pyi").read_text(encoding="utf-8")
             self.assertIn("comodel_name: ModelName", fields_stub)
+            self.assertIn("OrmFieldBuilder", fields_stub)
             menus_stub = written / "pyvelm" / "builders" / "menus.pyi"
             self.assertTrue(menus_stub.is_file())
             self.assertNotIn("Field", menus_stub.read_text(encoding="utf-8"))

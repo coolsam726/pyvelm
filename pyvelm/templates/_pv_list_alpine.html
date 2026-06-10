@@ -37,7 +37,9 @@ document.addEventListener('alpine:init', () => {
         // Single-value: currently grouped column, or null.
         groupBy: cfg.groupBy || null,
         bc: cfg.bc || '',
-        // Dropdown state.
+        bulkEnabled: !!cfg.bulkEnabled,
+        bulkActions: cfg.bulkActions || [],
+        selected: {},
         panelOpen: false,
         columnsOpen: false,
         visibleColumns: {},
@@ -92,7 +94,96 @@ document.addEventListener('alpine:init', () => {
             return 1 + (this.sequenceField ? 1 : 0);
         },
 
-        // The free-text "search" chip is the one with field===null.
+        get selectedCount() {
+            return Object.keys(this.selected).filter((k) => this.selected[k]).length;
+        },
+
+        pageRowIds() {
+            const ids = [];
+            document.querySelectorAll('[data-pv-list-table] [data-record-id]').forEach((tr) => {
+                const id = parseInt(tr.getAttribute('data-record-id'), 10);
+                if (!Number.isNaN(id)) ids.push(id);
+            });
+            return ids;
+        },
+
+        isSelected(id) {
+            return !!this.selected[String(id)];
+        },
+
+        toggleRow(id) {
+            const key = String(id);
+            if (this.selected[key]) {
+                delete this.selected[key];
+            } else {
+                this.selected[key] = true;
+            }
+            this.selected = { ...this.selected };
+        },
+
+        allPageSelected() {
+            const ids = this.pageRowIds();
+            return ids.length > 0 && ids.every((id) => this.isSelected(id));
+        },
+
+        somePageSelected() {
+            return this.pageRowIds().some((id) => this.isSelected(id));
+        },
+
+        toggleAll(checked) {
+            const next = { ...this.selected };
+            for (const id of this.pageRowIds()) {
+                const key = String(id);
+                if (checked) next[key] = true;
+                else delete next[key];
+            }
+            this.selected = next;
+        },
+
+        async runBulk(act) {
+            const ids = Object.keys(this.selected)
+                .filter((k) => this.selected[k])
+                .map((k) => parseInt(k, 10));
+            if (!ids.length) return;
+            const msg = act.confirm || `Run ${act.label} on ${ids.length} record(s)?`;
+            const ok = act.confirm
+                ? await window.pvConfirm(msg, { variant: 'danger', title: act.label })
+                : true;
+            if (!ok) return;
+            try {
+                const r = await fetch(
+                    `/web/records/${this.module}/${this.name}/bulk`,
+                    {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': window.pvCsrf ? window.pvCsrf() : '',
+                        },
+                        body: JSON.stringify({ action: act.action, ids }),
+                    },
+                );
+                if (r.status === 401 || r.status === 403) {
+                    window.pvAlert('Bulk action denied.', { variant: 'danger' });
+                    return;
+                }
+                if (!r.ok) {
+                    window.pvAlert('Bulk action failed.', { variant: 'danger' });
+                    return;
+                }
+                const redirect = r.headers.get('HX-Redirect');
+                if (redirect) {
+                    window.location.href = redirect;
+                    return;
+                }
+                this.selected = {};
+                this.load();
+            } catch (_) {
+                window.pvAlert('Bulk action failed.', { variant: 'danger' });
+            }
+        },
+
+        // Dropdown state.
         // Helpers below add/replace it on input commits.
         _searchChipIndex() {
             return this.chips.findIndex(c => c.field === null);

@@ -158,9 +158,12 @@ class ArchList(_ArchListRequired, total=False):
 
     - ``title``     — human-readable heading shown above the table.
     - ``form_view`` — ``"<name>"`` of a form view to link each row to.
+    - ``detail_view`` — read-only detail view for row clicks (uses ``can_read``).
     - ``record_href`` — URL pattern for row clicks; ``{id}`` is substituted.
     - ``create_href`` — URL for the list's New button (full navigation).
     - ``page_actions`` — toolbar buttons (same shape as form ``header_actions``).
+    - ``bulk_actions`` — bulk bar actions (default: delete when unlink allowed).
+    - ``row_actions`` — per-row action buttons in the Actions column.
     - ``sequence``  — name of an integer field; when set the renderer
                       adds a drag handle and forces sort by that field.
     - ``domain``    — static domain ANDed with toolbar search / filter chips
@@ -169,11 +172,28 @@ class ArchList(_ArchListRequired, total=False):
 
     title: str
     form_view: str
+    detail_view: str
     record_href: str
     create_href: str
     page_actions: list[ArchHeaderAction]
+    bulk_actions: list[ArchListBulkAction]
+    row_actions: list[ArchHeaderAction]
     sequence: str
     domain: list
+
+
+class ArchListBulkAction(TypedDict, total=False):
+    """One bulk action on a list view bulk bar.
+
+    Built-in ``action`` values: ``"unlink"`` (delete selected rows).
+    Custom URL actions are not supported yet — use ``row_actions`` /
+    ``page_actions`` for one-off endpoints.
+    """
+
+    label: str
+    action: str
+    confirm: str
+    perm: str
 
 
 class _ArchSectionRequired(TypedDict):
@@ -277,6 +297,19 @@ class ArchForm(_ArchFormRequired, total=False):
     title: str
     header_actions: list[ArchHeaderAction]
     cols: int
+
+
+class ArchDetail(_ArchFormRequired, total=False):
+    """Arch for ``view_type="detail"`` views — read-only record pages.
+
+    Same layout keys as :class:`ArchForm`. Optional ``form_view`` names
+    the editable form opened by the **Edit** toolbar link.
+    """
+
+    title: str
+    header_actions: list[ArchHeaderAction]
+    cols: int
+    form_view: str
 
 
 class ArchKanbanCard(TypedDict, total=False):
@@ -443,6 +476,19 @@ class FormView(_FormViewRequired, total=False):
     priority: int
 
 
+class _DetailViewRequired(TypedDict):
+    name: str
+    model: str
+    view_type: Literal["detail"]
+    arch: ArchDetail
+
+
+class DetailView(_DetailViewRequired, total=False):
+    """A ``view_type="detail"`` read-only record view declaration."""
+
+    priority: int
+
+
 class _KanbanViewRequired(TypedDict):
     name: str
     model: str
@@ -497,8 +543,10 @@ class DashboardView(_DashboardViewRequired, total=False):
 
 # Union alias kept for backwards compatibility and for lists that mix
 # view types (the common case).
-ViewType = Literal["list", "form", "kanban", "graph", "pivot", "dashboard"]
-View = Union[ListView, FormView, KanbanView, GraphView, PivotView, DashboardView]
+ViewType = Literal["list", "form", "detail", "kanban", "graph", "pivot", "dashboard"]
+View = Union[
+    ListView, FormView, DetailView, KanbanView, GraphView, PivotView, DashboardView
+]
 
 
 # ---- inheritance ops ----------------------------------------------

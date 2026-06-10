@@ -69,6 +69,7 @@ from .menus import (
 from .views import (
     ChartWidget,
     DashboardView,
+    DetailView,
     FormView,
     GraphView,
     InheritView,
@@ -84,6 +85,7 @@ from .views_data import ViewsData
 __all__ = [
     "ChartWidget",
     "DashboardView",
+    "DetailView",
     "Field",
     "FormView",
     "GraphView",

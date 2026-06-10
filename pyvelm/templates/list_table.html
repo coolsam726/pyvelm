@@ -11,7 +11,16 @@
             <tr data-pv-header-row>
                 {# Leftmost checkbox column — placeholder for future bulk selection. #}
                 <th class="w-9 px-3 py-3" aria-label="Row select">
+                    {% if bulk_enabled %}
+                    <input type="checkbox"
+                           class="rounded border-default w-3.5 h-3.5 cursor-pointer"
+                           aria-label="Select all rows on this page"
+                           :checked="allPageSelected()"
+                           :indeterminate="somePageSelected() && !allPageSelected()"
+                           @change="toggleAll($event.target.checked)">
+                    {% else %}
                     <span class="block w-3.5 h-3.5 rounded border border-default bg-neutral-primary/60"></span>
+                    {% endif %}
                 </th>
                 {% if sequence_field %}
                 {# Drag-handle column: no title, narrow gutter. #}

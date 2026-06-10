@@ -3253,7 +3253,9 @@ def render_form_page(
     from .views import resolve_arch
 
     arch = resolve_arch(view)
+    is_detail = view.view_type == "detail"
     header_actions: list[dict] = []
+    edit_form_href: str | None = None
     if mode == "display" and record_or_none is not None and record_or_none._ids:
         header_actions = _resolve_header_actions(
             arch.get("header_actions", []),
@@ -3264,6 +3266,25 @@ def render_form_page(
             record_id=record_or_none.id,
             record=record_or_none,
         )
+        if is_detail:
+            form_name = arch.get("form_view") or _find_form_view(view, env)
+            if form_name and env.has_access(view.model, "write"):
+                nav = encode_view_nav_query(
+                    list_module,
+                    list_name,
+                    search=list_search,
+                    order=list_order,
+                    filters=list_filters,
+                    group_by=group_by,
+                    page=page,
+                    page_size=page_size,
+                    bc_stack=bc_stack,
+                )
+                qs = f"?{nav}" if nav else ""
+                edit_form_href = (
+                    f"/web/views/{view.module}/{form_name}/record/"
+                    f"{record_or_none.id}/edit{qs}"
+                )
     workflow_ctx = None
     if (
         mode == "display"
@@ -3313,6 +3334,8 @@ def render_form_page(
         record_id=(record_or_none.id if record_or_none else None),
         title=title,
         mode=mode,
+        is_detail=is_detail,
+        edit_form_href=edit_form_href,
         body_only=body_only,
         in_dialog=in_dialog,
         sections=sections,
@@ -4546,6 +4569,100 @@ def render_pivot_page(
     )
 
 
+def _find_detail_view(view, env):
+    """Return the name of the first detail view for the same model, or None."""
+    if "ir.ui.view" not in env.registry:
+        return None
+    matches = _search_ui_views(
+        env,
+        [("model", "=", view.model), ("view_type", "=", "detail")],
+        limit=1,
+        order='"id" ASC',
+    )
+    if matches:
+        for m in matches:
+            return m.name
+    return None
+
+
+def _resolve_bulk_actions(arch, env, *, model: str) -> list[dict]:
+    """Materialize list bulk bar actions; default unlink when permitted."""
+    declared = list(arch.get("bulk_actions") or [])
+    if declared:
+        out: list[dict] = []
+        for act in declared:
+            perm = act.get("perm") or "unlink"
+            if perm and not env.has_access(model, perm):
+                continue
+            out.append(
+                {
+                    "label": act.get("label", "Run"),
+                    "action": act.get("action", "unlink"),
+                    "confirm": act.get("confirm") or "",
+                }
+            )
+        return out
+    if env.has_access(model, "unlink"):
+        return [
+            {
+                "label": "Delete",
+                "action": "unlink",
+                "confirm": "Delete selected records? This cannot be undone.",
+            }
+        ]
+    return []
+
+
+def _list_record_href(
+    view,
+    record_id,
+    *,
+    detail_view_name: str | None,
+    form_view_name: str | None,
+    record_href: str | None,
+    list_nav_query: str,
+    access,
+) -> str | None:
+    """Pick row-click URL: custom href, detail (read), or form (read/write)."""
+    if record_href and access.can_write:
+        return record_href.replace("{id}", str(record_id))
+    nav = f"?{list_nav_query}" if list_nav_query else ""
+    if detail_view_name and access.can_read:
+        return (
+            f"/web/views/{view.module}/{detail_view_name}/record/{record_id}{nav}"
+        )
+    if form_view_name and access.can_read:
+        return f"/web/views/{view.module}/{form_view_name}/record/{record_id}{nav}"
+    return None
+
+
+def _build_list_rows(
+    view,
+    recordset,
+    fields_spec,
+    env,
+    arch,
+) -> list[dict]:
+    """Display rows with optional per-row resolved actions."""
+    rows = _build_rows(view, recordset, fields_spec)
+    row_tpl = arch.get("row_actions") or []
+    if not row_tpl:
+        return rows
+    Model = env[view.model]
+    for row in rows:
+        rec = Model.browse(row["id"])
+        row["row_actions"] = _resolve_header_actions(
+            row_tpl,
+            env,
+            model=view.model,
+            module=view.module,
+            name=view.name,
+            record_id=row["id"],
+            record=rec,
+        )
+    return rows
+
+
 def _find_form_view(view, env):
     """Return the name of the first form view for the same model+module,
     or None if no such view is registered."""
@@ -4791,7 +4908,7 @@ def _safe_order(fields_spec: list, order: str) -> str:
 
 
 def _group_rows(
-    records, view, fields_spec, group_by: str, env, model_cls
+    records, view, fields_spec, group_by: str, env, model_cls, arch
 ) -> list[dict]:
     """Bucket `records` by their `group_by` field value.
 
@@ -4838,7 +4955,9 @@ def _group_rows(
                 "key": bucket["key"],
                 "label": bucket["label"],
                 "count": bucket["count"],
-                "rows": _build_rows(view, bucket["records"], fields_spec),
+                "rows": _build_list_rows(
+                    view, bucket["records"], fields_spec, env, arch
+                ),
             }
         )
     return groups
@@ -4864,8 +4983,12 @@ def render_list_page(
     arch = resolve_arch(view)
     fields_spec = arch.get("fields", [])
     form_view_name = arch.get("form_view") or _find_form_view(view, env)
+    detail_view_name = arch.get("detail_view") or _find_detail_view(view, env)
     record_href = arch.get("record_href")
     create_href = arch.get("create_href")
+    access = template_access(env, view.model)
+    bulk_actions = _resolve_bulk_actions(arch, env, model=view.model)
+    bulk_enabled = bool(bulk_actions) and not arch.get("sequence")
     page_actions = _resolve_header_actions(
         arch.get("page_actions", []),
         env,
@@ -4912,20 +5035,22 @@ def render_list_page(
         # bounded if someone groups a huge table without filtering.
         _GROUP_CAP = 500
         recs = Model.search(domain, limit=_GROUP_CAP, order=safe_ord)
-        groups = _group_rows(recs, view, fields_spec, safe_group_by, env, model_cls)
+        groups = _group_rows(
+            recs, view, fields_spec, safe_group_by, env, model_cls, arch
+        )
         rows = []
         total_pages = 1
     elif sequence_field:
         # No pagination when drag-reorder is active.
         recs = Model.search(domain, order=safe_ord)
         groups = None
-        rows = _build_rows(view, recs, fields_spec)
+        rows = _build_list_rows(view, recs, fields_spec, env, arch)
         total_pages = 1
     else:
         offset = page * page_size
         recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
         groups = None
-        rows = _build_rows(view, recs, fields_spec)
+        rows = _build_list_rows(view, recs, fields_spec, env, arch)
         total_pages = max(1, (total + page_size - 1) // page_size)
 
     page_title = _view_title(view, arch)
@@ -4956,9 +5081,12 @@ def render_list_page(
         group_by=safe_group_by,
         sequence_field=sequence_field,
         form_view_name=form_view_name,
+        detail_view_name=detail_view_name,
         record_href=record_href,
         create_href=create_href,
         page_actions=page_actions,
+        bulk_actions=bulk_actions,
+        bulk_enabled=bulk_enabled,
         list_nav_query=list_nav_query,
         page_title=page_title,
         # No record-count subtitle on list views — the pager footer
@@ -4977,7 +5105,7 @@ def render_list_page(
             page_size=page_size,
         ),
         bc_param=format_bc_param(bc_stack or []),
-        access=template_access(env, view.model),
+        access=access,
         **layout_context(env, current_path, leaf_label=page_title),
     )
 
@@ -5000,8 +5128,12 @@ def render_list_rows(
     arch = resolve_arch(view)
     fields_spec = arch.get("fields", [])
     form_view_name = arch.get("form_view") or _find_form_view(view, env)
+    detail_view_name = arch.get("detail_view") or _find_detail_view(view, env)
     record_href = arch.get("record_href")
     create_href = arch.get("create_href")
+    access = template_access(env, view.model)
+    bulk_actions = _resolve_bulk_actions(arch, env, model=view.model)
+    bulk_enabled = bool(bulk_actions) and not arch.get("sequence")
 
     model_cls = env.registry[view.model]
     Model = env[view.model]
@@ -5027,19 +5159,21 @@ def render_list_rows(
     if safe_group_by:
         _GROUP_CAP = 500
         recs = Model.search(domain, limit=_GROUP_CAP, order=safe_ord)
-        groups = _group_rows(recs, view, fields_spec, safe_group_by, env, model_cls)
+        groups = _group_rows(
+            recs, view, fields_spec, safe_group_by, env, model_cls, arch
+        )
         rows = []
         total_pages = 1
     elif sequence_field:
         recs = Model.search(domain, order=safe_ord)
         groups = None
-        rows = _build_rows(view, recs, fields_spec)
+        rows = _build_list_rows(view, recs, fields_spec, env, arch)
         total_pages = 1
     else:
         offset = page * page_size
         recs = Model.search(domain, limit=page_size, offset=offset, order=safe_ord)
         groups = None
-        rows = _build_rows(view, recs, fields_spec)
+        rows = _build_list_rows(view, recs, fields_spec, env, arch)
         total_pages = max(1, (total + page_size - 1) // page_size)
 
     list_nav_query = encode_view_nav_query(
@@ -5069,10 +5203,13 @@ def render_list_rows(
         group_by=safe_group_by,
         sequence_field=sequence_field,
         form_view_name=form_view_name,
+        detail_view_name=detail_view_name,
         record_href=record_href,
         create_href=create_href,
+        bulk_actions=bulk_actions,
+        bulk_enabled=bulk_enabled,
         list_nav_query=list_nav_query,
-        access=template_access(env, view.model),
+        access=access,
     )
 
 

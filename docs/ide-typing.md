@@ -128,6 +128,7 @@ Where completions apply:
 | `m.item(…, view="…")` | Short view name (`ViewSlug`) |
 | `env["…"]` | Model technical name (when `env` is typed as `Environment`) |
 | `env.query("…")` | Model technical name → `Query` |
+| `Char().required()` | Fluent ORM field chains return `OrmFieldBuilder` (v1.3+) |
 | `recordset.query()` | Returns `Query` (chain methods from `pyvelm.query`) |
 | `Query.where(…)` field arg | Plain `str` — field names are not literal-unions yet |
 | Record fields | Not stubbed yet (`record.name` stays unstructured) |

@@ -47,6 +47,10 @@ _LIST_PROMOTION_PATHS: dict[str, list[tuple[str, ...]]] = {
         ("sections", "*", "fields"),
         ("sections", "*", "pages", "*", "fields"),
     ],
+    "detail": [
+        ("sections", "*", "fields"),
+        ("sections", "*", "pages", "*", "fields"),
+    ],
     # Kanban view: card.fields and card.badges are field-spec lists.
     # title/subtitle stay as plain strings (single-field references)
     # because addressing them by name doesn't help inheritance.
