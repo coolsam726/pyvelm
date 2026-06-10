@@ -95,7 +95,7 @@ views_data = (
                 .title("Partners")
                 .subtitle("res.partner")
                 .description("Browse and manage partners for the current company.")
-                .url("/web/views/partners/partner.list"),
+                .url("/web/views/contacts/partner.list"),
             ]
         ),
     )

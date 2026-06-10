@@ -43,12 +43,13 @@ from .registry import Registry
 # to import because they only touch the registry at call time.
 
 # Discovery root for the modules bundled inside the wheel. Today the
-# framework ships two: ``base`` (the primitives every app needs:
+# framework ships ``base`` (the primitives every app needs:
 # ir.ui.view / res.users / res.groups / ir.model.access / ir.rule /
 # ir.actions.server / base.automation / ir.cron / mail.message /
-# res.country / res.region / res.company / ir.ui.menu) and ``admin``
-# (the list/form views + sidebar menus that put a usable management
-# UI in front of those models). Apps that boot the framework should
+# res.country / res.region / res.company / ir.ui.menu), ``contacts``
+# (``res.partner`` directory), and ``admin`` (the list/form views +
+# sidebar menus that put a usable management UI in front of those models).
+# Apps that boot the framework should
 # include this in their ``loader.load_and_install`` call:
 #
 #     from pyvelm import BUILTIN_MODULE_ROOTS

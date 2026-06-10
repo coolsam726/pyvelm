@@ -5,8 +5,8 @@ a Many2one to their "home" company; the Environment's company_id scopes
 searches automatically when set.
 
 Note: company_id is added directly to res.users in res_user.py (same
-module) and to res.partner in the partners module (which depends on base
-and thus loads res.company first).
+module) and to res.partner in the bundled contacts module (which depends
+on base and thus loads res.company first).
 """
 from __future__ import annotations
 

@@ -46,7 +46,7 @@ class SpecsToInstallTests(unittest.TestCase):
 
     def test_bootstrap_modules_cover_pyvelm_modules_tree(self):
         self.assertGreaterEqual(len(BOOTSTRAP_MODULES), 2)
-        for name in ("base", "admin", "reports"):
+        for name in ("base", "admin", "contacts", "reports"):
             self.assertIn(name, BOOTSTRAP_MODULES)
 
     def test_existing_db_only_installed_modules(self):

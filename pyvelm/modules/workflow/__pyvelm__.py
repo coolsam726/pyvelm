@@ -11,7 +11,7 @@ manifest = (
     )
     .category("System")
     .author("pyvelm")
-    .depends("base", "admin")
+    .depends("base", "admin", "contacts")
     .data(
         "views/definition.py",
         "views/runtime.py",
