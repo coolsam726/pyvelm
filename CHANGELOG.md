@@ -7,6 +7,23 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.1.1] — 2026-06-09
+
+### Fixed
+
+- **`pyvelm make:module`** — supply `display_name` for the module scaffold (fixes
+  `Scaffold placeholder {{display_name}} has no value`).
+- **`pyvelm make:model`** — infer owning module from a technical model name
+  (e.g. `partners.partner` without `--module`).
+- **`pyvelm make:menu --append`** — set `parent="{group}.main"` on appended items
+  (matches the bundled menu template).
+- **`pyvelm make:command`** — use the bundled `command.py.template` (avoids drift
+  from the inline generator).
+
+### Changed
+
+- **Test coverage** — line coverage ~99% on the framework package.
+
 ## [1.1.0] — 2026-06-09
 
 ### Added

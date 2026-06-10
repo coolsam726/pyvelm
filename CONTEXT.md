@@ -1,6 +1,10 @@
-# Project context — pyvelm v1.1.0
+# Project context — pyvelm v1.1.1
 
 Building an Odoo-style ERP framework in Python.
+
+**v1.1.1 (released 2026-06-09)** — patch: `pyvelm make:module` supplies
+`display_name`; `make:model` / `make:menu` / `make:command` generator fixes;
+~99% test coverage. See [docs/releases/v1.1.1.md](docs/releases/v1.1.1.md).
 
 **v1.1.0 (released 2026-06-09)** — fluent `Manifest.make()` / `ViewsData.make()`;
 `models.Model`; Eloquent-style `env["model"].query()` / `env.query()` on
