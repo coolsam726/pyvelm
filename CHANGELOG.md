@@ -22,6 +22,11 @@ out of the 0.x line.
 - **List bulk row selection** — individual checkboxes sync via ``setRowSelected``
   (fixes toggle desync with Alpine ``:checked`` binding).
 
+### Fixed
+
+- **Inline action Many2one fields** — use ``comodel_name`` when building relation
+  pickers in view-action dialogs.
+
 - **`system_audit` module** — opt-in IT audit trail: ``ir.audit.log`` (CRUD),
   ``ir.login.log`` (login/logout/failure), ``ir.user.lifecycle`` (user events);
   CSV export routes; daily retention cron (``audit_purge`` server action);
