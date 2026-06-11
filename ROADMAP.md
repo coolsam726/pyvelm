@@ -14,7 +14,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 
 | | |
 |---|---|
-| **Stable** | **v1.3.2** (2026-06-10) |
+| **Stable** | **v1.4.0** (2026-06-09) |
 | **Stack** | FastAPI + HTMX + Tailwind v4 + SQLAlchemy Core |
 | **Bundled modules** | `base`, `admin`, `contacts`, `console`, `workflow`, `reports`, `mail_compose`, `file_manager`, `technical`, `geo_data`, `document_layout` |
 | **Reference port** | velmphp **v1.0.1** + unreleased **v1.1.0** admin polish |
@@ -29,8 +29,9 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 | **v1.1.1** | `make:module` / generator fixes, ~99% test coverage | **Done** |
 | **v1.2.0** | Fluent ORM fields, nested dialogs, geo bootstrap, widget hints | **Done** |
 | **v1.3.0** | IDE field-builder stubs, list bulk actions, DetailView + row_actions | **Done** |
-| **v1.2.x** | velmphp shell parity — audit, reference `partners`, ActionForm | **Planned** |
-| **v1.4** | Multi-DB routing (preview → production), Oracle/MSSQL smoke | **Planned** (see [docs/multi-database.md](docs/multi-database.md)) |
+| **v1.2.x** | velmphp shell parity — audit, reference `partners`, ActionForm | **Partial** — audit + ActionForm in **v1.4.0**; reference `partners` still `examples/` |
+| **v1.4.0** | Shell parity slice — audit, schema DX, ActionForm | **Done** |
+| **v1.5** | Multi-DB routing (preview → production), Oracle/MSSQL smoke | **Planned** (see [docs/multi-database.md](docs/multi-database.md)) |
 
 ---
 
@@ -52,10 +53,10 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 
 | Feature | velmphp | pyvelm today |
 |---------|---------|--------------|
-| `system_audit` module | v1.0.1 | **Done (unreleased)** |
+| `system_audit` module | v1.0.1 | **Done (v1.4.0)** |
 | List `bulk_actions` | v1.1.0 | **Done (v1.3.0)** |
 | `DetailView` + `row_actions` | rc3+ | **Done (v1.3.0)** |
-| `ActionForm` / view-actions inline forms | v1.0.1 | **Done (unreleased)** |
+| `ActionForm` / view-actions inline forms | v1.0.1 | **Done (v1.4.0)** |
 | Bundled `partners` reference (graph/pivot/dashboard) | v1.0.1 | `examples/` only |
 | `$mixins` (`mail.thread` composable) | rc3 | class inheritance |
 | `static::super()` for `_inherit` stacks | rc3 | `self.super()` + `Registry.inherit_chain()` |
@@ -90,10 +91,10 @@ source.
 | # | Item | velmphp ref | Notes |
 |---|------|-------------|-------|
 | 1.1 | **Dark mode tokens** | `velm-tokens.css` `.dark` | **Done (v1.1.0)** — lifted surfaces (`gray-800`/`900`), not OLED black |
-| 1.2 | **`system_audit` module** | `packages/modules/modules/system_audit/` | **Done (unreleased)** — CRUD/login/lifecycle audit; retention cron; CSV export; opt-in via Apps |
+| 1.2 | **`system_audit` module** | `packages/modules/modules/system_audit/` | **Done (v1.4.0)** — CRUD/login/lifecycle audit; retention cron; CSV export; opt-in via Apps |
 | 1.3 | **List bulk actions** | `bulk_actions` arch | **Done (v1.3.0)** — row checkboxes, select-all, bulk bar, default bulk delete when unlink allowed |
 | 1.4 | **`DetailView` + `row_actions`** | `DetailView.php`, `ListRowAction` | **Done (v1.3.0)** — read-only record page; list links via `detail_view` |
-| 1.5 | **`ActionForm` / view-actions** | `ViewActionFormController` | **Done (unreleased)** — `Action`/`ActionForm` builders; PvDialog at `/web/view-actions/...` |
+| 1.5 | **`ActionForm` / view-actions** | `ViewActionFormController` | **Done (v1.4.0)** — `Action`/`ActionForm` builders; PvDialog at `/web/view-actions/...` |
 | 1.6 | **Bundled `contacts` module** | `modules/contacts/` | Ship in wheel: `res.partner` list/form + menu; example `partners` extends for kanban/tags/workflow |
 | 1.7 | **Currency import** | `CurrencyImportService` | On-demand world currencies (RESTcountries or bundled fallback); Settings action |
 | 1.8 | **Geo bootstrap polish** | `GeoCountryDetector` | **Done** — `PYVELM_GEO_COUNTRY`; bootstrap install; background full seed |
@@ -111,8 +112,8 @@ source.
 | Slice | Items | Outcome |
 |-------|-------|---------|
 | **1.1-a** | 1.1 (done), 1.11 | Visual parity — dark mode + theme toggle |
-| **1.1-b** | 1.2 | **Done (unreleased)** — Enterprise audit trail installable from Apps |
-| **1.1-c** | 1.3, 1.4, 1.5 | List/detail toolbar parity |
+| **1.1-b** | 1.2 | **Done (v1.4.0)** — Enterprise audit trail installable from Apps |
+| **1.1-c** | 1.3, 1.4, 1.5 | **Done (v1.4.0)** — list/detail toolbar parity |
 | **1.1-d** | 1.6 | Reference `partners` module authors can copy |
 | **1.1-e** | 1.7, 1.8, 1.9, 1.10 | Bootstrap / settings polish |
 
@@ -122,7 +123,7 @@ source.
 
 | # | Item | velmphp ref | Notes |
 |---|------|-------------|-------|
-| 2.0 | **Schema DX** | Filament schema fields | **Shipped (#40, #42+)** — callable ``Field`` chains, ``*_when`` domains, ``live()`` HTMX, ORM ``index``/``unique``; **100%** evaluator coverage; ``partners`` demo + live HTTP tests |
+| 2.0 | **Schema DX** | Filament schema fields | **Done (v1.4.0)** — callable ``Field`` chains, ``*_when`` domains, ``live()`` HTMX, ORM ``index``/``unique``; **100%** evaluator coverage; ``partners`` demo + live HTTP tests |
 | 2.1 | **`$mixins` registration** | `Registry.php` mixins | `mail.thread` via manifest/mixin list, not only subclass |
 | 2.2 | **`super()` chaining** | `Model::super()` | **Done** — `self.super()` + `Registry.inherit_chain()` |
 | 2.3 | **Model auto-discovery** | `ModuleModelLoader` | Scan `models/*.py` for `BaseModel` subclasses; manifest optional |

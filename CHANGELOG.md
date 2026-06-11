@@ -7,37 +7,40 @@ out of the 0.x line.
 
 ## Unreleased
 
-### Changed
-
-- **Coverage gate** raised to **98%** (`pyproject.toml`, CI).
-- **Schema DX tests** — ``schema_eval`` and ``field_builders`` at **100%** line coverage (domain paths, fluent ORM chains, live-form predicates).
-- **Schema DX demo** — example ``partners`` form uses ``live()`` + ``visible_when``; HTTP tests cover ``/web/views/.../live`` re-renders.
+## [1.4.0] — 2026-06-09
 
 ### Added
-
-- **`ActionForm` / view-actions** — `Action.make().form(ActionForm…)` on list
-  ``page_actions`` and form ``header_actions``; inline dialogs at
-  ``/web/view-actions/{module}/{view}/{slot}/{key}/form`` (GET HTML, POST JSON).
-  Example ``partners`` list includes **Quick add**.
-- **List bulk row selection** — individual checkboxes sync via ``setRowSelected``
-  (fixes toggle desync with Alpine ``:checked`` binding).
-
-### Fixed
-
-- **Inline action Many2one fields** — use ``comodel_name`` when building relation
-  pickers in view-action dialogs.
 
 - **`system_audit` module** — opt-in IT audit trail: ``ir.audit.log`` (CRUD),
   ``ir.login.log`` (login/logout/failure), ``ir.user.lifecycle`` (user events);
   CSV export routes; daily retention cron (``audit_purge`` server action);
   ``PYVELM_AUDIT_RETENTION_DAYS`` (default 90). Install from **Apps**.
-- **`Manifest.bootstrap(False)`** — bundled modules can skip fresh-DB auto-install.
+- **`ActionForm` / view-actions** — `Action.make().form(ActionForm…)` on list
+  ``page_actions`` and form ``header_actions``; inline dialogs at
+  ``/web/view-actions/{module}/{view}/{slot}/{key}/form`` (GET HTML, POST JSON).
+  Example ``partners`` list includes **Quick add**.
 - **Schema DX (Filament-style)** — view ``Field.make()`` chains accept callables for
   ``visible``, ``required``, ``readonly``, and ``hidden``; ``*_when`` helpers wrap
   Odoo domains. ``live()`` / ``live(on_blur)`` / ``live(debounce=…)`` re-render forms
   via HTMX; ``visible_js()`` uses Alpine ``$get`` / ``pvFormVal``.
 - **ORM ``index()`` / ``unique()``** — fluent field chains and model ``_sql_indexes`` /
   ``_sql_uniques``; ``Blueprint.unique()`` and alter-time ``index()`` / ``unique()``.
+- **`Manifest.bootstrap(False)`** — bundled modules can skip fresh-DB auto-install.
+
+### Changed
+
+- **Coverage gate** raised to **98%** (`pyproject.toml`, CI).
+- **Schema DX tests** — ``schema_eval`` and ``field_builders`` at **100%** line coverage
+  (domain paths, fluent ORM chains, live-form predicates).
+- **Schema DX demo** — example ``partners`` form uses ``live()`` + ``visible_when``;
+  HTTP tests cover ``/web/views/.../live`` re-renders.
+
+### Fixed
+
+- **List bulk row selection** — individual checkboxes sync via ``setRowSelected``
+  (fixes toggle desync with Alpine ``:checked`` binding).
+- **Inline action Many2one fields** — use ``comodel_name`` when building relation
+  pickers in view-action dialogs.
 
 ## [1.3.2] — 2026-06-10
 
