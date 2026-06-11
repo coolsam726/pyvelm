@@ -411,6 +411,7 @@ def _load_models(spec: ModuleSpec, registry: Registry) -> None:
         return
     with registry.activate():
         before_models: dict[str, type] = dict(registry._models)
+        _ensure_top_level_package(spec)
         if spec.models_package in sys.modules:
             reload_models(spec, registry)
         else:
@@ -429,6 +430,7 @@ def reload_models(spec: ModuleSpec, registry: Registry) -> None:
         return
     with registry.activate():
         before_models: dict[str, type] = dict(registry._models)
+        _ensure_top_level_package(spec)
         pkg = importlib.import_module(spec.models_package)
         importlib.reload(pkg)
         prefix = spec.models_package + "."
@@ -629,6 +631,100 @@ def _run_migrations(spec: ModuleSpec, env: Environment,
             )
 
 
+def _data_file_module_name(spec: ModuleSpec, rel_path: str) -> str:
+    """Dotted import name for a manifest ``DATA`` Python file."""
+    dotted = Path(rel_path).with_suffix("").as_posix().replace("/", ".")
+    return f"{spec.package}.{dotted}"
+
+
+def _purge_package_modules(package: str) -> None:
+    """Drop *package* and its submodules from :data:`sys.modules`."""
+    prefix = package + "."
+    for key in list(sys.modules):
+        if key == package or key.startswith(prefix):
+            del sys.modules[key]
+
+
+def _ensure_top_level_package(spec: ModuleSpec) -> None:
+    """Register ``spec.package`` so relative imports work in DATA files."""
+    if spec.package_path is None:
+        return
+    pkg_path = str(spec.package_path.resolve())
+    if spec.package in sys.modules:
+        mod = sys.modules[spec.package]
+        paths = getattr(mod, "__path__", None) or []
+        if any(
+            str(Path(p).resolve()) == pkg_path or p == str(spec.package_path)
+            for p in paths
+        ):
+            return
+        _purge_package_modules(spec.package)
+    init_py = spec.package_path / "__init__.py"
+    if init_py.is_file():
+        pkg_spec = importlib.util.spec_from_file_location(
+            spec.package,
+            init_py,
+            submodule_search_locations=[pkg_path],
+        )
+        if pkg_spec is None or pkg_spec.loader is None:
+            raise ImportError(
+                f"Could not load package {spec.package!r} at {pkg_path}"
+            )
+        pkg_mod = importlib.util.module_from_spec(pkg_spec)
+        sys.modules[spec.package] = pkg_mod
+        pkg_spec.loader.exec_module(pkg_mod)
+    else:
+        pkg_mod = importlib.util.module_from_spec(
+            importlib.util.spec_from_loader(spec.package, loader=None)
+        )
+        pkg_mod.__path__ = [pkg_path]  # type: ignore[attr-defined]
+        sys.modules[spec.package] = pkg_mod
+
+
+def _ensure_parent_packages(spec: ModuleSpec, rel_parts: tuple[str, ...]) -> None:
+    """Register namespace packages for nested DATA paths (e.g. ``pkg.views``)."""
+    if not rel_parts or spec.package_path is None:
+        return
+    _ensure_top_level_package(spec)
+    for i in range(len(rel_parts) - 1):
+        parent_name = f"{spec.package}.{'.'.join(rel_parts[: i + 1])}"
+        if parent_name in sys.modules:
+            continue
+        parent_dir = spec.package_path.joinpath(*rel_parts[: i + 1])
+        if not parent_dir.is_dir():
+            continue
+        parent_mod = importlib.util.module_from_spec(
+            importlib.util.spec_from_loader(parent_name, loader=None)
+        )
+        parent_mod.__path__ = [str(parent_dir)]  # type: ignore[attr-defined]
+        sys.modules[parent_name] = parent_mod
+
+
+def _data_file_package(spec: ModuleSpec, rel_parts: tuple[str, ...]) -> str:
+    if len(rel_parts) > 1:
+        return f"{spec.package}.{'.'.join(rel_parts[:-1])}"
+    return spec.package
+
+
+def _import_data_file(spec: ModuleSpec, path: Path, rel_path: str):
+    """Import one ``DATA`` ``.py`` file as ``<package>.<dotted-path>``."""
+    rel_parts = Path(rel_path).with_suffix("").parts
+    _ensure_parent_packages(spec, rel_parts)
+    mod_name = _data_file_module_name(spec, rel_path)
+    package = _data_file_package(spec, rel_parts)
+    if mod_name in sys.modules:
+        return importlib.reload(sys.modules[mod_name])
+
+    spec_obj = importlib.util.spec_from_file_location(mod_name, path)
+    if spec_obj is None or spec_obj.loader is None:
+        raise ImportError(f"Could not import data file {path}")
+    mod = importlib.util.module_from_spec(spec_obj)
+    mod.__package__ = package
+    sys.modules[mod_name] = mod
+    spec_obj.loader.exec_module(mod)
+    return mod
+
+
 def _load_data_files(spec: ModuleSpec) -> None:
     """Execute each path in `spec.data` and accumulate any VIEWS /
     VIEW_INHERITS lists they expose. Today only `.py` files are
@@ -653,18 +749,7 @@ def _load_data_files(spec: ModuleSpec) -> None:
             )
         suffix = path.suffix.lower()
         if suffix == ".py":
-            mod_name = (
-                f"_pyvelm_data_{spec.name}_"
-                + rel_path.replace("/", "_").replace(".py", "")
-            )
-            if mod_name in sys.modules:
-                mod = importlib.reload(sys.modules[mod_name])
-            else:
-                spec_obj = importlib.util.spec_from_file_location(mod_name, path)
-                if spec_obj is None or spec_obj.loader is None:
-                    raise ImportError(f"Could not import data file {path}")
-                mod = importlib.util.module_from_spec(spec_obj)
-                spec_obj.loader.exec_module(mod)
+            mod = _import_data_file(spec, path, rel_path)
             from .builders import ViewsData, flatten_menus
 
             views_data = getattr(mod, "views_data", None) or getattr(
@@ -700,7 +785,7 @@ def _sync_views(spec: ModuleSpec, env: Environment) -> None:
         return
     if "ir.ui.view" not in env.registry:
         return
-    from .views import normalize_arch
+    from .views import encode_arch_callables, normalize_arch
 
     View = env["ir.ui.view"]
     for v in spec.views:
@@ -717,6 +802,7 @@ def _sync_views(spec: ModuleSpec, env: Environment) -> None:
         else:
             arch_obj = arch
         arch_normalized = normalize_arch(arch_obj, v["view_type"])
+        arch_json = encode_arch_callables(arch_normalized)
         existing = View.search([
             ("module", "=", spec.name),
             ("name", "=", v["name"]),
@@ -726,7 +812,7 @@ def _sync_views(spec: ModuleSpec, env: Environment) -> None:
             "name": v["name"],
             "model": v["model"],
             "view_type": v["view_type"],
-            "arch": json.dumps(arch_normalized),
+            "arch": json.dumps(arch_json),
             "priority": v.get("priority", 16),
         }
         if existing:
@@ -747,6 +833,8 @@ def _sync_view_inherits(spec: ModuleSpec, env: Environment) -> None:
         return
     if "ir.ui.view" not in env.registry:
         return
+    from .views import encode_arch_callables
+
     View = env["ir.ui.view"]
     for v in spec.view_inherits:
         required = {"name", "inherit", "operations"}
@@ -784,7 +872,7 @@ def _sync_view_inherits(spec: ModuleSpec, env: Environment) -> None:
             "arch": None,
             "priority": v.get("priority", 16),
             "inherit_id": parent.id,
-            "operations": json.dumps(v["operations"]),
+            "operations": json.dumps(encode_arch_callables(v["operations"])),
         }
         if existing:
             existing.write(vals)

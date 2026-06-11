@@ -9,6 +9,15 @@ from pyvelm.loader import ModuleSpec, _load_data_files
 
 
 class DataFileReloadTests(unittest.TestCase):
+    def tearDown(self):
+        import sys
+
+        for key in list(sys.modules):
+            if key == "tmpmod" or key.startswith("tmpmod."):
+                del sys.modules[key]
+            if key == "tmpmod_rel" or key.startswith("tmpmod_rel."):
+                del sys.modules[key]
+
     def test_load_data_files_reload_picks_up_edits(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -35,6 +44,32 @@ class DataFileReloadTests(unittest.TestCase):
             )
             _load_data_files(spec)
             self.assertEqual(len(spec.views), 2)
+
+    def test_load_data_files_supports_relative_imports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "views").mkdir()
+            (root / "__init__.py").write_text("", encoding="utf-8")
+            (root / "helpers.py").write_text('EXPORT = "relative-ok"\n', encoding="utf-8")
+            view_py = root / "views" / "demo.py"
+            view_py.write_text(
+                "from ..helpers import EXPORT\n"
+                'VIEWS = [{"name": "demo.list", "export": EXPORT}]\n',
+                encoding="utf-8",
+            )
+            spec = ModuleSpec(
+                name="tmpmod_rel",
+                version=(0, 1, 0),
+                depends=[],
+                package="tmpmod_rel",
+                models_package="tmpmod_rel.models",
+                migrations_package=None,
+                package_path=root,
+                data=["views/demo.py"],
+            )
+            _load_data_files(spec)
+            self.assertEqual(len(spec.views), 1)
+            self.assertEqual(spec.views[0]["export"], "relative-ok")
 
 
 class ApplySchemaDiffTests(unittest.TestCase):
@@ -104,7 +139,7 @@ class ReloadModelsRegistryTests(unittest.TestCase):
                 if root_str in sys.path:
                     sys.path.remove(root_str)
                 for key in list(sys.modules):
-                    if key == "tmpmod.models" or key.startswith("tmpmod.models."):
+                    if key == "tmpmod" or key.startswith("tmpmod."):
                         del sys.modules[key]
 
 

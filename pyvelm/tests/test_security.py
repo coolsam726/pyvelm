@@ -285,6 +285,8 @@ class HeaderActionGatingTests(unittest.TestCase):
         run = out[0]
         self.assertEqual(run["url"], "/web/cron/7/run-now")  # {id} filled
         self.assertEqual(run["method"], "POST")
+        self.assertTrue(run["full_page"])
+        self.assertEqual(run["kind"], "post")
 
     def test_perm_can_target_a_different_model(self):
         action = [{"label": "Sync", "url": "/x", "perm": "write",
