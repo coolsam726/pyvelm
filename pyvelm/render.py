@@ -711,15 +711,20 @@ def _render_o2m_table(value, spec, field):
     )
 
 
-def _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname):
+def _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname, col_spec=None):
     """Build a spec dict for one inline-o2m cell, namespacing the input
     so the server can re-assemble it as `oname[idx][sub_name]`.
 
     Many2one cells are enriched with the same `_search_url` /
     `_form_view_url` data the standalone form uses, so the combobox
     renders identically inside the inline table."""
+    col_spec = col_spec or {}
     spec = {"name": f"{oname}[{idx_token}][{sub_name}]", "_env": env}
     field = comodel_cls._fields.get(sub_name)
+    if col_spec.get("widget"):
+        spec["widget"] = col_spec["widget"]
+    if col_spec.get("readonly"):
+        spec["readonly"] = col_spec["readonly"]
     if isinstance(field, Many2one):
         spec["_comodel"] = field.comodel_name
         spec["_search_url"] = f"/api/m2o/search?model={field.comodel_name}"
@@ -727,6 +732,10 @@ def _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname):
         spec["_form_view_url"] = (
             f"/web/views/{form_lookup[0]}/{form_lookup[1]}" if form_lookup else None
         )
+    elif field is not None and field.readonly and "readonly" not in spec:
+        spec["readonly"] = True
+    elif field is not None and field.compute and "readonly" not in spec:
+        spec["readonly"] = True
     return spec
 
 
@@ -741,6 +750,7 @@ def _render_o2m_edit_row(
     *,
     forced_op: str | None = None,
     errors: dict | None = None,
+    no_delete: bool = False,
 ):
     """Render one editable `<tr>` of an inline-o2m table.
 
@@ -792,8 +802,10 @@ def _render_o2m_edit_row(
             )
             col_idx += 1
             continue
-        spec = _o2m_child_cell_spec(env, comodel_cls, sub_name, idx_token, oname)
-        renderer = find_renderer(sub_field, fs.get("widget"), mode="edit")
+        spec = _o2m_child_cell_spec(
+            env, comodel_cls, sub_name, idx_token, oname, col_spec=fs
+        )
+        renderer = find_renderer(sub_field, spec.get("widget"), mode="edit")
         if is_new:
             raw = (
                 env[sub_field.comodel_name]
@@ -802,6 +814,23 @@ def _render_o2m_edit_row(
             )
         else:
             raw = getattr(rec_or_none, sub_name)
+        if callable(fs.get("default")):
+            from pyvelm.schema_eval import SchemaContext, resolve_spec_default
+
+            row_submitted = (
+                dict(getattr(rec_or_none, "_vals", {}))
+                if rec_or_none is not None
+                else {}
+            )
+            row_ctx = SchemaContext(
+                env=env,
+                record=rec_or_none,
+                submitted=row_submitted,
+                mode="edit",
+            )
+            computed = resolve_spec_default(fs, sub_field, row_ctx)
+            if computed is not None:
+                raw = computed
         value = _value_for_widget(env, sub_field, raw)
         err_key = f"{oname}[{idx_token}][{sub_name}]"
         cell_err = (errors or {}).get(err_key)
@@ -823,17 +852,19 @@ def _render_o2m_edit_row(
         col_idx += 1
 
     # Trailing cell: delete button.
-    delete_btn = (
-        '<td class="px-3 py-2 align-top text-right w-8">'
-        '<button type="button" data-pv-o2m-delete '
-        'class="text-body-subtle hover:text-fg-danger transition-colors" '
-        'aria-label="Delete row">'
-        '<svg class="w-4 h-4" fill="none" stroke="currentColor" '
-        'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
-        '<path stroke-linecap="round" stroke-linejoin="round" '
-        'd="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>'
-        "</svg></button></td>"
-    )
+    delete_btn = ""
+    if not no_delete:
+        delete_btn = (
+            '<td class="px-3 py-2 align-top text-right w-8">'
+            '<button type="button" data-pv-o2m-delete '
+            'class="text-body-subtle hover:text-fg-danger transition-colors" '
+            'aria-label="Delete row">'
+            '<svg class="w-4 h-4" fill="none" stroke="currentColor" '
+            'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+            '<path stroke-linecap="round" stroke-linejoin="round" '
+            'd="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>'
+            "</svg></button></td>"
+        )
 
     drag_handle = ""
     if sequence_field:
@@ -898,6 +929,8 @@ def _edit_o2m_table(value, spec, field):
     )
     cell_errors = spec.get("_o2m_errors") or {}
     form_playback = spec.get("_form_playback")
+    no_add = bool(spec.get("no_add"))
+    no_delete = bool(spec.get("no_delete"))
 
     # Column headers + one leading drag column (when sequenced) + one
     # trailing column for the delete button. The sequence field itself
@@ -915,7 +948,8 @@ def _edit_o2m_table(value, spec, field):
             f'<th class="px-3 py-2 text-left text-2xs font-semibold uppercase '
             f'tracking-wider text-body-subtle">{escape(label)}</th>'
         )
-    header_cells.append('<th class="px-3 py-2 w-8"></th>')
+    if not no_delete:
+        header_cells.append('<th class="px-3 py-2 w-8"></th>')
     col_count = len(header_cells)
 
     # Existing rows — after a failed save, replay the posted form so
@@ -933,6 +967,7 @@ def _edit_o2m_table(value, spec, field):
                 sequence_field,
                 forced_op=op,
                 errors=cell_errors,
+                no_delete=no_delete,
             )
             for idx, row_view, op in playback
         ]
@@ -951,6 +986,7 @@ def _edit_o2m_table(value, spec, field):
                 fields_spec,
                 sequence_field,
                 errors=cell_errors,
+                no_delete=no_delete,
             )
             for idx, rec in enumerate(existing)
         ]
@@ -963,32 +999,49 @@ def _edit_o2m_table(value, spec, field):
             f"No entries yet.</td></tr>"
         )
 
-    # Template row for client-side cloning.
-    template_row = _render_o2m_edit_row(
-        env,
-        co_cls,
-        None,
-        "__IDX__",
-        oname,
-        fields_spec,
-        sequence_field,
-        errors=cell_errors,
-    )
+    template_row = ""
+    add_line_row = ""
+    add_footer = ""
+    if not no_add:
+        # Template row for client-side cloning.
+        template_row = _render_o2m_edit_row(
+            env,
+            co_cls,
+            None,
+            "__IDX__",
+            oname,
+            fields_spec,
+            sequence_field,
+            errors=cell_errors,
+            no_delete=no_delete,
+        )
 
-    # Odoo-style "Add a line" footer row — click anywhere on it to
-    # append a new editable row (same handler as the Add row button).
-    add_line_row = (
-        f'<tr data-pv-o2m-add-row tabindex="0" role="button" '
-        f'class="cursor-pointer hover:bg-brand-soft/30 transition-colors">'
-        f'<td colspan="{col_count}" class="px-3 py-2.5 text-center text-xs '
-        f'text-fg-brand font-medium">'
-        f'<span class="inline-flex items-center gap-1">'
-        f'<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '
-        f'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
-        f'<path stroke-linecap="round" stroke-linejoin="round" '
-        f'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
-        f"Add a line</span></td></tr>"
-    )
+        # Odoo-style "Add a line" footer row — click anywhere on it to
+        # append a new editable row (same handler as the Add row button).
+        add_line_row = (
+            f'<tr data-pv-o2m-add-row tabindex="0" role="button" '
+            f'class="cursor-pointer hover:bg-brand-soft/30 transition-colors">'
+            f'<td colspan="{col_count}" class="px-3 py-2.5 text-center text-xs '
+            f'text-fg-brand font-medium">'
+            f'<span class="inline-flex items-center gap-1">'
+            f'<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '
+            f'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+            f'<path stroke-linecap="round" stroke-linejoin="round" '
+            f'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
+            f"Add a line</span></td></tr>"
+        )
+        add_footer = (
+            f'<div class="px-3 py-1.5 border-t border-default bg-neutral-secondary/50 '
+            f'flex justify-end">'
+            f'<button type="button" data-pv-o2m-add '
+            f'class="inline-flex items-center gap-1 text-xs font-medium '
+            f'text-fg-brand hover:underline">'
+            f'<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '
+            f'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
+            f'<path stroke-linecap="round" stroke-linejoin="round" '
+            f'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
+            f"Add row</button></div>"
+        )
 
     drag_flag = "true" if sequence_field else "false"
     js = (
@@ -1009,16 +1062,7 @@ def _edit_o2m_table(value, spec, field):
         f"{add_line_row}"
         f"</tbody></table>"
         f"<template data-pv-o2m-template>{template_row}</template>"
-        f'<div class="px-3 py-1.5 border-t border-default bg-neutral-secondary/50 '
-        f'flex justify-end">'
-        f'<button type="button" data-pv-o2m-add '
-        f'class="inline-flex items-center gap-1 text-xs font-medium '
-        f'text-fg-brand hover:underline">'
-        f'<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" '
-        f'viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">'
-        f'<path stroke-linecap="round" stroke-linejoin="round" '
-        f'd="M12 4.5v15m7.5-7.5h-15"/></svg>'
-        f"Add row</button></div>"
+        f"{add_footer}"
         f"{js}</div>"
     )
 
@@ -1229,11 +1273,33 @@ def _render_code_editor_widget(value, spec, field, *, readonly: bool) -> Markup:
     )
 
 
+def _prism_language(spec, field) -> str:
+    lang = _code_language(spec, field)
+    if lang in ("js", "javascript"):
+        return "javascript"
+    if lang == "html":
+        return "markup"
+    if lang == "text":
+        return "plain"
+    return lang
+
+
+def _render_code_display_widget(value, spec, field) -> Markup:
+    partial = _env.get_template("widgets/code_display.html")
+    raw = "" if value is None else str(value)
+    return Markup(
+        partial.render(
+            raw=escape(raw),
+            language=escape(_prism_language(spec, field)),
+        )
+    )
+
+
 @widget(Text, hint="code")
 @widget(Char, hint="code")
 @widget(Code)
 def _render_code_body(value, spec, field):
-    return _render_code_editor_widget(value, spec, field, readonly=True)
+    return _render_code_display_widget(value, spec, field)
 
 
 @widget(Text, hint="code", mode="edit")
@@ -1832,6 +1898,8 @@ def _enrich_specs_for_edit(
             )
             spec_copy["_form_view_url"] = _view_href(form_lookup)
         if field is not None and field.readonly and "readonly" not in spec_copy:
+            spec_copy["readonly"] = True
+        elif field is not None and field.compute and "readonly" not in spec_copy:
             spec_copy["readonly"] = True
         out.append(spec_copy)
     return out
@@ -2498,6 +2566,7 @@ def _form_section_html(
     from pyvelm.schema_eval import (
         SchemaContext,
         parse_live_spec,
+        resolve_spec_default,
         spec_required,
         spec_visible,
     )
@@ -2589,6 +2658,8 @@ def _form_section_html(
                     value = env[field.comodel_name]
             else:
                 value = raw
+        elif callable(spec.get("default")):
+            value = resolve_spec_default(spec, field, schema_ctx)
         elif record_or_none is None:
             if fname in prefill:
                 raw = prefill[fname]
@@ -2615,6 +2686,7 @@ def _form_section_html(
             "_env": env,
             "_o2m_errors": errors,
             "_form_playback": form_playback,
+            "_live_base": live_base,
             "readonly": ro,
         }
         # Author-declared colspan wins. As a safety net, anything that
@@ -3296,13 +3368,30 @@ def render_form_page(
     title = _record_title(record_or_none, view.model, mode)
     template_name = "form_body.html" if body_only else "form.html"
     template = _env.get_template(template_name)
-    # Title lives in the layout heading only — breadcrumbs stop at the list.
     if body_only:
         ctx = {}
     else:
         from pyvelm.menu import build_menu_tree
 
         prelim_menu = build_menu_tree(env, current_path)
+        record_href: str | None = None
+        if mode == "edit" and record_or_none is not None and record_or_none._ids:
+            nav = encode_view_nav_query(
+                list_module,
+                list_name,
+                search=list_search,
+                order=list_order,
+                filters=list_filters,
+                group_by=group_by,
+                page=page,
+                page_size=page_size,
+                bc_stack=bc_stack,
+            )
+            qs = f"?{nav}" if nav else ""
+            record_href = (
+                f"/web/views/{view.module}/{view.name}/record/"
+                f"{record_or_none.id}{qs}"
+            )
         form_crumbs = build_form_breadcrumbs(
             prelim_menu,
             env,
@@ -3315,6 +3404,9 @@ def render_form_page(
             group_by=group_by,
             page=page,
             page_size=page_size,
+            leaf_label=title if mode != "new" else "New",
+            mode=mode,
+            record_href=record_href,
         )
         ctx = layout_context(env, current_path, breadcrumbs=form_crumbs)
         ctx["subtitle"] = f"{view.model} · {mode}"
@@ -6007,14 +6099,14 @@ def render_access_denied_page(
     return template.render(**ctx)
 
 
-def _catalog_schema_diff_pending(env, spec) -> tuple[bool, str]:
+def _catalog_schema_diff_pending(env, spec, *, models_ready: bool = False) -> tuple[bool, str]:
     """Return whether Sync would apply any schema change for an installed module."""
     from . import db_autogen
     from . import loader as _loader
     from pyvelm.database.introspection import clear_reflection_cache
 
     try:
-        if not spec.loaded:
+        if not models_ready and not spec.loaded:
             _loader._load_models(spec, env.registry)
         clear_reflection_cache(env.conn)
         diff = db_autogen.compute_diff(env, spec.name)
@@ -6022,7 +6114,7 @@ def _catalog_schema_diff_pending(env, spec) -> tuple[bool, str]:
         return False, ""
     if not db_autogen.diff_has_syncable_changes(env, diff):
         return False, ""
-    summary = db_autogen._syncable_summary(diff)
+    summary = db_autogen._syncable_summary(env, diff)
     return True, summary or db_autogen._summary(diff)
 
 
@@ -6104,7 +6196,7 @@ def _uninstall_blockers(
         )
 
     if specs is None:
-        specs = _loader.discover(module_roots) if module_roots else {}
+        specs = _loader.discover(module_roots)
     if installed is None:
         try:
             rows = env.conn.execute(
@@ -6166,7 +6258,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
     """
     from . import loader as _loader
 
-    specs = _loader.discover(module_roots) if module_roots else {}
+    specs = _loader.discover(module_roots)
 
     installed: dict[str, str] = {}
     try:
@@ -6178,6 +6270,9 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
         # Fresh DB before any install — table doesn't exist yet.
         installed = {}
     installed_names = set(installed)
+
+    if installed_names:
+        _loader.reload_installed_models(env, specs)
 
     catalog: list[dict] = []
     for name, spec in specs.items():
@@ -6206,7 +6301,7 @@ def _apps_catalog(env, module_roots: list) -> list[dict]:
             pending_migrations = version_upgrade
             if not version_upgrade:
                 has_schema_diff, schema_diff_summary = _catalog_schema_diff_pending(
-                    env, spec,
+                    env, spec, models_ready=bool(installed_names),
                 )
             # velmphp-style split: Upgrade = version-gap migrations only;
             # Sync = schema/views reload when versions already match.
@@ -6963,8 +7058,10 @@ def build_form_breadcrumbs(
     page: int | None = None,
     page_size: int | None = None,
     leaf_label: str | None = None,
+    mode: str | None = None,
+    record_href: str | None = None,
 ) -> list[dict]:
-    """Odoo-style trail: Home → …ancestors… → parent view → optional record."""
+    """Odoo-style trail: Home → …ancestors… → list/kanban → record → Edit."""
     from pyvelm.home import home_url
 
     crumbs: list[dict] = [{"label": "Home", "href": home_url()}]
@@ -6990,7 +7087,15 @@ def build_form_breadcrumbs(
         )
         if parent:
             crumbs.append(parent)
-    if leaf_label:
+    if mode == "new":
+        crumbs.append({"label": leaf_label or "New", "href": None})
+    elif mode == "edit" and leaf_label:
+        if record_href:
+            crumbs.append({"label": leaf_label, "href": record_href})
+        else:
+            crumbs.append({"label": leaf_label, "href": None})
+        crumbs.append({"label": "Edit", "href": None})
+    elif leaf_label:
         crumbs.append({"label": leaf_label, "href": None})
     return crumbs
 

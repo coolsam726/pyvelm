@@ -60,12 +60,18 @@ class QuoteAndSummaryTests(unittest.TestCase):
         self.assertIn("\\'", _q("it's \"fine\""))
 
     def test_syncable_summary(self):
+        env = MagicMock()
         diff = Diff(
             new_tables=[("t", [])],
             alterations=[SchemaAlteration("t", "c", "set_not_null", "x")],
         )
-        self.assertIn("new table", _syncable_summary(diff))
-        self.assertEqual(_syncable_summary(Diff()), "")
+        with (
+            patch("pyvelm.database._conn_capabilities") as cap,
+            patch("pyvelm.db_autogen._column_has_nulls", return_value=False),
+        ):
+            cap.return_value.name = "postgresql"
+            self.assertIn("new table", _syncable_summary(env, diff))
+            self.assertEqual(_syncable_summary(env, Diff()), "")
 
     def test_summary_empty(self):
         diff = Diff()
@@ -389,6 +395,7 @@ class DiffHasSyncableTests(unittest.TestCase):
             )
 
     def test_syncable_summary_not_null_kinds(self):
+        env = MagicMock()
         diff = Diff(
             new_columns=[("t", "c", object(), True, "text")],
             alterations=[
@@ -396,7 +403,12 @@ class DiffHasSyncableTests(unittest.TestCase):
                 SchemaAlteration("t", "d", "drop_not_null", "y"),
             ],
         )
-        text = _syncable_summary(diff)
+        with (
+            patch("pyvelm.database._conn_capabilities") as cap,
+            patch("pyvelm.db_autogen._column_has_nulls", return_value=False),
+        ):
+            cap.return_value.name = "postgresql"
+            text = _syncable_summary(env, diff)
         self.assertIn("new column", text)
         self.assertIn("NOT NULL tighten", text)
         self.assertIn("NOT NULL relax", text)

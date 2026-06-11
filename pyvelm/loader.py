@@ -264,15 +264,33 @@ def _read_manifest(pkg_path: Path) -> ModuleSpec | None:
     return _module_spec_from_dict(data, pkg_path)
 
 
-def discover(roots: list[Path | str]) -> dict[str, ModuleSpec]:
-    """Walk `roots` for directories containing a `__pyvelm__.py` manifest."""
-    specs: dict[str, ModuleSpec] = {}
-    for root in roots:
-        rootp = Path(root)
-        if not rootp.is_dir():
+def _discovery_roots(roots: list[Path | str] | None) -> list[Path]:
+    """Builtin framework modules first, then caller roots (deduped)."""
+    from pyvelm import BUILTIN_MODULE_ROOTS
+
+    merged: list[Path] = []
+    seen: set[str] = set()
+    for root in list(BUILTIN_MODULE_ROOTS) + list(roots or []):
+        rootp = Path(root).resolve()
+        key = str(rootp)
+        if key in seen or not rootp.is_dir():
             continue
+        seen.add(key)
+        merged.append(rootp)
+    return merged
+
+
+def discover(roots: list[Path | str] | None = None) -> dict[str, ModuleSpec]:
+    """Walk module roots for directories containing a ``__pyvelm__.py`` manifest.
+
+    Always scans :data:`pyvelm.BUILTIN_MODULE_ROOTS` first so bundled modules
+    such as ``contacts`` are visible even when the app only passes custom
+  addon paths (mirrors ``pyvelm-cron`` / CLI behaviour).
+    """
+    specs: dict[str, ModuleSpec] = {}
+    for rootp in _discovery_roots(roots):
         # Make the root importable so `partners.models.res_partner` etc. resolves.
-        rootp_str = str(rootp.resolve())
+        rootp_str = str(rootp)
         if rootp_str not in sys.path:
             sys.path.insert(0, rootp_str)
         for sub in sorted(rootp.iterdir()):
@@ -430,7 +448,7 @@ def reload_installed_models(env: Environment, specs: dict[str, ModuleSpec]) -> N
     """
     _ensure_ir_module(env)
     rows = env.conn.execute(
-        f'SELECT name FROM "{IR_MODULE_TABLE}"',
+        f'SELECT "name" FROM "{IR_MODULE_TABLE}"',
     ).fetchall()
     installed = {r[0] for r in rows}
     subset = {k: v for k, v in specs.items() if k in installed}

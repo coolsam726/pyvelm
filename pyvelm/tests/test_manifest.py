@@ -160,6 +160,16 @@ class ManifestLoaderTests(unittest.TestCase):
             self.assertEqual(spec.version, (0, 9, 0))
             self.assertEqual(spec.summary, "Legacy")
 
+    def test_discover_always_includes_bundled_contacts(self):
+        """Custom-only roots still see framework modules (workflow → contacts)."""
+        examples = Path(__file__).resolve().parents[2] / "examples" / "modules"
+        specs = loader.discover([examples])
+        assert "contacts" in specs
+        assert "workflow" in specs
+        loader.resolve_order(
+            {n: specs[n] for n in ("base", "admin", "contacts", "workflow") if n in specs}
+        )
+
     def test_missing_manifest_keys_raises(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -1,0 +1,192 @@
+<div
+    class="tiptap-toolbar"
+    data-variant="fixed"
+    role="toolbar"
+    aria-label="Formatting"
+>
+    <div class="tiptap-toolbar-spacer" aria-hidden="true"></div>
+
+    <div class="tiptap-toolbar-group">
+        <button
+            type="button"
+            class="tiptap-button"
+            data-style="ghost"
+            :disabled="!canUndo()"
+            @mousedown.prevent.stop="run('undo')"
+            title="Undo"
+            aria-label="Undo"
+        >
+            {% with name='undo' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+        </button>
+        <button
+            type="button"
+            class="tiptap-button"
+            data-style="ghost"
+            :disabled="!canRedo()"
+            @mousedown.prevent.stop="run('redo')"
+            title="Redo"
+            aria-label="Redo"
+        >
+            {% with name='redo' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+        </button>
+    </div>
+
+    <span class="tiptap-separator" aria-hidden="true"></span>
+
+    <div class="tiptap-toolbar-group">
+        <div class="tiptap-toolbar-dropdown" @click.outside="headingMenuOpen = false">
+            <button
+                type="button"
+                class="tiptap-button"
+                data-style="ghost"
+                x-ref="headingTrigger"
+                :data-active-state="isActive('heading') ? 'on' : 'off'"
+                @click.stop="toggleHeadingMenu()"
+                title="Heading"
+                aria-label="Heading"
+                aria-haspopup="menu"
+                :aria-expanded="headingMenuOpen"
+            >
+                {% with name='heading' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+                {% with name='chevron-down' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+            </button>
+            <div x-ref="headingMenu" class="tiptap-dropdown-menu" x-show="headingMenuOpen" x-cloak role="menu">
+                <button
+                    type="button"
+                    class="tiptap-dropdown-menu__item"
+                    role="menuitem"
+                    :data-active-state="isActive('paragraph') ? 'on' : 'off'"
+                    @mousedown.prevent.stop="run('paragraph')"
+                >
+                    Normal
+                </button>
+                <template x-for="level in [1,2,3,4]" :key="level">
+                    <button
+                        type="button"
+                        class="tiptap-dropdown-menu__item"
+                        role="menuitem"
+                        :data-active-state="isActive('h' + level) ? 'on' : 'off'"
+                        @mousedown.prevent.stop="run('h' + level)"
+                    >
+                        <span x-text="'Heading ' + level"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <div class="tiptap-toolbar-dropdown" @click.outside="listMenuOpen = false">
+            <button
+                type="button"
+                class="tiptap-button"
+                data-style="ghost"
+                x-ref="listTrigger"
+                :data-active-state="isActive('list') ? 'on' : 'off'"
+                @click.stop="toggleListMenu()"
+                title="Lists"
+                aria-label="Lists"
+                aria-haspopup="menu"
+                :aria-expanded="listMenuOpen"
+            >
+                {% with name='list' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+                {% with name='chevron-down' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+            </button>
+            <div x-ref="listMenu" class="tiptap-dropdown-menu" x-show="listMenuOpen" x-cloak role="menu">
+                <button type="button" class="tiptap-dropdown-menu__item" role="menuitem" :data-active-state="isActive('bullet') ? 'on' : 'off'" @mousedown.prevent.stop="run('bullet')">
+                    {% with name='list-bullet' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+                    <span>Bullet list</span>
+                </button>
+                <button type="button" class="tiptap-dropdown-menu__item" role="menuitem" :data-active-state="isActive('ordered') ? 'on' : 'off'" @mousedown.prevent.stop="run('ordered')">
+                    {% with name='list-ordered' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+                    <span>Numbered list</span>
+                </button>
+                <button type="button" class="tiptap-dropdown-menu__item" role="menuitem" :data-active-state="isActive('task') ? 'on' : 'off'" @mousedown.prevent.stop="run('task')">
+                    {% with name='list-todo' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+                    <span>Task list</span>
+                </button>
+            </div>
+        </div>
+
+        <button
+            type="button"
+            class="tiptap-button"
+            data-style="ghost"
+            :data-active-state="isActive('blockquote') ? 'on' : 'off'"
+            @mousedown.prevent.stop="run('blockquote')"
+            title="Blockquote"
+            aria-label="Blockquote"
+        >
+            {% with name='blockquote' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+        </button>
+        <button
+            type="button"
+            class="tiptap-button"
+            data-style="ghost"
+            :data-active-state="isActive('codeBlock') ? 'on' : 'off'"
+            @mousedown.prevent.stop="run('codeBlock')"
+            title="Code block"
+            aria-label="Code block"
+        >
+            {% with name='code-block' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+        </button>
+    </div>
+
+    <span class="tiptap-separator" aria-hidden="true"></span>
+
+    <div class="tiptap-toolbar-group">
+        {% for mark, markLabel in [
+            ('bold','Bold'),('italic','Italic'),('strike','Strikethrough'),
+            ('code','Code'),('underline','Underline'),('highlight','Highlight'),('link','Link')
+        ] %}
+        <button type="button" class="tiptap-button" data-style="ghost"
+                :data-active-state="isActive('{{ mark }}') ? 'on' : 'off'"
+                @mousedown.prevent.stop="run('{{ mark }}')"
+                title="{{ markLabel }}" aria-label="{{ markLabel }}">
+            {% with name=mark %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+        </button>
+        {% endfor %}
+    </div>
+
+    <span class="tiptap-separator" aria-hidden="true"></span>
+
+    <div class="tiptap-toolbar-group">
+        <button type="button" class="tiptap-button" data-style="ghost" :data-active-state="isActive('superscript') ? 'on' : 'off'" @mousedown.prevent.stop="run('superscript')" title="Superscript" aria-label="Superscript">
+            <span class="tiptap-button-mark-label">x<sup>2</sup></span>
+        </button>
+        <button type="button" class="tiptap-button" data-style="ghost" :data-active-state="isActive('subscript') ? 'on' : 'off'" @mousedown.prevent.stop="run('subscript')" title="Subscript" aria-label="Subscript">
+            <span class="tiptap-button-mark-label">x<sub>2</sub></span>
+        </button>
+    </div>
+
+    <span class="tiptap-separator" aria-hidden="true"></span>
+
+    <div class="tiptap-toolbar-group">
+        {% for icon, alignLabel in [
+            ('align-left','Align left'),('align-center','Align center'),
+            ('align-right','Align right'),('align-justify','Justify')
+        ] %}
+        <button type="button" class="tiptap-button" data-style="ghost"
+                :data-active-state="isActive('{{ icon }}') ? 'on' : 'off'"
+                @mousedown.prevent.stop="run('{{ icon }}')"
+                title="{{ alignLabel }}" aria-label="{{ alignLabel }}">
+            {% with name=icon %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+        </button>
+        {% endfor %}
+    </div>
+
+    <span class="tiptap-separator" aria-hidden="true"></span>
+
+    <div class="tiptap-toolbar-group">
+        <button
+            type="button"
+            class="tiptap-button"
+            data-style="ghost"
+            @mousedown.prevent.stop="pickImage()"
+            title="Add image"
+            aria-label="Add image"
+        >
+            {% with name='image' %}{% include 'widgets/partials/tiptap_icon.html' %}{% endwith %}
+        </button>
+    </div>
+
+    <div class="tiptap-toolbar-spacer" aria-hidden="true"></div>
+</div>

@@ -8,6 +8,7 @@ from pyvelm.builders import (
     KanbanCard,
     KanbanView,
     ListView,
+    Page,
     ViewsData,
 )
 
@@ -65,12 +66,14 @@ views_data = (
                 Field.make("active").live(on_blur=True),
             ],
         )
-        .section(
+        .notebook(
             "relations",
             "Relations",
             [
-                Field.make("tag_ids").widget("dialog"),
-                Field.make("child_ids").widget("dialog"),
+                Page.make("tags", "Tags")
+                .fields([Field.make("tag_ids").widget("dialog")]),
+                Page.make("children", "Contacts")
+                .fields([Field.make("child_ids").widget("dialog")]),
             ],
         ),
         KanbanView.make("partner.kanban")

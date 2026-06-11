@@ -65,6 +65,15 @@ class SchemaEvalTests(unittest.TestCase):
         spec2 = {"name": "x", "hidden": False}
         self.assertTrue(spec_visible(spec2, ctx))
 
+    def test_resolve_spec_default_callable(self):
+        from pyvelm.schema_eval import resolve_spec_default
+
+        spec = {"default": lambda _r, _e, g: (g("qty") or 0) * (g("price") or 0)}
+        ctx = SchemaContext(env=None, submitted={"qty": 3, "price": 10})
+        self.assertEqual(resolve_spec_default(spec, None, ctx), 30)
+        ctx2 = SchemaContext(env=None, submitted={})
+        self.assertEqual(resolve_spec_default(spec, None, ctx2), 0)
+
     def test_field_builder_shortcuts(self):
         spec = (
             Field.make("code")

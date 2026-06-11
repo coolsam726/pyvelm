@@ -5,7 +5,7 @@
 {% set accent = company.accent or '#1f2937' %}
 {% set secondary = company.secondary or accent %}
 {% set layout = company.layout or 'light' %}
-{% set sheet_pad = '0' if layout in ('split', 'folder') else '16mm 12mm' %}
+{% set sheet_pad = '0' if layout in ('split', 'folder', 'wave', 'bubble') else '16mm 12mm' %}
 {# Print-friendly ink — keep in sync with external_layout.html #}
 {% set ink = '#1a1a1a' %}
 {% set ink_muted = '#374151' %}
@@ -68,7 +68,7 @@
     height: 174px;
     margin-bottom: 10px;
   }
-  .pvdoc.layout-folder .folder-shape-bg {
+  .pvdoc.layout-folder .folder-header-container {
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 174px;
@@ -76,9 +76,30 @@
     overflow: hidden;
   }
   .pvdoc.layout-folder .folder-band-svg { display: block; width: 100%; height: 174px; }
-  .pvdoc.layout-folder .folder-company-info {
+  .pvdoc.layout-folder .folder-tab-row {
     position: absolute;
-    top: 0; left: 0; right: 0;
+    left: 0; right: 0; bottom: 0;
+    width: 100%;
+    height: 48px;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .pvdoc.layout-folder .folder-tab-fill { width: 100%; height: 48px; vertical-align: bottom; padding: 0; }
+  .pvdoc.layout-folder .folder-tab-angle {
+    width: 80px;
+    padding: 0;
+    vertical-align: bottom;
+    line-height: 0;
+  }
+  .pvdoc.layout-folder .folder-tab-angle svg { display: block; margin-left: -1px; }
+  .pvdoc.layout-folder .folder-tab-title {
+    vertical-align: middle;
+    padding: 0 12mm 0 4px;
+    white-space: nowrap;
+    background: #ffffff;
+  }
+  .pvdoc.layout-folder .folder-company-info {
+    position: relative;
     z-index: 2;
     width: 100%;
     border-collapse: collapse;
@@ -94,28 +115,6 @@
     vertical-align: top;
     text-align: right;
     padding: 12px 12mm 54px 10px;
-  }
-  .pvdoc.layout-folder .folder-tab-row {
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    z-index: 1;
-    width: 100%;
-    height: 48px;
-    border-collapse: collapse;
-  }
-  .pvdoc.layout-folder .folder-tab-fill { height: 48px; vertical-align: bottom; }
-  .pvdoc.layout-folder .folder-tab-angle {
-    width: 80px;
-    padding: 0;
-    vertical-align: bottom;
-    line-height: 0;
-  }
-  .pvdoc.layout-folder .folder-tab-angle svg { display: block; margin-left: -1px; }
-  .pvdoc.layout-folder .folder-tab-title {
-    vertical-align: middle;
-    padding: 0 12mm 0 4px;
-    white-space: nowrap;
-    background: #ffffff;
   }
   .pvdoc.layout-folder .folder-doc-title { margin: 0; font-size: 20px; font-weight: 700; color: {{ ink }}; line-height: 1.2; }
   .pvdoc.layout-folder .folder-logo { height: {{ company.document_logo_height }}px; width: auto; max-width: {{ company.document_logo_max_width }}px; object-fit: contain; display: block; margin-bottom: 5px; }
@@ -190,6 +189,31 @@
   .pvdoc.layout-dark table.lines th { background:#111827; color:#ffffff; border-bottom:none; padding:8px; }
   .pvdoc.layout-dark table.lines tbody tr:nth-child(odd) td { background:#f9fafb; }
   .pvdoc.layout-dark .totals tr.grand td { border-top:2px solid {{ accent }}; color:{{ accent }}; }
+
+  /* ---- wave (Odoo 19) ---- */
+  .pvdoc.layout-wave .wave-header { position:relative; width:100%; min-height:230px; margin-bottom:8px; }
+  .pvdoc.layout-wave .wave-shape-bg { position:absolute; top:0; left:0; right:0; height:230px; z-index:0; overflow:hidden; }
+  .pvdoc.layout-wave .wave-header-shape { display:block; width:100%; height:230px; }
+  .pvdoc.layout-wave .wave-co-table { position:relative; z-index:1; width:100%; border-collapse:collapse; table-layout:fixed; }
+  .pvdoc.layout-wave .wave-co-left { width:50%; vertical-align:top; padding:16px 12mm 20px 12mm; }
+  .pvdoc.layout-wave .wave-co-right { width:50%; vertical-align:top; text-align:right; padding:16px 12mm 20px 12mm; }
+  .pvdoc.layout-wave .wave-logo { height:{{ company.document_logo_height }}px; width:auto; max-width:{{ company.document_logo_max_width }}px; object-fit:contain; display:block; margin-bottom:5px; }
+  .pvdoc.layout-wave .wave-tagline { font-weight:700; font-size:11px; color:{{ ink }}; }
+  .pvdoc.layout-wave .wave-addr-list { list-style:none; margin:0; padding:0; text-align:right; font-size:10px; color:{{ ink_muted }}; line-height:1.5; }
+  .pvdoc.layout-wave .wave-doc-title { margin:0 12mm 10px; font-size:20px; font-weight:700; color:{{ ink }}; }
+  .pvdoc.layout-wave table.lines tbody tr:nth-child(even) td { background:#f9fafb; }
+
+  /* ---- bubble (Odoo 19) ---- */
+  .pvdoc.layout-bubble .bubble-header { position:relative; overflow:hidden; padding:24px 12mm 12px; min-height:90px; }
+  .pvdoc.layout-bubble .bubble-shape { position:absolute; top:-870px; right:-450px; z-index:0; }
+  .pvdoc.layout-bubble .bubble-header-table { position:relative; z-index:1; width:100%; border-collapse:collapse; table-layout:fixed; }
+  .pvdoc.layout-bubble .bubble-tagline-cell { width:50%; vertical-align:top; padding:0 10px 0 0; }
+  .pvdoc.layout-bubble .bubble-tagline { font-weight:700; font-size:11px; color:{{ ink }}; }
+  .pvdoc.layout-bubble .bubble-addr-cell { width:50%; text-align:right; vertical-align:top; }
+  .pvdoc.layout-bubble .bubble-logo { height:{{ company.document_logo_height }}px; width:auto; max-width:{{ company.document_logo_max_width }}px; object-fit:contain; display:inline-block; margin-bottom:5px; }
+  .pvdoc.layout-bubble .bubble-addr-list { list-style:none; margin:0; padding:0; font-size:10px; color:{{ ink_muted }}; line-height:1.5; }
+  .pvdoc.layout-bubble table.lines thead th { background:{{ accent }}; color:#fff; border-bottom:none; }
+  .pvdoc.layout-bubble table.lines tbody tr:nth-child(even) td { background:#f9fafb; }
 </style>
 
 <div class="pvdoc-sheet-outer">
@@ -228,6 +252,22 @@
         </td>
       </tr>
     </table>
+  </div>
+</div>
+
+{# ---- WAVE / BUBBLE: Odoo 19 shapes ---- #}
+{% elif layout == 'wave' %}
+<div class="pvdoc layout-wave">
+  <div class="doc-frame">
+    {% include '_wave_header.html' %}
+    <main style="padding: 0 12mm 12mm;">{{ body }}</main>
+  </div>
+</div>
+{% elif layout == 'bubble' %}
+<div class="pvdoc layout-bubble">
+  <div class="doc-frame">
+    {% include '_bubble_header.html' %}
+    <main style="padding: 0 12mm 12mm;">{{ body }}</main>
   </div>
 </div>
 

@@ -1,8 +1,10 @@
-# Project context — pyvelm v1.4.1
+# Project context — pyvelm v1.4.2
 
 Building an Odoo-style ERP framework in Python.
 
-**v1.4.1 (released 2026-06-10)** — `system_audit` module See [docs/releases/v1.4.1.md](docs/releases/v1.4.1.md).
+**v1.4.2 (released 2026-06-11)** — Odoo 19 document layouts See [docs/releases/v1.4.2.md](docs/releases/v1.4.2.md).
+
+**v1.4.1 (released 2026-06-10)** — PyPI publish workflow resilience See [docs/releases/v1.4.1.md](docs/releases/v1.4.1.md).
 
 **v1.4.0 (released 2026-06-09)** — `ActionForm` / view-actions See [docs/releases/v1.4.0.md](docs/releases/v1.4.0.md).
 

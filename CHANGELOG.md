@@ -7,6 +7,37 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.4.2] — 2026-06-11
+
+### Added
+
+- **Odoo 19 document layouts** — Wave, Bubble, and Folder external layouts
+  (table-based headers for wkhtmltopdf; designer preview parity).
+- **Prism code display** — readonly ``Code`` fields render with syntax highlighting
+  (``code_display`` widget + ``pv_code_display.js``).
+- **velmphp-style HTML editor toolbar** — TipTap mail editor toolbar extracted to
+  partials with ``pv_tiptap_simple_theme.css``.
+- **Workflow step fields** — configurable field type and attributes on workflow
+  builder steps and transition forms.
+
+### Changed
+
+- **Page titles** — browser tab titles use branding ``app_name`` via
+  ``layouts/_app_title_suffix.html``.
+- **Form breadcrumbs** — Home → list → record → Edit progression on form views.
+- **Computed fields** — always readonly/disabled on edit forms.
+- **Notebook tabs** — one2many relationships can use ``Notebook`` on record forms
+  (``partners`` example).
+
+### Fixed
+
+- **Module sync status** — apps catalog no longer stuck on “Sync” after completion
+  (SQLite/MySQL nullability sync + single catalog reload).
+- **Bundled module discovery** — ``contacts`` and other builtins always merged in
+  ``loader.discover()`` so dependency resolution works (e.g. ``workflow`` → ``contacts``).
+- **Wave / Bubble layouts** — company logo and address overlay the decorative SVG
+  instead of rendering full-width below the shape.
+
 ## [1.4.1] — 2026-06-10
 
 ### Fixed

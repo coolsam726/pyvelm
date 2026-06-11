@@ -104,7 +104,7 @@
     height: 174px;
     margin-bottom: 12px;
   }
-  .layout-folder .folder-shape-bg {
+  .layout-folder .folder-header-container {
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 174px;
@@ -112,9 +112,35 @@
     overflow: hidden;
   }
   .layout-folder .folder-band-svg { display: block; width: 100%; height: 174px; }
-  .layout-folder .folder-company-info {
+  .layout-folder .folder-tab-row {
     position: absolute;
-    top: 0; left: 0; right: 0;
+    left: 0; right: 0; bottom: 0;
+    width: 100%;
+    height: 48px;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .layout-folder .folder-tab-fill {
+    width: 100%;
+    height: 48px;
+    vertical-align: bottom;
+    padding: 0;
+  }
+  .layout-folder .folder-tab-angle {
+    width: 80px;
+    padding: 0;
+    vertical-align: bottom;
+    line-height: 0;
+  }
+  .layout-folder .folder-tab-angle svg { display: block; margin-left: -1px; }
+  .layout-folder .folder-tab-title {
+    vertical-align: middle;
+    padding: 0 0 0 4px;
+    white-space: nowrap;
+    background: #ffffff;
+  }
+  .layout-folder .folder-company-info {
+    position: relative;
     z-index: 2;
     width: 100%;
     border-collapse: collapse;
@@ -130,28 +156,6 @@
     vertical-align: top;
     text-align: right;
     padding: 14px 0 54px 12px;
-  }
-  .layout-folder .folder-tab-row {
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    z-index: 1;
-    width: 100%;
-    height: 48px;
-    border-collapse: collapse;
-  }
-  .layout-folder .folder-tab-fill { height: 48px; vertical-align: bottom; }
-  .layout-folder .folder-tab-angle {
-    width: 80px;
-    padding: 0;
-    vertical-align: bottom;
-    line-height: 0;
-  }
-  .layout-folder .folder-tab-angle svg { display: block; margin-left: -1px; }
-  .layout-folder .folder-tab-title {
-    vertical-align: middle;
-    padding: 0 0 0 4px;
-    white-space: nowrap;
-    background: #ffffff;
   }
   .layout-folder .folder-doc-title {
     margin: 0;
@@ -174,6 +178,103 @@
   .layout-folder .folder-footer-table { width: 100%; border-collapse: collapse; }
   .layout-folder .folder-footer-table td { vertical-align: top; padding: 0; border: none; }
   .layout-folder .folder-footer-right { text-align: right; color: {{ ink_faint }}; white-space: nowrap; }
+
+  /* ---- Variant: wave (Odoo 19) ---- */
+  .layout-wave .wave-header {
+    position: relative;
+    width: 100%;
+    min-height: 230px;
+    margin-bottom: 8px;
+  }
+  .layout-wave .wave-shape-bg {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 230px;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .layout-wave .wave-header-shape { display: block; width: 100%; height: 230px; }
+  .layout-wave .wave-co-table {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .layout-wave .wave-co-left {
+    width: 50%;
+    vertical-align: top;
+    padding: 20px 12mm 24px 12mm;
+  }
+  .layout-wave .wave-co-right {
+    width: 50%;
+    vertical-align: top;
+    text-align: right;
+    padding: 20px 12mm 24px 12mm;
+  }
+  .layout-wave .wave-logo {
+    height: {{ company.document_logo_height }}px;
+    width: auto;
+    max-width: {{ company.document_logo_max_width }}px;
+    object-fit: contain;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .layout-wave .wave-tagline { font-weight: 700; font-size: 12px; color: {{ ink }}; }
+  .layout-wave .wave-addr-list {
+    list-style: none; margin: 0; padding: 0;
+    text-align: right; font-size: 11px; color: {{ ink_muted }}; line-height: 1.55;
+  }
+  .layout-wave .wave-doc-title { margin: 0 12mm 12px; font-size: 22px; font-weight: 700; color: {{ ink }}; }
+  .layout-wave table.lines tbody tr:nth-child(even) td { background: #f9fafb; }
+  .layout-wave .wave-footer-shape { display: block; width: 100%; height: 80px; margin-top: 12px; }
+
+  /* ---- Variant: bubble (Odoo 19) ---- */
+  .layout-bubble .bubble-header {
+    position: relative;
+    overflow: hidden;
+    padding: 32px 12mm 16px;
+    min-height: 100px;
+  }
+  .layout-bubble .bubble-shape {
+    position: absolute;
+    top: -870px;
+    right: -450px;
+    z-index: 0;
+  }
+  .layout-bubble .bubble-header-table {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .layout-bubble .bubble-tagline-cell {
+    width: 50%;
+    vertical-align: top;
+    padding: 0 12px 0 0;
+  }
+  .layout-bubble .bubble-tagline { font-weight: 700; font-size: 12px; color: {{ ink }}; }
+  .layout-bubble .bubble-addr-cell {
+    width: 50%;
+    text-align: right;
+    vertical-align: top;
+    padding: 0;
+  }
+  .layout-bubble .bubble-logo {
+    height: {{ company.document_logo_height }}px;
+    width: auto;
+    max-width: {{ company.document_logo_max_width }}px;
+    object-fit: contain;
+    display: inline-block;
+    margin-bottom: 6px;
+  }
+  .layout-bubble .bubble-addr-list {
+    list-style: none; margin: 0; padding: 0;
+    font-size: 11px; color: {{ ink_muted }}; line-height: 1.55;
+  }
+  .layout-bubble table.lines thead th { background: {{ accent }}; color: #fff; border-bottom: none; }
+  .layout-bubble table.lines tbody tr:nth-child(even) td { background: #f9fafb; }
 
   /* ---- Variant: dark ---- */
   .layout-dark .dark-band-name { font-size: 9px; font-weight: 700; text-transform: uppercase;
@@ -213,7 +314,7 @@
     width: {{ company.paper_width }};
     height: {{ company.paper_height }};
     margin: 0 auto;
-    padding: {{ '0' if layout in ('split', 'folder') else '16mm 12mm' }};
+    padding: {{ '0' if layout in ('split', 'folder', 'wave', 'bubble') else '16mm 12mm' }};
     box-shadow: 0 2px 12px rgba(0,0,0,.4);
     box-sizing: border-box;
     overflow: auto;
@@ -225,6 +326,8 @@
   .layout-folder .folder-co-left { padding-left: 12mm; }
   .layout-folder .folder-co-right { padding-right: 12mm; }
   .layout-folder .folder-tab-title { padding-right: 12mm; }
+  .layout-wave .wave-co-left,
+  .layout-wave .wave-co-right { padding-left: 12mm; padding-right: 12mm; }
   {% endif %}
 </style>
 </head>
@@ -267,6 +370,35 @@
         </td>
       </tr>
     </table>
+  </div>
+
+  {# ============================================================
+     WAVE layout — Odoo 19 curved header band
+     ============================================================ #}
+  {% elif layout == 'wave' %}
+
+  <div class="doc-frame layout-wave">
+    {% include '_wave_header.html' %}
+    <main style="padding: 0 12mm 12mm;">{{ body }}</main>
+    {% if company.copyright %}
+      <div class="doc-footer" style="padding: 0 12mm;">{{ company.copyright }}</div>
+    {% endif %}
+    <svg class="wave-footer-shape" width="100%" height="80" viewBox="0 0 1000 180" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M427.731 19.757C686.904 51.3469 898.971 38.039 1000 27.6922V180H0V8.20934C66.363 -0.991089 198.347 -8.20218 427.731 19.757Z" fill="{{ secondary }}" fill-opacity="0.1"/>
+    </svg>
+  </div>
+
+  {# ============================================================
+     BUBBLE layout — Odoo 19 circular accent
+     ============================================================ #}
+  {% elif layout == 'bubble' %}
+
+  <div class="doc-frame layout-bubble">
+    {% include '_bubble_header.html' %}
+    <main style="padding: 0 12mm 12mm;">{{ body }}</main>
+    {% if company.copyright %}
+      <div class="doc-footer" style="padding: 0 12mm;">{{ company.copyright }}</div>
+    {% endif %}
   </div>
 
   {# ============================================================

@@ -1,0 +1,7 @@
+{# Read-only code display — Prism.js (velmphp parity). #}
+{% if raw %}
+<pre class="pv-code-display language-{{ language }} overflow-x-auto rounded-md border border-default bg-neutral-secondary-soft p-3 text-xs leading-relaxed"
+     data-pv-code-display><code class="language-{{ language }}">{{ raw }}</code></pre>
+{% else %}
+<p class="text-sm text-body-subtle">—</p>
+{% endif %}

@@ -1,0 +1,24 @@
+{# Odoo 19 external_layout_bubble — large circle accent behind header table. #}
+{% set bubble_fill = company.accent or '#1f2937' %}
+<div class="bubble-header">
+  <svg class="bubble-shape" width="1100" height="1100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <circle cx="550" cy="550" r="550" fill="{{ bubble_fill }}" fill-opacity="0.1"/>
+  </svg>
+  <table class="bubble-header-table" cellpadding="0" cellspacing="0">
+    <tr>
+      <td class="bubble-tagline-cell">
+        {% if company.name %}<div class="bubble-tagline">{{ company.name }}</div>{% endif %}
+      </td>
+      <td class="bubble-addr-cell">
+        {% if company.logo_url %}
+          <img class="bubble-logo" src="{{ company.logo_url }}" alt="logo"/>
+        {% endif %}
+        <ul class="bubble-addr-list">
+          {% for line in company.address_lines %}
+            <li>{{ line }}</li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+  </table>
+</div>

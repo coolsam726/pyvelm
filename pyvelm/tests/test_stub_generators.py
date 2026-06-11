@@ -422,7 +422,7 @@ class StubGeneratorTests(unittest.TestCase):
         write_module(
             "partners",
             depends=["base_mod"],
-            model_name="res.partner",
+            model_name="partners.partner",
             view_name="partner.list",
         )
         write_module(
@@ -455,7 +455,7 @@ class StubGeneratorTests(unittest.TestCase):
                 dependency_closure("partners", specs),
                 index,
             )
-            self.assertIn("res.partner", partners_index.models)
+            self.assertIn("partners.partner", partners_index.models)
             self.assertIn("base_mod.country", partners_index.models)
             self.assertNotIn("crm.lead", partners_index.models)
             self.assertIn("partners.partner.list", partners_index.qualified_views)
@@ -474,7 +474,7 @@ class StubGeneratorTests(unittest.TestCase):
             crm_names = (out / "scopes" / "crm" / "names.pyi").read_text(
                 encoding="utf-8"
             )
-            self.assertIn('"res.partner"', partners_names)
+            self.assertIn('"partners.partner"', partners_names)
             self.assertIn('"base_mod.country"', partners_names)
             self.assertNotIn('"crm.lead"', partners_names)
             self.assertIn('"crm.lead"', crm_names)

@@ -1,5 +1,5 @@
 {% extends "layouts/main.html" %}
-{% block title %}{{ app.display_name }} — Apps — pyvelm{% endblock %}
+{% block title %}{{ app.display_name }} — Apps{% include "layouts/_app_title_suffix.html" %}{% endblock %}
 {% block page_title %}{{ app.display_name }}{% endblock %}
 
 {% block page_actions %}

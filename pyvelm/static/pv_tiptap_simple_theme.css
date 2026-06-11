@@ -1,0 +1,639 @@
+/**
+ * TipTap Simple Editor theme (MIT, ueberdosis/tiptap-ui-components).
+ * Scoped to Velm rich-text widget — not global :root.
+ */
+
+.pv-rich-text-editor--simple {
+    --tt-toolbar-height: 2.75rem;
+    --tt-radius-md: 0.5rem;
+    --tt-radius-lg: 0.75rem;
+    --tt-transition-duration-default: 0.2s;
+    --tt-transition-easing-default: cubic-bezier(0.46, 0.03, 0.52, 0.96);
+
+    --tt-gray-light-a-50: rgba(56, 56, 56, 0.04);
+    --tt-gray-light-a-100: rgba(15, 22, 36, 0.05);
+    --tt-gray-light-a-200: rgba(37, 39, 45, 0.1);
+    --tt-gray-light-a-300: rgba(47, 50, 55, 0.2);
+    --tt-gray-light-a-400: rgba(40, 44, 51, 0.42);
+    --tt-gray-light-a-500: rgba(52, 55, 60, 0.64);
+    --tt-gray-light-a-600: rgba(36, 39, 46, 0.78);
+    --tt-gray-light-a-700: rgba(35, 37, 42, 0.87);
+    --tt-gray-light-a-800: rgba(30, 32, 36, 0.95);
+    --tt-gray-light-a-900: rgba(29, 30, 32, 0.98);
+    --tt-gray-light-200: rgba(234, 234, 235, 1);
+    --tt-gray-light-300: rgba(213, 214, 215, 1);
+    --tt-gray-light-900: rgba(34, 35, 37, 1);
+
+    --tt-brand-color-100: rgba(222, 219, 255, 1);
+    --tt-brand-color-200: rgba(195, 189, 255, 1);
+    --tt-brand-color-400: rgba(122, 82, 255, 1);
+    --tt-brand-color-500: rgba(98, 41, 255, 1);
+    --tt-brand-color-600: rgba(84, 0, 229, 1);
+
+    --tt-toolbar-bg-color: var(--color-neutral-primary, #fff);
+    --tt-toolbar-border-color: var(--tt-gray-light-a-100);
+    --tt-cursor-color: var(--tt-brand-color-500);
+    --tt-selection-color: rgba(157, 138, 255, 0.2);
+    --link-text-color: var(--tt-brand-color-500);
+    --placeholder-color: var(--tt-gray-light-a-400);
+
+    --tt-button-default-bg-color: var(--tt-gray-light-a-100);
+    --tt-button-hover-bg-color: var(--tt-gray-light-200);
+    --tt-button-active-bg-color: var(--tt-gray-light-a-200);
+    --tt-button-active-bg-color-emphasized: var(--tt-brand-color-100);
+    --tt-button-active-hover-bg-color-emphasized: var(--tt-brand-color-200);
+    --tt-button-default-text-color: var(--tt-gray-light-a-600);
+    --tt-button-hover-text-color: var(--tt-gray-light-a-900);
+    --tt-button-active-text-color: var(--tt-gray-light-a-900);
+    --tt-button-default-icon-color: var(--tt-gray-light-a-600);
+    --tt-button-hover-icon-color: var(--tt-gray-light-a-900);
+    --tt-button-active-icon-color: var(--tt-brand-color-500);
+
+    --blockquote-bg-color: var(--tt-gray-light-900);
+    --tt-inline-code-bg-color: var(--tt-gray-light-a-100);
+    --tt-inline-code-text-color: var(--tt-gray-light-a-700);
+    --tt-inline-code-border-color: var(--tt-gray-light-a-200);
+    --tt-codeblock-bg: var(--tt-gray-light-a-50);
+    --tt-codeblock-text: var(--tt-gray-light-a-800);
+    --tt-codeblock-border: var(--tt-gray-light-a-200);
+
+    border-radius: var(--tt-radius-lg);
+    border: 1px solid var(--tt-toolbar-border-color);
+    background-color: var(--color-neutral-primary, #fff);
+    box-shadow: var(--shadow-sm, 0 1px 2px rgb(0 0 0 / 0.05));
+    overflow: visible;
+}
+
+.dark .pv-rich-text-editor--simple {
+    --tt-gray-dark-a-50: rgba(232, 232, 253, 0.05);
+    --tt-gray-dark-a-100: rgba(231, 231, 243, 0.07);
+    --tt-gray-dark-a-200: rgba(238, 238, 246, 0.11);
+    --tt-gray-dark-a-300: rgba(239, 239, 245, 0.22);
+    --tt-gray-dark-a-400: rgba(244, 244, 255, 0.37);
+    --tt-gray-dark-a-500: rgba(236, 238, 253, 0.5);
+    --tt-gray-dark-a-600: rgba(247, 247, 253, 0.64);
+    --tt-gray-dark-a-700: rgba(251, 251, 254, 0.75);
+    --tt-gray-dark-a-800: rgba(253, 253, 253, 0.88);
+    --tt-gray-dark-a-900: rgba(255, 255, 255, 0.96);
+    --tt-gray-dark-200: rgba(45, 45, 47, 1);
+    --tt-gray-dark-300: rgba(70, 70, 73, 1);
+    --tt-gray-dark-900: rgba(245, 245, 245, 1);
+
+    --tt-toolbar-bg-color: var(--color-neutral-primary, #141417);
+    --tt-toolbar-border-color: var(--tt-gray-dark-a-50);
+    --tt-cursor-color: var(--tt-brand-color-400);
+    --tt-selection-color: rgba(122, 82, 255, 0.2);
+    --link-text-color: var(--tt-brand-color-400);
+    --placeholder-color: var(--tt-gray-dark-a-400);
+
+    --tt-button-default-bg-color: var(--tt-gray-dark-a-100);
+    --tt-button-hover-bg-color: var(--tt-gray-dark-200);
+    --tt-button-active-bg-color: var(--tt-gray-dark-a-200);
+    --tt-button-active-bg-color-emphasized: var(--tt-brand-color-900, rgba(43, 25, 102, 1));
+    --tt-button-active-hover-bg-color-emphasized: rgba(56, 0, 153, 1);
+    --tt-button-default-text-color: var(--tt-gray-dark-a-600);
+    --tt-button-hover-text-color: var(--tt-gray-dark-a-900);
+    --tt-button-active-text-color: var(--tt-gray-dark-a-900);
+    --tt-button-default-icon-color: var(--tt-gray-dark-a-600);
+    --tt-button-hover-icon-color: var(--tt-gray-dark-a-900);
+    --tt-button-active-icon-color: var(--tt-brand-color-400);
+
+    --blockquote-bg-color: var(--tt-gray-dark-900);
+    --tt-inline-code-bg-color: var(--tt-gray-dark-a-100);
+    --tt-inline-code-text-color: var(--tt-gray-dark-a-700);
+    --tt-inline-code-border-color: var(--tt-gray-dark-a-200);
+    --tt-codeblock-bg: var(--tt-gray-dark-a-50);
+    --tt-codeblock-text: var(--tt-gray-dark-a-800);
+    --tt-codeblock-border: var(--tt-gray-dark-a-200);
+}
+
+/* Toolbar (fixed variant) */
+.pv-rich-text-editor--simple .tiptap-toolbar[data-variant='fixed'] {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    width: 100%;
+    min-height: var(--tt-toolbar-height);
+    background: var(--tt-toolbar-bg-color);
+    border-bottom: 1px solid var(--tt-toolbar-border-color);
+    padding: 0 0.5rem;
+    overflow: visible;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 2;
+    border-radius: var(--tt-radius-lg) var(--tt-radius-lg) 0 0;
+}
+
+.pv-rich-text-editor--simple .tiptap-toolbar[data-variant='fixed']::-webkit-scrollbar {
+    display: none;
+}
+
+.pv-rich-text-editor--simple .tiptap-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 0.125rem;
+}
+
+.pv-rich-text-editor--simple .tiptap-separator {
+    width: 1px;
+    align-self: stretch;
+    margin: 0.375rem 0.125rem;
+    background-color: var(--tt-toolbar-border-color);
+    flex-shrink: 0;
+}
+
+.pv-rich-text-editor--simple .tiptap-toolbar-spacer {
+    flex: 1 1 auto;
+    min-width: 0.25rem;
+}
+
+/* Toolbar buttons (TipTap Simple Editor ghost style) */
+.pv-rich-text-editor--simple .tiptap-button {
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.15;
+    height: 2rem;
+    min-width: 2rem;
+    border: none;
+    padding: 0.5rem;
+    gap: 0.125rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--tt-radius-lg);
+    cursor: pointer;
+    background-color: transparent;
+    color: var(--tt-button-default-text-color);
+    transition:
+        background-color var(--tt-transition-duration-default) var(--tt-transition-easing-default),
+        color var(--tt-transition-duration-default) var(--tt-transition-easing-default);
+}
+
+.pv-rich-text-editor--simple .tiptap-button[data-style='ghost']:not([data-active-state='on']) {
+    background-color: transparent;
+}
+
+.pv-rich-text-editor--simple .tiptap-button .tiptap-button-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    color: var(--tt-button-default-icon-color);
+}
+
+.pv-rich-text-editor--simple .tiptap-button .tiptap-button-dropdown-small {
+    width: 0.625rem;
+    height: 0.625rem;
+    flex-shrink: 0;
+    color: var(--tt-button-default-icon-color);
+}
+
+.pv-rich-text-editor--simple .tiptap-button:hover:not(:disabled) .tiptap-button-icon,
+.pv-rich-text-editor--simple .tiptap-button:hover:not(:disabled) .tiptap-button-dropdown-small {
+    color: var(--tt-button-hover-icon-color);
+}
+
+.pv-rich-text-editor--simple .tiptap-button[data-active-state='on']:not(:disabled) .tiptap-button-icon,
+.pv-rich-text-editor--simple .tiptap-button[data-active-state='on']:not(:disabled) .tiptap-button-dropdown-small {
+    color: var(--tt-button-active-icon-color);
+}
+
+.pv-rich-text-editor--simple .tiptap-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.pv-rich-text-editor--simple .tiptap-button .tiptap-button-mark-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.pv-rich-text-editor--simple .tiptap-button .tiptap-button-mark-label sup,
+.pv-rich-text-editor--simple .tiptap-button .tiptap-button-mark-label sub {
+    font-size: 0.5625rem;
+    font-weight: 700;
+    line-height: 0;
+}
+
+.pv-rich-text-editor--simple .tiptap-button:hover:not(:disabled) {
+    background-color: var(--tt-button-hover-bg-color);
+    color: var(--tt-button-hover-text-color);
+}
+
+.pv-rich-text-editor--simple .tiptap-button[data-active-state='on']:not(:disabled),
+.pv-rich-text-editor--simple .tiptap-button[data-style='ghost'][data-active-state='on']:not(:disabled) {
+    background-color: var(--tt-button-active-bg-color-emphasized);
+    color: var(--tt-button-active-text-color);
+}
+
+.pv-rich-text-editor--simple .tiptap-button[data-active-state='on']:hover:not(:disabled),
+.pv-rich-text-editor--simple .tiptap-button[data-style='ghost'][data-active-state='on']:hover:not(:disabled) {
+    background-color: var(--tt-button-active-hover-bg-color-emphasized);
+}
+
+.pv-rich-text-editor--simple .tiptap-button:focus-visible {
+    outline: 2px solid var(--tt-button-active-icon-color);
+    outline-offset: 1px;
+}
+
+/* Content shell */
+.pv-rich-text-editor--simple .simple-editor-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 8rem;
+    overflow: hidden;
+    border-radius: 0 0 var(--tt-radius-lg) var(--tt-radius-lg);
+}
+
+.pv-rich-text-editor--simple .simple-editor-content .tiptap.ProseMirror.simple-editor,
+.pv-rich-text-editor--simple .simple-editor-content .tiptap.ProseMirror {
+    flex: 1;
+    min-height: 8rem;
+    padding: 1rem 1.25rem 1.5rem;
+    outline: none;
+}
+
+/* ProseMirror core (paragraph-node) */
+.pv-rich-text-editor--simple .tiptap.ProseMirror,
+.pv-rich-text-display--simple .tiptap {
+    font-family: 'DM Sans', var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    caret-color: var(--tt-cursor-color, var(--color-fg-brand));
+    color: var(--color-heading, var(--tt-gray-light-900));
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror > * {
+    position: relative;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror p,
+.pv-rich-text-display--simple .tiptap p {
+    font-size: 1rem;
+    line-height: 1.6;
+    font-weight: normal;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror p + p,
+.pv-rich-text-display--simple .tiptap p + p {
+    margin-top: 1.25rem;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror:not(.readonly):not(.ProseMirror-hideselection) ::selection,
+.pv-rich-text-display--simple .tiptap ::selection {
+    background-color: var(--tt-selection-color, rgba(157, 138, 255, 0.2));
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror a,
+.pv-rich-text-display--simple .tiptap a {
+    color: var(--link-text-color, var(--color-fg-brand));
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* Placeholder (extension + simple-editor pattern) */
+.pv-rich-text-editor--simple .tiptap.ProseMirror p.is-editor-empty:first-child::before {
+    color: var(--placeholder-color, var(--color-body-subtle));
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+}
+
+/* Headings */
+.pv-rich-text-editor--simple .tiptap.ProseMirror h1,
+.pv-rich-text-editor--simple .tiptap.ProseMirror h2,
+.pv-rich-text-editor--simple .tiptap.ProseMirror h3,
+.pv-rich-text-editor--simple .tiptap.ProseMirror h4,
+.pv-rich-text-display--simple .tiptap h1,
+.pv-rich-text-display--simple .tiptap h2,
+.pv-rich-text-display--simple .tiptap h3,
+.pv-rich-text-display--simple .tiptap h4 {
+    position: relative;
+    color: inherit;
+    font-style: inherit;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror h1:first-child,
+.pv-rich-text-editor--simple .tiptap.ProseMirror h2:first-child,
+.pv-rich-text-editor--simple .tiptap.ProseMirror h3:first-child,
+.pv-rich-text-editor--simple .tiptap.ProseMirror h4:first-child {
+    margin-top: 0;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror h1,
+.pv-rich-text-display--simple .tiptap h1 {
+    font-size: 1.5em;
+    font-weight: 700;
+    margin-top: 2em;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror h2,
+.pv-rich-text-display--simple .tiptap h2 {
+    font-size: 1.25em;
+    font-weight: 700;
+    margin-top: 1.75em;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror h3,
+.pv-rich-text-display--simple .tiptap h3 {
+    font-size: 1.125em;
+    font-weight: 600;
+    margin-top: 1.5em;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror h4,
+.pv-rich-text-display--simple .tiptap h4 {
+    font-size: 1em;
+    font-weight: 600;
+    margin-top: 1.5em;
+}
+
+/* Lists */
+.pv-rich-text-editor--simple .tiptap.ProseMirror ol,
+.pv-rich-text-editor--simple .tiptap.ProseMirror ul,
+.pv-rich-text-display--simple .tiptap ol,
+.pv-rich-text-display--simple .tiptap ul {
+    margin-top: 1.5em;
+    margin-bottom: 1.5em;
+    padding-left: 1.5em;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ol:first-child,
+.pv-rich-text-editor--simple .tiptap.ProseMirror ul:first-child {
+    margin-top: 0;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ol:last-child,
+.pv-rich-text-editor--simple .tiptap.ProseMirror ul:last-child {
+    margin-bottom: 0;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ol ol,
+.pv-rich-text-editor--simple .tiptap.ProseMirror ul ul {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror li p,
+.pv-rich-text-display--simple .tiptap li p {
+    margin-top: 0;
+    line-height: 1.6;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ol,
+.pv-rich-text-display--simple .tiptap ol {
+    list-style: decimal !important;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ol ol,
+.pv-rich-text-display--simple .tiptap ol ol {
+    list-style: lower-alpha !important;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ul:not([data-type='taskList']),
+.pv-rich-text-display--simple .tiptap ul:not([data-type='taskList']) {
+    list-style: disc !important;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ul:not([data-type='taskList']) ul,
+.pv-rich-text-display--simple .tiptap ul:not([data-type='taskList']) ul {
+    list-style: circle !important;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror li,
+.pv-rich-text-display--simple .tiptap li {
+    display: list-item;
+}
+
+/* Blockquote */
+.pv-rich-text-editor--simple .tiptap.ProseMirror blockquote,
+.pv-rich-text-display--simple .tiptap blockquote {
+    position: relative;
+    padding-left: 1em;
+    padding-top: 0.375em;
+    padding-bottom: 0.375em;
+    margin: 1.5rem 0;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror blockquote p,
+.pv-rich-text-display--simple .tiptap blockquote p {
+    margin-top: 0;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror blockquote::before,
+.pv-rich-text-display--simple .tiptap blockquote::before {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 0.25em;
+    background-color: var(--blockquote-bg-color);
+    content: '';
+    border-radius: 0;
+}
+
+/* Code */
+.pv-rich-text-editor--simple .tiptap.ProseMirror code,
+.pv-rich-text-display--simple .tiptap code {
+    background-color: var(--tt-inline-code-bg-color);
+    color: var(--tt-inline-code-text-color);
+    border: 1px solid var(--tt-inline-code-border-color);
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    line-height: 1.4;
+    border-radius: 0.375rem;
+    padding: 0.1em 0.2em;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror pre,
+.pv-rich-text-display--simple .tiptap pre {
+    background-color: var(--tt-codeblock-bg);
+    color: var(--tt-codeblock-text);
+    border: 1px solid var(--tt-codeblock-border);
+    margin-top: 1.5em;
+    margin-bottom: 1.5em;
+    padding: 1em;
+    font-size: 1rem;
+    border-radius: 0.375rem;
+    overflow-x: auto;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror pre code,
+.pv-rich-text-display--simple .tiptap pre code {
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+}
+
+/* Strong / em */
+.pv-rich-text-editor--simple .tiptap.ProseMirror strong,
+.pv-rich-text-display--simple .tiptap strong {
+    font-weight: 700;
+}
+
+.pv-rich-text-display--simple {
+    --link-text-color: var(--tt-brand-color-500, var(--color-fg-brand));
+    --tt-selection-color: rgba(157, 138, 255, 0.2);
+    --blockquote-bg-color: var(--tt-gray-light-900, var(--color-heading));
+}
+
+.dark .pv-rich-text-display--simple {
+    --link-text-color: var(--tt-brand-color-400, var(--color-fg-brand));
+    --blockquote-bg-color: var(--tt-gray-dark-900, var(--color-heading));
+}
+
+.pv-rich-text-display--simple .tiptap {
+    font-family: 'DM Sans', var(--font-sans);
+    max-width: none;
+}
+
+/* Toolbar dropdowns */
+.pv-rich-text-editor--simple .tiptap-toolbar-dropdown {
+    position: relative;
+    display: inline-flex;
+}
+
+.pv-rich-text-editor--simple .tiptap-dropdown-menu {
+    position: fixed;
+    z-index: 200;
+    min-width: 10rem;
+    padding: 0.25rem;
+    border-radius: var(--tt-radius-lg);
+    border: 1px solid var(--tt-toolbar-border-color);
+    background: var(--color-neutral-primary, #fff);
+    box-shadow:
+        0 16px 48px rgba(17, 24, 39, 0.04),
+        0 6px 8px rgba(17, 24, 39, 0.02);
+}
+
+.dark .pv-rich-text-editor--simple .tiptap-dropdown-menu {
+    background: var(--color-neutral-primary, #141417);
+    box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.5),
+        0 6px 8px rgba(0, 0, 0, 0.22);
+}
+
+.pv-rich-text-editor--simple .tiptap-dropdown-menu__item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    border: none;
+    border-radius: var(--tt-radius-md);
+    padding: 0.375rem 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.25;
+    text-align: left;
+    color: var(--tt-button-default-text-color);
+    background: transparent;
+    cursor: pointer;
+}
+
+.pv-rich-text-editor--simple .tiptap-dropdown-menu__item .tiptap-dropdown-menu__icon,
+.pv-rich-text-editor--simple .tiptap-dropdown-menu__item .tiptap-button-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    color: var(--tt-button-default-icon-color);
+}
+
+.pv-rich-text-editor--simple .tiptap-dropdown-menu__item:hover .tiptap-dropdown-menu__icon,
+.pv-rich-text-editor--simple .tiptap-dropdown-menu__item:hover .tiptap-button-icon {
+    color: var(--tt-button-hover-icon-color);
+}
+
+.pv-rich-text-editor--simple .tiptap-dropdown-menu__item[data-active-state='on'] .tiptap-dropdown-menu__icon,
+.pv-rich-text-editor--simple .tiptap-dropdown-menu__item[data-active-state='on'] .tiptap-button-icon {
+    color: var(--tt-button-active-icon-color);
+}
+
+.pv-rich-text-editor--simple .tiptap-dropdown-menu__item > span {
+    flex: 1;
+    min-width: 0;
+}
+
+.pv-rich-text-editor--simple .tiptap-dropdown-menu__item:hover {
+    background: var(--tt-button-hover-bg-color);
+    color: var(--tt-button-hover-text-color);
+}
+
+.pv-rich-text-editor--simple .tiptap-dropdown-menu__item[data-active-state='on'] {
+    background: var(--tt-button-active-bg-color-emphasized);
+    color: var(--tt-button-active-text-color);
+}
+
+/* Highlight, underline, task list, images */
+.pv-rich-text-editor--simple .tiptap.ProseMirror mark {
+    background-color: #fef9c3;
+    border-radius: 0.25rem;
+    padding: 0.05em 0.1em;
+}
+
+.dark .pv-rich-text-editor--simple .tiptap.ProseMirror mark,
+.dark .pv-rich-text-display--simple .tiptap mark {
+    background-color: #6b6524;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror u,
+.pv-rich-text-display--simple .tiptap u {
+    text-decoration: underline;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror s,
+.pv-rich-text-display--simple .tiptap s {
+    text-decoration: line-through;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror img,
+.pv-rich-text-display--simple .tiptap img {
+    height: auto;
+    border-radius: var(--tt-radius-md);
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror img:not([width]),
+.pv-rich-text-display--simple .tiptap img:not([style*='width:']) {
+    max-width: 100%;
+}
+
+/* imageResize node view: keep alignment controller above content */
+.pv-rich-text-editor--simple .tiptap.ProseMirror {
+    overflow: visible;
+}
+
+.pv-rich-text-display--simple [data-pv-image-resize-wrap] {
+    width: 100%;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ul[data-type='taskList'],
+.pv-rich-text-display--simple .tiptap ul[data-type='taskList'] {
+    list-style: none !important;
+    padding-left: 0.25em;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ul[data-type='taskList'] li,
+.pv-rich-text-display--simple .tiptap ul[data-type='taskList'] li {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ul[data-type='taskList'] li > label,
+.pv-rich-text-display--simple .tiptap ul[data-type='taskList'] li > label {
+    flex-shrink: 0;
+    margin-top: 0.2rem;
+}
+
+.pv-rich-text-editor--simple .tiptap.ProseMirror ul[data-type='taskList'] li[data-checked='true'] > div > p,
+.pv-rich-text-display--simple .tiptap ul[data-type='taskList'] li[data-checked='true'] > div > p {
+    opacity: 0.5;
+    text-decoration: line-through;
+}

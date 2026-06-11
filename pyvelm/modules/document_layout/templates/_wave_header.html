@@ -1,0 +1,32 @@
+{# Odoo 19 external_layout_wave — curved band behind a two-column company table. #}
+{% set doc_title = title|default('Invoice') %}
+{% set wave_fill = company.accent or '#1f2937' %}
+<div class="wave-header">
+  <div class="wave-shape-bg">
+    <svg class="wave-header-shape" width="100%" height="230" viewBox="0 0 1000 240" preserveAspectRatio="none"
+         xmlns="http://www.w3.org/2000/svg">
+      <path d="M1000 230.734C937.384 240.621 803.83 250.266 562.185 220.602C311.343 189.809 104.626 201.375 0 211.598V0.5H1000V230.734Z"
+            fill="{{ wave_fill }}" fill-opacity="0.1"/>
+    </svg>
+  </div>
+  <table class="wave-co-table" cellpadding="0" cellspacing="0">
+    <tr>
+      <td class="wave-co-left">
+        {% if company.logo_url %}
+          <img class="wave-logo" src="{{ company.logo_url }}" alt="logo"/>
+        {% endif %}
+        {% if company.name %}
+          <div class="wave-tagline">{{ company.name }}</div>
+        {% endif %}
+      </td>
+      <td class="wave-co-right">
+        <ul class="wave-addr-list">
+          {% for line in company.address_lines %}
+            <li>{{ line }}</li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+  </table>
+</div>
+<h2 class="wave-doc-title">{{ doc_title }}</h2>

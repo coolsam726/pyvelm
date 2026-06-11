@@ -44,6 +44,29 @@ class SchemaContext:
         return default
 
 
+def _call_value_fn(fn: Callable[..., Any], ctx: SchemaContext) -> Any:
+    """Invoke a schema ``default`` callable (same arity rules as predicates)."""
+    try:
+        params = list(inspect.signature(fn).parameters.values())
+    except (TypeError, ValueError):
+        return fn(ctx)
+    if not params:
+        return fn()
+    if len(params) == 1:
+        return fn(ctx)
+    if len(params) == 2:
+        return fn(ctx.record, ctx.env)
+    return fn(ctx.record, ctx.env, ctx.get)
+
+
+def resolve_spec_default(spec: dict, field, ctx: SchemaContext) -> Any:
+    """Evaluate ``Field.default()`` for live / computed display values."""
+    fn = spec.get("default")
+    if not callable(fn):
+        return None
+    return _call_value_fn(fn, ctx)
+
+
 def _call_predicate(fn: Callable[..., bool], ctx: SchemaContext) -> bool:
     try:
         params = list(inspect.signature(fn).parameters.values())

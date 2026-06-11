@@ -97,7 +97,8 @@ class LayoutChoiceTests(unittest.TestCase):
     def test_all_layouts_registered(self):
         slugs = {slug for slug, _ in DOCUMENT_LAYOUT_CHOICES}
         expected = {
-            "light", "boxed", "bold", "striped", "editorial", "split", "dark", "folder",
+            "light", "boxed", "bold", "striped", "bubble", "wave", "folder",
+            "editorial", "split", "dark",
         }
         self.assertEqual(slugs, expected)
 
@@ -111,7 +112,9 @@ class ExternalLayoutRenderTests(unittest.TestCase):
         "editorial": "layout-editorial",
         "split": "doc-frame-split",
         "dark": "layout-dark",
-        "folder": "folder-header",
+        "folder": "folder-header-container",
+        "wave": "wave-shape-bg",
+        "bubble": "bubble-shape",
     }
 
     def test_each_layout_renders_preview_html(self):
@@ -153,12 +156,27 @@ class InlinePreviewRenderTests(unittest.TestCase):
 
     def test_folder_inline_has_tab_shape_and_company_in_strip(self):
         html = _render_inline(_ctx(layout="folder"))
+        self.assertIn("folder-header-container", html)
         self.assertIn("folder-company-info", html)
         self.assertIn("folder-tab-row", html)
         self.assertIn("M5.70364 48", html)
         self.assertIn("Sample Invoice", html)
         self.assertIn("Acme Corporation", html)
         self.assertIn("doc-number", html)
+
+    def test_wave_header_overlays_shape_not_flex(self):
+        html = _render_inline(_ctx(layout="wave"))
+        self.assertIn("wave-shape-bg", html)
+        self.assertIn("wave-co-table", html)
+        self.assertNotIn("wave-header-inner", html)
+        self.assertNotIn("display: flex", html.split("wave-header")[1].split("</style>")[0])
+
+    def test_bubble_circle_positioned_like_odoo(self):
+        html = _render_inline(_ctx(layout="bubble"))
+        self.assertIn('width="1100" height="1100"', html)
+        self.assertIn("top:-870px", html)
+        self.assertIn("right:-450px", html)
+        self.assertIn("bubble-header-table", html)
 
     def test_folder_hides_duplicate_doc_title_in_body(self):
         html = _render_inline(_ctx(layout="folder"))

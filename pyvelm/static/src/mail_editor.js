@@ -129,7 +129,7 @@ function createTipTap(mountEl, { content, onUpdate, onSelectionChange }) {
         editable: true,
         editorProps: {
             attributes: {
-                class: 'tiptap pv-tiptap-doc',
+                class: 'tiptap ProseMirror simple-editor pv-tiptap-doc',
                 spellcheck: 'true',
                 tabindex: '0',
             },
@@ -729,9 +729,19 @@ function registerAlpine() {
                 underline: (c) => c.toggleUnderline(),
                 strike: (c) => c.toggleStrike(),
                 code: (c) => c.toggleCode(),
-                // headings — `arg` is the level (1..4); 0 / undefined = paragraph
+                paragraph: (c) => c.setParagraph(),
+                h1: (c) => c.toggleHeading({ level: 1 }),
+                h2: (c) => c.toggleHeading({ level: 2 }),
+                h3: (c) => c.toggleHeading({ level: 3 }),
+                h4: (c) => c.toggleHeading({ level: 4 }),
                 heading: (c) =>
                     arg ? c.toggleHeading({ level: arg }) : c.setParagraph(),
+                link: (c) => c,
+                highlight: (c) => c.toggleHighlight({ color: '#FEF08A' }),
+                'align-left': (c) => c.setTextAlign('left'),
+                'align-center': (c) => c.setTextAlign('center'),
+                'align-right': (c) => c.setTextAlign('right'),
+                'align-justify': (c) => c.setTextAlign('justify'),
                 // lists
                 bullet: (c) => c.toggleBulletList(),
                 ordered: (c) => c.toggleOrderedList(),
@@ -750,6 +760,11 @@ function registerAlpine() {
                 redo: (c) => c.redo(),
                 clear: (c) => c.unsetAllMarks().clearNodes(),
             };
+            if (cmd === 'link') {
+                this.insertLink();
+                this.closeMenus();
+                return;
+            }
             const op = map[cmd];
             if (!op) return;
             try {
@@ -758,6 +773,7 @@ function registerAlpine() {
                 console.warn('[pvHtmlEditor] toolbar command failed', cmd, err);
                 return;
             }
+            this.closeMenus();
             this.html = ed.getHTML();
         },
 
@@ -884,18 +900,113 @@ function registerAlpine() {
         // ---- state queries used by the toolbar's :class bindings ----
 
         isActive(name, attrs) {
-            // Touch the reactive counter so Alpine re-runs this expression
-            // whenever the cursor / selection moves (otherwise the toolbar
-            // would only update when `this.html` changes, missing typing
-            // and arrow-key moves).
             void this._selVersion;
             const ed = this._tipTap();
             if (!ed || ed.isDestroyed) return false;
+            if (typeof name === 'string' && attrs === undefined) {
+                const aliases = {
+                    bold: () => ed.isActive('bold'),
+                    italic: () => ed.isActive('italic'),
+                    strike: () => ed.isActive('strike'),
+                    code: () => ed.isActive('code'),
+                    underline: () => ed.isActive('underline'),
+                    highlight: () => ed.isActive('highlight'),
+                    link: () => ed.isActive('link'),
+                    blockquote: () => ed.isActive('blockquote'),
+                    codeBlock: () => ed.isActive('codeBlock'),
+                    bullet: () => ed.isActive('bulletList'),
+                    ordered: () => ed.isActive('orderedList'),
+                    task: () => ed.isActive('taskList'),
+                    heading: () => ed.isActive('heading'),
+                    paragraph: () =>
+                        ed.isActive('paragraph') && !ed.isActive('heading'),
+                    list: () =>
+                        ed.isActive('bulletList')
+                        || ed.isActive('orderedList')
+                        || ed.isActive('taskList'),
+                    superscript: () => ed.isActive('superscript'),
+                    subscript: () => ed.isActive('subscript'),
+                    h1: () => ed.isActive('heading', { level: 1 }),
+                    h2: () => ed.isActive('heading', { level: 2 }),
+                    h3: () => ed.isActive('heading', { level: 3 }),
+                    h4: () => ed.isActive('heading', { level: 4 }),
+                    'align-left': () => ed.isActive({ textAlign: 'left' }),
+                    'align-center': () => ed.isActive({ textAlign: 'center' }),
+                    'align-right': () => ed.isActive({ textAlign: 'right' }),
+                    'align-justify': () => ed.isActive({ textAlign: 'justify' }),
+                };
+                if (aliases[name]) {
+                    try {
+                        return aliases[name]();
+                    } catch {
+                        return false;
+                    }
+                }
+            }
             try {
                 return ed.isActive(name, attrs);
             } catch {
                 return false;
             }
+        },
+
+        canUndo() {
+            void this._selVersion;
+            const ed = this._tipTap();
+            return !!(ed && !ed.isDestroyed && ed.can().undo());
+        },
+
+        canRedo() {
+            void this._selVersion;
+            const ed = this._tipTap();
+            return !!(ed && !ed.isDestroyed && ed.can().redo());
+        },
+
+        headingMenuOpen: false,
+        listMenuOpen: false,
+
+        closeMenus() {
+            this.headingMenuOpen = false;
+            this.listMenuOpen = false;
+            this.openDropdown = '';
+        },
+
+        positionMenu(menuRef, triggerRef) {
+            const menu = this.$refs[menuRef];
+            const trigger = this.$refs[triggerRef];
+            if (!menu || !trigger) return;
+            const rect = trigger.getBoundingClientRect();
+            menu.style.position = 'fixed';
+            menu.style.top = `${rect.bottom + 4}px`;
+            menu.style.left = `${rect.left}px`;
+            menu.style.zIndex = '200';
+            menu.style.minWidth = `${Math.max(rect.width, 160)}px`;
+        },
+
+        toggleHeadingMenu() {
+            this.listMenuOpen = false;
+            this.openDropdown = '';
+            this.headingMenuOpen = !this.headingMenuOpen;
+            if (this.headingMenuOpen) {
+                this.$nextTick(() =>
+                    this.positionMenu('headingMenu', 'headingTrigger')
+                );
+            }
+        },
+
+        toggleListMenu() {
+            this.headingMenuOpen = false;
+            this.openDropdown = '';
+            this.listMenuOpen = !this.listMenuOpen;
+            if (this.listMenuOpen) {
+                this.$nextTick(() =>
+                    this.positionMenu('listMenu', 'listTrigger')
+                );
+            }
+        },
+
+        pickImage() {
+            this.triggerImageUpload();
         },
 
         currentHeadingLevel() {
