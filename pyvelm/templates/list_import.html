@@ -1,0 +1,174 @@
+{# List view import wizard — Odoo-style, loaded in PvDialog. #}
+<div id="pv-import-wizard" class="space-y-4 text-sm" data-pv-import-wizard>
+    {% if error %}
+    <p class="text-fg-danger bg-danger-soft border border-fg-danger/30 rounded-md px-3 py-2">
+        {{ error }}
+    </p>
+    {% endif %}
+
+    {% if test_message %}
+    <p class="text-heading bg-success-soft border border-success/30 rounded-md px-3 py-2">
+        {{ test_message }}
+    </p>
+    {% endif %}
+
+    {% if step == 'upload' %}
+    <p class="text-body-subtle">
+        Import records from an Excel file (.xlsx) or CSV. Column headers are
+        matched automatically to fields by name or label.
+    </p>
+    <p>
+        <a href="{{ template_url }}"
+           download="{{ template_filename }}"
+           class="text-fg-brand font-medium hover:underline">
+            Download Excel import template
+        </a>
+    </p>
+    <form method="post"
+          action="/web/views/{{ view.module }}/{{ view.name }}/import/preview"
+          enctype="multipart/form-data"
+          hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/preview"
+          hx-encoding="multipart/form-data"
+          hx-target="#pv-import-wizard"
+          hx-swap="outerHTML"
+          class="space-y-4 border border-dashed border-default rounded-lg p-4 bg-neutral-secondary/30">
+        <div>
+            <label class="block font-medium text-heading mb-2">Load file</label>
+            <input type="file" name="file" required accept=".csv,.xlsx,.xlsm"
+                   class="block w-full text-sm text-body
+                          file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0
+                          file:text-sm file:font-medium file:bg-fg-brand file:text-white
+                          hover:file:opacity-90 file:cursor-pointer cursor-pointer">
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="update_by_id" value="1"
+                   class="w-4 h-4 rounded border-default text-fg-brand">
+            <span>Update existing records when an <code>id</code> column is mapped</span>
+        </label>
+        <div class="flex justify-end gap-2 pt-2 border-t border-default">
+            <button type="button"
+                    onclick="window.PvDialog && window.PvDialog.close()"
+                    class="px-3 py-1.5 border border-default rounded-md hover:bg-neutral-secondary">
+                Cancel
+            </button>
+            <button type="submit"
+                    class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
+                Load
+            </button>
+        </div>
+    </form>
+
+    {% elif step == 'preview' %}
+    <p class="text-body-subtle">
+        <span class="font-medium text-heading">{{ filename }}</span> —
+        {{ total_rows }} row{{ 's' if total_rows != 1 else '' }} to import.
+        Map each file column to a field, then test or import.
+    </p>
+    <form method="post"
+          action="/web/views/{{ view.module }}/{{ view.name }}/import/run"
+          hx-target="#pv-import-wizard"
+          hx-swap="outerHTML"
+          class="space-y-4">
+        <input type="hidden" name="payload" value="{{ payload }}">
+        <input type="hidden" name="filename" value="{{ filename }}">
+        <input type="hidden" name="update_by_id" value="{{ '1' if update_by_id else '' }}">
+        <div class="overflow-x-auto border border-default rounded-lg max-h-48">
+            <table class="min-w-full text-xs">
+                <thead class="bg-neutral-secondary sticky top-0">
+                    <tr>
+                        {% for idx in range(headers|length) %}
+                        <th class="px-2 py-1 text-left font-medium text-heading whitespace-nowrap">
+                            {{ headers[idx] }}
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in preview_rows %}
+                    <tr class="border-t border-default">
+                        {% for cell in row %}
+                        <td class="px-2 py-1 text-body whitespace-nowrap max-w-[10rem] truncate"
+                            title="{{ cell }}">{{ cell }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_rows > preview_rows|length %}
+        <p class="text-body-subtle">Preview: first {{ preview_rows|length }} data rows.</p>
+        {% endif %}
+        <div class="border border-default rounded-lg divide-y divide-default">
+            <div class="px-3 py-2 bg-neutral-secondary text-xs font-medium text-heading grid grid-cols-2 gap-2">
+                <span>File column</span>
+                <span>Field</span>
+            </div>
+            {% for idx in range(headers|length) %}
+            <div class="px-3 py-2 grid grid-cols-2 gap-2 items-center">
+                <span class="text-body truncate" title="{{ headers[idx] }}">{{ headers[idx] }}</span>
+                <select name="map_{{ idx }}"
+                        class="w-full text-xs border border-default rounded px-2 py-1.5 bg-neutral-primary">
+                    <option value="">— skip —</option>
+                    {% for f in fields %}
+                    <option value="{{ f.name }}"
+                            {% if mapping.get(idx) == f.name %}selected{% endif %}>
+                        {{ f.label }} ({{ f.name }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="flex justify-end gap-2 pt-2 border-t border-default">
+            <button type="button"
+                    onclick="window.PvDialog && window.PvDialog.close()"
+                    class="px-3 py-1.5 border border-default rounded-md hover:bg-neutral-secondary">
+                Cancel
+            </button>
+            <button type="submit"
+                    formaction="/web/views/{{ view.module }}/{{ view.name }}/import/test"
+                    hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/test"
+                    class="px-3 py-1.5 border border-default rounded-md hover:bg-neutral-secondary font-medium">
+                Test
+            </button>
+            <button type="submit"
+                    formaction="/web/views/{{ view.module }}/{{ view.name }}/import/run"
+                    hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/run"
+                    class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
+                Import
+            </button>
+        </div>
+    </form>
+
+    {% elif step == 'result' %}
+    <div class="space-y-2">
+        <p class="font-medium text-heading">Import complete</p>
+        <ul class="list-disc pl-5 text-body">
+            <li>{{ result.created }} record{{ 's' if result.created != 1 else '' }} created</li>
+            {% if result.updated %}
+            <li>{{ result.updated }} record{{ 's' if result.updated != 1 else '' }} updated</li>
+            {% endif %}
+            {% if result.errors %}
+            <li class="text-fg-danger">{{ result.errors|length }} error{{ 's' if result.errors|length != 1 else '' }}</li>
+            {% endif %}
+        </ul>
+        {% if result.errors %}
+        <div class="max-h-40 overflow-y-auto border border-default rounded-md p-2 text-xs">
+            {% for err in result.errors[:20] %}
+            <p>Line {{ err.line }}: {{ err.error }}</p>
+            {% endfor %}
+            {% if result.errors|length > 20 %}
+            <p class="text-body-subtle">… and {{ result.errors|length - 20 }} more</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="flex justify-end pt-2 border-t border-default">
+        <button type="button"
+                onclick="window.dispatchEvent(new CustomEvent('pv-list-reload')); window.PvDialog && window.PvDialog.close(true)"
+                class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
+            Done
+        </button>
+    </div>
+    {% endif %}
+</div>

@@ -23,6 +23,7 @@
     }) | tojson }};
 </script>
 <div class="pv-file-picker-field"
+     data-pv-field-name="{{ name }}"
      x-data="pvFilePickerField(window._pvFilePickerFieldCfg)">
 
     {# Hidden input(s) for form submission. For Many2many the parent
@@ -90,6 +91,7 @@
                 multi: !!cfg.multi,
                 readonly: !!cfg.readonly,
                 accept: cfg.accept || '',
+                _picking: false,
                 selected: (cfg.initial || []).slice(),
 
                 hiddenValue() {
@@ -99,6 +101,7 @@
                 },
 
                 openPicker() {
+                    if (this._picking) return;
                     const params = new URLSearchParams({
                         multi: this.multi ? '1' : '0',
                     });
@@ -108,18 +111,43 @@
                         window.location.href = url;
                         return;
                     }
+                    const ownerId = 'pvfp-' + Date.now().toString(36);
+                    this.$el.dataset.pvPickerOwner = ownerId;
+                    this._picking = true;
                     window.PvDialog.open({
                         url,
                         title: this.multi ? 'Pick files' : 'Pick a file',
                         onResult: (result) => {
+                            this._picking = false;
                             if (!result) return;
-                            if (this.multi && Array.isArray(result)) {
-                                for (const r of result) this.addRow(r);
-                            } else {
-                                this.addRow(result);
-                            }
+                            this._applyResultLive(result, ownerId);
                         },
                     });
+                },
+
+                _applyResultLive(result, ownerId) {
+                    const apply = (data) => {
+                        if (!data) return false;
+                        if (data.multi && Array.isArray(result)) {
+                            for (const r of result) data.addRow(r);
+                        } else {
+                            data.addRow(result);
+                        }
+                        return true;
+                    };
+                    if (this.$el && this.$el.isConnected && apply(this)) return;
+                    const find = () => {
+                        const el = document.querySelector('[data-pv-picker-owner="' + ownerId + '"]');
+                        if (!el || !window.Alpine) return false;
+                        try { return apply(window.Alpine.$data(el)); } catch (_) { return false; }
+                    };
+                    if (find()) return;
+                    let tries = 0;
+                    const tick = () => {
+                        if (find() || ++tries > 24) return;
+                        requestAnimationFrame(tick);
+                    };
+                    requestAnimationFrame(tick);
                 },
 
                 addRow(row) {

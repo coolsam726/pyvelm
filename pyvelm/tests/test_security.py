@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from unittest.mock import MagicMock
 
 from pyvelm import BUILTIN_MODULE_ROOTS
 from pyvelm.security import _perm_dict, grant_model_access
@@ -53,6 +54,64 @@ class PermSpecTests(unittest.TestCase):
         perms = _perm_dict("read")
         self.assertTrue(perms["read"])
         self.assertFalse(perms["create"])
+
+
+class RecordFormAccessTests(unittest.TestCase):
+    def test_denies_without_model_write(self):
+        from pyvelm.security import check_record_form_write, record_form_access
+
+        env = MagicMock()
+        env.access_flags.return_value = {
+            "read": True,
+            "write": False,
+            "create": False,
+            "unlink": False,
+        }
+        rec = MagicMock(_name="demo.item", _ids=(1,), id=1)
+        access = record_form_access(env, rec)
+        self.assertFalse(access["can_write"])
+        self.assertIn("permission", access["readonly_reason"].lower())
+        with self.assertRaises(PermissionError):
+            check_record_form_write(env, rec)
+
+    def test_denies_when_policy_blocks_write(self):
+        from pyvelm.security import record_form_access
+
+        env = MagicMock()
+        env.access_flags.return_value = {
+            "read": True,
+            "write": True,
+            "create": True,
+            "unlink": False,
+        }
+        env.can.return_value = False
+        env.collect_record_rules.return_value = []
+        rec = MagicMock(_name="demo.item", _ids=(1,), id=1)
+        access = record_form_access(env, rec)
+        self.assertFalse(access["can_write"])
+        self.assertIn("not allowed", access["readonly_reason"].lower())
+
+    def test_denies_when_write_rules_exclude_record(self):
+        from pyvelm.security import record_form_access
+
+        env = MagicMock()
+        env.access_flags.return_value = {
+            "read": True,
+            "write": True,
+            "create": True,
+            "unlink": False,
+        }
+        env.can.return_value = True
+        env.collect_record_rules.return_value = [("active", "=", True)]
+        Model = MagicMock()
+        found = MagicMock()
+        found.exists.return_value = False
+        Model.search.return_value = found
+        env.__getitem__ = MagicMock(return_value=Model)
+        rec = MagicMock(_name="demo.item", _ids=(1,), id=1)
+        access = record_form_access(env, rec)
+        self.assertFalse(access["can_write"])
+        self.assertIn("read-only", access["readonly_reason"].lower())
 
 
 class HasAccessTests(unittest.TestCase):

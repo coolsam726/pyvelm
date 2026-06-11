@@ -2,7 +2,9 @@
    by the 'Design layout' button. Plain side-by-side: controls left, live HTML
    preview right (no iframe). HTMX executes the script on swap; the IIFE keeps
    re-opening the dialog from clashing. #}
-<div class="pv-ld" style="display:flex; min-height:62vh; max-height:78vh; width:100%;">
+<div class="pv-ld" style="display:flex; min-height:62vh; max-height:78vh; width:100%;"
+     data-pv-company-id="{{ company_id }}"
+     data-pv-csrf="{{ csrf_token }}">
   <style>
     /* Widen the (otherwise 720px) PvDialog card only when it hosts the designer. */
     .pv-fdialog-card:has(.pv-ld) { width: min(96vw, 1120px) !important; max-width: 1120px !important; }
@@ -70,20 +72,19 @@
 </div>
 
 <script>
-(function () {
-  const CID = {{ company_id }};
-  const CSRF = {{ csrf_token | tojson }};
-  const root = document.querySelector('.pv-ld');
+window.pvInitLayoutDesigner = function (root) {
+  root = root || document.querySelector('.pv-ld');
   if (!root) return;
-  const $ = (id) => document.getElementById(id);
+  const CID = parseInt(root.dataset.pvCompanyId || '0', 10);
+  const CSRF = root.dataset.pvCsrf || '';
+  const $ = (id) => root.querySelector('#' + id);
   const preview = $('pvld-preview');
-  // PvDialog defaults "Open full page" to the fragment URL — point at the shell page.
+  if (!preview) return;
   const card = root.closest('.pv-fdialog-card');
   if (card) {
     const fullLink = card.querySelector('.pv-fdialog-title a[href]');
     if (fullLink) fullLink.href = '/web/report/layout/designer?company_id=' + CID;
   }
-  // Logo comes from the embedded file_url picker widget's URL input.
   const logoInput = root.querySelector('.pv-file-url input[type=url]');
   const logoVal = () => (logoInput ? logoInput.value : '');
   let timer = null;
@@ -114,10 +115,12 @@
   syncColor('pvld-color', 'pvld-color-hex');
   syncColor('pvld-secondary', 'pvld-secondary-hex');
   ['pvld-layout', 'pvld-paper', 'pvld-font']
-    .forEach(id => $(id).addEventListener('input', debounced));
+    .forEach(id => { const el = $(id); if (el) el.addEventListener('input', debounced); });
 
-  $('pvld-save').addEventListener('click', () => {
-    $('pvld-status').textContent = '';
+  const saveBtn = $('pvld-save');
+  if (saveBtn) saveBtn.addEventListener('click', () => {
+    const status = $('pvld-status');
+    if (status) status.textContent = '';
     fetch('/report/layout/designer/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
@@ -131,8 +134,10 @@
         logo_url: logoVal(),
       }),
     }).then(r => r.ok ? r.json() : Promise.reject(r))
-      .then(() => { $('pvld-status').textContent = 'Saved ✓'; })
-      .catch(() => { const s = $('pvld-status'); s.textContent = 'Save failed'; s.style.color = '#dc2626'; });
+      .then(() => { if (status) status.textContent = 'Saved ✓'; })
+      .catch(() => { if (status) { status.textContent = 'Save failed'; status.style.color = '#dc2626'; } });
   });
-})();
+  refresh();
+};
+window.pvInitLayoutDesigner();
 </script>
