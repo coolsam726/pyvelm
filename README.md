@@ -18,7 +18,7 @@ recordsets and modules in the Odoo tradition, developer and admin patterns borro
 from Laravel and Filament, and a bespoke **Tailwind v4 + HTMX** interface—its own
 layout, widgets, and look & feel—not Odoo's web client or Filament's Blade stack.
 
-**Latest: [v1.4.2](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#142--2026-06-11)** —
+**Latest: [v1.4.3](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#143--2026-06-11)** —
 bundled **contacts** module with `res.partner` list/form views. See the
 [docs](https://coolsam726.github.io/pyvelm/) (version picker for older releases).
 
@@ -30,7 +30,7 @@ and CLI stay `pyvelm` (lowercase).
 ## Install
 
 ```bash
-pip install pyvelm==1.4.2
+pip install pyvelm==1.4.3
 ```
 
 Greenfield app:

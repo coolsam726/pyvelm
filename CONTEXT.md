@@ -1,6 +1,8 @@
-# Project context — pyvelm v1.4.2
+# Project context — pyvelm v1.4.3
 
 Building an Odoo-style ERP framework in Python.
+
+**v1.4.3 (released 2026-06-11)** — POST action 405 fix, view callable persistence, DATA relative imports See [docs/releases/v1.4.3.md](docs/releases/v1.4.3.md).
 
 **v1.4.2 (released 2026-06-11)** — Odoo 19 document layouts See [docs/releases/v1.4.2.md](docs/releases/v1.4.2.md).
 

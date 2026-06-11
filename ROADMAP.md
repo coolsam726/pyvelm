@@ -14,7 +14,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 
 | | |
 |---|---|
-| **Stable** | **v1.4.2** (2026-06-11) |
+| **Stable** | **v1.4.3** (2026-06-11) |
 | **Stack** | FastAPI + HTMX + Tailwind v4 + SQLAlchemy Core |
 | **Bundled modules** | `base`, `admin`, `contacts`, `console`, `workflow`, `reports`, `mail_compose`, `file_manager`, `technical`, `geo_data`, `document_layout` |
 | **Reference port** | velmphp **v1.0.1** + unreleased **v1.1.0** admin polish |

@@ -7,6 +7,18 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.4.3] — 2026-06-11
+
+### Fixed
+
+- **POST toolbar actions** — header, page, and row actions with ``method: POST``
+  (e.g. cron **Run Now**) no longer render as ``<a href>`` GET links that returned
+  **405 Method Not Allowed**.
+- **View schema callables** — field ``default`` / visibility callables in view arch
+  survive module sync via ``module:qualname`` JSON refs restored in ``resolve_arch``.
+- **Manifest DATA imports** — ``DATA`` ``.py`` files load under their real package
+  path so relative imports (e.g. ``from ..helpers import …``) work on sync.
+
 ## [1.4.2] — 2026-06-11
 
 ### Added
