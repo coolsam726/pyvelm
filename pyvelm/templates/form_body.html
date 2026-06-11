@@ -74,7 +74,7 @@ or (chatter_context and chatter_context.enabled)
                     {% for act in header_actions or [] %}
                     {% if act.kind == 'inline_form' %}
                     {% include "_view_action_button.html" %}
-                    {% elif act.full_page or (act.method == 'GET' and not act.url.startswith(base)) %}
+                    {% elif act.method == 'GET' and (act.full_page or not act.url.startswith(base)) %}
                     <a href="{{ act.url }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
                       border border-default text-body rounded-md hover:bg-neutral-secondary transition">
                         {{ act.label }}
@@ -98,7 +98,7 @@ or (chatter_context and chatter_context.enabled)
                     {% for act in header_actions or [] %}
                     {% if act.kind == 'inline_form' %}
                     {% include "_view_action_button.html" %}
-                    {% elif act.full_page or (act.method == 'GET' and not act.url.startswith(base)) %}
+                    {% elif act.method == 'GET' and (act.full_page or not act.url.startswith(base)) %}
                     <a href="{{ act.url }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
                       border border-default text-body rounded-md hover:bg-neutral-secondary transition">
                         {{ act.label }}

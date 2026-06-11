@@ -14,7 +14,7 @@
         })">
     {{ act.label }}
 </button>
-{% elif act.full_page or (act.method == 'GET' and act.url and not act.url.startswith('/web/views/' ~ view.module ~ '/' ~ view.name)) %}
+{% elif act.method == 'GET' and act.url and (act.full_page or not act.url.startswith('/web/views/' ~ view.module ~ '/' ~ view.name)) %}
 <a href="{{ act.url }}"
    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
           border border-default text-body rounded-md hover:bg-neutral-secondary transition">
