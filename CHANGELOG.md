@@ -7,6 +7,13 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.4.1] — 2026-06-10
+
+### Fixed
+
+- **PyPI release workflow** — ``skip-existing: true`` on the publish step so a
+  re-run or duplicate tag push does not fail when the wheel is already on PyPI.
+
 ## [1.4.0] — 2026-06-09
 
 ### Added

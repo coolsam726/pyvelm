@@ -8,12 +8,12 @@ dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
 bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on a
 portable **SQLAlchemy Core** database layer (PostgreSQL or SQLite), FastAPI, and Jinja2.
 
-**Latest release:** [v1.4.0](releases/v1.4.0.md) — see [CHANGELOG](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#140--2026-06-09).
+**Latest release:** [v1.4.1](releases/v1.4.1.md) — see [CHANGELOG](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#141--2026-06-10).
 [Unreleased](releases/unreleased.md) for work on `main` after the tag. Use the
 header picker for older doc versions ([versioning](versioning.md)).
 
 ```bash
-pip install pyvelm==1.4.0
+pip install pyvelm==1.4.1
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
@@ -59,7 +59,7 @@ python examples/basic.py
 
 | Version | Highlights |
 |---------|------------|
-| [Unreleased](releases/unreleased.md) | *(none yet after v1.4.0)* |
+| [Unreleased](releases/unreleased.md) | *(none yet after v1.4.1)* |
 | [v1.3.2](releases/v1.3.2.md) | **Bundled `contacts`** module — `res.partner` list/form + menu |
 | [v1.3.1](releases/v1.3.1.md) | **IDE model autocomplete** (scoped stubs); **dev-server stub refresh**; **bump_version.sh** |
 | [v1.3.0](releases/v1.3.0.md) | **List bulk actions**; **DetailView** + **row_actions**; **IDE field-builder stubs** |
