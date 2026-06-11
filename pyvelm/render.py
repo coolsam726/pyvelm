@@ -31,7 +31,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import jinja2
 from markupsafe import Markup, escape
 
-from .security import template_access
+from .security import record_form_access, template_access
 from .fields import (
     Boolean,
     Char,
@@ -3431,7 +3431,8 @@ def render_form_page(
         )
         if is_detail:
             form_name = arch.get("form_view") or _find_form_view(view, env)
-            if form_name and env.has_access(view.model, "write"):
+            rec_access = record_form_access(env, record_or_none, view=view)
+            if form_name and rec_access["can_write"]:
                 nav = encode_view_nav_query(
                     list_module,
                     list_name,
@@ -3518,9 +3519,76 @@ def render_form_page(
             page_size=page_size,
             bc_stack=bc_stack,
         ),
-        access=template_access(env, view.model),
+        access=_form_template_access(env, view.model, record_or_none, view=view),
+        record_access=(
+            record_form_access(env, record_or_none, view=view)
+            if record_or_none is not None and record_or_none._ids
+            else None
+        ),
         **ctx,
     )
+
+
+def _form_template_access(env, model: str, record_or_none, *, view=None) -> dict:
+    """Model ACL merged with per-record write access when a record is loaded."""
+    access = template_access(env, model)
+    if record_or_none is not None and getattr(record_or_none, "_ids", None):
+        rec_access = record_form_access(env, record_or_none, view=view)
+        access = dict(access)
+        access["can_write"] = rec_access["can_write"]
+    return access
+
+
+def _default_list_io_actions(
+    view,
+    env,
+    *,
+    list_nav_query: str = "",
+) -> list[dict]:
+    """Built-in Import / Export toolbar actions for every list view."""
+    qs = f"?{list_nav_query}" if list_nav_query else ""
+    actions: list[dict] = []
+    if env.has_access(view.model, "create"):
+        actions.append({
+            "label": "Import",
+            "dialog_title": "Import a File",
+            "url": f"/web/views/{view.module}/{view.name}/import",
+            "method": "GET",
+            "kind": "dialog",
+            "action_key": "import",
+        })
+    if env.has_access(view.model, "read"):
+        actions.append({
+            "label": "Export CSV",
+            "url": f"/web/views/{view.module}/{view.name}/export.csv{qs}",
+            "method": "GET",
+            "kind": "get",
+            "action_key": "export-csv",
+            "full_page": True,
+        })
+        actions.append({
+            "label": "Export Excel",
+            "url": f"/web/views/{view.module}/{view.name}/export.xlsx{qs}",
+            "method": "GET",
+            "kind": "get",
+            "action_key": "export-xlsx",
+            "full_page": True,
+        })
+    return actions
+
+
+def _merge_list_page_actions(declared: list[dict], defaults: list[dict]) -> list[dict]:
+    """Append built-in IO actions unless the view already declares them."""
+    labels = {(a.get("label") or "").lower() for a in declared or []}
+    keys = {(a.get("action_key") or "").lower() for a in declared or []}
+    out = list(declared or [])
+    for act in defaults:
+        label = (act.get("label") or "").lower()
+        key = (act.get("action_key") or "").lower()
+        if label in labels or key in keys:
+            continue
+        out.append(act)
+    return out
 
 
 def render_chatter_panel(
@@ -5152,16 +5220,6 @@ def render_list_page(
     access = template_access(env, view.model)
     bulk_actions = _resolve_bulk_actions(arch, env, model=view.model)
     bulk_enabled = bool(bulk_actions) and not arch.get("sequence")
-    page_actions = _resolve_header_actions(
-        arch.get("page_actions", []),
-        env,
-        model=view.model,
-        module=view.module,
-        name=view.name,
-        record_id=0,
-        record=None,
-        slot="page",
-    )
 
     model_cls = env.registry[view.model]
     Model = env[view.model]
@@ -5229,6 +5287,21 @@ def render_list_page(
         page_size=page_size,
         bc_stack=bc_stack,
     )
+    page_actions = _merge_list_page_actions(
+        _resolve_header_actions(
+            arch.get("page_actions", []),
+            env,
+            model=view.model,
+            module=view.module,
+            name=view.name,
+            record_id=0,
+            record=None,
+            slot="page",
+        ),
+        _default_list_io_actions(view, env, list_nav_query=list_nav_query)
+        if arch.get("import_export", True)
+        else [],
+    )
     template = _env.get_template("list.html")
     return template.render(
         view=view,
@@ -5271,6 +5344,50 @@ def render_list_page(
         bc_param=format_bc_param(bc_stack or []),
         access=access,
         **layout_context(env, current_path, leaf_label=page_title),
+    )
+
+
+def render_list_import_page(
+    view,
+    env,
+    *,
+    step: str = "upload",
+    fields: list[dict] | None = None,
+    headers: list[str] | None = None,
+    rows: list[list] | None = None,
+    mapping: dict[int, str] | None = None,
+    payload: str = "",
+    result: dict | None = None,
+    error: str | None = None,
+    update_by_id: bool = False,
+    filename: str = "",
+    test_message: str | None = None,
+) -> str:
+    """Import wizard fragment for PvDialog (upload → preview → result)."""
+    from .importer import list_importable_fields
+
+    importable = fields or list_importable_fields(env, view.model)
+    template = _env.get_template("list_import.html")
+    preview_rows = (rows or [])[:5]
+    return template.render(
+        view=view,
+        step=step,
+        fields=importable,
+        headers=headers or [],
+        rows=rows or [],
+        preview_rows=preview_rows,
+        mapping=mapping or {},
+        payload=payload,
+        result=result,
+        error=error,
+        update_by_id=update_by_id,
+        filename=filename,
+        total_rows=len(rows or []),
+        test_message=test_message,
+        template_url=(
+            f"/web/views/{view.module}/{view.name}/import?download=template"
+        ),
+        template_filename=f"{view.name}_import_template.xlsx",
     )
 
 

@@ -648,13 +648,23 @@
             }, SHOW_DELAY_MS);
         }
 
+        window.pvIsDialogHtmxRequest = function (detail) {
+            const req = detail && (detail.requestConfig || detail);
+            const headers = (req && req.headers) || {};
+            return headers['X-PV-Dialog'] === '1';
+        };
+
         document.body.addEventListener('htmx:beforeRequest', e => {
+            // PvDialog body loads swap [data-pv-form-shell]; overlaying the
+            // global swap blocker leaves a stuck "Loading…" on the dialog.
+            if (window.pvIsDialogHtmxRequest(e.detail)) return;
             requestBlocker(e.detail);
         });
         document.body.addEventListener('htmx:afterRequest', hideBlocker);
         document.body.addEventListener('htmx:sendError', hideBlocker);
         document.body.addEventListener('htmx:timeout', hideBlocker);
         document.body.addEventListener('htmx:responseError', hideBlocker);
+        document.body.addEventListener('htmx:sendAbort', hideBlocker);
 
         function repositionIfVisible() {
             if (depth > 0 && activeTarget) positionBlocker(activeTarget);
@@ -878,6 +888,7 @@
             _dragOffset: null,            // mousedown offset within title bar
             _resolve: null,               // onResult callback from opener
             _stack: [],                   // suspended parent dialogs (nested create)
+            _contentBusy: false,          // guard concurrent HTMX body loads
             _moveHandler: null,
             _upHandler: null,
 
@@ -921,10 +932,20 @@
                     e.stopPropagation();
                     e.stopImmediatePropagation();
                     const refresh = trigger.hasAttribute('data-pv-dialog-refresh');
+                    const reloadList = trigger.hasAttribute('data-pv-list-reload');
+                    const reloadRecord = trigger.hasAttribute('data-pv-reload-record');
                     this.openWith({
                         url,
                         title: trigger.dataset.pvDialogTitle || 'Edit',
                         onResult: (result) => {
+                            if (reloadList) {
+                                window.dispatchEvent(
+                                    new CustomEvent('pv-list-reload'));
+                            }
+                            if (reloadRecord
+                                && window.location.pathname.indexOf('/record/') !== -1) {
+                                window.location.reload();
+                            }
                             if (refresh && result && result.id) {
                                 const shells = document.querySelectorAll(
                                     '[data-pv-form-shell]');
@@ -939,6 +960,19 @@
                         },
                     });
                 }, true);
+                // Re-wire hx-* after wizard step swaps (upload → preview → result).
+                document.body.addEventListener('htmx:afterSwap', (ev) => {
+                    if (!this.open || this.mode !== 'content') return;
+                    const content = this.$refs.content;
+                    if (!content) return;
+                    const target = ev.detail.target;
+                    if (target !== content && !content.contains(target)) return;
+                    const req = ev.detail.requestConfig || {};
+                    const verb = ((req.verb || req.method || 'get') + '').toUpperCase();
+                    // openWith() already inits the initial GET body load.
+                    if (verb === 'GET' && window.pvIsDialogHtmxRequest(ev.detail)) return;
+                    this._reinitDialogContent(content);
+                });
             },
 
             get cardStyle() {
@@ -952,6 +986,11 @@
 
             _pushFrame() {
                 const content = this.$refs.content;
+                const html = (content && content.innerHTML) ? content.innerHTML.trim() : '';
+                // Skip empty snapshots — e.g. a second open fired while HTMX
+                // had already cleared the body but before the next fragment
+                // arrived. Restoring those leaves a blank, stuck dialog.
+                if (!html) return;
                 this._stack.push({
                     mode: this.mode,
                     title: this.title,
@@ -962,8 +1001,37 @@
                     recordUrl: this.recordUrl,
                     closeOnBackdrop: this.closeOnBackdrop,
                     _resolve: this._resolve,
-                    contentHtml: content ? content.innerHTML : '',
+                    contentHtml: html,
                 });
+            },
+
+            _resolveRecordUrl(url, explicit) {
+                if (explicit !== undefined && explicit !== null) return explicit;
+                if (!url) return null;
+                try {
+                    const u = new URL(url, window.location.origin);
+                    const p = u.pathname;
+                    const qs = u.search || '';
+                    // Dialog fragments — link to the real full-page shell.
+                    if (p === '/web/files/picker') {
+                        return '/web/files/library' + qs;
+                    }
+                    if (p === '/report/layout/designer') {
+                        return '/web/report/layout/designer' + qs;
+                    }
+                    if (p.includes('/import') || p.startsWith('/web/view-actions/')) {
+                        return null;
+                    }
+                    return url;
+                } catch (_) {
+                    return url;
+                }
+            },
+
+            _alpineInitTree(root) {
+                if (typeof window.pvAlpineInitFragment === 'function') {
+                    window.pvAlpineInitFragment(root);
+                }
             },
 
             _reinitDialogContent(root) {
@@ -971,13 +1039,15 @@
                 if (window.htmx && typeof window.htmx.process === 'function') {
                     window.htmx.process(root);
                 }
-                if (window.Alpine && typeof window.Alpine.initTree === 'function') {
-                    window.Alpine.initTree(root);
-                }
+                this._alpineInitTree(root);
                 if (typeof pvInitPickers === 'function') pvInitPickers();
                 if (typeof pvInitO2mGrids === 'function') pvInitO2mGrids(root);
                 if (typeof window.pvRefreshO2mEditToggles === 'function') {
                     window.pvRefreshO2mEditToggles(root);
+                }
+                const ld = root.querySelector('.pv-ld');
+                if (ld && typeof window.pvInitLayoutDesigner === 'function') {
+                    window.pvInitLayoutDesigner(ld);
                 }
             },
 
@@ -1001,14 +1071,17 @@
                 this.$nextTick(() => {
                     const content = this.$refs.content;
                     if (content) {
-                        content.innerHTML = parent.contentHtml;
+                        content.innerHTML = parent.contentHtml || '';
                         this._reinitDialogContent(content);
                     }
                     this.center();
+                    // Run the child onResult only after the parent body is
+                    // back in the DOM — otherwise Alpine closures from the
+                    // opener (file picker fields) point at detached nodes.
+                    if (cb) {
+                        try { cb(result ?? null); } catch (_) {}
+                    }
                 });
-                if (cb) {
-                    try { cb(result || null); } catch (_) {}
-                }
                 return true;
             },
 
@@ -1049,13 +1122,14 @@
             },
 
             async openWith(cfg) {
+                if (this._contentBusy) return;
                 if (this.open && this.mode === 'content') {
                     this._pushFrame();
                 }
                 this.mode = 'content';
                 this.message = '';
                 this.title = cfg.title || '';
-                this.recordUrl = cfg.url || cfg.recordUrl || null;
+                this.recordUrl = this._resolveRecordUrl(cfg.url, cfg.recordUrl);
                 this.closeOnBackdrop = !!cfg.closeOnBackdrop;
                 this._resolve = cfg.onResult || null;
                 this._x = null;
@@ -1063,13 +1137,12 @@
                 this.open = true;
                 await this.$nextTick();
                 const contentEl = this.$refs.content;
+                this._contentBusy = true;
                 try {
                     if (cfg.url && window.htmx) {
                         // `htmx.ajax` processes the swapped DOM so
                         // hx-* attributes inside the loaded body
-                        // (Save button etc.) are wired up. Alpine's
-                        // MutationObserver picks up the x-data
-                        // widgets automatically.
+                        // (Save button etc.) are wired up.
                         await window.htmx.ajax('GET', cfg.url, {
                             target: contentEl,
                             swap: 'innerHTML',
@@ -1078,8 +1151,11 @@
                                 'X-PV-Dialog': '1',
                             },
                         });
+                        await this.$nextTick();
+                        this._reinitDialogContent(contentEl);
                     }
                 } finally {
+                    this._contentBusy = false;
                     await this.$nextTick();
                     this.center();
                 }
@@ -1264,20 +1340,59 @@
                     form.appendChild(inp);
                 });
         }
+        // Init only leaf `x-data` roots inside a swapped fragment. Calling
+        // initTree on a large container twice stacks duplicate x-for rows
+        // (file-picker folders appearing 2×). Skip roots already mounted.
+        window.pvAlpineInitFragment = function (container) {
+            if (!container || !window.Alpine) return;
+            const roots = [];
+            const collect = (el) => {
+                if (!el || !el.children) return;
+                for (const child of el.children) {
+                    if (child.hasAttribute && child.hasAttribute('x-data')) {
+                        roots.push(child);
+                    } else {
+                        collect(child);
+                    }
+                }
+            };
+            if (container.hasAttribute && container.hasAttribute('x-data')) {
+                roots.push(container);
+            } else {
+                collect(container);
+            }
+            roots.forEach((el) => {
+                if (el._x_dataStack && el._x_dataStack.length) return;
+                if (typeof window.Alpine.destroyTree === 'function') {
+                    window.Alpine.destroyTree(el);
+                }
+                if (typeof window.Alpine.initTree === 'function') {
+                    window.Alpine.initTree(el);
+                }
+            });
+        };
+
         document.addEventListener('DOMContentLoaded', () => pvInjectCsrfFields());
         document.body.addEventListener('htmx:afterSwap', e => {
             pvInjectCsrfFields(e.detail.elt || e.detail.target);
-            // Re-init Alpine on swapped fragments. Prefer `elt` (new DOM); for
-            // innerHTML swaps also walk `#pv-chatter-root` when the shell kept
-            // its outer x-data wrapper.
-            const elt = e.detail.elt || e.detail.target;
-            if (elt && window.Alpine && typeof window.Alpine.initTree === 'function') {
-                window.Alpine.initTree(elt);
+            const target = e.detail.target;
+            const elt = e.detail.elt || target;
+            const req = e.detail.requestConfig || {};
+            const headers = req.headers || {};
+            // PvDialog.openWith (GET) loads the body via htmx.ajax and
+            // inits Alpine itself — skip the global pass to avoid double
+            // mount. POST saves inside the dialog still need re-init.
+            const verb = ((req.verb || req.method || 'get') + '').toUpperCase();
+            if (headers['X-PV-Dialog'] === '1'
+                && verb === 'GET'
+                && target && target.matches
+                && target.matches('[data-pv-form-shell]')) {
+                return;
             }
+            if (elt) window.pvAlpineInitFragment(elt);
             const chatter = document.getElementById('pv-chatter-root');
-            if (chatter && chatter !== elt && window.Alpine
-                && typeof window.Alpine.initTree === 'function') {
-                window.Alpine.initTree(chatter);
+            if (chatter && chatter !== elt) {
+                window.pvAlpineInitFragment(chatter);
             }
         });
 

@@ -1,4 +1,13 @@
-{% if act.kind == 'inline_form' and act.form_url %}
+{% if act.kind == 'dialog' and act.url %}
+<button type="button"
+        data-pv-dialog
+        data-pv-dialog-url="{{ act.url }}"
+        data-pv-dialog-title="{{ act.dialog_title or act.label }}"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+               border border-default text-body rounded-md hover:bg-neutral-secondary transition">
+    {{ act.label }}
+</button>
+{% elif act.kind == 'inline_form' and act.form_url %}
 <button type="button"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
                border border-default text-body rounded-md hover:bg-neutral-secondary transition"

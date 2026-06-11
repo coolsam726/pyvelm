@@ -44,6 +44,16 @@
             </svg>`;
     };
 
+    const _dedupeRowsById = (rows) => {
+        const seen = new Set();
+        return (rows || []).filter((r) => {
+            const id = r && r.id;
+            if (id == null || seen.has(id)) return false;
+            seen.add(id);
+            return true;
+        });
+    };
+
     const pickerFactory = (cfg) => ({
         accept: cfg.accept || '',
         query: cfg.q || '',
@@ -54,24 +64,27 @@
         // navigation, which is a client-side re-fetch — not a swap).
         folderId: (cfg.browse && cfg.browse.folder_id) || null,
         breadcrumb: (cfg.browse && cfg.browse.breadcrumb) || [],
-        folders: (cfg.browse && cfg.browse.folders) || [],
-        rows: (cfg.browse && cfg.browse.rows) || [],
+        folders: _dedupeRowsById((cfg.browse && cfg.browse.folders) || []),
+        rows: _dedupeRowsById((cfg.browse && cfg.browse.rows) || []),
         searching: !!(cfg.browse && cfg.browse.searching),
         selected: [],
         uploading: false,
         loading: false,
+        closing: false,
         error: '',
 
         isSelected(id) {
             return this.selected.some((r) => r.id === id);
         },
         onTileClick(row) {
+            if (this.closing) return;
             if (this.multi) {
                 const idx = this.selected.findIndex((r) => r.id === row.id);
                 if (idx >= 0) this.selected.splice(idx, 1);
                 else this.selected.push(row);
                 return;
             }
+            this.closing = true;
             window.PvDialog && window.PvDialog.close(row);
         },
         confirmMulti() {
@@ -94,8 +107,8 @@
                 const data = await r.json();
                 this.folderId = data.folder_id || null;
                 this.breadcrumb = data.breadcrumb || [];
-                this.folders = data.folders || [];
-                this.rows = data.rows || [];
+                this.folders = _dedupeRowsById(data.folders || []);
+                this.rows = _dedupeRowsById(data.rows || []);
                 this.searching = !!data.searching;
             } catch (err) {
                 this.error = 'Could not load folder: ' + (err.message || err);
@@ -151,7 +164,10 @@
                         : '';
                     this.rows.unshift(row);
                     if (!this.multi) {
-                        window.PvDialog && window.PvDialog.close(row);
+                        if (!this.closing) {
+                            this.closing = true;
+                            window.PvDialog && window.PvDialog.close(row);
+                        }
                         return;
                     }
                     this.selected.push(row);

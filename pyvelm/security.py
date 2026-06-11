@@ -12,7 +12,7 @@ Use :func:`grant_model_access` in ``hooks.py`` instead of hand-rolling
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pyvelm.env import Environment
@@ -192,3 +192,41 @@ def template_access(env: Environment, model: str) -> dict[str, bool]:
         "can_create": flags["create"],
         "can_unlink": flags["unlink"],
     }
+
+
+def record_form_access(env: Environment, record, *, view=None) -> dict[str, Any]:
+    """Per-record form editability: ACL, policy, and write record rules."""
+    model = getattr(record, "_name", None) or str(record)
+    flags = env.access_flags(model)
+    can_read = flags["read"]
+    can_write = flags["write"]
+    readonly_reason: str | None = None
+
+    if not can_write:
+        readonly_reason = f"You do not have permission to edit {model} records."
+    elif not env.can(record, "write", perm="write"):
+        can_write = False
+        readonly_reason = "You are not allowed to edit this record."
+    else:
+        rule_leaves = env.collect_record_rules(model, "write")
+        if rule_leaves and getattr(record, "_ids", None):
+            Model = env[model]
+            domain = [("id", "=", record.id)] + list(rule_leaves)
+            found = Model.search(domain, limit=1)
+            if not found or not found.exists():
+                can_write = False
+                readonly_reason = "This record is read-only."
+
+    return {
+        "can_read": can_read,
+        "can_write": can_write,
+        "readonly_reason": readonly_reason,
+    }
+
+
+def check_record_form_write(env: Environment, record, *, view=None) -> None:
+    """Raise PermissionError when the record cannot be edited."""
+    access = record_form_access(env, record, view=view)
+    if not access["can_write"]:
+        msg = access["readonly_reason"] or "You cannot edit this record."
+        raise PermissionError(msg)

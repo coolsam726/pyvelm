@@ -15,6 +15,7 @@
 #}
 <div class="pv-file-url"
      data-pv-cfg="{{ ({'name': name, 'value': value, 'accept': accept, 'readonly': readonly}) | tojson | forceescape }}"
+     data-pv-field-name="{{ name }}"
      x-data="pvFileUrl(JSON.parse($el.dataset.pvCfg))">
 
     <input type="hidden" :name="name" :value="value">
@@ -85,9 +86,11 @@
         accept: cfg.accept || 'image/*',
         readonly: !!cfg.readonly,
         busy: false,
+        _picking: false,
         error: '',
 
         pick() {
+            if (this.busy || this._picking) return;
             this.error = '';
             const params = new URLSearchParams({ multi: '0' });
             if (this.accept) params.set('accept', this.accept);
@@ -96,14 +99,41 @@
                 window.location.href = url;
                 return;
             }
+            const ownerId = 'pvfu-' + Date.now().toString(36);
+            this.$el.dataset.pvPickerOwner = ownerId;
+            this._picking = true;
             window.PvDialog.open({
                 url,
                 title: 'Pick an image',
                 onResult: (row) => {
+                    this._picking = false;
                     if (!row || !row.id) return;
-                    this.applyPick(row);
+                    this._applyPickLive(row, ownerId);
                 },
             });
+        },
+
+        _applyPickLive(row, ownerId) {
+            const apply = (data) => {
+                if (data && typeof data.applyPick === 'function') {
+                    data.applyPick(row);
+                    return true;
+                }
+                return false;
+            };
+            if (this.$el && this.$el.isConnected && apply(this)) return;
+            const find = () => {
+                const el = document.querySelector('[data-pv-picker-owner="' + ownerId + '"]');
+                if (!el || !window.Alpine) return false;
+                try { return apply(window.Alpine.$data(el)); } catch (_) { return false; }
+            };
+            if (find()) return;
+            let tries = 0;
+            const tick = () => {
+                if (find() || ++tries > 24) return;
+                requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
         },
 
         async applyPick(row) {

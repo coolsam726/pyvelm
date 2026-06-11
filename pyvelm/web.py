@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 import time
 from typing import Any
@@ -1063,6 +1064,8 @@ def create_app(
         from .render import render_new_row
 
         view = _load_view(env, module, name)
+        if not env.has_access(view.model, "create"):
+            raise PermissionError(f"You cannot create {view.model} records.")
         return HTMLResponse(render_new_row(view, env))
 
     @app.get(
@@ -1099,6 +1102,9 @@ def create_app(
 
         view = _load_view(env, module, name)
         rec = _load_record(env, view, record_id)
+        from .security import check_record_form_write
+
+        check_record_form_write(env, rec, view=view)
         return HTMLResponse(render_list_row(view, rec, env, mode="edit"))
 
     @app.post(
@@ -1117,6 +1123,9 @@ def create_app(
 
         view = _load_view(env, module, name)
         rec = _load_record(env, view, record_id)
+        from .security import check_record_form_write
+
+        check_record_form_write(env, rec, view=view)
         form = await request.form()
         cls = env.registry[view.model]
         vals, errors = parse_form_vals(cls, form, env)
@@ -1126,8 +1135,11 @@ def create_app(
             # the layout's pvAlert handler shows a toast and the edit
             # row stays open.
             return _row_validation_error(view, rec, env, errors)
-        with env.transaction():
-            rec.write(vals)
+        try:
+            with env.transaction():
+                rec.write(vals)
+        except PermissionError:
+            raise
         # Reread for any computed-field follow-on values.
         env.cache.invalidate(model_name=view.model, ids=[record_id])
         return HTMLResponse(render_list_row(view, rec, env, mode="display"))
@@ -1203,6 +1215,350 @@ def create_app(
                 headers={"HX-Redirect": f"/web/views/{module}/{name}"},
             )
         return RedirectResponse(f"/web/views/{module}/{name}", status_code=303)
+
+    def _require_list_view(env, module: str, name: str):
+        view = _load_view(env, module, name)
+        if view.view_type != "list":
+            raise HTTPException(status_code=400, detail="Not a list view")
+        return view
+
+    def _list_export_records(
+        env,
+        view,
+        *,
+        search: str = "",
+        order: str = "",
+        filters: str = "",
+    ):
+        from .render import _enrich_specs_for_edit, _list_page_domain
+        from .views import resolve_arch
+
+        arch = resolve_arch(view)
+        fields_spec = arch.get("fields", [])
+        model_cls = env.registry[view.model]
+        fields_spec = _enrich_specs_for_edit(env, model_cls, fields_spec)
+        domain = _list_page_domain(model_cls, arch, fields_spec, search, filters)
+        sequence_field = arch.get("sequence")
+        if sequence_field and sequence_field in model_cls._fields:
+            safe_ord = f'"{sequence_field}" ASC, "id" ASC'
+        else:
+            from .render import _safe_order
+
+            safe_ord = _safe_order(fields_spec, order)
+        return fields_spec, env[view.model].search(domain, order=safe_ord)
+
+    def _list_import_template_response(view, env: Environment) -> Response:
+        from .importer import (
+            import_template_fields_for_view,
+            import_template_headers,
+            import_template_xlsx_bytes,
+        )
+        from .render import _view_title
+        from .views import resolve_arch
+
+        fields = import_template_fields_for_view(env, view)
+        headers = import_template_headers(fields)
+        title = _view_title(view, resolve_arch(view))
+        body = import_template_xlsx_bytes(headers, title=title or view.name)
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "_", title or view.name).strip("_") or view.name
+        return Response(
+            content=body,
+            media_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe}_import_template.xlsx"',
+                "Cache-Control": "no-store",
+            },
+        )
+
+    @app.get("/web/views/{module}/{name}/import-template.xlsx")
+    def web_list_import_template(
+        module: str,
+        name: str,
+        request: Request,
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        view = _require_list_view(env, module, name)
+        if not env.has_access(view.model, "create"):
+            raise PermissionError(f"You cannot import {view.model} records.")
+        return _list_import_template_response(view, env)
+
+    @app.get("/web/views/{module}/{name}/import")
+    def web_list_import_form(
+        module: str,
+        name: str,
+        request: Request,
+        download: str = Query(default=""),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .render import render_list_import_page
+
+        view = _require_list_view(env, module, name)
+        if not env.has_access(view.model, "create"):
+            raise PermissionError(f"You cannot import {view.model} records.")
+        if download.lower() in ("template", "xlsx", "1"):
+            return _list_import_template_response(view, env)
+        return HTMLResponse(render_list_import_page(view, env, step="upload"))
+
+    @app.post("/web/views/{module}/{name}/import/preview", response_class=HTMLResponse)
+    async def web_list_import_preview(
+        module: str,
+        name: str,
+        request: Request,
+        file: UploadFile = File(...),
+        update_by_id: str = Form(default=""),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .importer import (
+            encode_import_payload,
+            list_importable_fields,
+            parse_tabular_upload,
+            suggest_column_mapping,
+        )
+        from .render import render_list_import_page
+
+        view = _require_list_view(env, module, name)
+        if not env.has_access(view.model, "create"):
+            raise PermissionError(f"You cannot import {view.model} records.")
+        content = await file.read()
+        try:
+            headers, rows = parse_tabular_upload(content, file.filename or "upload.csv")
+        except Exception as exc:  # noqa: BLE001
+            return HTMLResponse(
+                render_list_import_page(
+                    view, env, step="upload", error=str(exc),
+                ),
+                status_code=422,
+            )
+        if not headers:
+            return HTMLResponse(
+                render_list_import_page(
+                    view, env, step="upload", error="The file has no header row.",
+                ),
+                status_code=422,
+            )
+        fields = list_importable_fields(env, view.model)
+        mapping = suggest_column_mapping(headers, fields)
+        return HTMLResponse(
+            render_list_import_page(
+                view,
+                env,
+                step="preview",
+                fields=fields,
+                headers=headers,
+                rows=rows,
+                mapping=mapping,
+                payload=encode_import_payload(headers, rows),
+                update_by_id=bool(update_by_id),
+                filename=file.filename or "upload",
+            )
+        )
+
+    @app.post("/web/views/{module}/{name}/import/run", response_class=HTMLResponse)
+    async def web_list_import_run(
+        module: str,
+        name: str,
+        request: Request,
+        payload: str = Form(...),
+        update_by_id: str = Form(default=""),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .importer import (
+            decode_import_payload,
+            import_rows,
+            list_importable_fields,
+            mapping_from_form,
+        )
+        from .render import render_list_import_page
+
+        view = _require_list_view(env, module, name)
+        if not env.has_access(view.model, "create"):
+            raise PermissionError(f"You cannot import {view.model} records.")
+        form = await request.form()
+        try:
+            headers, rows = decode_import_payload(payload)
+        except (json.JSONDecodeError, TypeError, KeyError):
+            return HTMLResponse(
+                render_list_import_page(
+                    view, env, step="upload",
+                    error="Import session expired — upload the file again.",
+                ),
+                status_code=422,
+            )
+        fields = list_importable_fields(env, view.model)
+        mapping = mapping_from_form(form, headers, fields)
+        with env.transaction():
+            result = import_rows(
+                env,
+                view.model,
+                rows,
+                mapping,
+                update_by_id=bool(update_by_id),
+            )
+        return HTMLResponse(
+            render_list_import_page(
+                view, env, step="result", result=result,
+            )
+        )
+
+    @app.post("/web/views/{module}/{name}/import/test", response_class=HTMLResponse)
+    async def web_list_import_test(
+        module: str,
+        name: str,
+        request: Request,
+        payload: str = Form(...),
+        update_by_id: str = Form(default=""),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .importer import (
+            ImportTestAbort,
+            decode_import_payload,
+            import_rows,
+            list_importable_fields,
+            mapping_from_form,
+        )
+        from .render import render_list_import_page
+
+        view = _require_list_view(env, module, name)
+        if not env.has_access(view.model, "create"):
+            raise PermissionError(f"You cannot import {view.model} records.")
+        form = await request.form()
+        filename = str(form.get("filename") or "upload")
+        try:
+            headers, rows = decode_import_payload(payload)
+        except (json.JSONDecodeError, TypeError, KeyError):
+            return HTMLResponse(
+                render_list_import_page(
+                    view, env, step="upload",
+                    error="Import session expired — upload the file again.",
+                ),
+                status_code=422,
+            )
+        fields = list_importable_fields(env, view.model)
+        mapping = mapping_from_form(form, headers, fields)
+        try:
+            with env.transaction():
+                result = import_rows(
+                    env,
+                    view.model,
+                    rows,
+                    mapping,
+                    update_by_id=bool(update_by_id),
+                )
+                raise ImportTestAbort(result)
+        except ImportTestAbort as exc:
+            result = exc.args[0]
+        if result["errors"]:
+            msg = (
+                f"Test found {len(result['errors'])} error"
+                f"{'s' if len(result['errors']) != 1 else ''}. "
+                "Fix the file or mapping and test again."
+            )
+        else:
+            parts = []
+            if result["created"]:
+                parts.append(
+                    f"{result['created']} record"
+                    f"{'s' if result['created'] != 1 else ''} ready to create"
+                )
+            if result["updated"]:
+                parts.append(
+                    f"{result['updated']} record"
+                    f"{'s' if result['updated'] != 1 else ''} ready to update"
+                )
+            msg = (
+                "Everything seems valid. "
+                + (", ".join(parts) if parts else "No rows to import.")
+                + " Click Import to apply."
+            )
+        return HTMLResponse(
+            render_list_import_page(
+                view,
+                env,
+                step="preview",
+                fields=fields,
+                headers=headers,
+                rows=rows,
+                mapping=mapping,
+                payload=payload,
+                update_by_id=bool(update_by_id),
+                filename=filename,
+                test_message=msg,
+            )
+        )
+
+    @app.get("/web/views/{module}/{name}/export.csv")
+    def web_list_export_csv(
+        module: str,
+        name: str,
+        request: Request,
+        search: str = Query(default=""),
+        order: str = Query(default=""),
+        filters: str = Query(default=""),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .importer import export_csv_bytes, export_list_data
+        from .render import _view_title
+        from .views import resolve_arch
+
+        view = _require_list_view(env, module, name)
+        env.check_access(view.model, "read")
+        fields_spec, records = _list_export_records(
+            env, view, search=search, order=order, filters=filters,
+        )
+        headers, rows = export_list_data(env, view.model, fields_spec, records)
+        body = export_csv_bytes(headers, rows)
+        title = _view_title(view, resolve_arch(view))
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "_", title or view.name).strip("_") or view.name
+        return Response(
+            content=body,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe}.csv"'},
+        )
+
+    @app.get("/web/views/{module}/{name}/export.xlsx")
+    def web_list_export_xlsx(
+        module: str,
+        name: str,
+        request: Request,
+        search: str = Query(default=""),
+        order: str = Query(default=""),
+        filters: str = Query(default=""),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .importer import export_list_data, export_xlsx_bytes
+        from .render import _view_title
+        from .views import resolve_arch
+
+        view = _require_list_view(env, module, name)
+        env.check_access(view.model, "read")
+        fields_spec, records = _list_export_records(
+            env, view, search=search, order=order, filters=filters,
+        )
+        headers, rows = export_list_data(env, view.model, fields_spec, records)
+        title = _view_title(view, resolve_arch(view))
+        body = export_xlsx_bytes(headers, rows, title=title or view.name)
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "_", title or view.name).strip("_") or view.name
+        return Response(
+            content=body,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{safe}.xlsx"'},
+        )
 
     @app.post("/web/records/{module}/{name}/reorder")
     async def web_row_reorder(
@@ -1457,6 +1813,9 @@ def create_app(
         if not env.has_access(view.model, "write"):
             raise PermissionError(f"You cannot edit {view.model} records.")
         rec = _load_record(env, view, record_id)
+        from .security import check_record_form_write
+
+        check_record_form_write(env, rec, view=view)
         body_only = request.headers.get("HX-Request") == "true"
         return HTMLResponse(
             render_form_page(
@@ -1492,6 +1851,9 @@ def create_app(
 
         view = _require_form_view(_load_view(env, module, name))
         rec = _load_record(env, view, record_id)
+        from .security import check_record_form_write
+
+        check_record_form_write(env, rec, view=view)
         form = await request.form()
         cls = env.registry[view.model]
         vals, errors = parse_form_vals(cls, form, env)
@@ -1523,6 +1885,8 @@ def create_app(
             with env.transaction():
                 rec.write(vals)
                 apply_o2m_commands(rec, o2m_cmds)
+        except PermissionError:
+            raise
         except Exception as exc:  # noqa: BLE001
             # ORM-level failure (constraint, downstream DB error).
             # Show a top-level banner so the user sees why the save
@@ -3757,7 +4121,11 @@ def create_app(
                 if f.parent_id:
                     child_counts[f.parent_id.id] = child_counts.get(f.parent_id.id, 0) + 1
             cdom = _library_company_domain(env)
+            seen_folder_ids: set[int] = set()
             for f in subs:
+                if f.id in seen_folder_ids:
+                    continue
+                seen_folder_ids.add(f.id)
                 file_n = Att.search_count([("folder_id", "=", f.id)] + cdom)
                 folders.append(
                     {
@@ -3772,11 +4140,18 @@ def create_app(
         file_domain.extend(_library_company_domain(env))
         file_domain.extend(_accept_mime_domain(accept))
         rows = Att.search(file_domain, limit=limit, order='"id" DESC')
+        file_rows: list[dict] = []
+        seen_file_ids: set[int] = set()
+        for rec in rows:
+            if rec.id in seen_file_ids:
+                continue
+            seen_file_ids.add(rec.id)
+            file_rows.append(_attachment_to_row(rec))
         return {
             "folder_id": target,
             "breadcrumb": _folder_breadcrumb(env, target),
             "folders": folders,
-            "rows": [_attachment_to_row(r) for r in rows],
+            "rows": file_rows,
             "searching": False,
         }
 
