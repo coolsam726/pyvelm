@@ -11,6 +11,7 @@ out of the 0.x line.
 
 - **Coverage gate** raised to **98%** (`pyproject.toml`, CI).
 - **Schema DX tests** — ``schema_eval`` and ``field_builders`` at **100%** line coverage (domain paths, fluent ORM chains, live-form predicates).
+- **Schema DX demo** — example ``partners`` form uses ``live()`` + ``visible_when``; HTTP tests cover ``/web/views/.../live`` re-renders.
 
 ### Added
 

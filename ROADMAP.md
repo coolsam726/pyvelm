@@ -122,7 +122,7 @@ source.
 
 | # | Item | velmphp ref | Notes |
 |---|------|-------------|-------|
-| 2.0 | **Schema DX** | Filament schema fields | **Core shipped (#40)** — callable ``Field`` chains, ``*_when`` domains, ``live()`` HTMX, ORM ``index``/``unique``; evaluator + ORM builders at **100% test coverage** |
+| 2.0 | **Schema DX** | Filament schema fields | **Shipped (#40, #42+)** — callable ``Field`` chains, ``*_when`` domains, ``live()`` HTMX, ORM ``index``/``unique``; **100%** evaluator coverage; ``partners`` demo + live HTTP tests |
 | 2.1 | **`$mixins` registration** | `Registry.php` mixins | `mail.thread` via manifest/mixin list, not only subclass |
 | 2.2 | **`super()` chaining** | `Model::super()` | **Done** — `self.super()` + `Registry.inherit_chain()` |
 | 2.3 | **Model auto-discovery** | `ModuleModelLoader` | Scan `models/*.py` for `BaseModel` subclasses; manifest optional |

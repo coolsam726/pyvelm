@@ -34,12 +34,15 @@ views_data = (
             "profile",
             "Profile",
             [
-                "age",
-                "birth_date",
+                # Filament-style schema: live re-render + domain visibility.
+                Field.make("age").live(debounce=200),
+                Field.make("birth_date").visible_when([("age", ">=", 18)]),
+                Field.make("phone").visible_when([("email", "like", "@")]),
+                "email",
                 "country_id",
                 "company_id",
                 "parent_id",
-                "active",
+                Field.make("active").live(on_blur=True),
             ],
         )
         .section(
