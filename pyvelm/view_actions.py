@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
-
 from .fields import Boolean, Char, Integer, Many2one, Text
 from .views import resolve_arch
 
@@ -121,9 +119,8 @@ def _inline_field_spec(env, model, model_cls, field_spec, values: dict) -> dict 
         }
 
     if isinstance(velm_field, Many2one):
-        comodel = velm_field.comodel
-        Model = env[comodel]
-        rows = Model.search([], limit=200, order="id asc")
+        Model = env[velm_field.comodel_name]
+        rows = Model.search([], limit=200, order='"id" ASC')
         options = []
         for rec in rows:
             dn = getattr(rec, "display_name", None)
@@ -195,7 +192,3 @@ def render_view_action_inline_form(
         submit_url=submit_url,
         record_id=record_id,
     )
-
-
-def json_error(message: str, status: int = 400) -> tuple[dict, int]:
-    return {"message": message}, status
