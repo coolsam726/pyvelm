@@ -18,7 +18,7 @@
                class="rounded border-default w-3.5 h-3.5 cursor-pointer"
                aria-label="Select row"
                :checked="isSelected({{ row.id }})"
-               @change="toggleRow({{ row.id }})">
+               @change="setRowSelected({{ row.id }}, $event.target.checked)">
         {% else %}
         <input type="checkbox" class="rounded border-default w-3.5 h-3.5 cursor-not-allowed opacity-40"
                disabled aria-label="Select row">

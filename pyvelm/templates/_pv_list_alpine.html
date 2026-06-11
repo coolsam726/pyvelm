@@ -111,14 +111,15 @@ document.addEventListener('alpine:init', () => {
             return !!this.selected[String(id)];
         },
 
-        toggleRow(id) {
+        setRowSelected(id, checked) {
             const key = String(id);
-            if (this.selected[key]) {
-                delete this.selected[key];
+            const next = { ...this.selected };
+            if (checked) {
+                next[key] = true;
             } else {
-                this.selected[key] = true;
+                delete next[key];
             }
-            this.selected = { ...this.selected };
+            this.selected = next;
         },
 
         allPageSelected() {
@@ -223,6 +224,11 @@ document.addEventListener('alpine:init', () => {
             }).then(() => {
                 this.loading = false;
                 if (this.swapTarget === '#pv-table-container') {
+                    const root = document.querySelector(this.swapTarget);
+                    if (root && window.Alpine
+                        && typeof window.Alpine.initTree === 'function') {
+                        window.Alpine.initTree(root);
+                    }
                     this.applyColumnOrder();
                 }
             }).catch(() => { this.loading = false; });
@@ -556,6 +562,8 @@ document.addEventListener('alpine:init', () => {
             // Re-apply column order + re-bind drag handlers after
             // every HTMX swap, since the <table> element itself is
             // recreated by list_table.html.
+            this._onListReload = () => this.load();
+            window.addEventListener('pv-list-reload', this._onListReload);
             this.$el.addEventListener('htmx:afterSwap', () => {
                 this.applyColumnOrder();
                 this.initDragReorder();

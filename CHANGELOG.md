@@ -15,6 +15,13 @@ out of the 0.x line.
 
 ### Added
 
+- **`ActionForm` / view-actions** — `Action.make().form(ActionForm…)` on list
+  ``page_actions`` and form ``header_actions``; inline dialogs at
+  ``/web/view-actions/{module}/{view}/{slot}/{key}/form`` (GET HTML, POST JSON).
+  Example ``partners`` list includes **Quick add**.
+- **List bulk row selection** — individual checkboxes sync via ``setRowSelected``
+  (fixes toggle desync with Alpine ``:checked`` binding).
+
 - **`system_audit` module** — opt-in IT audit trail: ``ir.audit.log`` (CRUD),
   ``ir.login.log`` (login/logout/failure), ``ir.user.lifecycle`` (user events);
   CSV export routes; daily retention cron (``audit_purge`` server action);

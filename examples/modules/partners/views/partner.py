@@ -1,6 +1,8 @@
 """View declarations for the ``partners`` module."""
 
 from pyvelm.builders import (
+    Action,
+    ActionForm,
     Field,
     FormView,
     KanbanCard,
@@ -14,6 +16,24 @@ views_data = (
     .views(
         ListView.make("partner.list")
         .model("res.partner")
+        .page_actions(
+            [
+                Action.make("Quick add")
+                .model("res.partner")
+                .perm("create")
+                .form(
+                    lambda form: form.section(
+                        "identity",
+                        "Quick contact",
+                        [
+                            "name",
+                            "country_id",
+                            Field.make("active").toggle(),
+                        ],
+                    )
+                ),
+            ]
+        )
         .columns(
             [
                 "name",

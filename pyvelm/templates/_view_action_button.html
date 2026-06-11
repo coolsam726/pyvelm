@@ -1,0 +1,32 @@
+{% if act.kind == 'inline_form' and act.form_url %}
+<button type="button"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+               border border-default text-body rounded-md hover:bg-neutral-secondary transition"
+        onclick="window.PvDialog && window.PvDialog.open({
+            url: {{ act.form_url | tojson }},
+            title: {{ act.label | tojson }},
+            onResult: function() {
+                window.dispatchEvent(new CustomEvent('pv-list-reload'));
+                if (window.location.pathname.indexOf('/record/') !== -1) {
+                    window.location.reload();
+                }
+            }
+        })">
+    {{ act.label }}
+</button>
+{% elif act.full_page or (act.method == 'GET' and act.url and not act.url.startswith('/web/views/' ~ view.module ~ '/' ~ view.name)) %}
+<a href="{{ act.url }}"
+   class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+          border border-default text-body rounded-md hover:bg-neutral-secondary transition">
+    {{ act.label }}
+</a>
+{% else %}
+<button type="button"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
+               border border-default text-body rounded-md hover:bg-neutral-secondary transition"
+        hx-{{ act.method | lower }}="{{ act.url }}"
+        hx-swap="none"
+        {% if act.confirm %}hx-confirm="{{ act.confirm }}"{% endif %}>
+    {{ act.label }}
+</button>
+{% endif %}

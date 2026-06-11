@@ -2550,6 +2550,138 @@ def create_app(
         )
 
     @app.get(
+        "/web/view-actions/{module}/{view_name}/{slot}/{action_key}/form",
+        response_class=HTMLResponse,
+    )
+    def web_view_action_form_show(
+        module: str,
+        view_name: str,
+        slot: str,
+        action_key: str,
+        request: Request,
+        record: int = Query(default=0, ge=0),
+        env: Environment = Depends(get_env),
+    ):
+        from .view_actions import (
+            ViewActionLocator,
+            inline_action_form_fields,
+            render_view_action_inline_form,
+        )
+
+        if env.uid is None:
+            return _auth_required_response(request)
+        action = ViewActionLocator().find(
+            env, module, view_name, slot, action_key
+        )
+        if action is None:
+            raise HTTPException(status_code=404, detail="Action not found.")
+        inline_form = action.get("form")
+        if not isinstance(inline_form, dict) or not inline_form.get("sections"):
+            raise HTTPException(
+                status_code=404, detail="Action has no inline form."
+            )
+        model = str(action.get("model") or "")
+        if not model:
+            raise HTTPException(status_code=404, detail="Action model is missing.")
+        perm = str(action.get("perm") or ("write" if record > 0 else "create"))
+        try:
+            env.check_access(model, perm)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        values: dict = {}
+        if record > 0:
+            rows = env[model].browse(record).read()
+            values = rows[0] if rows else {}
+        fields = inline_action_form_fields(env, model, inline_form, values)
+        submit_url = str(request.url).split("?", 1)[0]
+        if record > 0:
+            submit_url = f"{submit_url}?record={record}"
+        html = render_view_action_inline_form(
+            title=str(action.get("label") or "Form"),
+            fields=fields,
+            submit_url=submit_url,
+            record_id=record,
+        )
+        return HTMLResponse(html)
+
+    @app.post(
+        "/web/view-actions/{module}/{view_name}/{slot}/{action_key}/form",
+    )
+    async def web_view_action_form_submit(
+        module: str,
+        view_name: str,
+        slot: str,
+        action_key: str,
+        request: Request,
+        record: int = Query(default=0, ge=0),
+        env: Environment = Depends(get_env),
+    ):
+        from fastapi.responses import JSONResponse
+
+        from .view_actions import ViewActionLocator
+
+        if env.uid is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        action = ViewActionLocator().find(
+            env, module, view_name, slot, action_key
+        )
+        if action is None:
+            return JSONResponse(
+                {"message": "Action not found."}, status_code=404
+            )
+        inline_form = action.get("form")
+        if not isinstance(inline_form, dict):
+            return JSONResponse(
+                {"message": "Action has no inline form."}, status_code=404
+            )
+        model = str(action.get("model") or "")
+        if not model:
+            return JSONResponse(
+                {"message": "Action model is missing."}, status_code=404
+            )
+        perm = str(action.get("perm") or ("write" if record > 0 else "create"))
+        try:
+            env.check_access(model, perm)
+        except PermissionError as exc:
+            return JSONResponse({"message": str(exc)}, status_code=403)
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return JSONResponse(
+                {"message": "Request body must be a JSON object."},
+                status_code=422,
+            )
+        if not isinstance(body, dict) or not body:
+            return JSONResponse(
+                {"message": "Request body must be a JSON object."},
+                status_code=422,
+            )
+        Model = env[model]
+        try:
+            with env.transaction():
+                if record > 0:
+                    rec = Model.browse(record)
+                    rec.ensure_one()
+                    rec.write(body)
+                    rec_id = record
+                else:
+                    rec_id = Model.create(body).id
+        except PermissionError as exc:
+            return JSONResponse({"message": str(exc)}, status_code=403)
+        except Exception as exc:  # noqa: BLE001
+            return JSONResponse({"message": str(exc)}, status_code=422)
+        rows = Model.browse(rec_id).read(["display_name"])
+        label = rows[0].get("display_name") if rows else rec_id
+        return JSONResponse(
+            {
+                "ok": True,
+                "id": rec_id,
+                "label": str(label) if label is not None else str(rec_id),
+                "message": "Record updated." if record > 0 else "Record created.",
+            }
+        )
+
+    @app.get(
         "/web/workflow/instances/{instance_id}/transition/{transition_key}",
         response_class=HTMLResponse,
     )
