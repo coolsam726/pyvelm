@@ -44,6 +44,27 @@ def test_form_page_links_back_to_list():
     ]
 
 
+def test_build_form_breadcrumbs_edit_trail(monkeypatch):
+    def _fake_view_breadcrumb(env, module, name, menu_tree=None, **kw):
+        return {"label": "Partners", "href": f"/web/views/{module}/{name}"}
+
+    monkeypatch.setattr("pyvelm.render._view_breadcrumb", _fake_view_breadcrumb)
+    crumbs = build_form_breadcrumbs(
+        _menu(),
+        env=object(),
+        ref_module="partners",
+        ref_name="partner.list",
+        leaf_label="Acme Corp",
+        mode="edit",
+        record_href="/web/views/partners/partner.form/record/7",
+    )
+    assert crumbs[-2] == {
+        "label": "Acme Corp",
+        "href": "/web/views/partners/partner.form/record/7",
+    }
+    assert crumbs[-1] == {"label": "Edit", "href": None}
+
+
 def test_form_page_list_crumb_without_record_title():
     """Record title lives in the page heading; list crumb stays a link."""
     crumbs = build_breadcrumbs(

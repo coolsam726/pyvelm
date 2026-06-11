@@ -1,5 +1,5 @@
 {% extends "layouts/main.html" %}
-{% block title %}{{ report.name }} — Report — pyvelm{% endblock %}
+{% block title %}{{ report.name }} — Report{% include "layouts/_app_title_suffix.html" %}{% endblock %}
 {% block page_title %}{{ report.name }}{% endblock %}
 {% block page_subtitle %}Model: {{ report.root_model }}{% endblock %}
 

@@ -97,14 +97,13 @@ class Diff:
         )
 
 
-def diff_has_syncable_changes(env: "Environment", diff: Diff) -> bool:
-    """True when ``apply_schema_diff`` would apply at least one change.
+def _nullability_is_syncable(env: "Environment", diff: Diff) -> bool:
+    """Whether nullability alterations would be applied on this backend."""
+    from pyvelm.database import _conn_capabilities
 
-    Ignores orphan columns and type drift (hand-written migrations only),
-    and ``SET NOT NULL`` while NULL rows still exist.
-    """
-    if diff.new_tables or diff.new_columns:
-        return True
+    cap = _conn_capabilities(env.conn)
+    if cap.name in ("sqlite", "mysql"):
+        return False
     for alt in diff.alterations:
         if alt.kind == "drop_not_null":
             return True
@@ -115,15 +114,22 @@ def diff_has_syncable_changes(env: "Environment", diff: Diff) -> bool:
     return False
 
 
-def _syncable_summary(diff: Diff) -> str:
+def diff_has_syncable_changes(env: "Environment", diff: Diff) -> bool:
+    """True when ``apply_schema_diff`` would apply at least one change.
+
+    Ignores orphan columns and type drift (hand-written migrations only),
+    and ``SET NOT NULL`` while NULL rows still exist. Nullability drift is
+    ignored on SQLite/MySQL because ``apply_schema_diff`` skips it there.
+    """
+    if diff.new_tables or diff.new_columns:
+        return True
+    return _nullability_is_syncable(env, diff)
+
+
+def _syncable_summary(env: "Environment", diff: Diff) -> str:
     """Human summary of changes Sync can apply (subset of ``_summary``)."""
-    if not (
-        diff.new_tables
-        or diff.new_columns
-        or any(
-            a.kind in ("set_not_null", "drop_not_null") for a in diff.alterations
-        )
-    ):
+    null_syncable = _nullability_is_syncable(env, diff)
+    if not (diff.new_tables or diff.new_columns or null_syncable):
         return ""
     parts: list[str] = []
     if diff.new_tables:
@@ -131,9 +137,10 @@ def _syncable_summary(diff: Diff) -> str:
     if diff.new_columns:
         parts.append(f"{len(diff.new_columns)} new column(s)")
     kinds: dict[str, int] = {}
-    for alt in diff.alterations:
-        if alt.kind in ("set_not_null", "drop_not_null"):
-            kinds[alt.kind] = kinds.get(alt.kind, 0) + 1
+    if null_syncable:
+        for alt in diff.alterations:
+            if alt.kind in ("set_not_null", "drop_not_null"):
+                kinds[alt.kind] = kinds.get(alt.kind, 0) + 1
     labels: list[str] = []
     if kinds.get("set_not_null"):
         labels.append(f"{kinds['set_not_null']} NOT NULL tighten")

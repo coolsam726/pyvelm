@@ -1,14 +1,17 @@
 """Shared constants for document layout (import-safe — no model registration)."""
 
 DOCUMENT_LAYOUT_CHOICES = [
-    ("light",     "Light — clean header, white"),
-    ("boxed",     "Boxed — framed company block"),
-    ("bold",      "Bold — accent company header"),
-    ("striped",   "Striped — alternating rows"),
-    ("editorial", "Editorial — large title, minimal header"),
-    ("split",     "Split — accent sidebar + white body"),
-    ("dark",      "Dark — black header band"),
-    ("folder",    "Folder — Odoo 19 tab header"),
+    ("light",     "Light"),
+    ("boxed",     "Boxed"),
+    ("bold",      "Bold"),
+    ("striped",   "Striped"),
+    ("bubble",    "Bubble — Odoo 19"),
+    ("wave",      "Wave — Odoo 19"),
+    ("folder",    "Folder — Odoo 19"),
+    # Legacy layouts (still render for existing companies)
+    ("editorial", "Editorial (legacy)"),
+    ("split",     "Split (legacy)"),
+    ("dark",      "Dark (legacy)"),
 ]
 
 GOOGLE_FONTS = [

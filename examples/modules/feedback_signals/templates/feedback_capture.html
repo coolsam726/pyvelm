@@ -1,5 +1,5 @@
 {% extends "layouts/main.html" %}
-{% block title %}{% if mode == 'thanks' %}Thank you{% else %}Share feedback{% endif %} — pyvelm{% endblock %}
+{% block title %}{% if mode == 'thanks' %}Thank you{% else %}Share feedback{% endif %}{% include "layouts/_app_title_suffix.html" %}{% endblock %}
 {% block page_title %}{% if mode == 'thanks' %}Thank you{% else %}Share feedback{% endif %}{% endblock %}
 
 {% block page_heading_region %}{% endblock %}

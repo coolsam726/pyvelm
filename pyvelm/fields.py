@@ -968,4 +968,6 @@ def spec_readonly(spec: dict, field: Field, ctx=None) -> bool:
     raw = spec.get("readonly")
     if raw is not None and not callable(raw) and not isinstance(raw, (list, tuple)):
         return bool(raw)
+    if getattr(field, "compute", None):
+        return True
     return bool(getattr(field, "readonly", False))

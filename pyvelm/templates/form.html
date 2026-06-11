@@ -1,5 +1,5 @@
 {% extends "layouts/main.html" %}
-{% block title %}{{ title }} — pyvelm{% endblock %}
+{% block title %}{{ title }}{% include "layouts/_app_title_suffix.html" %}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block page_actions %}
 {% if record_pager %}

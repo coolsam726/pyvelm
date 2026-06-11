@@ -44,7 +44,25 @@ class SyncableDiffTests(unittest.TestCase):
                 )
             ]
         )
-        self.assertTrue(diff_has_syncable_changes(env, diff))
+        with patch("pyvelm.database._conn_capabilities") as cap:
+            cap.return_value.name = "postgresql"
+            self.assertTrue(diff_has_syncable_changes(env, diff))
+
+    def test_nullability_not_syncable_on_sqlite(self):
+        env = MagicMock()
+        diff = Diff(
+            alterations=[
+                SchemaAlteration(
+                    "res_partner",
+                    "name",
+                    "drop_not_null",
+                    "ALTER COLUMN DROP NOT NULL",
+                )
+            ]
+        )
+        with patch("pyvelm.database._conn_capabilities") as cap:
+            cap.return_value.name = "sqlite"
+            self.assertFalse(diff_has_syncable_changes(env, diff))
 
     def test_set_not_null_with_null_rows_is_not_syncable(self):
         env = MagicMock()

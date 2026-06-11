@@ -1,5 +1,5 @@
 {% extends "layouts/main.html" %}
-{% block title %}{{ page_title }} — Workflow designer — pyvelm{% endblock %}
+{% block title %}{{ page_title }} — Workflow designer{% include "layouts/_app_title_suffix.html" %}{% endblock %}
 {% block page_title %}{{ page_title }}{% endblock %}
 {% block page_subtitle %}Design approvals and stage forms without code{% endblock %}
 
@@ -219,16 +219,30 @@
                                     </template>
                                 </select>
                             </template>
+                            <template x-if="ff.source === 'record'">
+                                <span class="text-2xs text-body-subtle px-2 py-1 rounded bg-neutral-secondary"
+                                      x-text="(recordFields.find(r => r.name === ff.name) || {}).type || 'field'"></span>
+                            </template>
                             <template x-if="ff.source !== 'record'">
                                 <input type="text" x-model="ff.name" placeholder="field key" class="rounded border px-2 py-1 w-28">
                                 <input type="text" x-model="ff.label" placeholder="Label" class="rounded border px-2 py-1 flex-1 min-w-[120px]">
                                 <select x-model="ff.type" class="rounded border px-2 py-1">
-                                    <option value="char">Text</option>
+                                    <option value="char">Short text</option>
                                     <option value="text">Long text</option>
                                     <option value="boolean">Yes/No</option>
-                                    <option value="integer">Number</option>
+                                    <option value="integer">Integer</option>
+                                    <option value="float">Decimal</option>
                                     <option value="date">Date</option>
+                                    <option value="datetime">Date & time</option>
+                                    <option value="selection">Selection</option>
                                 </select>
+                                <input type="text" x-model="ff.placeholder" placeholder="Placeholder" class="rounded border px-2 py-1 w-32">
+                                <input type="text" x-model="ff.help" placeholder="Help text" class="rounded border px-2 py-1 w-32">
+                                <template x-if="ff.type === 'selection'">
+                                    <input type="text" x-model="ff.optionsText"
+                                           placeholder="Options: key:Label, key2:Label2"
+                                           class="rounded border px-2 py-1 min-w-[200px]">
+                                </template>
                             </template>
                             <label class="inline-flex items-center gap-1">
                                 <input type="checkbox" x-model="ff.required"> Required
@@ -379,7 +393,17 @@
                     }
                     const fields = (t.form?.fields || []).map(f => {
                         const ff = { name: f.name, label: f.label || f.name, source: f.source || 'stage' };
-                        if (ff.source === 'stage') ff.type = f.type || 'char';
+                        if (ff.source === 'stage') {
+                            ff.type = f.type || 'char';
+                            if (f.placeholder) ff.placeholder = f.placeholder;
+                            if (f.help) ff.help = f.help;
+                            if (f.type === 'selection' && f.optionsText) {
+                                ff.options = f.optionsText.split(',').map(part => {
+                                    const p = part.trim().split(':');
+                                    return p.length > 1 ? [p[0].trim(), p.slice(1).join(':').trim()] : [p[0], p[0]];
+                                }).filter(o => o[0]);
+                            }
+                        }
                         if (f.required) ff.required = true;
                         return ff;
                     });

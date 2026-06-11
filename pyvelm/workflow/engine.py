@@ -146,6 +146,7 @@ class WorkflowEngine:
             )
             return instance
 
+        from_state = instance.state
         instance.write({
             "state": tr["to"],
             "stage_data": json.dumps(stage_data),
@@ -155,6 +156,13 @@ class WorkflowEngine:
         _post_chatter(
             env, record,
             f"Moved to «{tr['to']}» via «{tr.get('label', transition_key)}»",
+        )
+        _invoke_workflow_transition_hook(
+            env,
+            record,
+            tr,
+            from_state=from_state,
+            to_state=tr["to"],
         )
         return instance
 
@@ -199,6 +207,7 @@ class WorkflowEngine:
         if not approved:
             reject_to = tr.get("reject_to") or (tr.get("from") or ["draft"])[0]
             reject_label = _state_label(defn, reject_to)
+            from_state = instance.state
             instance.write({
                 "state": reject_to,
                 "pending_transition": False,
@@ -208,18 +217,33 @@ class WorkflowEngine:
                 env, record,
                 f"Approval rejected — returned to «{reject_label}»",
             )
+            _invoke_workflow_transition_hook(
+                env,
+                record,
+                tr,
+                from_state=from_state,
+                to_state=reject_to,
+            )
             return instance
 
         if not _approvals_complete(env, instance, tr):
             _maybe_advance_sequential(env, instance, tr)
             return instance
 
+        from_state = instance.state
         instance.write({
             "state": tr["to"],
             "pending_transition": False,
             "state_updated_at": utc_now(),
         })
         _post_chatter(env, record, _approval_complete_message(defn, tr))
+        _invoke_workflow_transition_hook(
+            env,
+            record,
+            tr,
+            from_state=from_state,
+            to_state=tr["to"],
+        )
         return instance
 
     @staticmethod
@@ -508,3 +532,24 @@ def _post_chatter(env, record, body: str) -> None:
             record.message_post(body, subtype="workflow")
         except Exception:  # noqa: BLE001
             pass
+
+
+def _invoke_workflow_transition_hook(
+    env,
+    record,
+    tr: dict,
+    *,
+    from_state: str,
+    to_state: str,
+) -> None:
+    """Call ``record._workflow_after_transition`` when the business model defines it."""
+    if not record or not getattr(record, "_ids", None):
+        return
+    hook = getattr(record, "_workflow_after_transition", None)
+    if not callable(hook):
+        return
+    hook(
+        transition_key=tr.get("key") or "",
+        from_state=from_state,
+        to_state=to_state,
+    )
