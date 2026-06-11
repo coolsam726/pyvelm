@@ -5362,17 +5362,24 @@ def render_list_import_page(
     update_by_id: bool = False,
     filename: str = "",
     test_message: str | None = None,
+    selected_fields: list[str] | None = None,
 ) -> str:
     """Import wizard fragment for PvDialog (upload → preview → result)."""
-    from .importer import list_importable_fields
+    from .importer import filter_import_fields, list_importable_fields
 
     importable = fields or list_importable_fields(env, view.model)
+    all_importable = list_importable_fields(env, view.model)
+    selected_set = {
+        f["name"] for f in filter_import_fields(all_importable, selected_fields)
+    } if selected_fields else {f["name"] for f in all_importable}
     template = _env.get_template("list_import.html")
     preview_rows = (rows or [])[:5]
     return template.render(
         view=view,
         step=step,
         fields=importable,
+        template_field_choices=all_importable,
+        selected_field_names=selected_set,
         headers=headers or [],
         rows=rows or [],
         preview_rows=preview_rows,
@@ -5384,9 +5391,7 @@ def render_list_import_page(
         filename=filename,
         total_rows=len(rows or []),
         test_message=test_message,
-        template_url=(
-            f"/web/views/{view.module}/{view.name}/import?download=template"
-        ),
+        template_base_url=f"/web/views/{view.module}/{view.name}/import",
         template_filename=f"{view.name}_import_template.xlsx",
     )
 
