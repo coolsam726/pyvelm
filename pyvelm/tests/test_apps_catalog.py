@@ -32,6 +32,13 @@ def _spec(name: str, version=(0, 2, 0)) -> ModuleSpec:
 
 
 class AppsCatalogUpgradeTests(unittest.TestCase):
+    def setUp(self):
+        self._reload_patcher = patch("pyvelm.loader.reload_installed_models")
+        self._reload_patcher.start()
+
+    def tearDown(self):
+        self._reload_patcher.stop()
+
     def _env_with_installed(self, rows: list[tuple[str, str]]) -> Environment:
         conn = MagicMock()
         conn.execute.return_value.fetchall.return_value = rows

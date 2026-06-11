@@ -612,7 +612,8 @@ class LoaderHelperTests(unittest.TestCase):
             )
             specs = discover([root])
             self.assertIn("mod_a", specs)
-            ordered = resolve_order(specs)
+            local = {k: v for k, v in specs.items() if k.startswith("mod_")}
+            ordered = resolve_order(local)
             self.assertEqual([s.name for s in ordered], ["mod_a", "mod_b"])
 
             (root / "mod_c").mkdir()
@@ -621,8 +622,9 @@ class LoaderHelperTests(unittest.TestCase):
                 encoding="utf-8",
             )
             specs2 = discover([root])
+            local2 = {k: v for k, v in specs2.items() if k.startswith("mod_")}
             with self.assertRaises(ValueError):
-                resolve_order(specs2)
+                resolve_order(local2)
 
     def test_load_data_files_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
