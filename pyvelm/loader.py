@@ -411,6 +411,7 @@ def _load_models(spec: ModuleSpec, registry: Registry) -> None:
         return
     with registry.activate():
         before_models: dict[str, type] = dict(registry._models)
+        _ensure_top_level_package(spec)
         if spec.models_package in sys.modules:
             reload_models(spec, registry)
         else:
@@ -429,6 +430,7 @@ def reload_models(spec: ModuleSpec, registry: Registry) -> None:
         return
     with registry.activate():
         before_models: dict[str, type] = dict(registry._models)
+        _ensure_top_level_package(spec)
         pkg = importlib.import_module(spec.models_package)
         importlib.reload(pkg)
         prefix = spec.models_package + "."
@@ -635,13 +637,28 @@ def _data_file_module_name(spec: ModuleSpec, rel_path: str) -> str:
     return f"{spec.package}.{dotted}"
 
 
+def _purge_package_modules(package: str) -> None:
+    """Drop *package* and its submodules from :data:`sys.modules`."""
+    prefix = package + "."
+    for key in list(sys.modules):
+        if key == package or key.startswith(prefix):
+            del sys.modules[key]
+
+
 def _ensure_top_level_package(spec: ModuleSpec) -> None:
     """Register ``spec.package`` so relative imports work in DATA files."""
     if spec.package_path is None:
         return
+    pkg_path = str(spec.package_path.resolve())
     if spec.package in sys.modules:
-        return
-    pkg_path = str(spec.package_path)
+        mod = sys.modules[spec.package]
+        paths = getattr(mod, "__path__", None) or []
+        if any(
+            str(Path(p).resolve()) == pkg_path or p == str(spec.package_path)
+            for p in paths
+        ):
+            return
+        _purge_package_modules(spec.package)
     init_py = spec.package_path / "__init__.py"
     if init_py.is_file():
         pkg_spec = importlib.util.spec_from_file_location(

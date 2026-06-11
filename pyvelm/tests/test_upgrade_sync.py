@@ -9,6 +9,15 @@ from pyvelm.loader import ModuleSpec, _load_data_files
 
 
 class DataFileReloadTests(unittest.TestCase):
+    def tearDown(self):
+        import sys
+
+        for key in list(sys.modules):
+            if key == "tmpmod" or key.startswith("tmpmod."):
+                del sys.modules[key]
+            if key == "tmpmod_rel" or key.startswith("tmpmod_rel."):
+                del sys.modules[key]
+
     def test_load_data_files_reload_picks_up_edits(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -130,7 +139,7 @@ class ReloadModelsRegistryTests(unittest.TestCase):
                 if root_str in sys.path:
                     sys.path.remove(root_str)
                 for key in list(sys.modules):
-                    if key == "tmpmod.models" or key.startswith("tmpmod.models."):
+                    if key == "tmpmod" or key.startswith("tmpmod."):
                         del sys.modules[key]
 
 
