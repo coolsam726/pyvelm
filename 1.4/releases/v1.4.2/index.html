@@ -10,13 +10,9 @@
       
       
       
-        <link rel="canonical" href="https://coolsam726.github.io/pyvelm/1.4/releases/unreleased/">
+        <link rel="canonical" href="https://coolsam726.github.io/pyvelm/1.4/releases/v1.4.2/">
       
       
-        <link rel="prev" href="../..">
-      
-      
-        <link rel="next" href="../../getting-started/">
       
       
         
@@ -27,7 +23,7 @@
     
     
       
-        <title>Unreleased - PyVELM</title>
+        <title>PyVELM v1.4.2 - PyVELM</title>
       
     
     
@@ -80,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#unreleased-main-branch" class="md-skip">
+        <a href="#pyvelm-v142" class="md-skip">
           Skip to content
         </a>
       
@@ -118,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Unreleased
+              PyVELM v1.4.2
             
           </span>
         </div>
@@ -253,11 +249,9 @@
   
   
   
-    
   
-  
-    <li class="md-tabs__item md-tabs__item--active">
-      <a href="./" class="md-tabs__link">
+    <li class="md-tabs__item">
+      <a href="../unreleased/" class="md-tabs__link">
         
   
   
@@ -386,37 +380,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Unreleased
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../unreleased/" class="md-nav__link">
         
   
   
@@ -432,48 +399,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#highlights" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Highlights
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#upgrade-from-pypi" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Upgrade from PyPI
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2180,10 +2105,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#upgrade-from-pypi" class="md-nav__link">
+  <a href="#upgrade" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Upgrade from PyPI
+        Upgrade
       
     </span>
   </a>
@@ -2210,18 +2135,27 @@
   
 
 
-<h1 id="unreleased-main-branch">Unreleased (main branch)<a class="headerlink" href="#unreleased-main-branch" title="Permanent link">&para;</a></h1>
-<p>Changes on <code>main</code> after the latest PyPI tag. See
-<a href="https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#unreleased">CHANGELOG</a>.</p>
+<h1 id="pyvelm-v142">PyVELM v1.4.2<a class="headerlink" href="#pyvelm-v142" title="Permanent link">&para;</a></h1>
+<p><strong>Release date:</strong> 2026-06-11</p>
+<p>Patch release after <strong>v1.4.1</strong>: production feedback fixes for the admin shell,
+module sync, workflows, and Odoo 19 document layouts.</p>
 <hr />
 <h2 id="highlights">Highlights<a class="headerlink" href="#highlights" title="Permanent link">&para;</a></h2>
-<p><em>No unreleased highlights yet — edit this page when features land on <code>main</code> after <strong>v1.4.2</strong>.</em></p>
+<ul>
+<li><strong>Odoo 19 document layouts</strong> — Wave, Bubble, and Folder PDF/preview headers
+  (wkhtmltopdf-safe table overlays; Folder adaptive tab + title).</li>
+<li><strong>Module sync</strong> — apps catalog status returns to idle after sync completes.</li>
+<li><strong>Bundled module discovery</strong> — <code>workflow</code> → <code>contacts</code> and other builtin deps resolve.</li>
+<li><strong>Admin polish</strong> — velmphp-style HTML editor toolbar, Prism readonly Code fields,
+  branding page titles, form breadcrumbs, computed-field readonly, notebook relationship tabs.</li>
+<li><strong>Workflow builder</strong> — configurable step field types and attributes.</li>
+</ul>
 <hr />
-<h2 id="upgrade-from-pypi">Upgrade from PyPI<a class="headerlink" href="#upgrade-from-pypi" title="Permanent link">&para;</a></h2>
-<p>When the next release ships:</p>
-<div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-U<span class="w"> </span>pyvelm
+<h2 id="upgrade">Upgrade<a class="headerlink" href="#upgrade" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-U<span class="w"> </span><span class="s2">&quot;pyvelm==1.4.2&quot;</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pyvelm<span class="w"> </span>db<span class="w"> </span>migrate
 </span></code></pre></div>
+<p>See <a href="https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#142--2026-06-11">CHANGELOG</a> for the full list.</p>
 
 
 
