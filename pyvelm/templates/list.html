@@ -4,14 +4,7 @@
 
 {% block page_actions %}
 {% for act in page_actions or [] %}
-<button type="button"
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium
-               border border-default text-body rounded-md hover:bg-neutral-secondary transition"
-        hx-{{ act.method | lower }}="{{ act.url }}"
-        hx-swap="none"
-        {% if act.confirm %}hx-confirm="{{ act.confirm }}"{% endif %}>
-    {{ act.label }}
-</button>
+{% include "_view_action_button.html" %}
 {% endfor %}
 {% if access.can_create and (create_href or form_view_name) %}
 {% if create_href %}

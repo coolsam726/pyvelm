@@ -55,7 +55,7 @@ Release notes go in [CHANGELOG.md](CHANGELOG.md); design rationale in
 | `system_audit` module | v1.0.1 | **Done (unreleased)** |
 | List `bulk_actions` | v1.1.0 | **Done (v1.3.0)** |
 | `DetailView` + `row_actions` | rc3+ | **Done (v1.3.0)** |
-| `ActionForm` / view-actions inline forms | v1.0.1 | URL actions only |
+| `ActionForm` / view-actions inline forms | v1.0.1 | **Done (unreleased)** |
 | Bundled `partners` reference (graph/pivot/dashboard) | v1.0.1 | `examples/` only |
 | `$mixins` (`mail.thread` composable) | rc3 | class inheritance |
 | `static::super()` for `_inherit` stacks | rc3 | `self.super()` + `Registry.inherit_chain()` |
@@ -93,7 +93,7 @@ source.
 | 1.2 | **`system_audit` module** | `packages/modules/modules/system_audit/` | **Done (unreleased)** — CRUD/login/lifecycle audit; retention cron; CSV export; opt-in via Apps |
 | 1.3 | **List bulk actions** | `bulk_actions` arch | **Done (v1.3.0)** — row checkboxes, select-all, bulk bar, default bulk delete when unlink allowed |
 | 1.4 | **`DetailView` + `row_actions`** | `DetailView.php`, `ListRowAction` | **Done (v1.3.0)** — read-only record page; list links via `detail_view` |
-| 1.5 | **`ActionForm` / view-actions** | `ViewActionFormController` | Toolbar quick-add/edit mini-forms at `/web/view-actions/...` |
+| 1.5 | **`ActionForm` / view-actions** | `ViewActionFormController` | **Done (unreleased)** — `Action`/`ActionForm` builders; PvDialog at `/web/view-actions/...` |
 | 1.6 | **Bundled `contacts` module** | `modules/contacts/` | Ship in wheel: `res.partner` list/form + menu; example `partners` extends for kanban/tags/workflow |
 | 1.7 | **Currency import** | `CurrencyImportService` | On-demand world currencies (RESTcountries or bundled fallback); Settings action |
 | 1.8 | **Geo bootstrap polish** | `GeoCountryDetector` | **Done** — `PYVELM_GEO_COUNTRY`; bootstrap install; background full seed |

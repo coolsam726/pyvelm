@@ -29,6 +29,7 @@ from pyvelm.types import (
 )
 
 from ._normalize import field_specs
+from .action import action_specs
 from .layout import KanbanCard, Notebook, Page, Section
 
 
@@ -80,8 +81,8 @@ class ListViewBuilder:
         self._create_href = create_href
         return self
 
-    def page_actions(self, page_actions: list[dict]) -> ListViewBuilder:
-        self._page_actions = list(page_actions)
+    def page_actions(self, page_actions: list) -> ListViewBuilder:
+        self._page_actions = action_specs(page_actions)
         return self
 
     def sequence(self, sequence: str) -> ListViewBuilder:
@@ -167,8 +168,8 @@ class FormViewBuilder:
         self._cols = cols
         return self
 
-    def header_actions(self, header_actions: list[dict]) -> FormViewBuilder:
-        self._header_actions = list(header_actions)
+    def header_actions(self, header_actions: list) -> FormViewBuilder:
+        self._header_actions = action_specs(header_actions)
         return self
 
     def priority(self, priority: int) -> FormViewBuilder:
@@ -262,8 +263,8 @@ class DetailViewBuilder:
         self._form_view = form_view
         return self
 
-    def header_actions(self, header_actions: list[dict]) -> DetailViewBuilder:
-        self._header_actions = list(header_actions)
+    def header_actions(self, header_actions: list) -> DetailViewBuilder:
+        self._header_actions = action_specs(header_actions)
         return self
 
     def priority(self, priority: int) -> DetailViewBuilder:

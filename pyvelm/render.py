@@ -3176,8 +3176,9 @@ def _resolve_header_actions(
     name: str,
     record_id,
     record=None,
+    slot: str = "header",
 ) -> list[dict]:
-    """Materialize a form's display-mode header actions.
+    """Materialize toolbar actions for list ``page_actions`` or form headers.
 
     Granular gating: an action that declares the ``perm`` it needs is
     *hidden* — not rendered-then-denied — when the user lacks that grant
@@ -3185,9 +3186,15 @@ def _resolve_header_actions(
     override). Actions with no ``perm`` stay visible to anyone who can
     read the record. ``{id}`` in the URL is substituted, and any URL
     that leaves the current view is flagged ``full_page``.
+
+    Inline ``form`` schemas are enriched with ``kind=inline_form`` and a
+    ``form_url`` pointing at ``/web/view-actions/...``.
     """
+    from .view_actions import view_action_form_url, view_action_key
+
     out: list[dict] = []
     for act in actions or []:
+        label = act.get("label") or "Run"
         perm = act.get("perm")
         if perm and not env.has_access(act.get("model") or model, perm):
             continue
@@ -3203,19 +3210,39 @@ def _resolve_header_actions(
                     rec = None
             if rec is None or not env.can(rec, str(policy), perm=perm):
                 continue
-        url = (act.get("url") or "").replace("{id}", str(record_id))
-        out.append(
-            {
-                "label": act.get("label", "Run"),
-                "url": url,
-                "method": (act.get("method") or "POST").upper(),
-                "confirm": act.get("confirm") or "",
-                "full_page": bool(
-                    act.get("full_page")
-                    or not url.startswith(f"/web/views/{module}/{name}")
-                ),
-            }
+        inline_form = act.get("form")
+        has_inline = isinstance(inline_form, dict) and bool(
+            inline_form.get("sections")
         )
+        url = (act.get("url") or "").replace("{id}", str(record_id))
+        if not url and not has_inline:
+            continue
+        action_key = view_action_key(str(label))
+        method = (act.get("method") or ("GET" if has_inline else "POST")).upper()
+        entry: dict = {
+            "label": label,
+            "action_key": action_key,
+            "url": url,
+            "method": method,
+            "confirm": act.get("confirm") or "",
+            "full_page": bool(
+                act.get("full_page")
+                or (
+                    url
+                    and not url.startswith(f"/web/views/{module}/{name}")
+                )
+            ),
+        }
+        if has_inline:
+            entry["kind"] = "inline_form"
+            entry["form_url"] = view_action_form_url(
+                module, name, slot, action_key, record_id or 0
+            )
+        elif method == "GET" and url:
+            entry["kind"] = "get"
+        else:
+            entry["kind"] = "post"
+        out.append(entry)
     return out
 
 
@@ -5041,6 +5068,7 @@ def render_list_page(
         name=view.name,
         record_id=0,
         record=None,
+        slot="page",
     )
 
     model_cls = env.registry[view.model]

@@ -28,6 +28,7 @@ available and delegate to the same fluent classes.
 """
 from __future__ import annotations
 
+from .action import Action, ActionForm
 from .field import Field
 from .layout import KanbanCard, Notebook, Page, Section
 from .legacy import (
@@ -83,6 +84,8 @@ from .views import (
 from .views_data import ViewsData
 
 __all__ = [
+    "Action",
+    "ActionForm",
     "ChartWidget",
     "DashboardView",
     "DetailView",
