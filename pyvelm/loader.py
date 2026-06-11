@@ -448,7 +448,7 @@ def reload_installed_models(env: Environment, specs: dict[str, ModuleSpec]) -> N
     """
     _ensure_ir_module(env)
     rows = env.conn.execute(
-        f'SELECT name FROM "{IR_MODULE_TABLE}"',
+        f'SELECT "name" FROM "{IR_MODULE_TABLE}"',
     ).fetchall()
     installed = {r[0] for r in rows}
     subset = {k: v for k, v in specs.items() if k in installed}
