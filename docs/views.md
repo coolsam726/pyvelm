@@ -224,9 +224,13 @@ views_data = (
         .section("identity", "Identity", ["name", "code"])
         .notebook(
             "relations",
-            Notebook.make()
-            .page("children", "Contacts", ["child_ids"])
-            .page("tags", "Tags", [Field.make("tag_ids").widget("dialog")]),
+            "Relations",
+            [
+                Page.make("children", "Contacts").fields(["child_ids"]),
+                Page.make("tags", "Tags").fields(
+                    [Field.make("tag_ids").widget("dialog")]
+                ),
+            ],
         ),
     )
 )
