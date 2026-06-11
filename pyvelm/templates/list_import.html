@@ -15,15 +15,65 @@
     {% if step == 'upload' %}
     <p class="text-body-subtle">
         Import records from an Excel file (.xlsx) or CSV. Column headers are
-        matched automatically to fields by name or label.
+        matched automatically to field names or labels. Related fields (Many2one)
+        accept a record <strong>ID</strong> or a matching <strong>name</strong>
+        — countries also accept the <strong>ISO code</strong> (e.g. <code>US</code>,
+        <code>KE</code>).
     </p>
-    <p>
-        <a href="{{ template_url }}"
-           download="{{ template_filename }}"
-           class="text-fg-brand font-medium hover:underline">
+    <form method="get"
+          action="{{ template_base_url }}"
+          class="space-y-3 border border-default rounded-lg p-4 bg-neutral-secondary/30">
+        <input type="hidden" name="download" value="template">
+        <div class="flex items-center justify-between gap-2">
+            <p class="font-medium text-heading">Template columns</p>
+            <div class="flex gap-2 text-xs">
+                <button type="button"
+                        onclick="this.closest('form').querySelector('#pv-import-template-fields').querySelectorAll('input[name=fields]').forEach(c => { c.checked = true; })"
+                        class="text-fg-brand hover:underline">Select all</button>
+                <button type="button"
+                        onclick="this.closest('form').querySelector('#pv-import-template-fields').querySelectorAll('input[name=fields]').forEach(c => { c.checked = false; })"
+                        class="text-body-subtle hover:underline">Clear</button>
+            </div>
+        </div>
+        <p class="text-body-subtle text-2xs">Drag to reorder columns in the downloaded file.</p>
+        <ul id="pv-import-template-fields"
+            class="space-y-0.5 max-h-48 overflow-y-auto text-xs list-none m-0 p-0">
+            {% for f in template_field_choices %}
+            <li data-field="{{ f.name }}"
+                class="pv-import-template-row flex items-start gap-2 rounded-md px-1 py-1
+                       border border-transparent hover:bg-neutral-primary/60">
+                <span data-pv-import-drag-handle
+                      draggable="true"
+                      class="mt-0.5 inline-flex items-center justify-center w-5 h-5 shrink-0
+                             rounded cursor-grab active:cursor-grabbing
+                             text-body-subtle/50 hover:text-fg-brand hover:bg-neutral-tertiary"
+                      title="Drag to reorder"
+                      aria-label="Drag to reorder">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                         viewBox="0 0 24 24" stroke-width="2.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M3.75 9h16.5m-16.5 6.75h16.5"/>
+                    </svg>
+                </span>
+                <label class="flex items-start gap-2 cursor-pointer flex-1 min-w-0">
+                    <input type="checkbox" name="fields" value="{{ f.name }}"
+                           {% if f.name in selected_field_names %}checked{% endif %}
+                           class="mt-0.5 rounded border-default text-fg-brand shrink-0">
+                    <span class="min-w-0">
+                        <span class="text-body">{{ f.label }}</span>
+                        {% if f.import_hint %}
+                        <span class="block text-body-subtle text-2xs">{{ f.import_hint }}</span>
+                        {% endif %}
+                    </span>
+                </label>
+            </li>
+            {% endfor %}
+        </ul>
+        <button type="submit"
+                class="text-fg-brand font-medium hover:underline text-left">
             Download Excel import template
-        </a>
-    </p>
+        </button>
+    </form>
     <form method="post"
           action="/web/views/{{ view.module }}/{{ view.name }}/import/preview"
           enctype="multipart/form-data"
@@ -111,8 +161,9 @@
                     <option value="">— skip —</option>
                     {% for f in fields %}
                     <option value="{{ f.name }}"
-                            {% if mapping.get(idx) == f.name %}selected{% endif %}>
-                        {{ f.label }} ({{ f.name }})
+                            {% if mapping.get(idx) == f.name %}selected{% endif %}
+                            title="{{ f.import_hint or '' }}">
+                        {{ f.label }}{% if f.type == 'Many2one' %} → {{ f.comodel }}{% endif %}
                     </option>
                     {% endfor %}
                 </select>

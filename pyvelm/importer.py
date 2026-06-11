@@ -41,6 +41,39 @@ def _normalize_key(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (value or "").lower())
 
 
+def _humanize_field_label(fname: str) -> str:
+    """Turn ``country_id`` into ``Country`` when no field string is set."""
+    base = fname
+    if base.endswith("_id"):
+        base = base[:-3]
+    return base.replace("_", " ").strip().title() or fname
+
+
+def _m2o_lookup_field_names(env, comodel: str) -> list[str]:
+    """Search keys tried when resolving a Many2one cell value."""
+    if comodel not in env.registry:
+        return ["name"]
+    cls = env.registry[comodel]
+    keys: list[str] = []
+    for candidate in ("name", "code", "login", "email"):
+        if candidate in cls._fields:
+            keys.append(candidate)
+    return keys or ["name"]
+
+
+def m2o_import_hint(env, comodel: str | None) -> str:
+    """Short guidance for spreadsheet cells (shown in the import wizard)."""
+    if not comodel:
+        return "Related record ID or name"
+    keys = _m2o_lookup_field_names(env, comodel)
+    parts = ["numeric ID"]
+    if "name" in keys:
+        parts.append("exact name")
+    if "code" in keys:
+        parts.append("code (e.g. country ISO)")
+    return " or ".join(parts)
+
+
 def list_importable_fields(env, model: str) -> list[dict[str, Any]]:
     """Stored, writable scalar fields suitable for tabular import."""
     if model not in env.registry:
@@ -54,26 +87,65 @@ def list_importable_fields(env, model: str) -> list[dict[str, Any]]:
                 "label": "ID",
                 "type": "Integer",
                 "required": False,
+                "import_hint": "Existing record ID (for updates)",
             })
             continue
         if not isinstance(field, _IMPORTABLE):
             continue
         if field.compute or field.readonly or not field.is_stored:
             continue
+        comodel = getattr(field, "comodel_name", None)
         if isinstance(field, Many2one):
             try:
-                env.check_access(field.comodel_name, "read")
+                env.check_access(comodel, "read")
             except PermissionError:
                 continue
-        out.append({
+        label = field.string or _humanize_field_label(fname)
+        spec: dict[str, Any] = {
             "name": fname,
-            "label": field.string or fname,
+            "label": label,
             "type": type(field).__name__,
             "required": bool(field.required),
-            "comodel": getattr(field, "comodel_name", None),
+            "comodel": comodel,
             "choices": getattr(field, "choices", None),
-        })
+        }
+        if isinstance(field, Many2one):
+            spec["import_hint"] = m2o_import_hint(env, comodel)
+        out.append(spec)
     return out
+
+
+def filter_import_fields(
+    fields: list[dict[str, Any]],
+    selected_names: list[str] | None,
+) -> list[dict[str, Any]]:
+    """Keep only user-selected template columns (default: all)."""
+    if not selected_names:
+        return list(fields)
+    allowed = {n.strip() for n in selected_names if n and str(n).strip()}
+    if not allowed:
+        return list(fields)
+    lookup = {spec["name"]: spec for spec in fields}
+    ordered: list[dict[str, Any]] = []
+    for name in selected_names:
+        key = name.strip()
+        if key in lookup and key not in {s["name"] for s in ordered}:
+            ordered.append(lookup[key])
+    for spec in fields:
+        if spec["name"] in allowed and spec["name"] not in {s["name"] for s in ordered}:
+            ordered.append(spec)
+    return ordered
+
+
+def parse_fields_query(raw: str | list[str] | None) -> list[str]:
+    """Parse ``fields`` from repeated query params or a comma-separated string."""
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        parts = raw.split(",")
+    else:
+        parts = list(raw)
+    return [p.strip() for p in parts if p and str(p).strip()]
 
 
 def suggest_column_mapping(
@@ -150,15 +222,26 @@ def _resolve_m2o(env, comodel: str, raw: Any) -> int | None:
         rec = Model.browse(int(text))
         if rec.exists():
             return rec.id
-    name_field = "name" if "name" in Model._fields else None
-    if name_field:
-        found = Model.search([(name_field, "=", text)], limit=1)
+    for key in _m2o_lookup_field_names(env, comodel):
+        field = Model._fields.get(key)
+        if field is None:
+            continue
+        # Exact match first (codes, names, logins).
+        found = Model.search([(key, "=", text)], limit=1)
         if found:
             return found.id
-        found = Model.search([(name_field, "ilike", text)], limit=1)
-        if found:
-            return found.id
-    raise ValueError(f"Cannot resolve {comodel} reference {text!r}")
+        if key == "code" and text.upper() != text:
+            found = Model.search([(key, "=", text.upper())], limit=1)
+            if found:
+                return found.id
+        if key == "name":
+            found = Model.search([(key, "ilike", text)], limit=1)
+            if found:
+                return found.id
+    raise ValueError(
+        f"Cannot resolve {comodel} reference {text!r} — "
+        f"use a record ID or a matching {', '.join(_m2o_lookup_field_names(env, comodel))}"
+    )
 
 
 def _coerce_field_value(env, model: str, fname: str, raw: Any) -> Any:
@@ -294,27 +377,14 @@ def _export_cell(value: Any) -> Any:
     return value
 
 
-def import_template_fields_for_view(env, view) -> list[dict[str, Any]]:
-    """Importable fields for a list view template, in column order (+ id)."""
+def import_template_fields_for_view(
+    env,
+    view,
+    selected_names: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Importable fields for a template, optionally filtered by user selection."""
     importable = list_importable_fields(env, view.model)
-    by_name = {spec["name"]: spec for spec in importable}
-    ordered: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    if "id" in by_name:
-        ordered.append(by_name["id"])
-        seen.add("id")
-    from .views import resolve_arch
-
-    arch = resolve_arch(view)
-    for spec in arch.get("fields", []):
-        fname = spec["name"]
-        if fname in by_name and fname not in seen:
-            ordered.append(by_name[fname])
-            seen.add(fname)
-    for spec in importable:
-        if spec["name"] not in seen:
-            ordered.append(spec)
-    return ordered
+    return filter_import_fields(importable, selected_names)
 
 
 def import_template_headers(fields: list[dict[str, Any]]) -> list[str]:

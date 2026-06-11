@@ -1049,6 +1049,9 @@
                 if (ld && typeof window.pvInitLayoutDesigner === 'function') {
                     window.pvInitLayoutDesigner(ld);
                 }
+                if (typeof window.pvInitImportTemplateColumns === 'function') {
+                    window.pvInitImportTemplateColumns(root);
+                }
             },
 
             _popFrame(result) {
@@ -1322,6 +1325,65 @@
             if (token) e.detail.headers['X-CSRF-Token'] = token;
         });
 
+        // Import wizard: drag-reorder template columns before Excel download.
+        window.pvInitImportTemplateColumns = function (root) {
+            const scope = root || document;
+            const list = scope.querySelector
+                ? scope.querySelector('#pv-import-template-fields')
+                : null;
+            if (!list || list.dataset.pvImportDragBound) return;
+            list.dataset.pvImportDragBound = '1';
+            let dragged = null;
+
+            list.addEventListener('dragstart', (e) => {
+                const handle = e.target.closest('[data-pv-import-drag-handle]');
+                if (!handle) return;
+                dragged = handle.closest('.pv-import-template-row');
+                if (!dragged) return;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', dragged.dataset.field || '');
+                dragged.classList.add('opacity-50');
+            });
+            list.addEventListener('dragend', () => {
+                if (dragged) dragged.classList.remove('opacity-50');
+                dragged = null;
+                list.querySelectorAll('.pv-import-template-row').forEach((row) => {
+                    row.classList.remove('ring-1', 'ring-fg-brand', 'bg-brand-soft');
+                });
+            });
+            list.addEventListener('dragover', (e) => {
+                if (!dragged) return;
+                const row = e.target.closest('.pv-import-template-row');
+                if (!row || row === dragged) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                list.querySelectorAll('.pv-import-template-row').forEach((r) => {
+                    r.classList.remove('ring-1', 'ring-fg-brand', 'bg-brand-soft');
+                });
+                row.classList.add('ring-1', 'ring-fg-brand', 'bg-brand-soft');
+            });
+            list.addEventListener('dragleave', (e) => {
+                const row = e.target.closest('.pv-import-template-row');
+                if (row) row.classList.remove('ring-1', 'ring-fg-brand', 'bg-brand-soft');
+            });
+            list.addEventListener('drop', (e) => {
+                if (!dragged) return;
+                const row = e.target.closest('.pv-import-template-row');
+                if (!row || row === dragged) return;
+                e.preventDefault();
+                const rect = row.getBoundingClientRect();
+                const before = e.clientY < rect.top + rect.height / 2;
+                if (before) {
+                    list.insertBefore(dragged, row);
+                } else {
+                    list.insertBefore(dragged, row.nextSibling);
+                }
+                row.classList.remove('ring-1', 'ring-fg-brand', 'bg-brand-soft');
+                dragged.classList.remove('opacity-50');
+                dragged = null;
+            });
+        };
+
         // Inject a hidden `_csrf` into every plain (non-HTMX) POST form
         // so the logout button, password-change form, and any future
         // direct browser submit pass CSRF without per-template plumbing.
@@ -1372,9 +1434,17 @@
             });
         };
 
-        document.addEventListener('DOMContentLoaded', () => pvInjectCsrfFields());
+        document.addEventListener('DOMContentLoaded', () => {
+            pvInjectCsrfFields();
+            if (typeof window.pvInitImportTemplateColumns === 'function') {
+                window.pvInitImportTemplateColumns();
+            }
+        });
         document.body.addEventListener('htmx:afterSwap', e => {
             pvInjectCsrfFields(e.detail.elt || e.detail.target);
+            if (typeof window.pvInitImportTemplateColumns === 'function') {
+                window.pvInitImportTemplateColumns(e.detail.elt || e.detail.target);
+            }
             const target = e.detail.target;
             const elt = e.detail.elt || target;
             const req = e.detail.requestConfig || {};

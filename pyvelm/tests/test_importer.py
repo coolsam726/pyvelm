@@ -12,12 +12,15 @@ from pyvelm.importer import (
     encode_import_payload,
     export_csv_bytes,
     export_list_data,
+    filter_import_fields,
     import_rows,
     import_template_fields_for_view,
     import_template_headers,
     import_template_xlsx_bytes,
     list_importable_fields,
     mapping_from_form,
+    m2o_import_hint,
+    parse_fields_query,
     parse_tabular_upload,
     suggest_column_mapping,
 )
@@ -120,6 +123,21 @@ class ImporterModelTests(unittest.TestCase):
         self.assertEqual(vals["tag_id"], 5)
         self.assertEqual(vals["code"], "X")
 
+    def test_build_row_vals_m2o_by_numeric_id(self):
+        env = self._env()
+        tag_cls = env.registry["test.import.tag"]
+        rec = MagicMock()
+        rec.exists.return_value = True
+        rec.id = 42
+        with patch.object(tag_cls, "browse", return_value=rec):
+            vals = build_row_vals(
+                env,
+                "test.import.item",
+                ["42"],
+                {0: "tag_id"},
+            )
+        self.assertEqual(vals["tag_id"], 42)
+
 
 class ListIoActionsTests(unittest.TestCase):
     def test_default_actions_include_import_export(self):
@@ -141,7 +159,26 @@ class ListIoActionsTests(unittest.TestCase):
 
 
 class ImportTemplateTests(unittest.TestCase):
-    def test_import_template_fields_follow_list_columns(self):
+    def test_filter_import_fields_respects_selection(self):
+        fields = [
+            {"name": "id", "label": "ID"},
+            {"name": "name", "label": "Name"},
+            {"name": "code", "label": "Code"},
+        ]
+        filtered = filter_import_fields(fields, ["name", "code"])
+        self.assertEqual([f["name"] for f in filtered], ["name", "code"])
+
+    def test_parse_fields_query(self):
+        self.assertEqual(parse_fields_query(["name", "code"]), ["name", "code"])
+        self.assertEqual(parse_fields_query("name,code"), ["name", "code"])
+
+    def test_m2o_import_hint_mentions_code_for_country(self):
+        env = MagicMock()
+        env.registry = {"res.country": MagicMock(_fields={"name": 1, "code": 1})}
+        hint = m2o_import_hint(env, "res.country")
+        self.assertIn("code", hint)
+
+    def test_import_template_fields_default_all_importable(self):
         env = MagicMock()
         env.registry = {"test.import.item": MagicMock(_fields={})}
         view = MagicMock()
@@ -151,13 +188,16 @@ class ImportTemplateTests(unittest.TestCase):
             {"name": "name", "label": "Name"},
             {"name": "code", "label": "Reference"},
         ]
-        arch = {"fields": [{"name": "name"}, {"name": "code"}]}
         with patch(
             "pyvelm.importer.list_importable_fields",
             return_value=fields,
-        ), patch("pyvelm.views.resolve_arch", return_value=arch):
+        ):
             ordered = import_template_fields_for_view(env, view)
-        self.assertEqual([f["name"] for f in ordered], ["id", "name", "code"])
+            self.assertEqual([f["name"] for f in ordered], ["id", "name", "code"])
+            subset = import_template_fields_for_view(
+                env, view, selected_names=["name"],
+            )
+            self.assertEqual([f["name"] for f in subset], ["name"])
 
     def test_import_template_xlsx_bytes(self):
         data = import_template_xlsx_bytes(["Name", "Email"], title="Partners")

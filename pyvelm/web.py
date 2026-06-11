@@ -1247,7 +1247,12 @@ def create_app(
             safe_ord = _safe_order(fields_spec, order)
         return fields_spec, env[view.model].search(domain, order=safe_ord)
 
-    def _list_import_template_response(view, env: Environment) -> Response:
+    def _list_import_template_response(
+        view,
+        env: Environment,
+        *,
+        selected_fields: list[str] | None = None,
+    ) -> Response:
         from .importer import (
             import_template_fields_for_view,
             import_template_headers,
@@ -1256,7 +1261,9 @@ def create_app(
         from .render import _view_title
         from .views import resolve_arch
 
-        fields = import_template_fields_for_view(env, view)
+        fields = import_template_fields_for_view(
+            env, view, selected_names=selected_fields,
+        )
         headers = import_template_headers(fields)
         title = _view_title(view, resolve_arch(view))
         body = import_template_xlsx_bytes(headers, title=title or view.name)
@@ -1277,14 +1284,19 @@ def create_app(
         module: str,
         name: str,
         request: Request,
+        fields: list[str] = Query(default=[]),
         env: Environment = Depends(get_env),
     ):
         if env.uid is None:
             return _auth_required_response(request)
+        from .importer import parse_fields_query
+
         view = _require_list_view(env, module, name)
         if not env.has_access(view.model, "create"):
             raise PermissionError(f"You cannot import {view.model} records.")
-        return _list_import_template_response(view, env)
+        return _list_import_template_response(
+            view, env, selected_fields=parse_fields_query(fields),
+        )
 
     @app.get("/web/views/{module}/{name}/import")
     def web_list_import_form(
@@ -1292,18 +1304,27 @@ def create_app(
         name: str,
         request: Request,
         download: str = Query(default=""),
+        fields: list[str] = Query(default=[]),
         env: Environment = Depends(get_env),
     ):
         if env.uid is None:
             return _auth_required_response(request)
+        from .importer import parse_fields_query
         from .render import render_list_import_page
 
         view = _require_list_view(env, module, name)
         if not env.has_access(view.model, "create"):
             raise PermissionError(f"You cannot import {view.model} records.")
+        selected = parse_fields_query(fields)
         if download.lower() in ("template", "xlsx", "1"):
-            return _list_import_template_response(view, env)
-        return HTMLResponse(render_list_import_page(view, env, step="upload"))
+            return _list_import_template_response(
+                view, env, selected_fields=selected,
+            )
+        return HTMLResponse(
+            render_list_import_page(
+                view, env, step="upload", selected_fields=selected,
+            )
+        )
 
     @app.post("/web/views/{module}/{name}/import/preview", response_class=HTMLResponse)
     async def web_list_import_preview(
