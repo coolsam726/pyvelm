@@ -14,21 +14,17 @@ _EXAMPLE_ROOT = Path(__file__).resolve().parents[2] / "examples" / "modules"
 _MODULE_ROOTS = BUILTIN_MODULE_ROOTS + [_EXAMPLE_ROOT]
 
 
-def _login(client: TestClient) -> None:
-    client.get("/login")
-    csrf = client.cookies.get("pyvelm_csrf")
+def _live_post(client: TestClient, url: str, data: dict):
+    """POST a live re-render; return the HTMX body fragment (not a login redirect)."""
     resp = client.post(
-        "/login",
-        data={"login": "admin", "password": "admin", "_csrf": csrf},
+        url,
+        data=data,
         follow_redirects=False,
+        headers={"HX-Request": "true"},
     )
-    assert resp.status_code == 303
-
-
-def _csrf(client: TestClient) -> str:
-    token = client.cookies.get("pyvelm_csrf")
-    assert token
-    return token
+    assert resp.status_code == 200, resp.text[:500]
+    assert "<!DOCTYPE" not in resp.text
+    return resp
 
 
 @pytest.mark.integration
@@ -44,57 +40,37 @@ def test_form_live_visibility_on_new_partner(pyvelm_dsn: str):
 
     app = create_app(reg, db, module_roots=_MODULE_ROOTS)
     with TestClient(app) as client:
-        _login(client)
-        new_form = client.get("/web/views/partners/partner.form/new")
-        assert new_form.status_code == 200
+        client.auth = ("admin", "admin")
+        live_url = "/web/views/partners/partner.form/live?driver=age"
 
-        minor = client.post(
-            "/web/views/partners/partner.form/live?driver=age",
-            data={
-                "name": "Minor",
-                "code": "MIN-1",
-                "age": "10",
-                "_csrf": _csrf(client),
-            },
+        minor = _live_post(
+            client,
+            live_url,
+            {"name": "Minor", "code": "MIN-1", "age": "10"},
         )
-        assert minor.status_code == 200
         assert 'data-field="birth_date"' not in minor.text
 
-        adult = client.post(
-            "/web/views/partners/partner.form/live?driver=age",
-            data={
-                "name": "Adult",
-                "code": "ADU-1",
-                "age": "25",
-                "_csrf": _csrf(client),
-            },
+        adult = _live_post(
+            client,
+            live_url,
+            {"name": "Adult", "code": "ADU-1", "age": "25"},
         )
-        assert adult.status_code == 200
         assert 'data-field="birth_date"' in adult.text
-        assert "/web/views/partners/partner.form/live?driver=age" in adult.text
+        assert live_url in adult.text
 
-        no_phone = client.post(
-            "/web/views/partners/partner.form/live?driver=email",
-            data={
-                "name": "No Mail",
-                "code": "NML-1",
-                "email": "",
-                "_csrf": _csrf(client),
-            },
+        email_url = "/web/views/partners/partner.form/live?driver=email"
+        no_phone = _live_post(
+            client,
+            email_url,
+            {"name": "No Mail", "code": "NML-1", "email": ""},
         )
-        assert no_phone.status_code == 200
         assert 'data-field="phone"' not in no_phone.text
 
-        with_phone = client.post(
-            "/web/views/partners/partner.form/live?driver=email",
-            data={
-                "name": "With Mail",
-                "code": "WML-1",
-                "email": "user@example.com",
-                "_csrf": _csrf(client),
-            },
+        with_phone = _live_post(
+            client,
+            email_url,
+            {"name": "With Mail", "code": "WML-1", "email": "user@example.com"},
         )
-        assert with_phone.status_code == 200
         assert 'data-field="phone"' in with_phone.text
 
     db.dispose()
@@ -124,17 +100,12 @@ def test_form_live_visibility_on_edit_partner(pyvelm_dsn: str):
 
     app = create_app(reg, db, module_roots=_MODULE_ROOTS)
     with TestClient(app) as client:
-        _login(client)
-        resp = client.post(
+        client.auth = ("admin", "admin")
+        resp = _live_post(
+            client,
             f"/web/views/partners/partner.form/record/{partner_id}/live?driver=age",
-            data={
-                "name": "Live Edit",
-                "code": "LIV-1",
-                "age": "12",
-                "_csrf": _csrf(client),
-            },
+            {"name": "Live Edit", "code": "LIV-1", "age": "12"},
         )
-        assert resp.status_code == 200
         assert 'data-field="birth_date"' not in resp.text
 
     db.dispose()
@@ -155,8 +126,9 @@ def test_form_live_requires_auth(pyvelm_dsn: str):
         resp = client.post(
             "/web/views/partners/partner.form/live?driver=age",
             data={"name": "X", "code": "X"},
+            headers={"HX-Request": "true"},
         )
-        assert resp.status_code == 302
-        assert "/login" in (resp.headers.get("location") or "")
+        assert resp.status_code == 204
+        assert "/login" in (resp.headers.get("HX-Redirect") or "")
 
     db.dispose()
