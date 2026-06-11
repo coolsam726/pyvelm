@@ -11,9 +11,15 @@ from pyvelm.views import (
     _resolve_position,
     _step_into,
     apply_operations,
+    decode_arch_callables,
+    encode_arch_callables,
     normalize_arch,
     resolve_arch,
 )
+
+
+def _sample_schema_default(_record, _env, get):
+    return (get("quantity") or 0) * (get("unit_price") or 0)
 
 
 def _arch():
@@ -314,6 +320,51 @@ class ResolveArchTests(unittest.TestCase):
         out = resolve_arch(base)
         # post-resolution normalize promotes the inserted string too.
         self.assertEqual(out["fields"], [{"name": "a"}, {"name": "b"}])
+
+
+class CallableArchTests(unittest.TestCase):
+    def test_encode_decode_roundtrip(self):
+        arch = {
+            "sections": [{
+                "name": "main",
+                "fields": [
+                    {"name": "quantity", "live": 200},
+                    {
+                        "name": "amount",
+                        "readonly": True,
+                        "default": _sample_schema_default,
+                    },
+                ],
+            }]
+        }
+        encoded = encode_arch_callables(arch)
+        raw = json.dumps(encoded)
+        restored = decode_arch_callables(json.loads(raw))
+        self.assertIs(restored["sections"][0]["fields"][1]["default"], _sample_schema_default)
+
+    def test_resolve_arch_restores_callable_default(self):
+        env = _FakeEnv()
+        arch = encode_arch_callables({
+            "sections": [{
+                "name": "main",
+                "fields": [
+                    {
+                        "name": "amount",
+                        "default": _sample_schema_default,
+                    },
+                ],
+            }]
+        })
+        base = _FakeView(
+            env,
+            id=1,
+            arch=json.dumps(arch),
+            view_type="form",
+        )
+        env._by_parent = {1: []}
+        out = resolve_arch(base)
+        fn = out["sections"][0]["fields"][0]["default"]
+        self.assertEqual(fn(None, None, lambda k, d=0: 3 if k == "quantity" else 10), 30)
 
 
 if __name__ == "__main__":

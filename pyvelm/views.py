@@ -32,8 +32,12 @@ Target segments (Stage 7 Slice C — `pyvelm/docs/web-layer.md`):
 from __future__ import annotations
 
 import copy
+import importlib
 import json
+from collections.abc import Callable
 from typing import Any
+
+_CALLABLE_MARKER = "__pyvelm_callable__"
 
 # Per-view_type list positions whose string entries should be promoted
 # to {"name": <str>} dicts at normalization time. Extensible by adding
@@ -57,6 +61,54 @@ _LIST_PROMOTION_PATHS: dict[str, list[tuple[str, ...]]] = {
     "kanban": [("card", "fields"), ("card", "badges")],
     "dashboard": [("widgets", "*", "fields")],
 }
+
+
+def callable_ref(fn: Callable[..., Any]) -> str:
+    """Serialize a view-schema callable as ``module:qualname``."""
+    mod = getattr(fn, "__module__", None)
+    qual = getattr(fn, "__qualname__", None)
+    if not mod or not qual or qual == "<lambda>":
+        raise TypeError(
+            "View schema callables must be module-level named functions; "
+            f"cannot serialize {fn!r}"
+        )
+    return f"{mod}:{qual}"
+
+
+def resolve_callable_ref(ref: str) -> Callable[..., Any]:
+    """Import a callable previously stored via :func:`callable_ref`."""
+    if ":" not in ref:
+        raise ValueError(f"Invalid callable ref {ref!r}")
+    mod_name, attr = ref.rsplit(":", 1)
+    mod = importlib.import_module(mod_name)
+    obj: Any = mod
+    for part in attr.split("."):
+        obj = getattr(obj, part)
+    if not callable(obj):
+        raise TypeError(f"Callable ref {ref!r} did not resolve to a function")
+    return obj
+
+
+def encode_arch_callables(node: Any) -> Any:
+    """Replace callables with JSON-safe refs before persisting view arch."""
+    if callable(node):
+        return {_CALLABLE_MARKER: callable_ref(node)}
+    if isinstance(node, dict):
+        return {k: encode_arch_callables(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [encode_arch_callables(item) for item in node]
+    return node
+
+
+def decode_arch_callables(node: Any) -> Any:
+    """Restore callables from refs produced by :func:`encode_arch_callables`."""
+    if isinstance(node, dict):
+        if list(node.keys()) == [_CALLABLE_MARKER]:
+            return resolve_callable_ref(node[_CALLABLE_MARKER])
+        return {k: decode_arch_callables(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [decode_arch_callables(item) for item in node]
+    return node
 
 
 def normalize_arch(arch: dict, view_type: str) -> dict:
@@ -314,7 +366,7 @@ def resolve_arch(view) -> dict:
                 f"View {root.module}.{root.name} has no arch (extension views "
                 f"need an inherit_id to a base view)"
             )
-        arch = copy.deepcopy(json.loads(root.arch))
+        arch = decode_arch_callables(copy.deepcopy(json.loads(root.arch)))
         _apply_chain(root, arch)
         # Normalize the resolved arch so that any plain-string entries
         # inserted by before/after/replace operations are promoted to dicts.
@@ -329,6 +381,6 @@ def resolve_arch(view) -> dict:
 def _apply_chain(view, arch):
     for ext in _ext_search(view, view.id):
         if ext.operations:
-            ops = json.loads(ext.operations)
+            ops = decode_arch_callables(json.loads(ext.operations))
             apply_operations(arch, ops)
         _apply_chain(ext, arch)
