@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from pyvelm import BaseModel, Boolean, Char, Environment, Integer, Many2one, Registry
 from pyvelm.importer import (
+    ImportBatchError,
     build_row_vals,
     decode_import_payload,
     encode_import_payload,
@@ -14,9 +15,15 @@ from pyvelm.importer import (
     export_list_data,
     filter_import_fields,
     import_rows,
+    import_data_line_no,
+    import_errors_by_line,
+    failed_import_sheet,
+    failed_import_xlsx_bytes,
+    import_template_data_rows,
     import_template_fields_for_view,
     import_template_headers,
     import_template_xlsx_bytes,
+    parse_include_data_query,
     list_importable_fields,
     mapping_from_form,
     m2o_import_hint,
@@ -45,6 +52,17 @@ class ImporterParseTests(unittest.TestCase):
         headers, rows = parse_tabular_upload(content, "partners.csv")
         self.assertEqual(headers, ["name", "code"])
         self.assertEqual(rows[0], ["Alice", "A1"])
+
+    def test_encode_payload_serializes_dates(self):
+        from datetime import datetime
+
+        raw = encode_import_payload(
+            ["When"],
+            [[datetime(2024, 6, 1, 12, 30)]],
+        )
+        headers, rows = decode_import_payload(raw)
+        self.assertEqual(headers, ["When"])
+        self.assertEqual(rows[0][0], "2024-06-01 12:30:00")
 
     def test_roundtrip_payload(self):
         headers = ["name"]
@@ -126,10 +144,9 @@ class ImporterModelTests(unittest.TestCase):
     def test_build_row_vals_m2o_by_numeric_id(self):
         env = self._env()
         tag_cls = env.registry["test.import.tag"]
-        rec = MagicMock()
-        rec.exists.return_value = True
-        rec.id = 42
-        with patch.object(tag_cls, "browse", return_value=rec):
+        tag_rs = MagicMock()
+        tag_rs.id = 42
+        with patch.object(tag_cls, "search", return_value=tag_rs):
             vals = build_row_vals(
                 env,
                 "test.import.item",
@@ -138,24 +155,156 @@ class ImporterModelTests(unittest.TestCase):
             )
         self.assertEqual(vals["tag_id"], 42)
 
+    def test_import_rows_update_by_id(self):
+        env = self._env()
+        cls = env.registry["test.import.item"]
+        rec = MagicMock()
+        written: list[dict] = []
+
+        def fake_write(vals):
+            written.append(vals)
+
+        rec.write = fake_write
+        with patch.object(cls, "search", return_value=rec):
+            with patch.object(env, "transaction"):
+                result = import_rows(
+                    env,
+                    "test.import.item",
+                    [["1", "Updated"]],
+                    {0: "id", 1: "name"},
+                    update_by_id=True,
+                )
+        self.assertEqual(result["updated"], 1)
+        self.assertEqual(written, [{"name": "Updated"}])
+
+    def test_import_rows_atomic_aborts_on_any_error(self):
+        env = self._env()
+        cls = env.registry["test.import.item"]
+        created: list[dict] = []
+
+        def fake_create(vals):
+            created.append(vals)
+            return env["test.import.item"].browse(len(created))
+
+        def fail_build_row_vals(*args, **kwargs):
+            if len(created) >= 1:
+                raise ValueError("bad row")
+            return build_row_vals(*args, **kwargs)
+
+        with patch.object(cls, "create", side_effect=fake_create):
+            with patch(
+                "pyvelm.importer.build_row_vals",
+                side_effect=fail_build_row_vals,
+            ):
+                with patch.object(env, "transaction"):
+                    with self.assertRaises(ImportBatchError) as ctx:
+                        import_rows(
+                            env,
+                            "test.import.item",
+                            [["Widget", "W1"], ["Bad", "B1"]],
+                            {0: "name", 1: "code"},
+                        )
+        self.assertEqual(len(ctx.exception.result["errors"]), 1)
+        self.assertEqual(ctx.exception.result["created"], 1)
+
+    def test_import_rows_non_atomic_allows_partial_success(self):
+        env = self._env()
+        cls = env.registry["test.import.item"]
+        created: list[dict] = []
+
+        def fake_create(vals):
+            created.append(vals)
+            return env["test.import.item"].browse(len(created))
+
+        def fail_build_row_vals(*args, **kwargs):
+            if len(created) >= 1:
+                raise ValueError("bad row")
+            return build_row_vals(*args, **kwargs)
+
+        with patch.object(cls, "create", side_effect=fake_create):
+            with patch(
+                "pyvelm.importer.build_row_vals",
+                side_effect=fail_build_row_vals,
+            ):
+                with patch.object(env, "transaction"):
+                    result = import_rows(
+                        env,
+                        "test.import.item",
+                        [["Widget", "W1"], ["Bad", "B1"]],
+                        {0: "name", 1: "code"},
+                        atomic=False,
+                    )
+        self.assertEqual(result["created"], 1)
+        self.assertEqual(len(result["errors"]), 1)
+
 
 class ListIoActionsTests(unittest.TestCase):
-    def test_default_actions_include_import_export(self):
+    def test_default_actions_group_import_export_in_menu(self):
         env = MagicMock()
         env.has_access.side_effect = lambda _m, perm: perm in ("create", "read")
         view = MagicMock(module="demo", name="item.list", model="demo.item")
         acts = _default_list_io_actions(view, env, list_nav_query="search=foo")
-        labels = [a["label"] for a in acts]
-        self.assertIn("Import", labels)
-        self.assertIn("Export CSV", labels)
-        self.assertTrue(acts[1]["url"].endswith("export.csv?search=foo"))
+        self.assertEqual(len(acts), 1)
+        self.assertEqual(acts[0]["kind"], "menu")
+        labels = [i["label"] for i in acts[0]["items"]]
+        self.assertEqual(labels, ["Import", "Export CSV", "Export Excel"])
+        self.assertTrue(acts[0]["items"][0]["url"].endswith("import?search=foo"))
+        self.assertTrue(acts[0]["items"][1]["url"].endswith("export.csv?search=foo"))
 
-    def test_merge_skips_duplicates(self):
-        declared = [{"label": "Import", "url": "/custom"}]
-        defaults = [{"label": "Import", "url": "/built-in"}]
+    def test_merge_skips_duplicate_menu_items(self):
+        declared = [{"label": "Import", "url": "/custom", "action_key": "import"}]
+        defaults = _default_list_io_actions(
+            MagicMock(module="demo", name="item.list", model="demo.item"),
+            MagicMock(has_access=lambda *_a, **_k: True),
+        )
         merged = _merge_list_page_actions(declared, defaults)
-        self.assertEqual(len(merged), 1)
+        self.assertEqual(len(merged), 2)
         self.assertEqual(merged[0]["url"], "/custom")
+        self.assertEqual(merged[1]["kind"], "menu")
+        menu_labels = [i["label"] for i in merged[1]["items"]]
+        self.assertEqual(menu_labels, ["Export CSV", "Export Excel"])
+
+
+class FailedImportExportTests(unittest.TestCase):
+    def test_failed_import_sheet_appends_error_column(self):
+        headers = ["Name", "Code"]
+        rows = [["Good", "G1"], ["Bad", "B1"], ["Also bad", "B2"]]
+        errors = [
+            {"line": 3, "error": "Duplicate code"},
+            {"line": 4, "error": "Missing parent"},
+        ]
+        out_headers, out_rows = failed_import_sheet(headers, rows, errors)
+        self.assertEqual(out_headers, ["Name", "Code", "Error"])
+        self.assertEqual(len(out_rows), 2)
+        self.assertEqual(out_rows[0], ["Bad", "B1", "Duplicate code"])
+        self.assertEqual(out_rows[1], ["Also bad", "B2", "Missing parent"])
+
+    def test_failed_import_xlsx_bytes(self):
+        data = failed_import_xlsx_bytes(
+            ["Name"],
+            [["Bad"]],
+            [{"line": 2, "error": "Nope"}],
+            title="Failed",
+        )
+        self.assertTrue(data[:2] == b"PK")
+
+
+class ImportTestPreviewTests(unittest.TestCase):
+    def test_import_data_line_no(self):
+        self.assertEqual(import_data_line_no(0), 2)
+        self.assertEqual(import_data_line_no(4), 6)
+
+    def test_import_errors_by_line(self):
+        errors = [
+            {"line": 2, "error": "Missing name"},
+            {"line": 5, "error": "Bad code"},
+        ]
+        self.assertEqual(
+            import_errors_by_line(errors),
+            {2: "Missing name", 5: "Bad code"},
+        )
+        self.assertEqual(import_errors_by_line(None), {})
+        self.assertEqual(import_errors_by_line([]), {})
 
 
 class ImportTemplateTests(unittest.TestCase):
@@ -202,6 +351,36 @@ class ImportTemplateTests(unittest.TestCase):
     def test_import_template_xlsx_bytes(self):
         data = import_template_xlsx_bytes(["Name", "Email"], title="Partners")
         self.assertTrue(data[:2] == b"PK")
+
+    def test_import_template_xlsx_bytes_with_rows(self):
+        data = import_template_xlsx_bytes(
+            ["Name"],
+            rows=[["Alice"], ["Bob"]],
+            title="Partners",
+        )
+        self.assertTrue(data[:2] == b"PK")
+        self.assertGreater(len(data), 4000)
+
+    def test_parse_include_data_query(self):
+        self.assertFalse(parse_include_data_query(""))
+        self.assertFalse(parse_include_data_query("0"))
+        self.assertTrue(parse_include_data_query("1"))
+        self.assertTrue(parse_include_data_query("true"))
+
+    def test_import_template_data_rows(self):
+        env = MagicMock()
+        env.registry = {"test.import.item": MagicMock(_fields={"name": 1, "code": 1})}
+        rec = MagicMock()
+        rec.name = "Widget"
+        rec.code = "W1"
+        fields = [
+            {"name": "name", "label": "Name"},
+            {"name": "code", "label": "Reference"},
+        ]
+        rows = import_template_data_rows(
+            env, "test.import.item", fields, [rec],
+        )
+        self.assertEqual(rows, [["Widget", "W1"]])
 
     def test_import_template_headers_use_labels(self):
         fields = [

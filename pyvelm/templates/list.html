@@ -4,7 +4,9 @@
 
 {% block page_actions %}
 {% for act in page_actions or [] %}
+{% if act.kind != 'menu' %}
 {% include "_view_action_button.html" %}
+{% endif %}
 {% endfor %}
 {% if access.can_create and (create_href or form_view_name) %}
 {% if create_href %}
@@ -22,6 +24,11 @@
     New
 </a>
 {% endif %}
+{% for act in page_actions or [] %}
+{% if act.kind == 'menu' %}
+{% include "_view_action_menu.html" %}
+{% endif %}
+{% endfor %}
 {% endblock %}
 
 {# ── Main content ── #}

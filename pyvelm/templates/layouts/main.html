@@ -1036,6 +1036,9 @@
 
             _reinitDialogContent(root) {
                 if (!root) return;
+                if (typeof pvInjectCsrfFields === 'function') {
+                    pvInjectCsrfFields(root);
+                }
                 if (window.htmx && typeof window.htmx.process === 'function') {
                     window.htmx.process(root);
                 }
