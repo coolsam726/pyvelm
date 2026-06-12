@@ -57,10 +57,11 @@ or (chatter_context and chatter_context.enabled)
         <div class="pv-form-split__main space-y-6">
             {% endif %}
 
-            {# Action toolbar — sticky while scrolling long forms (Filament-style). #}
+            {# Action toolbar — pinned to dialog footer when opened in PvDialog. #}
             <div class="pv-form-actions-bar flex items-center justify-between gap-3
-                        sticky top-0 z-20 -mx-1 px-1 py-2 mb-2
-                        bg-neutral-primary/95 backdrop-blur-sm border-b border-default/80">
+                        {% if not in_dialog %}sticky top-0 z-20 -mx-1 px-1 py-2 mb-2
+                        bg-neutral-primary/95 backdrop-blur-sm border-b border-default/80{% endif %}"
+                 {% if in_dialog %}data-pv-dialog-footer{% endif %}>
                 <span class="inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider
                      px-2 py-0.5 rounded-full
                      {% if is_detail %}bg-neutral-tertiary text-body-subtle

@@ -86,6 +86,7 @@
         z-index: 61;
         display: flex; flex-direction: column;
         width: min(90vw, 720px);
+        height: min(85vh, 640px);
         max-height: 85vh;
         background: var(--color-neutral-primary);
         color: var(--color-body);
@@ -96,11 +97,57 @@
       }
       .pv-fdialog-card.pv-fdialog-card--prompt {
         width: min(90vw, 28rem);
+        height: auto;
         max-height: none;
       }
+      .pv-fdialog-card.pv-fdialog-card--fullscreen {
+        width: 100vw !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0;
+      }
       .pv-fdialog-card.is-dragging { cursor: grabbing; user-select: none; }
-      .pv-fdialog-title { cursor: grab; user-select: none; }
+      .pv-fdialog-card.is-resizing { user-select: none; }
+      .pv-fdialog-title { cursor: grab; user-select: none; flex-shrink: 0; }
       .pv-fdialog-title:active { cursor: grabbing; }
+      .pv-fdialog-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+      }
+      .pv-fdialog-footer {
+        flex-shrink: 0;
+        border-top: 1px solid var(--color-default);
+        background: var(--color-neutral-secondary);
+      }
+      .pv-fdialog-footer-inner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+      }
+      .pv-fdialog-resize-handle {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 1rem;
+        height: 1rem;
+        cursor: nwse-resize;
+        z-index: 2;
+      }
+      .pv-fdialog-resize-handle::after {
+        content: '';
+        position: absolute;
+        right: 3px;
+        bottom: 3px;
+        width: 8px;
+        height: 8px;
+        border-right: 2px solid var(--color-body-subtle);
+        border-bottom: 2px solid var(--color-body-subtle);
+        opacity: 0.65;
+      }
       /* Toolbar buttons that would navigate the host page out from
          under the dialog (in-form Cancel, Delete-then-history.back)
          are hidden when rendered inside the dialog — the dialog's
@@ -472,7 +519,9 @@
             <div class="pv-fdialog-card"
                  :class="{
                      'is-dragging': dragging,
+                     'is-resizing': resizing,
                      'pv-fdialog-card--prompt': mode === 'confirm' || mode === 'alert',
+                     'pv-fdialog-card--fullscreen': fullscreen && mode === 'content',
                  }"
                  x-ref="card"
                  :style="cardStyle">
@@ -481,49 +530,74 @@
                      @mousedown="startDrag($event)">
                     <h3 class="text-sm font-semibold text-heading truncate flex-1 min-w-0"
                         x-text="title || 'Dialog'"></h3>
-                    <a x-show="recordUrl && mode === 'content'"
-                       :href="recordUrl"
-                       class="shrink-0 text-xs font-medium text-fg-brand hover:underline whitespace-nowrap"
-                       title="Open this record on the full page">
-                        Open full page
-                    </a>
-                    <button type="button"
-                            x-show="mode !== 'alert'"
-                            @click.stop="close()"
-                            aria-label="Close"
-                            class="p-1 rounded text-body-subtle hover:text-heading shrink-0">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
-                             viewBox="0 0 24 24" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                  d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
+                    <div class="pv-fdialog-title-actions flex items-center gap-1 shrink-0"
+                         @mousedown.stop>
+                        <a x-show="recordUrl && mode === 'content' && !fullscreen"
+                           :href="recordUrl"
+                           class="shrink-0 text-xs font-medium text-fg-brand hover:underline whitespace-nowrap px-1"
+                           title="Open this record on the full page">
+                            Open full page
+                        </a>
+                        <button type="button"
+                                x-show="mode === 'content'"
+                                @click.stop="toggleFullscreen()"
+                                :aria-label="fullscreen ? 'Exit full screen' : 'Full screen'"
+                                :title="fullscreen ? 'Exit full screen' : 'Full screen'"
+                                class="p-1 rounded text-body-subtle hover:text-heading">
+                            <svg x-show="!fullscreen" class="w-4 h-4" fill="none" stroke="currentColor"
+                                 viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      d="M3.75 3.75v4.5m0-4.5h4.5M20.25 3.75v4.5m0-4.5h-4.5M3.75 20.25v-4.5m0 4.5h4.5M20.25 20.25v-4.5m0 4.5h-4.5"/>
+                            </svg>
+                            <svg x-show="fullscreen" class="w-4 h-4" fill="none" stroke="currentColor"
+                                 viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      d="M9 9V4.5H4.5M9 9H4.5M9 9v-.75M15 9h4.5M15 9V4.5M15 9v-.75M9 15v4.5H4.5M9 15H4.5M9 15h-.75M15 15h4.5M15 15v4.5M15 15h.75"/>
+                            </svg>
+                        </button>
+                        <button type="button"
+                                x-show="mode !== 'alert'"
+                                @click.stop="close()"
+                                aria-label="Close"
+                                class="p-1 rounded text-body-subtle hover:text-heading">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                 viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-                <div class="flex-1 overflow-auto flex flex-col min-h-0">
+                <div x-show="mode === 'confirm' || mode === 'alert'"
+                     class="pv-fdialog-body p-4">
+                    <p class="text-sm text-body leading-relaxed whitespace-pre-wrap"
+                       x-text="message"></p>
+                </div>
+                <div x-show="mode === 'content'"
+                     x-ref="content"
+                     data-pv-form-shell
+                     class="pv-fdialog-body p-4 relative min-h-[8rem]">
+                </div>
+                <div x-ref="footer" class="pv-fdialog-footer">
                     <div x-show="mode === 'confirm' || mode === 'alert'"
-                         class="p-4 flex flex-col flex-1 min-h-0">
-                        <p class="text-sm text-body leading-relaxed whitespace-pre-wrap flex-1"
-                           x-text="message"></p>
-                        <div class="flex items-center justify-end gap-2 pt-4 mt-2
-                                    border-t border-default shrink-0">
-                            <button type="button"
-                                    x-show="mode === 'confirm'"
-                                    @click="close()"
-                                    x-text="cancelLabel"
-                                    class="px-4 py-1.5 text-sm rounded-md text-body
-                                           hover:bg-neutral-secondary transition-colors"></button>
-                            <button type="button"
-                                    @click="confirmPrompt()"
-                                    x-text="confirmLabel"
-                                    :class="confirmBtnClass"></button>
-                        </div>
+                         class="pv-fdialog-footer-inner">
+                        <button type="button"
+                                x-show="mode === 'confirm'"
+                                @click="close()"
+                                x-text="cancelLabel"
+                                class="px-4 py-1.5 text-sm rounded-md text-body
+                                       hover:bg-neutral-secondary transition-colors"></button>
+                        <button type="button"
+                                @click="confirmPrompt()"
+                                x-text="confirmLabel"
+                                :class="confirmBtnClass"></button>
                     </div>
-                    <div x-show="mode === 'content'"
-                         x-ref="content"
-                         data-pv-form-shell
-                         class="p-4 flex-1 overflow-auto relative min-h-[8rem]">
-                    </div>
+                    <div x-ref="footerContent"></div>
                 </div>
+                <div x-show="mode === 'content' && !fullscreen"
+                     class="pv-fdialog-resize-handle"
+                     aria-hidden="true"
+                     @mousedown.stop="startResize($event)"></div>
             </div>
         </div>
     </template>
@@ -884,13 +958,18 @@
             closeOnBackdrop: false,
             recordUrl: null,              // full-page URL for "Open full page" link
             dragging: false,
+            resizing: false,
+            fullscreen: false,
             _x: null, _y: null,           // current top-left position (px)
+            _width: null, _height: null,  // custom size (px); null = default CSS
             _dragOffset: null,            // mousedown offset within title bar
+            _resizeOrigin: null,          // mousedown size/position for resize
             _resolve: null,               // onResult callback from opener
             _stack: [],                   // suspended parent dialogs (nested create)
             _contentBusy: false,          // guard concurrent HTMX body loads
             _moveHandler: null,
             _upHandler: null,
+            _fsRestore: null,             // saved geometry before fullscreen
 
             init() {
                 // Imperative entry point — bind once.
@@ -977,11 +1056,21 @@
 
             get cardStyle() {
                 const z = 61 + this._stack.length * 2;
-                if (this._x === null || this._y === null) {
-                    // Centered fallback before we measure the card.
-                    return `left: 50%; top: 12vh; transform: translateX(-50%); z-index: ${z};`;
+                if (this.fullscreen && this.mode === 'content') {
+                    return `left: 0; top: 0; z-index: ${z};`;
                 }
-                return `left: ${this._x}px; top: ${this._y}px; z-index: ${z};`;
+                const parts = [`z-index: ${z}`];
+                if (this._width) parts.push(`width: ${this._width}px`);
+                if (this._height) {
+                    parts.push(`height: ${this._height}px`);
+                    parts.push(`max-height: ${this._height}px`);
+                }
+                if (this._x === null || this._y === null) {
+                    parts.push('left: 50%', 'top: 12vh', 'transform: translateX(-50%)');
+                } else {
+                    parts.push(`left: ${this._x}px`, `top: ${this._y}px`, 'transform: none');
+                }
+                return parts.join('; ');
             },
 
             _pushFrame() {
@@ -1055,6 +1144,30 @@
                 if (typeof window.pvInitImportTemplateColumns === 'function') {
                     window.pvInitImportTemplateColumns(root);
                 }
+                this._syncDialogFooter(root);
+            },
+
+            _syncDialogFooter(root) {
+                const slot = this.$refs.footerContent;
+                if (!slot) return;
+                slot.innerHTML = '';
+                if (!root || this.mode !== 'content') return;
+                root.querySelectorAll('[data-pv-dialog-footer]').forEach((bar) => {
+                    const form = bar.closest('form');
+                    let formId = form && form.id;
+                    if (form && !formId) {
+                        formId = 'pv-dialog-form-'
+                            + Math.random().toString(36).slice(2, 9);
+                        form.id = formId;
+                    }
+                    bar.querySelectorAll(
+                        'button[type="submit"], input[type="submit"]',
+                    ).forEach((btn) => {
+                        if (formId) btn.setAttribute('form', formId);
+                    });
+                    bar.classList.add('pv-fdialog-footer-inner');
+                    slot.appendChild(bar);
+                });
             },
 
             _popFrame(result) {
@@ -1106,10 +1219,11 @@
                     this.cancelLabel = cfg.cancelLabel || 'Cancel';
                     this.closeOnBackdrop = false;
                     this._resolve = (result) => resolve(!!(result && result.confirmed));
-                    this._x = null;
-                    this._y = null;
+                    this._resetGeometry();
                     this.loading = false;
                     this.open = true;
+                    const footerContent = this.$refs.footerContent;
+                    if (footerContent) footerContent.innerHTML = '';
                     this.$nextTick(() => this.center());
                 });
             },
@@ -1138,8 +1252,7 @@
                 this.recordUrl = this._resolveRecordUrl(cfg.url, cfg.recordUrl);
                 this.closeOnBackdrop = !!cfg.closeOnBackdrop;
                 this._resolve = cfg.onResult || null;
-                this._x = null;
-                this._y = null;
+                this._resetGeometry();
                 this.open = true;
                 await this.$nextTick();
                 const contentEl = this.$refs.content;
@@ -1187,11 +1300,12 @@
                 this.message = '';
                 this.recordUrl = null;
                 this.loading = false;
-                this._x = null;
-                this._y = null;
+                this._resetGeometry();
                 this._stack = [];
                 const content = this.$refs.content;
                 if (content) content.innerHTML = '';
+                const footerContent = this.$refs.footerContent;
+                if (footerContent) footerContent.innerHTML = '';
                 if (cb) {
                     try { cb(result || null); } catch (_) {}
                 }
@@ -1199,7 +1313,17 @@
 
             close() { this.closeWith(null); },
 
+            _resetGeometry() {
+                this._x = null;
+                this._y = null;
+                this._width = null;
+                this._height = null;
+                this.fullscreen = false;
+                this._fsRestore = null;
+            },
+
             center() {
+                if (this.fullscreen) return;
                 const card = this.$refs.card;
                 if (!card) return;
                 const rect = card.getBoundingClientRect();
@@ -1210,8 +1334,42 @@
                              (window.innerHeight - rect.height) / 2)));
             },
 
+            toggleFullscreen() {
+                if (this.mode !== 'content') return;
+                if (this.fullscreen) {
+                    const saved = this._fsRestore || {};
+                    this.fullscreen = false;
+                    this._x = saved.x ?? this._x;
+                    this._y = saved.y ?? this._y;
+                    this._width = saved.width ?? this._width;
+                    this._height = saved.height ?? this._height;
+                    this._fsRestore = null;
+                    return;
+                }
+                const card = this.$refs.card;
+                if (!card) return;
+                const rect = card.getBoundingClientRect();
+                this._fsRestore = {
+                    x: this._x,
+                    y: this._y,
+                    width: this._width || Math.round(rect.width),
+                    height: this._height || Math.round(rect.height),
+                };
+                this._width = null;
+                this._height = null;
+                this._x = 0;
+                this._y = 0;
+                this.fullscreen = true;
+            },
+
             startDrag(ev) {
                 if (ev.button !== 0) return; // left button only
+                if (this.fullscreen) return;
+                if (ev.target.closest(
+                    'button, a, input, select, textarea, .pv-fdialog-title-actions',
+                )) {
+                    return;
+                }
                 const card = this.$refs.card;
                 if (!card) return;
                 ev.preventDefault();
@@ -1239,6 +1397,49 @@
                 };
                 this._upHandler = () => {
                     this.dragging = false;
+                    document.removeEventListener('mousemove', this._moveHandler);
+                    document.removeEventListener('mouseup', this._upHandler);
+                    this._moveHandler = null;
+                    this._upHandler = null;
+                };
+                document.addEventListener('mousemove', this._moveHandler);
+                document.addEventListener('mouseup', this._upHandler);
+            },
+
+            startResize(ev) {
+                if (ev.button !== 0 || this.fullscreen) return;
+                const card = this.$refs.card;
+                if (!card) return;
+                ev.preventDefault();
+                const rect = card.getBoundingClientRect();
+                this._x = Math.round(rect.left);
+                this._y = Math.round(rect.top);
+                this._width = Math.round(rect.width);
+                this._height = Math.round(rect.height);
+                this._resizeOrigin = {
+                    x: ev.clientX,
+                    y: ev.clientY,
+                    width: this._width,
+                    height: this._height,
+                };
+                this.resizing = true;
+                const minW = 320;
+                const minH = 200;
+                this._moveHandler = (e) => {
+                    const dx = e.clientX - this._resizeOrigin.x;
+                    const dy = e.clientY - this._resizeOrigin.y;
+                    const maxW = window.innerWidth - this._x - 8;
+                    const maxH = window.innerHeight - this._y - 8;
+                    this._width = Math.max(
+                        minW, Math.min(maxW, this._resizeOrigin.width + dx),
+                    );
+                    this._height = Math.max(
+                        minH, Math.min(maxH, this._resizeOrigin.height + dy),
+                    );
+                };
+                this._upHandler = () => {
+                    this.resizing = false;
+                    this._resizeOrigin = null;
                     document.removeEventListener('mousemove', this._moveHandler);
                     document.removeEventListener('mouseup', this._upHandler);
                     this._moveHandler = null;

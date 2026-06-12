@@ -122,7 +122,7 @@
                    class="w-4 h-4 rounded border-default text-fg-brand">
             <span>Update existing records when an <code>id</code> column is mapped</span>
         </label>
-        <div class="flex justify-end gap-2 pt-2 border-t border-default">
+        <div class="flex justify-end gap-2" data-pv-dialog-footer>
             <button type="button"
                     onclick="window.PvDialog && window.PvDialog.close()"
                     class="px-3 py-1.5 border border-default rounded-md hover:bg-neutral-secondary">
@@ -215,7 +215,7 @@
             </div>
             {% endfor %}
         </div>
-        <div class="flex justify-end gap-2 pt-2 border-t border-default">
+        <div class="flex justify-end gap-2" data-pv-dialog-footer>
             <button type="button"
                     onclick="window.PvDialog && window.PvDialog.close()"
                     class="px-3 py-1.5 border border-default rounded-md hover:bg-neutral-secondary">
@@ -330,7 +330,7 @@
     })();
     </script>
     {% endif %}
-    <div class="flex justify-end pt-2 border-t border-default">
+    <div class="flex justify-end" data-pv-dialog-footer>
         <button type="button"
                 onclick="{% if import_had_success %}window.dispatchEvent(new CustomEvent('pv-list-reload')); {% endif %}window.PvDialog && window.PvDialog.close(true)"
                 class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
