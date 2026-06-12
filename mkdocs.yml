@@ -26,21 +26,22 @@ theme:
     # Light mode default; toggles to dark via the icon in the header.
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
   icon:
     repo: fontawesome/brands/github
-
+extra_css:
+  - assets/css/savannabits.css
 extra:
   version:
     provider: mike
@@ -52,6 +53,7 @@ extra:
 
 plugins:
   - search
+  - glightbox
   - mike:
       version_selector: true
       css_dir: assets
@@ -90,10 +92,11 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Unreleased: releases/unreleased.md
-  - Guides:
+  - Start here:
       - Getting started: getting-started.md
-      - Database layer (v1.0): multi-database.md
+      - Learning path: learning-path.md
+      - CLI quick reference: cli.md
+  - Build your app:
       - Declaring models: models.md
       - Building UIs: views.md
       - Form UX: form-ux.md
@@ -106,16 +109,18 @@ nav:
       - Email composer: mail-compose.md
       - File library: file-manager.md
       - Document layouts & PDF: document-layout.md
-      - Shell navigation: navigation.md
       - Geo data: geo-data.md
-      - White-label branding: branding.md
+  - Operate and deploy:
       - Security: security.md
+      - Database layer (v1.0): multi-database.md
       - Deployment: deployment.md
-      - CLI reference: cli.md
-      - Console commands: console.md
+      - Shell navigation: navigation.md
+      - White-label branding: branding.md
       - IDE typing stubs: ide-typing.md
+  - Extend the framework:
+      - Console commands: console.md
       - Architecture: architecture.md
-      - Doc versions (mike): versioning.md
+      - "ADR 001: SQLAlchemy Core": adr/001-sqlalchemy-core.md
   - API reference:
       - Overview: api/index.md
       - Recordsets & fields:
@@ -142,3 +147,66 @@ nav:
       - HTTP & CLI:
           - pyvelm.web: api/web.md
           - pyvelm.cli: api/cli.md
+  - Releases and versions:
+      - Releases overview: releases/index.md
+      - Unreleased: releases/unreleased.md
+      - v1 series:
+          - v1.4.4: releases/v1.4.4.md
+          - v1.4.3: releases/v1.4.3.md
+          - v1.4.2: releases/v1.4.2.md
+          - v1.4.1: releases/v1.4.1.md
+          - v1.4.0: releases/v1.4.0.md
+          - v1.3.2: releases/v1.3.2.md
+          - v1.3.1: releases/v1.3.1.md
+          - v1.3.0: releases/v1.3.0.md
+          - v1.2.0: releases/v1.2.0.md
+          - v1.1.1: releases/v1.1.1.md
+          - v1.1.0: releases/v1.1.0.md
+          - v1.0.1: releases/v1.0.1.md
+          - v1.0.0: releases/v1.0.0.md
+      - v0.26-v0.20:
+          - v0.26.2: releases/v0.26.2.md
+          - v0.26.1: releases/v0.26.1.md
+          - v0.26.0: releases/v0.26.0.md
+          - v0.25.0: releases/v0.25.0.md
+          - v0.24.1: releases/v0.24.1.md
+          - v0.24.0: releases/v0.24.0.md
+          - v0.23.0: releases/v0.23.0.md
+          - v0.22.1: releases/v0.22.1.md
+          - v0.22.0: releases/v0.22.0.md
+          - v0.21.0: releases/v0.21.0.md
+          - v0.20.2: releases/v0.20.2.md
+          - v0.20.1: releases/v0.20.1.md
+          - v0.20.0: releases/v0.20.0.md
+      - v0.19-v0.10:
+          - v0.19.0: releases/v0.19.0.md
+          - v0.18.0: releases/v0.18.0.md
+          - v0.17.0: releases/v0.17.0.md
+          - v0.16.0: releases/v0.16.0.md
+          - v0.15.1: releases/v0.15.1.md
+          - v0.15.0: releases/v0.15.0.md
+          - v0.14.0: releases/v0.14.0.md
+          - v0.13.0: releases/v0.13.0.md
+          - v0.12.0: releases/v0.12.0.md
+          - v0.11.0: releases/v0.11.0.md
+          - v0.10.0: releases/v0.10.0.md
+      - v0.9-v0.2:
+          - v0.9.0: releases/v0.9.0.md
+          - v0.8.0: releases/v0.8.0.md
+          - v0.7.0: releases/v0.7.0.md
+          - v0.6.0: releases/v0.6.0.md
+          - v0.5.0: releases/v0.5.0.md
+          - v0.4.0: releases/v0.4.0.md
+          - v0.3.0: releases/v0.3.0.md
+          - v0.2.10: releases/v0.2.10.md
+          - v0.2.9: releases/v0.2.9.md
+          - v0.2.8: releases/v0.2.8.md
+          - v0.2.7: releases/v0.2.7.md
+          - v0.2.6: releases/v0.2.6.md
+          - v0.2.5: releases/v0.2.5.md
+          - v0.2.4: releases/v0.2.4.md
+          - v0.2.3: releases/v0.2.3.md
+          - v0.2.2: releases/v0.2.2.md
+          - v0.2.1: releases/v0.2.1.md
+          - v0.2.0: releases/v0.2.0.md
+      - Doc versions (mike): versioning.md

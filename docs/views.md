@@ -296,6 +296,8 @@ Edit-mode Many2one fields render as a searchable combobox:
 
 ### Relational fields on forms (One2many / Many2many)
 
+<a id="relational-fields-on-forms-on2many--many2many"></a>
+
 For **One2many** and **Many2many** on parent forms you choose:
 
 1. **Edit mode** — `widget="dialog"` vs `widget="inline"` / `table`
@@ -306,6 +308,10 @@ For **One2many** and **Many2many** on parent forms you choose:
 precedence, view ref syntax, invoice vs entry example, `FieldRef` keys).
 
 Quick reference:
+
+### Relational fields: `widget="dialog"` vs `widget="inline"`
+
+<a id="relational-fields-widgetdialog-vs-widgetinline"></a>
 
 | Goal | One2many |
 |------|----------|
@@ -341,6 +347,8 @@ If the comodel has **no** form view, One2many falls back to a chip
 summary; Many2many falls back to inline chip search.
 
 ### Many2many — dialog mode
+
+<a id="many2many-chip-editor"></a>
 
 Selected records appear as chips. **Create new** opens the comodel
 form in the dialog; **Link existing…** opens a search field to pick

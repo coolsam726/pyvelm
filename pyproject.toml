@@ -56,6 +56,7 @@ docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.27",
+    "mkdocs-glightbox>=0.4",
     "mike>=2.1",
 ]
 # Required by the `geo_data` bundled module — kept optional so the

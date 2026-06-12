@@ -40,6 +40,22 @@ Published docs use [mike](https://github.com/jimporter/mike) on `gh-pages`
 (`gh-pages` / root), not from GitHub Actions or `main`. See
 [docs/versioning.md](docs/versioning.md).
 
+## Docs writing conventions
+
+When editing guides under `docs/`, prefer a beginner-first structure:
+
+- Start with outcome and prerequisites.
+- Present the shortest happy-path first.
+- Move advanced internals and edge cases to later sections.
+- Keep one page focused on one job (build, secure, deploy, extend).
+
+Style conventions:
+
+- Use `PyVELM` for the framework name and `pyvelm` for CLI/package examples.
+- Prefer fluent examples (`Manifest.make()`, `ViewsData.make()`) before legacy forms.
+- Use short paragraphs and actionable headings (`Step 1`, `Step 2`, etc.) where helpful.
+- End guides with clear "what's next" links.
+
 ## Test coverage
 
 CI runs `pytest --cov=pyvelm` with a **98%** floor (`fail_under` in
