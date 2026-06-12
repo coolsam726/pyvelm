@@ -129,6 +129,8 @@
                 Cancel
             </button>
             <button type="submit"
+                    hx-target="#pv-import-wizard"
+                    hx-swap="innerHTML"
                     class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
                 Load
             </button>
@@ -224,12 +226,16 @@
             <button type="submit"
                     formaction="/web/views/{{ view.module }}/{{ view.name }}/import/test"
                     hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/test"
+                    hx-target="#pv-import-wizard"
+                    hx-swap="innerHTML"
                     class="px-3 py-1.5 border border-default rounded-md hover:bg-neutral-secondary font-medium">
                 Test
             </button>
             <button type="submit"
                     formaction="/web/views/{{ view.module }}/{{ view.name }}/import/run"
                     hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/run"
+                    hx-target="#pv-import-wizard"
+                    hx-swap="innerHTML"
                     class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
                 Import
             </button>

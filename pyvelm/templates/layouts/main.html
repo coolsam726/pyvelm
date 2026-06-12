@@ -989,7 +989,10 @@
                 document.body.addEventListener('htmx:configRequest', (ev) => {
                     if (!this.open) return;
                     const body = this.$refs.content;
-                    if (body && body.contains(ev.detail.elt)) {
+                    const footer = this.$refs.footerContent;
+                    const elt = ev.detail.elt;
+                    if ((body && body.contains(elt))
+                        || (footer && footer.contains(elt))) {
                         ev.detail.headers['X-PV-Dialog'] = '1';
                     }
                 });
@@ -1050,7 +1053,8 @@
                     const verb = ((req.verb || req.method || 'get') + '').toUpperCase();
                     // openWith() already inits the initial GET body load.
                     if (verb === 'GET' && window.pvIsDialogHtmxRequest(ev.detail)) return;
-                    this._reinitDialogContent(content);
+                    const root = (target && content.contains(target)) ? target : content;
+                    this._reinitDialogContent(root);
                 });
             },
 
@@ -1160,14 +1164,35 @@
                             + Math.random().toString(36).slice(2, 9);
                         form.id = formId;
                     }
+                    const hxFromForm = form ? [
+                        'hx-target', 'hx-swap', 'hx-post', 'hx-encoding',
+                    ].reduce((acc, attr) => {
+                        const val = form.getAttribute(attr);
+                        if (val) acc[attr] = val;
+                        return acc;
+                    }, {}) : {};
                     bar.querySelectorAll(
                         'button[type="submit"], input[type="submit"]',
                     ).forEach((btn) => {
                         if (formId) btn.setAttribute('form', formId);
+                        // Hoisted buttons no longer inherit the form's hx-*.
+                        Object.entries(hxFromForm).forEach(([attr, val]) => {
+                            if (attr === 'hx-post'
+                                && (btn.hasAttribute('hx-post')
+                                    || btn.getAttribute('formaction'))) {
+                                return;
+                            }
+                            if (!btn.hasAttribute(attr)) {
+                                btn.setAttribute(attr, val);
+                            }
+                        });
                     });
                     bar.classList.add('pv-fdialog-footer-inner');
                     slot.appendChild(bar);
                 });
+                if (window.htmx && typeof window.htmx.process === 'function') {
+                    window.htmx.process(slot);
+                }
             },
 
             _popFrame(result) {
