@@ -1174,7 +1174,12 @@
                     bar.querySelectorAll(
                         'button[type="submit"], input[type="submit"]',
                     ).forEach((btn) => {
-                        if (formId) btn.setAttribute('form', formId);
+                        if (formId) {
+                            btn.setAttribute('form', formId);
+                            // HTMX 1.9 gathers fields via closest('form'), not the
+                            // HTML form= attribute — hoisted buttons need hx-include.
+                            btn.setAttribute('hx-include', `#${formId}`);
+                        }
                         // Hoisted buttons no longer inherit the form's hx-*.
                         Object.entries(hxFromForm).forEach(([attr, val]) => {
                             if (attr === 'hx-post'
