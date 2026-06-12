@@ -129,8 +129,6 @@
                 Cancel
             </button>
             <button type="submit"
-                    hx-target="#pv-import-wizard"
-                    hx-swap="innerHTML"
                     class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
                 Load
             </button>
@@ -143,7 +141,7 @@
         {{ total_rows }} row{{ 's' if total_rows != 1 else '' }} to import.
         Map each file column to a field, then test or import.
     </p>
-    <form id="pv-import-preview-form" method="post"
+    <form method="post"
           action="/web/views/{{ view.module }}/{{ view.name }}/import/run"
           hx-target="#pv-import-wizard"
           hx-swap="innerHTML"
@@ -224,20 +222,14 @@
                 Cancel
             </button>
             <button type="submit"
-                    formaction="/web/views/{{ view.module }}/{{ view.name }}/import/test{% if csrf_token %}?_csrf={{ csrf_token }}{% endif %}"
-                    hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/test{% if csrf_token %}?_csrf={{ csrf_token }}{% endif %}"
-                    hx-include="#pv-import-preview-form"
-                    hx-target="#pv-import-wizard"
-                    hx-swap="innerHTML"
+                    formaction="/web/views/{{ view.module }}/{{ view.name }}/import/test"
+                    hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/test"
                     class="px-3 py-1.5 border border-default rounded-md hover:bg-neutral-secondary font-medium">
                 Test
             </button>
             <button type="submit"
-                    formaction="/web/views/{{ view.module }}/{{ view.name }}/import/run{% if csrf_token %}?_csrf={{ csrf_token }}{% endif %}"
-                    hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/run{% if csrf_token %}?_csrf={{ csrf_token }}{% endif %}"
-                    hx-include="#pv-import-preview-form"
-                    hx-target="#pv-import-wizard"
-                    hx-swap="innerHTML"
+                    formaction="/web/views/{{ view.module }}/{{ view.name }}/import/run"
+                    hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/run"
                     class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
                 Import
             </button>
