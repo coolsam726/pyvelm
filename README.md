@@ -21,8 +21,8 @@ layout, widgets, and look & feel—not Odoo's web client or Filament's Blade sta
 
 Backend matrix and DSN examples: [docs/multi-database.md](docs/multi-database.md).
 
-**Latest: [v1.4.4](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#144--2026-06-12)** —
-bundled **contacts** module with `res.partner` list/form views. See the
+**Latest: [v1.4.6](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#146--2026-06-12)** —
+Filament-style **schema field reactivity** on forms. See the
 [docs](https://coolsam726.github.io/pyvelm/) (version picker for older releases).
 
 **Full documentation:** [coolsam726.github.io/pyvelm](https://coolsam726.github.io/pyvelm/)
@@ -33,7 +33,7 @@ and CLI stay `pyvelm` (lowercase).
 ## Install
 
 ```bash
-pip install pyvelm==1.4.4
+pip install pyvelm==1.4.6
 ```
 
 Greenfield app:

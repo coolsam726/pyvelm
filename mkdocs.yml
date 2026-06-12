@@ -151,6 +151,7 @@ nav:
       - Releases overview: releases/index.md
       - Unreleased: releases/unreleased.md
       - v1 series:
+          - v1.4.6: releases/v1.4.6.md
           - v1.4.4: releases/v1.4.4.md
           - v1.4.3: releases/v1.4.3.md
           - v1.4.2: releases/v1.4.2.md

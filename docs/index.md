@@ -67,11 +67,11 @@ See [CLI reference](cli.md) for full command options.
 
 ## Current release
 
-Latest docs target [v1.4.4](releases/v1.4.4.md). Active development notes are in [Unreleased](releases/unreleased.md).
+Latest docs target [v1.4.6](releases/v1.4.6.md). Active development notes are in [Unreleased](releases/unreleased.md).
 
 Published package:
 
 ```bash
-pip install pyvelm==1.4.4
+pip install pyvelm==1.4.6
 ```
 
