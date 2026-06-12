@@ -1,7 +1,4 @@
-
-<!doctype html>
-<html lang="en" class="no-js">
-  <head>
+<!DOCTYPE html><html lang="en" class="no-js"><head>
     
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -47,13 +44,15 @@
       
         
         
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback">
         <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
       
     
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../assets/css/savannabits.css">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -61,7 +60,17 @@
 
     
     
-  </head>
+  <link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
   
   
     
@@ -71,7 +80,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -89,7 +98,7 @@
       
     </div>
     
-      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden="">
         
       </div>
     
@@ -101,12 +110,12 @@
     <a href="../.." title="PyVELM" class="md-header__button md-logo" aria-label="PyVELM" data-md-component="logo">
       
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
       
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
     </label>
     <div class="md-header__title" data-md-component="header-title">
       <div class="md-header__ellipsis">
@@ -131,20 +140,20 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom" aria-label="Switch to dark mode" type="radio" name="__palette" id="__palette_0">
     
-      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"></path></svg>
       </label>
     
   
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom" aria-label="Switch to light mode" type="radio" name="__palette" id="__palette_1">
     
-      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"></path></svg>
       </label>
     
   
@@ -160,29 +169,29 @@
       
         <label class="md-header__button md-icon" for="__search">
           
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
         </label>
         <div class="md-search" data-md-component="search" role="dialog">
   <label class="md-search__overlay" for="__search"></label>
   <div class="md-search__inner" role="search">
     <form class="md-search__form" name="search">
-      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required="">
       <label class="md-search__icon md-icon" for="__search">
         
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
         
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
       </label>
       <nav class="md-search__options" aria-label="Search">
         
-          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard="" data-clipboard-text="" data-md-component="search-share" tabindex="-1">
             
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"></path></svg>
           </a>
         
         <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
           
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
         </button>
       </nav>
       
@@ -190,7 +199,7 @@
       
     </form>
     <div class="md-search__output">
-      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix="">
         <div class="md-search-result" data-md-component="search-result">
           <div class="md-search-result__meta">
             Initializing search
@@ -208,7 +217,7 @@
         <a href="https://github.com/coolsam726/pyvelm" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg>
   </div>
   <div class="md-source__repository">
     GitHub
@@ -254,17 +263,18 @@
   
   
   
-    <li class="md-tabs__item">
-      <a href="../../releases/unreleased/" class="md-tabs__link">
-        
-  
-  
     
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/" class="md-tabs__link">
+          
   
-  Unreleased
+  
+  Start here
 
-      </a>
-    </li>
+        </a>
+      </li>
+    
   
 
       
@@ -276,11 +286,51 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../getting-started/" class="md-tabs__link">
+        <a href="../../models/" class="md-tabs__link">
           
   
   
-  Guides
+  Build your app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../security/" class="md-tabs__link">
+          
+  
+  
+  Operate and deploy
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../console/" class="md-tabs__link">
+          
+  
+  
+  Extend the framework
 
         </a>
       </li>
@@ -310,6 +360,26 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../releases/" class="md-tabs__link">
+          
+  
+  
+  Releases and versions
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -321,7 +391,7 @@
           
             
               
-              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
                     
@@ -335,7 +405,7 @@
     <a href="../.." title="PyVELM" class="md-nav__button md-logo" aria-label="PyVELM" data-md-component="logo">
       
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
 
     </a>
     PyVELM
@@ -345,7 +415,7 @@
       <a href="https://github.com/coolsam726/pyvelm" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg>
   </div>
   <div class="md-source__repository">
     GitHub
@@ -353,7 +423,7 @@
 </a>
     </div>
   
-  <ul class="md-nav__list" data-md-scrollfix>
+  <ul class="md-nav__list" data-md-scrollfix="">
     
       
       
@@ -388,33 +458,6 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../releases/unreleased/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Unreleased
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
     
     
     
@@ -431,17 +474,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2">
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Guides
+    Start here
   
 
     
@@ -452,16 +495,16 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Guides
+    Start here
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -498,14 +541,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../multi-database/" class="md-nav__link">
+      <a href="../../learning-path/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Database layer (v1.0)
+    Learning path
   
 
     
@@ -518,6 +561,95 @@
   
 
               
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI quick reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3">
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build your app
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Build your app
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -841,35 +973,7 @@
   <span class="md-ellipsis">
     
   
-    Document layouts & PDF
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../navigation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Shell navigation
+    Document layouts &amp; PDF
   
 
     
@@ -911,6 +1015,67 @@
 
               
             
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4">
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operate and deploy
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operate and deploy
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
               
                 
   
@@ -918,14 +1083,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../branding/" class="md-nav__link">
+      <a href="../../security/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    White-label branding
+    Security
   
 
     
@@ -946,14 +1111,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/" class="md-nav__link">
+      <a href="../../multi-database/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Security
+    Database layer (v1.0)
   
 
     
@@ -1002,14 +1167,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/" class="md-nav__link">
+      <a href="../../navigation/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CLI reference
+    Shell navigation
   
 
     
@@ -1030,14 +1195,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../console/" class="md-nav__link">
+      <a href="../../branding/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Console commands
+    White-label branding
   
 
     
@@ -1066,6 +1231,95 @@
     
   
     IDE typing stubs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5">
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extend the framework
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Extend the framework
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../console/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console commands
   
 
     
@@ -1114,14 +1368,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../versioning/" class="md-nav__link">
+      <a href="../../adr/001-sqlalchemy-core/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Doc versions (mike)
+    ADR 001: SQLAlchemy Core
   
 
     
@@ -1167,10 +1421,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked="">
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -1188,8 +1442,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1197,7 +1451,7 @@
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -1252,17 +1506,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_2">
         
           
-          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    Recordsets & fields
+    Recordsets &amp; fields
   
 
     
@@ -1273,16 +1527,16 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Recordsets & fields
+    Recordsets &amp; fields
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -1513,17 +1767,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_3">
         
           
-          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    Modules & loader
+    Modules &amp; loader
   
 
     
@@ -1534,16 +1788,16 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Modules & loader
+    Modules &amp; loader
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -1690,17 +1944,17 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_4" checked="">
         
           
-          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_4" id="__nav_6_4_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    Views & rendering
+    Views &amp; rendering
   
 
     
@@ -1711,16 +1965,16 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6_4">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Views & rendering
+    Views &amp; rendering
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -1786,7 +2040,7 @@
       <span class="md-nav__icon md-icon"></span>
       Table of contents
     </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
       
         <li class="md-nav__item">
   <a href="#pyvelm.views" class="md-nav__link">
@@ -1952,10 +2206,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_5">
         
           
-          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_5" id="__nav_6_5_label" tabindex="">
             
   
   
@@ -1973,8 +2227,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1982,7 +2236,7 @@
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -2129,17 +2383,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_6">
         
           
-          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_6" id="__nav_6_6_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    HTTP & CLI
+    HTTP &amp; CLI
   
 
     
@@ -2150,16 +2404,16 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_6">
             <span class="md-nav__icon md-icon"></span>
             
   
-    HTTP & CLI
+    HTTP &amp; CLI
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -2232,6 +2486,1939 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7">
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases and versions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Releases and versions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/unreleased/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unreleased
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_3">
+        
+          
+          <label class="md-nav__link" for="__nav_7_3" id="__nav_7_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1 series
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    v1 series
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.4.4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.4.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.4.3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.4.3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.4.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.4.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.4.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.4.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.4.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.4.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.3.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.3.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.3.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.3.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.3.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.3.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.2.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.2.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.1.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.1.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.1.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.0.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.0.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.0.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.0.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_4">
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.26-v0.20
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    v0.26-v0.20
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.26.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.26.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.26.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.26.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.26.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.26.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.25.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.25.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.24.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.24.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.24.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.24.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.23.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.23.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.22.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.22.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.22.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.22.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.21.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.21.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.20.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.20.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.20.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.20.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.20.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.20.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_5">
+        
+          
+          <label class="md-nav__link" for="__nav_7_5" id="__nav_7_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.19-v0.10
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    v0.19-v0.10
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.19.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.19.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.18.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.18.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.17.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.17.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.16.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.16.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.15.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.15.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.15.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.15.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.14.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.14.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.13.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.13.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.12.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.12.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.11.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.11.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.10.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.10.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_6">
+        
+          
+          <label class="md-nav__link" for="__nav_7_6" id="__nav_7_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.9-v0.2
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    v0.9-v0.2
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.9.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.9.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.8.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.8.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.7.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.7.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.6.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.6.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.5.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.5.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.4.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.4.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.3.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.3.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.10
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.9/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.9
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.8/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.8
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.7/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.7
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.6/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.5/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.5
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../versioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Doc versions (mike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2240,7 +4427,7 @@
             
             
               
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
                     
@@ -2256,7 +4443,7 @@
       <span class="md-nav__icon md-icon"></span>
       Table of contents
     </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
       
         <li class="md-nav__item">
   <a href="#pyvelm.views" class="md-nav__link">
@@ -2372,7 +4559,7 @@
   
 
 
-<h1 id="pyvelmviews">pyvelm.views<a class="headerlink" href="#pyvelmviews" title="Permanent link">&para;</a></h1>
+<h1 id="pyvelmviews">pyvelm.views<a class="headerlink" href="#pyvelmviews" title="Permanent link">¶</a></h1>
 
 
 <div class="doc doc-object doc-module">
@@ -2383,7 +4570,7 @@
             <span class="doc doc-object-name doc-module-name">views</span>
 
 
-<a href="#pyvelm.views" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#pyvelm.views" class="headerlink" title="Permanent link">¶</a></h2>
 
     <div class="doc doc-contents first">
 
@@ -2396,26 +4583,26 @@ chain and applies operations from every extension view in ascending
 priority order.</p>
 
 
-<details class="operation-shape" open>
+<details class="operation-shape" open="">
   <summary>Operation shape</summary>
   <p>{"op": "<set|replace|update|before|after|remove>",
  "target": [<segment>, ...],
- "value": <dict, optional except for remove>}</p>
+ "value": <dict, optional="" except="" for="" remove="">}</dict,></segment></set|replace|update|before|after|remove></p>
 </details>        <p>Target segments (Stage 7 Slice C — <code>pyvelm/docs/web-layer.md</code>):</p>
 <div class="highlight"><pre><span></span><code>- `str`  + dict node      → dict key lookup
 - `str`  + list of dicts  → match the dict whose `name` equals it
-                            (shorthand for `{&quot;name&quot;: &quot;&lt;str&gt;&quot;}`)
+                            (shorthand for `{"name": "&lt;str&gt;"}`)
 - `int`  + list           → positional index
 - `dict` + list of dicts  → predicate; first list entry where every
                             key/value in the dict matches. Matches
-                            Odoo&#39;s `xpath=&quot;//tag[@a=&#39;1&#39;][@b=&#39;2&#39;]&quot;`
+                            Odoo's `xpath="//tag[@a='1'][@b='2']"`
                             attribute-filter idiom.
-- `&quot;**&quot;` as the **first** segment  → start the lookup anywhere in
+- `"**"` as the **first** segment  → start the lookup anywhere in
                             the arch (depth-first). The next
                             segment selects the entry point;
                             remaining segments resolve normally
-                            from there. Equivalent to Odoo&#39;s
-                            `xpath=&quot;//.../foo&quot;` prefix.
+                            from there. Equivalent to Odoo's
+                            `xpath="//.../foo"` prefix.
 </code></pre></div>
 
 
@@ -2445,7 +4632,7 @@ priority order.</p>
             <span class="doc doc-object-name doc-function-name">callable_ref</span>
 
 
-<a href="#pyvelm.views.callable_ref" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.views.callable_ref" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">callable_ref</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span>
 </span></code></pre></div>
 
@@ -2456,7 +4643,7 @@ priority order.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/views.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-66">66</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-66">66</a></span>
 <span class="normal"><a href="#__codelineno-0-67">67</a></span>
 <span class="normal"><a href="#__codelineno-0-68">68</a></span>
 <span class="normal"><a href="#__codelineno-0-69">69</a></span>
@@ -2466,16 +4653,16 @@ priority order.</p>
 <span class="normal"><a href="#__codelineno-0-73">73</a></span>
 <span class="normal"><a href="#__codelineno-0-74">74</a></span>
 <span class="normal"><a href="#__codelineno-0-75">75</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="k">def</span><span class="w"> </span><span class="nf">callable_ref</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Serialize a view-schema callable as ``module:qualname``.&quot;&quot;&quot;</span>
-</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a>    <span class="n">mod</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="s2">&quot;__module__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="n">qual</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="s2">&quot;__qualname__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">mod</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">qual</span> <span class="ow">or</span> <span class="n">qual</span> <span class="o">==</span> <span class="s2">&quot;&lt;lambda&gt;&quot;</span><span class="p">:</span>
+</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="w">    </span><span class="sd">"""Serialize a view-schema callable as ``module:qualname``."""</span>
+</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a>    <span class="n">mod</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="s2">"__module__"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="n">qual</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="s2">"__qualname__"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">mod</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">qual</span> <span class="ow">or</span> <span class="n">qual</span> <span class="o">==</span> <span class="s2">"&lt;lambda&gt;"</span><span class="p">:</span>
 </span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a>        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a>            <span class="s2">&quot;View schema callables must be module-level named functions; &quot;</span>
-</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a>            <span class="sa">f</span><span class="s2">&quot;cannot serialize </span><span class="si">{</span><span class="n">fn</span><span class="si">!r}</span><span class="s2">&quot;</span>
+</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a>            <span class="s2">"View schema callables must be module-level named functions; "</span>
+</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a>            <span class="sa">f</span><span class="s2">"cannot serialize </span><span class="si">{</span><span class="n">fn</span><span class="si">!r}</span><span class="s2">"</span>
 </span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a>        <span class="p">)</span>
-</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">mod</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">qual</span><span class="si">}</span><span class="s2">&quot;</span>
-</span></code></pre></div></td></tr></table></div>
+</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">mod</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">qual</span><span class="si">}</span><span class="s2">"</span>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2488,7 +4675,7 @@ priority order.</p>
             <span class="doc doc-object-name doc-function-name">resolve_callable_ref</span>
 
 
-<a href="#pyvelm.views.resolve_callable_ref" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.views.resolve_callable_ref" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_callable_ref</span><span class="p">(</span><span class="n">ref</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
 </span></code></pre></div>
 
@@ -2499,7 +4686,7 @@ priority order.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/views.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-78">78</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-78">78</a></span>
 <span class="normal"><a href="#__codelineno-0-79">79</a></span>
 <span class="normal"><a href="#__codelineno-0-80">80</a></span>
 <span class="normal"><a href="#__codelineno-0-81">81</a></span>
@@ -2511,18 +4698,18 @@ priority order.</p>
 <span class="normal"><a href="#__codelineno-0-87">87</a></span>
 <span class="normal"><a href="#__codelineno-0-88">88</a></span>
 <span class="normal"><a href="#__codelineno-0-89">89</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="k">def</span><span class="w"> </span><span class="nf">resolve_callable_ref</span><span class="p">(</span><span class="n">ref</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Import a callable previously stored via :func:`callable_ref`.&quot;&quot;&quot;</span>
-</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a>    <span class="k">if</span> <span class="s2">&quot;:&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ref</span><span class="p">:</span>
-</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid callable ref </span><span class="si">{</span><span class="n">ref</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82"></a>    <span class="n">mod_name</span><span class="p">,</span> <span class="n">attr</span> <span class="o">=</span> <span class="n">ref</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;:&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="w">    </span><span class="sd">"""Import a callable previously stored via :func:`callable_ref`."""</span>
+</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a>    <span class="k">if</span> <span class="s2">":"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ref</span><span class="p">:</span>
+</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Invalid callable ref </span><span class="si">{</span><span class="n">ref</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82"></a>    <span class="n">mod_name</span><span class="p">,</span> <span class="n">attr</span> <span class="o">=</span> <span class="n">ref</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">":"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 </span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a>    <span class="n">mod</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">import_module</span><span class="p">(</span><span class="n">mod_name</span><span class="p">)</span>
 </span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a>    <span class="n">obj</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="n">mod</span>
-</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a>    <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">attr</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">):</span>
+</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a>    <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">attr</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"."</span><span class="p">):</span>
 </span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86"></a>        <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">part</span><span class="p">)</span>
 </span><span id="__span-0-87"><a id="__codelineno-0-87" name="__codelineno-0-87"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">callable</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
-</span><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88"></a>        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Callable ref </span><span class="si">{</span><span class="n">ref</span><span class="si">!r}</span><span class="s2"> did not resolve to a function&quot;</span><span class="p">)</span>
+</span><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88"></a>        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Callable ref </span><span class="si">{</span><span class="n">ref</span><span class="si">!r}</span><span class="s2"> did not resolve to a function"</span><span class="p">)</span>
 </span><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89"></a>    <span class="k">return</span> <span class="n">obj</span>
-</span></code></pre></div></td></tr></table></div>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2535,7 +4722,7 @@ priority order.</p>
             <span class="doc doc-object-name doc-function-name">encode_arch_callables</span>
 
 
-<a href="#pyvelm.views.encode_arch_callables" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.views.encode_arch_callables" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">encode_arch_callables</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span>
 </span></code></pre></div>
 
@@ -2546,7 +4733,7 @@ priority order.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/views.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-92"> 92</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-92"> 92</a></span>
 <span class="normal"><a href="#__codelineno-0-93"> 93</a></span>
 <span class="normal"><a href="#__codelineno-0-94"> 94</a></span>
 <span class="normal"><a href="#__codelineno-0-95"> 95</a></span>
@@ -2555,7 +4742,7 @@ priority order.</p>
 <span class="normal"><a href="#__codelineno-0-98"> 98</a></span>
 <span class="normal"><a href="#__codelineno-0-99"> 99</a></span>
 <span class="normal"><a href="#__codelineno-0-100">100</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="k">def</span><span class="w"> </span><span class="nf">encode_arch_callables</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-</span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Replace callables with JSON-safe refs before persisting view arch.&quot;&quot;&quot;</span>
+</span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="w">    </span><span class="sd">"""Replace callables with JSON-safe refs before persisting view arch."""</span>
 </span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a>    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
 </span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a>        <span class="k">return</span> <span class="p">{</span><span class="n">_CALLABLE_MARKER</span><span class="p">:</span> <span class="n">callable_ref</span><span class="p">(</span><span class="n">node</span><span class="p">)}</span>
 </span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
@@ -2563,7 +4750,7 @@ priority order.</p>
 </span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
 </span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a>        <span class="k">return</span> <span class="p">[</span><span class="n">encode_arch_callables</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">node</span><span class="p">]</span>
 </span><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a>    <span class="k">return</span> <span class="n">node</span>
-</span></code></pre></div></td></tr></table></div>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2576,7 +4763,7 @@ priority order.</p>
             <span class="doc doc-object-name doc-function-name">decode_arch_callables</span>
 
 
-<a href="#pyvelm.views.decode_arch_callables" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.views.decode_arch_callables" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">decode_arch_callables</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span>
 </span></code></pre></div>
 
@@ -2587,7 +4774,7 @@ priority order.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/views.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-103">103</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-103">103</a></span>
 <span class="normal"><a href="#__codelineno-0-104">104</a></span>
 <span class="normal"><a href="#__codelineno-0-105">105</a></span>
 <span class="normal"><a href="#__codelineno-0-106">106</a></span>
@@ -2596,7 +4783,7 @@ priority order.</p>
 <span class="normal"><a href="#__codelineno-0-109">109</a></span>
 <span class="normal"><a href="#__codelineno-0-110">110</a></span>
 <span class="normal"><a href="#__codelineno-0-111">111</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a><span class="k">def</span><span class="w"> </span><span class="nf">decode_arch_callables</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Restore callables from refs produced by :func:`encode_arch_callables`.&quot;&quot;&quot;</span>
+</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a><span class="w">    </span><span class="sd">"""Restore callables from refs produced by :func:`encode_arch_callables`."""</span>
 </span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
 </span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a>        <span class="k">if</span> <span class="nb">list</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">==</span> <span class="p">[</span><span class="n">_CALLABLE_MARKER</span><span class="p">]:</span>
 </span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>            <span class="k">return</span> <span class="n">resolve_callable_ref</span><span class="p">(</span><span class="n">node</span><span class="p">[</span><span class="n">_CALLABLE_MARKER</span><span class="p">])</span>
@@ -2604,7 +4791,7 @@ priority order.</p>
 </span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
 </span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>        <span class="k">return</span> <span class="p">[</span><span class="n">decode_arch_callables</span><span class="p">(</span><span class="n">item</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">node</span><span class="p">]</span>
 </span><span id="__span-0-111"><a id="__codelineno-0-111" name="__codelineno-0-111"></a>    <span class="k">return</span> <span class="n">node</span>
-</span></code></pre></div></td></tr></table></div>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2617,7 +4804,7 @@ priority order.</p>
             <span class="doc doc-object-name doc-function-name">normalize_arch</span>
 
 
-<a href="#pyvelm.views.normalize_arch" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.views.normalize_arch" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">normalize_arch</span><span class="p">(</span><span class="n">arch</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">view_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
 </span></code></pre></div>
 
@@ -2630,7 +4817,7 @@ already-normalized arch is a no-op.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/views.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-114">114</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-114">114</a></span>
 <span class="normal"><a href="#__codelineno-0-115">115</a></span>
 <span class="normal"><a href="#__codelineno-0-116">116</a></span>
 <span class="normal"><a href="#__codelineno-0-117">117</a></span>
@@ -2642,18 +4829,18 @@ already-normalized arch is a no-op.</p>
 <span class="normal"><a href="#__codelineno-0-123">123</a></span>
 <span class="normal"><a href="#__codelineno-0-124">124</a></span>
 <span class="normal"><a href="#__codelineno-0-125">125</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-114"><a id="__codelineno-0-114" name="__codelineno-0-114"></a><span class="k">def</span><span class="w"> </span><span class="nf">normalize_arch</span><span class="p">(</span><span class="n">arch</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">view_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-</span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Promote authoring-sugar strings to dicts in known list positions.</span>
+</span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="w">    </span><span class="sd">"""Promote authoring-sugar strings to dicts in known list positions.</span>
 </span><span id="__span-0-116"><a id="__codelineno-0-116" name="__codelineno-0-116"></a>
 </span><span id="__span-0-117"><a id="__codelineno-0-117" name="__codelineno-0-117"></a><span class="sd">    Returns a new dict; never mutates the input. Idempotent — passing an</span>
 </span><span id="__span-0-118"><a id="__codelineno-0-118" name="__codelineno-0-118"></a><span class="sd">    already-normalized arch is a no-op.</span>
-</span><span id="__span-0-119"><a id="__codelineno-0-119" name="__codelineno-0-119"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-119"><a id="__codelineno-0-119" name="__codelineno-0-119"></a><span class="sd">    """</span>
 </span><span id="__span-0-120"><a id="__codelineno-0-120" name="__codelineno-0-120"></a>    <span class="k">if</span> <span class="n">arch</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-0-121"><a id="__codelineno-0-121" name="__codelineno-0-121"></a>        <span class="k">return</span> <span class="n">arch</span>
 </span><span id="__span-0-122"><a id="__codelineno-0-122" name="__codelineno-0-122"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">arch</span><span class="p">)</span>
 </span><span id="__span-0-123"><a id="__codelineno-0-123" name="__codelineno-0-123"></a>    <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">_LIST_PROMOTION_PATHS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">view_type</span><span class="p">,</span> <span class="p">[]):</span>
 </span><span id="__span-0-124"><a id="__codelineno-0-124" name="__codelineno-0-124"></a>        <span class="n">_promote_list_at</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
 </span><span id="__span-0-125"><a id="__codelineno-0-125" name="__codelineno-0-125"></a>    <span class="k">return</span> <span class="n">result</span>
-</span></code></pre></div></td></tr></table></div>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2666,7 +4853,7 @@ already-normalized arch is a no-op.</p>
             <span class="doc doc-object-name doc-function-name">apply_operations</span>
 
 
-<a href="#pyvelm.views.apply_operations" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.views.apply_operations" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">apply_operations</span><span class="p">(</span><span class="n">arch</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">operations</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
 </span></code></pre></div>
 
@@ -2678,7 +4865,7 @@ already-normalized arch is a no-op.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/views.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-233">233</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-233">233</a></span>
 <span class="normal"><a href="#__codelineno-0-234">234</a></span>
 <span class="normal"><a href="#__codelineno-0-235">235</a></span>
 <span class="normal"><a href="#__codelineno-0-236">236</a></span>
@@ -2773,31 +4960,31 @@ already-normalized arch is a no-op.</p>
 <span class="normal"><a href="#__codelineno-0-325">325</a></span>
 <span class="normal"><a href="#__codelineno-0-326">326</a></span>
 <span class="normal"><a href="#__codelineno-0-327">327</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-233"><a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="k">def</span><span class="w"> </span><span class="nf">apply_operations</span><span class="p">(</span><span class="n">arch</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">operations</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-</span><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply each op to `arch` in order, in place. Returns the same dict.</span>
+</span><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="w">    </span><span class="sd">"""Apply each op to `arch` in order, in place. Returns the same dict.</span>
 </span><span id="__span-0-235"><a id="__codelineno-0-235" name="__codelineno-0-235"></a>
 </span><span id="__span-0-236"><a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">    Caller should pass a deepcopy if they need the original preserved.</span>
-</span><span id="__span-0-237"><a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-237"><a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">    """</span>
 </span><span id="__span-0-238"><a id="__codelineno-0-238" name="__codelineno-0-238"></a>    <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">operations</span><span class="p">:</span>
-</span><span id="__span-0-239"><a id="__codelineno-0-239" name="__codelineno-0-239"></a>        <span class="n">kind</span> <span class="o">=</span> <span class="n">op</span><span class="p">[</span><span class="s2">&quot;op&quot;</span><span class="p">]</span>
-</span><span id="__span-0-240"><a id="__codelineno-0-240" name="__codelineno-0-240"></a>        <span class="n">target</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">op</span><span class="p">[</span><span class="s2">&quot;target&quot;</span><span class="p">])</span>
+</span><span id="__span-0-239"><a id="__codelineno-0-239" name="__codelineno-0-239"></a>        <span class="n">kind</span> <span class="o">=</span> <span class="n">op</span><span class="p">[</span><span class="s2">"op"</span><span class="p">]</span>
+</span><span id="__span-0-240"><a id="__codelineno-0-240" name="__codelineno-0-240"></a>        <span class="n">target</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">op</span><span class="p">[</span><span class="s2">"target"</span><span class="p">])</span>
 </span><span id="__span-0-241"><a id="__codelineno-0-241" name="__codelineno-0-241"></a>
 </span><span id="__span-0-242"><a id="__codelineno-0-242" name="__codelineno-0-242"></a>        <span class="c1"># `**` as the first segment finds any descendant whose next</span>
-</span><span id="__span-0-243"><a id="__codelineno-0-243" name="__codelineno-0-243"></a>        <span class="c1"># step matches. Effectively: &quot;ignore the path, just find this</span>
-</span><span id="__span-0-244"><a id="__codelineno-0-244" name="__codelineno-0-244"></a>        <span class="c1"># node anywhere.&quot; Resolves to a normal target rooted at the</span>
-</span><span id="__span-0-245"><a id="__codelineno-0-245" name="__codelineno-0-245"></a>        <span class="c1"># match&#39;s parent so the rest of the segment list keeps the</span>
+</span><span id="__span-0-243"><a id="__codelineno-0-243" name="__codelineno-0-243"></a>        <span class="c1"># step matches. Effectively: "ignore the path, just find this</span>
+</span><span id="__span-0-244"><a id="__codelineno-0-244" name="__codelineno-0-244"></a>        <span class="c1"># node anywhere." Resolves to a normal target rooted at the</span>
+</span><span id="__span-0-245"><a id="__codelineno-0-245" name="__codelineno-0-245"></a>        <span class="c1"># match's parent so the rest of the segment list keeps the</span>
 </span><span id="__span-0-246"><a id="__codelineno-0-246" name="__codelineno-0-246"></a>        <span class="c1"># existing semantics.</span>
-</span><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a>        <span class="k">if</span> <span class="n">target</span> <span class="ow">and</span> <span class="n">target</span> <span class="ow">and</span> <span class="n">target</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;**&quot;</span><span class="p">:</span>
+</span><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a>        <span class="k">if</span> <span class="n">target</span> <span class="ow">and</span> <span class="n">target</span> <span class="ow">and</span> <span class="n">target</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"**"</span><span class="p">:</span>
 </span><span id="__span-0-248"><a id="__codelineno-0-248" name="__codelineno-0-248"></a>            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">target</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
 </span><span id="__span-0-249"><a id="__codelineno-0-249" name="__codelineno-0-249"></a>                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-</span><span id="__span-0-250"><a id="__codelineno-0-250" name="__codelineno-0-250"></a>                    <span class="s2">&quot;&#39;**&#39; must be followed by at least one selector &quot;</span>
-</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a>                    <span class="s2">&quot;(`name` string or predicate dict)&quot;</span>
+</span><span id="__span-0-250"><a id="__codelineno-0-250" name="__codelineno-0-250"></a>                    <span class="s2">"'**' must be followed by at least one selector "</span>
+</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a>                    <span class="s2">"(`name` string or predicate dict)"</span>
 </span><span id="__span-0-252"><a id="__codelineno-0-252" name="__codelineno-0-252"></a>                <span class="p">)</span>
 </span><span id="__span-0-253"><a id="__codelineno-0-253" name="__codelineno-0-253"></a>            <span class="n">entry_seg</span> <span class="o">=</span> <span class="n">target</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
 </span><span id="__span-0-254"><a id="__codelineno-0-254" name="__codelineno-0-254"></a>            <span class="k">try</span><span class="p">:</span>
 </span><span id="__span-0-255"><a id="__codelineno-0-255" name="__codelineno-0-255"></a>                <span class="n">root</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_find_descendant</span><span class="p">(</span><span class="n">arch</span><span class="p">,</span> <span class="n">entry_seg</span><span class="p">)</span>
 </span><span id="__span-0-256"><a id="__codelineno-0-256" name="__codelineno-0-256"></a>            <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
 </span><span id="__span-0-257"><a id="__codelineno-0-257" name="__codelineno-0-257"></a>                <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span>
-</span><span id="__span-0-258"><a id="__codelineno-0-258" name="__codelineno-0-258"></a>                    <span class="sa">f</span><span class="s2">&quot;`**` lookup found no descendant matching </span><span class="si">{</span><span class="n">entry_seg</span><span class="si">!r}</span><span class="s2">&quot;</span>
+</span><span id="__span-0-258"><a id="__codelineno-0-258" name="__codelineno-0-258"></a>                    <span class="sa">f</span><span class="s2">"`**` lookup found no descendant matching </span><span class="si">{</span><span class="n">entry_seg</span><span class="si">!r}</span><span class="s2">"</span>
 </span><span id="__span-0-259"><a id="__codelineno-0-259" name="__codelineno-0-259"></a>                <span class="p">)</span>
 </span><span id="__span-0-260"><a id="__codelineno-0-260" name="__codelineno-0-260"></a>            <span class="c1"># Splice: drop `**`, anchor at the discovered subtree.</span>
 </span><span id="__span-0-261"><a id="__codelineno-0-261" name="__codelineno-0-261"></a>            <span class="c1"># The remaining target list (entry_seg + rest) resolves</span>
@@ -2808,66 +4995,66 @@ already-normalized arch is a no-op.</p>
 </span><span id="__span-0-266"><a id="__codelineno-0-266" name="__codelineno-0-266"></a>            <span class="n">arch_root</span> <span class="o">=</span> <span class="n">arch</span>
 </span><span id="__span-0-267"><a id="__codelineno-0-267" name="__codelineno-0-267"></a>
 </span><span id="__span-0-268"><a id="__codelineno-0-268" name="__codelineno-0-268"></a>        <span class="c1"># `update` walks all the way INTO the target (must end on a dict)</span>
-</span><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a>        <span class="c1"># and merges in op[&quot;value&quot;]. Equivalent to Odoo&#39;s</span>
-</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a>        <span class="c1"># `position=&quot;attributes&quot;` with multiple &lt;attribute&gt; children.</span>
-</span><span id="__span-0-271"><a id="__codelineno-0-271" name="__codelineno-0-271"></a>        <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;update&quot;</span><span class="p">:</span>
+</span><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a>        <span class="c1"># and merges in op["value"]. Equivalent to Odoo's</span>
+</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a>        <span class="c1"># `position="attributes"` with multiple &lt;attribute&gt; children.</span>
+</span><span id="__span-0-271"><a id="__codelineno-0-271" name="__codelineno-0-271"></a>        <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"update"</span><span class="p">:</span>
 </span><span id="__span-0-272"><a id="__codelineno-0-272" name="__codelineno-0-272"></a>            <span class="n">node</span> <span class="o">=</span> <span class="n">arch_root</span>
 </span><span id="__span-0-273"><a id="__codelineno-0-273" name="__codelineno-0-273"></a>            <span class="k">for</span> <span class="n">seg</span> <span class="ow">in</span> <span class="n">target</span><span class="p">:</span>
 </span><span id="__span-0-274"><a id="__codelineno-0-274" name="__codelineno-0-274"></a>                <span class="n">node</span> <span class="o">=</span> <span class="n">_step_into</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">seg</span><span class="p">)</span>
 </span><span id="__span-0-275"><a id="__codelineno-0-275" name="__codelineno-0-275"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
 </span><span id="__span-0-276"><a id="__codelineno-0-276" name="__codelineno-0-276"></a>                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-</span><span id="__span-0-277"><a id="__codelineno-0-277" name="__codelineno-0-277"></a>                    <span class="sa">f</span><span class="s2">&quot;&#39;update&#39; target must resolve to a dict, got &quot;</span>
-</span><span id="__span-0-278"><a id="__codelineno-0-278" name="__codelineno-0-278"></a>                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> at </span><span class="si">{</span><span class="n">target</span><span class="si">!r}</span><span class="s2">&quot;</span>
+</span><span id="__span-0-277"><a id="__codelineno-0-277" name="__codelineno-0-277"></a>                    <span class="sa">f</span><span class="s2">"'update' target must resolve to a dict, got "</span>
+</span><span id="__span-0-278"><a id="__codelineno-0-278" name="__codelineno-0-278"></a>                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> at </span><span class="si">{</span><span class="n">target</span><span class="si">!r}</span><span class="s2">"</span>
 </span><span id="__span-0-279"><a id="__codelineno-0-279" name="__codelineno-0-279"></a>                <span class="p">)</span>
-</span><span id="__span-0-280"><a id="__codelineno-0-280" name="__codelineno-0-280"></a>            <span class="n">value</span> <span class="o">=</span> <span class="n">op</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span>
+</span><span id="__span-0-280"><a id="__codelineno-0-280" name="__codelineno-0-280"></a>            <span class="n">value</span> <span class="o">=</span> <span class="n">op</span><span class="p">[</span><span class="s2">"value"</span><span class="p">]</span>
 </span><span id="__span-0-281"><a id="__codelineno-0-281" name="__codelineno-0-281"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
 </span><span id="__span-0-282"><a id="__codelineno-0-282" name="__codelineno-0-282"></a>                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-</span><span id="__span-0-283"><a id="__codelineno-0-283" name="__codelineno-0-283"></a>                    <span class="sa">f</span><span class="s2">&quot;&#39;update&#39; value must be a dict, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-0-283"><a id="__codelineno-0-283" name="__codelineno-0-283"></a>                    <span class="sa">f</span><span class="s2">"'update' value must be a dict, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">"</span>
 </span><span id="__span-0-284"><a id="__codelineno-0-284" name="__codelineno-0-284"></a>                <span class="p">)</span>
 </span><span id="__span-0-285"><a id="__codelineno-0-285" name="__codelineno-0-285"></a>            <span class="n">node</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
 </span><span id="__span-0-286"><a id="__codelineno-0-286" name="__codelineno-0-286"></a>            <span class="k">continue</span>
 </span><span id="__span-0-287"><a id="__codelineno-0-287" name="__codelineno-0-287"></a>
 </span><span id="__span-0-288"><a id="__codelineno-0-288" name="__codelineno-0-288"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">target</span><span class="p">:</span>
-</span><span id="__span-0-289"><a id="__codelineno-0-289" name="__codelineno-0-289"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Operation </span><span class="si">{</span><span class="n">op</span><span class="si">!r}</span><span class="s2"> has empty target&quot;</span><span class="p">)</span>
+</span><span id="__span-0-289"><a id="__codelineno-0-289" name="__codelineno-0-289"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Operation </span><span class="si">{</span><span class="n">op</span><span class="si">!r}</span><span class="s2"> has empty target"</span><span class="p">)</span>
 </span><span id="__span-0-290"><a id="__codelineno-0-290" name="__codelineno-0-290"></a>        <span class="c1"># Walk into the parent container.</span>
 </span><span id="__span-0-291"><a id="__codelineno-0-291" name="__codelineno-0-291"></a>        <span class="n">parent</span> <span class="o">=</span> <span class="n">arch_root</span>
 </span><span id="__span-0-292"><a id="__codelineno-0-292" name="__codelineno-0-292"></a>        <span class="k">for</span> <span class="n">seg</span> <span class="ow">in</span> <span class="n">target</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
 </span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a>            <span class="n">parent</span> <span class="o">=</span> <span class="n">_step_into</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">seg</span><span class="p">)</span>
 </span><span id="__span-0-294"><a id="__codelineno-0-294" name="__codelineno-0-294"></a>        <span class="n">last</span> <span class="o">=</span> <span class="n">target</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
 </span><span id="__span-0-295"><a id="__codelineno-0-295" name="__codelineno-0-295"></a>
-</span><span id="__span-0-296"><a id="__codelineno-0-296" name="__codelineno-0-296"></a>        <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;remove&quot;</span><span class="p">:</span>
+</span><span id="__span-0-296"><a id="__codelineno-0-296" name="__codelineno-0-296"></a>        <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"remove"</span><span class="p">:</span>
 </span><span id="__span-0-297"><a id="__codelineno-0-297" name="__codelineno-0-297"></a>            <span class="n">position</span> <span class="o">=</span> <span class="n">_resolve_position</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">last</span><span class="p">)</span>
 </span><span id="__span-0-298"><a id="__codelineno-0-298" name="__codelineno-0-298"></a>            <span class="k">del</span> <span class="n">parent</span><span class="p">[</span><span class="n">position</span><span class="p">]</span>
-</span><span id="__span-0-299"><a id="__codelineno-0-299" name="__codelineno-0-299"></a>        <span class="k">elif</span> <span class="n">kind</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span> <span class="s2">&quot;replace&quot;</span><span class="p">):</span>
+</span><span id="__span-0-299"><a id="__codelineno-0-299" name="__codelineno-0-299"></a>        <span class="k">elif</span> <span class="n">kind</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"set"</span><span class="p">,</span> <span class="s2">"replace"</span><span class="p">):</span>
 </span><span id="__span-0-300"><a id="__codelineno-0-300" name="__codelineno-0-300"></a>            <span class="c1"># Granular attribute set: the final segment may be a new key</span>
 </span><span id="__span-0-301"><a id="__codelineno-0-301" name="__codelineno-0-301"></a>            <span class="c1"># on a dict parent (think: add `readonly` to a field). Existing</span>
 </span><span id="__span-0-302"><a id="__codelineno-0-302" name="__codelineno-0-302"></a>            <span class="c1"># keys are overwritten. Lists still require the entry to exist</span>
 </span><span id="__span-0-303"><a id="__codelineno-0-303" name="__codelineno-0-303"></a>            <span class="c1"># — use `before`/`after` to grow a list.</span>
 </span><span id="__span-0-304"><a id="__codelineno-0-304" name="__codelineno-0-304"></a>            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">last</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-</span><span id="__span-0-305"><a id="__codelineno-0-305" name="__codelineno-0-305"></a>                <span class="n">parent</span><span class="p">[</span><span class="n">last</span><span class="p">]</span> <span class="o">=</span> <span class="n">op</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span>
+</span><span id="__span-0-305"><a id="__codelineno-0-305" name="__codelineno-0-305"></a>                <span class="n">parent</span><span class="p">[</span><span class="n">last</span><span class="p">]</span> <span class="o">=</span> <span class="n">op</span><span class="p">[</span><span class="s2">"value"</span><span class="p">]</span>
 </span><span id="__span-0-306"><a id="__codelineno-0-306" name="__codelineno-0-306"></a>            <span class="k">else</span><span class="p">:</span>
 </span><span id="__span-0-307"><a id="__codelineno-0-307" name="__codelineno-0-307"></a>                <span class="n">position</span> <span class="o">=</span> <span class="n">_resolve_position</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">last</span><span class="p">)</span>
-</span><span id="__span-0-308"><a id="__codelineno-0-308" name="__codelineno-0-308"></a>                <span class="n">parent</span><span class="p">[</span><span class="n">position</span><span class="p">]</span> <span class="o">=</span> <span class="n">op</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span>
-</span><span id="__span-0-309"><a id="__codelineno-0-309" name="__codelineno-0-309"></a>        <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;before&quot;</span><span class="p">:</span>
+</span><span id="__span-0-308"><a id="__codelineno-0-308" name="__codelineno-0-308"></a>                <span class="n">parent</span><span class="p">[</span><span class="n">position</span><span class="p">]</span> <span class="o">=</span> <span class="n">op</span><span class="p">[</span><span class="s2">"value"</span><span class="p">]</span>
+</span><span id="__span-0-309"><a id="__codelineno-0-309" name="__codelineno-0-309"></a>        <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"before"</span><span class="p">:</span>
 </span><span id="__span-0-310"><a id="__codelineno-0-310" name="__codelineno-0-310"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
 </span><span id="__span-0-311"><a id="__codelineno-0-311" name="__codelineno-0-311"></a>                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-</span><span id="__span-0-312"><a id="__codelineno-0-312" name="__codelineno-0-312"></a>                    <span class="sa">f</span><span class="s2">&quot;&#39;before&#39; requires a list parent, got &quot;</span>
-</span><span id="__span-0-313"><a id="__codelineno-0-313" name="__codelineno-0-313"></a>                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> at target </span><span class="si">{</span><span class="n">target</span><span class="si">!r}</span><span class="s2">&quot;</span>
+</span><span id="__span-0-312"><a id="__codelineno-0-312" name="__codelineno-0-312"></a>                    <span class="sa">f</span><span class="s2">"'before' requires a list parent, got "</span>
+</span><span id="__span-0-313"><a id="__codelineno-0-313" name="__codelineno-0-313"></a>                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> at target </span><span class="si">{</span><span class="n">target</span><span class="si">!r}</span><span class="s2">"</span>
 </span><span id="__span-0-314"><a id="__codelineno-0-314" name="__codelineno-0-314"></a>                <span class="p">)</span>
 </span><span id="__span-0-315"><a id="__codelineno-0-315" name="__codelineno-0-315"></a>            <span class="n">position</span> <span class="o">=</span> <span class="n">_resolve_position</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">last</span><span class="p">)</span>
-</span><span id="__span-0-316"><a id="__codelineno-0-316" name="__codelineno-0-316"></a>            <span class="n">parent</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">position</span><span class="p">,</span> <span class="n">op</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">])</span>
-</span><span id="__span-0-317"><a id="__codelineno-0-317" name="__codelineno-0-317"></a>        <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;after&quot;</span><span class="p">:</span>
+</span><span id="__span-0-316"><a id="__codelineno-0-316" name="__codelineno-0-316"></a>            <span class="n">parent</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">position</span><span class="p">,</span> <span class="n">op</span><span class="p">[</span><span class="s2">"value"</span><span class="p">])</span>
+</span><span id="__span-0-317"><a id="__codelineno-0-317" name="__codelineno-0-317"></a>        <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"after"</span><span class="p">:</span>
 </span><span id="__span-0-318"><a id="__codelineno-0-318" name="__codelineno-0-318"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
 </span><span id="__span-0-319"><a id="__codelineno-0-319" name="__codelineno-0-319"></a>                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-</span><span id="__span-0-320"><a id="__codelineno-0-320" name="__codelineno-0-320"></a>                    <span class="sa">f</span><span class="s2">&quot;&#39;after&#39; requires a list parent, got &quot;</span>
-</span><span id="__span-0-321"><a id="__codelineno-0-321" name="__codelineno-0-321"></a>                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> at target </span><span class="si">{</span><span class="n">target</span><span class="si">!r}</span><span class="s2">&quot;</span>
+</span><span id="__span-0-320"><a id="__codelineno-0-320" name="__codelineno-0-320"></a>                    <span class="sa">f</span><span class="s2">"'after' requires a list parent, got "</span>
+</span><span id="__span-0-321"><a id="__codelineno-0-321" name="__codelineno-0-321"></a>                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">parent</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> at target </span><span class="si">{</span><span class="n">target</span><span class="si">!r}</span><span class="s2">"</span>
 </span><span id="__span-0-322"><a id="__codelineno-0-322" name="__codelineno-0-322"></a>                <span class="p">)</span>
 </span><span id="__span-0-323"><a id="__codelineno-0-323" name="__codelineno-0-323"></a>            <span class="n">position</span> <span class="o">=</span> <span class="n">_resolve_position</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">last</span><span class="p">)</span>
-</span><span id="__span-0-324"><a id="__codelineno-0-324" name="__codelineno-0-324"></a>            <span class="n">parent</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">position</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">op</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">])</span>
+</span><span id="__span-0-324"><a id="__codelineno-0-324" name="__codelineno-0-324"></a>            <span class="n">parent</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">position</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">op</span><span class="p">[</span><span class="s2">"value"</span><span class="p">])</span>
 </span><span id="__span-0-325"><a id="__codelineno-0-325" name="__codelineno-0-325"></a>        <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-326"><a id="__codelineno-0-326" name="__codelineno-0-326"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown view-arch op: </span><span class="si">{</span><span class="n">kind</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-326"><a id="__codelineno-0-326" name="__codelineno-0-326"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown view-arch op: </span><span class="si">{</span><span class="n">kind</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
 </span><span id="__span-0-327"><a id="__codelineno-0-327" name="__codelineno-0-327"></a>    <span class="k">return</span> <span class="n">arch</span>
-</span></code></pre></div></td></tr></table></div>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2880,7 +5067,7 @@ already-normalized arch is a no-op.</p>
             <span class="doc doc-object-name doc-function-name">resolve_arch</span>
 
 
-<a href="#pyvelm.views.resolve_arch" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.views.resolve_arch" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve_arch</span><span class="p">(</span><span class="n">view</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
 </span></code></pre></div>
 
@@ -2897,7 +5084,7 @@ extension's ops, in the same priority sweep.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/views.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-346">346</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-346">346</a></span>
 <span class="normal"><a href="#__codelineno-0-347">347</a></span>
 <span class="normal"><a href="#__codelineno-0-348">348</a></span>
 <span class="normal"><a href="#__codelineno-0-349">349</a></span>
@@ -2930,16 +5117,16 @@ extension's ops, in the same priority sweep.</p>
 <span class="normal"><a href="#__codelineno-0-376">376</a></span>
 <span class="normal"><a href="#__codelineno-0-377">377</a></span>
 <span class="normal"><a href="#__codelineno-0-378">378</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-346"><a id="__codelineno-0-346" name="__codelineno-0-346"></a><span class="k">def</span><span class="w"> </span><span class="nf">resolve_arch</span><span class="p">(</span><span class="n">view</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-</span><span id="__span-0-347"><a id="__codelineno-0-347" name="__codelineno-0-347"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the fully-resolved arch for `view`.</span>
+</span><span id="__span-0-347"><a id="__codelineno-0-347" name="__codelineno-0-347"></a><span class="w">    </span><span class="sd">"""Return the fully-resolved arch for `view`.</span>
 </span><span id="__span-0-348"><a id="__codelineno-0-348" name="__codelineno-0-348"></a>
 </span><span id="__span-0-349"><a id="__codelineno-0-349" name="__codelineno-0-349"></a><span class="sd">    If `view` is an extension, walks up to the root base view first.</span>
 </span><span id="__span-0-350"><a id="__codelineno-0-350" name="__codelineno-0-350"></a><span class="sd">    Then applies every extension in the family in (priority, id) order.</span>
 </span><span id="__span-0-351"><a id="__codelineno-0-351" name="__codelineno-0-351"></a><span class="sd">    Depth-first: extensions-of-extensions are applied after their parent</span>
-</span><span id="__span-0-352"><a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="sd">    extension&#39;s ops, in the same priority sweep.</span>
+</span><span id="__span-0-352"><a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="sd">    extension's ops, in the same priority sweep.</span>
 </span><span id="__span-0-353"><a id="__codelineno-0-353" name="__codelineno-0-353"></a>
 </span><span id="__span-0-354"><a id="__codelineno-0-354" name="__codelineno-0-354"></a><span class="sd">    ACL is bypassed for the whole resolution — view arch is system metadata</span>
 </span><span id="__span-0-355"><a id="__codelineno-0-355" name="__codelineno-0-355"></a><span class="sd">    (same policy as ``render._search_ui_views`` / ``_menu``).</span>
-</span><span id="__span-0-356"><a id="__codelineno-0-356" name="__codelineno-0-356"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-356"><a id="__codelineno-0-356" name="__codelineno-0-356"></a><span class="sd">    """</span>
 </span><span id="__span-0-357"><a id="__codelineno-0-357" name="__codelineno-0-357"></a>    <span class="n">env</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">env</span>
 </span><span id="__span-0-358"><a id="__codelineno-0-358" name="__codelineno-0-358"></a>    <span class="n">prev</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">_acl_bypass</span>
 </span><span id="__span-0-359"><a id="__codelineno-0-359" name="__codelineno-0-359"></a>    <span class="n">env</span><span class="o">.</span><span class="n">_acl_bypass</span> <span class="o">=</span> <span class="kc">True</span>
@@ -2949,8 +5136,8 @@ extension's ops, in the same priority sweep.</p>
 </span><span id="__span-0-363"><a id="__codelineno-0-363" name="__codelineno-0-363"></a>            <span class="n">root</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">inherit_id</span>
 </span><span id="__span-0-364"><a id="__codelineno-0-364" name="__codelineno-0-364"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">root</span><span class="o">.</span><span class="n">arch</span><span class="p">:</span>
 </span><span id="__span-0-365"><a id="__codelineno-0-365" name="__codelineno-0-365"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-</span><span id="__span-0-366"><a id="__codelineno-0-366" name="__codelineno-0-366"></a>                <span class="sa">f</span><span class="s2">&quot;View </span><span class="si">{</span><span class="n">root</span><span class="o">.</span><span class="n">module</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">root</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> has no arch (extension views &quot;</span>
-</span><span id="__span-0-367"><a id="__codelineno-0-367" name="__codelineno-0-367"></a>                <span class="sa">f</span><span class="s2">&quot;need an inherit_id to a base view)&quot;</span>
+</span><span id="__span-0-366"><a id="__codelineno-0-366" name="__codelineno-0-366"></a>                <span class="sa">f</span><span class="s2">"View </span><span class="si">{</span><span class="n">root</span><span class="o">.</span><span class="n">module</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">root</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> has no arch (extension views "</span>
+</span><span id="__span-0-367"><a id="__codelineno-0-367" name="__codelineno-0-367"></a>                <span class="sa">f</span><span class="s2">"need an inherit_id to a base view)"</span>
 </span><span id="__span-0-368"><a id="__codelineno-0-368" name="__codelineno-0-368"></a>            <span class="p">)</span>
 </span><span id="__span-0-369"><a id="__codelineno-0-369" name="__codelineno-0-369"></a>        <span class="n">arch</span> <span class="o">=</span> <span class="n">decode_arch_callables</span><span class="p">(</span><span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">root</span><span class="o">.</span><span class="n">arch</span><span class="p">)))</span>
 </span><span id="__span-0-370"><a id="__codelineno-0-370" name="__codelineno-0-370"></a>        <span class="n">_apply_chain</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">arch</span><span class="p">)</span>
@@ -2962,7 +5149,7 @@ extension's ops, in the same priority sweep.</p>
 </span><span id="__span-0-376"><a id="__codelineno-0-376" name="__codelineno-0-376"></a>        <span class="k">return</span> <span class="n">arch</span>
 </span><span id="__span-0-377"><a id="__codelineno-0-377" name="__codelineno-0-377"></a>    <span class="k">finally</span><span class="p">:</span>
 </span><span id="__span-0-378"><a id="__codelineno-0-378" name="__codelineno-0-378"></a>        <span class="n">env</span><span class="o">.</span><span class="n">_acl_bypass</span> <span class="o">=</span> <span class="n">prev</span>
-</span></code></pre></div></td></tr></table></div>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2995,9 +5182,9 @@ extension's ops, in the same priority sweep.</p>
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
-          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden="">
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"></path></svg>
   Back to top
 </button>
         
@@ -3025,7 +5212,7 @@ extension's ops, in the same priority sweep.</p>
     
     
     <a href="https://github.com/sponsors/coolsam726" target="_blank" rel="noopener" title="Sponsor on GitHub" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="m241 87.1 15 20.7 15-20.7C296 52.5 336.2 32 378.9 32 452.4 32 512 91.6 512 165.1v2.6c0 112.2-139.9 242.5-212.9 298.2-12.4 9.4-27.6 14.1-43.1 14.1s-30.8-4.6-43.1-14.1C139.9 410.2 0 279.9 0 167.7v-2.6C0 91.6 59.6 32 133.1 32 175.8 32 216 52.5 241 87.1"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="m241 87.1 15 20.7 15-20.7C296 52.5 336.2 32 378.9 32 452.4 32 512 91.6 512 165.1v2.6c0 112.2-139.9 242.5-212.9 298.2-12.4 9.4-27.6 14.1-43.1 14.1s-30.8-4.6-43.1-14.1C139.9 410.2 0 279.9 0 167.7v-2.6C0 91.6 59.6 32 133.1 32 175.8 32 216 52.5 241 87.1"></path></svg>
     </a>
   
 </div>
@@ -3049,5 +5236,7 @@ extension's ops, in the same priority sweep.</p>
       <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
-  </body>
-</html>
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>

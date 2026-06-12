@@ -1,7 +1,4 @@
-
-<!doctype html>
-<html lang="en" class="no-js">
-  <head>
+<!DOCTYPE html><html lang="en" class="no-js"><head>
     
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -15,6 +12,8 @@
       
         <link rel="prev" href="../web/">
       
+      
+        <link rel="next" href="../../releases/">
       
       
         
@@ -45,13 +44,15 @@
       
         
         
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback">
         <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
       
     
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../assets/css/savannabits.css">
     
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -59,7 +60,17 @@
 
     
     
-  </head>
+  <link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style></head>
   
   
     
@@ -69,7 +80,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -87,7 +98,7 @@
       
     </div>
     
-      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden="">
         
       </div>
     
@@ -99,12 +110,12 @@
     <a href="../.." title="PyVELM" class="md-header__button md-logo" aria-label="PyVELM" data-md-component="logo">
       
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
       
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
     </label>
     <div class="md-header__title" data-md-component="header-title">
       <div class="md-header__ellipsis">
@@ -129,20 +140,20 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom" aria-label="Switch to dark mode" type="radio" name="__palette" id="__palette_0">
     
-      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"></path></svg>
       </label>
     
   
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom" aria-label="Switch to light mode" type="radio" name="__palette" id="__palette_1">
     
-      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden="">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"></path></svg>
       </label>
     
   
@@ -158,29 +169,29 @@
       
         <label class="md-header__button md-icon" for="__search">
           
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
         </label>
         <div class="md-search" data-md-component="search" role="dialog">
   <label class="md-search__overlay" for="__search"></label>
   <div class="md-search__inner" role="search">
     <form class="md-search__form" name="search">
-      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required="">
       <label class="md-search__icon md-icon" for="__search">
         
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
         
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
       </label>
       <nav class="md-search__options" aria-label="Search">
         
-          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard="" data-clipboard-text="" data-md-component="search-share" tabindex="-1">
             
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"></path></svg>
           </a>
         
         <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
           
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
         </button>
       </nav>
       
@@ -188,7 +199,7 @@
       
     </form>
     <div class="md-search__output">
-      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix="">
         <div class="md-search-result" data-md-component="search-result">
           <div class="md-search-result__meta">
             Initializing search
@@ -206,7 +217,7 @@
         <a href="https://github.com/coolsam726/pyvelm" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg>
   </div>
   <div class="md-source__repository">
     GitHub
@@ -252,17 +263,18 @@
   
   
   
-    <li class="md-tabs__item">
-      <a href="../../releases/unreleased/" class="md-tabs__link">
-        
-  
-  
     
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/" class="md-tabs__link">
+          
   
-  Unreleased
+  
+  Start here
 
-      </a>
-    </li>
+        </a>
+      </li>
+    
   
 
       
@@ -274,11 +286,51 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../getting-started/" class="md-tabs__link">
+        <a href="../../models/" class="md-tabs__link">
           
   
   
-  Guides
+  Build your app
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../security/" class="md-tabs__link">
+          
+  
+  
+  Operate and deploy
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../console/" class="md-tabs__link">
+          
+  
+  
+  Extend the framework
 
         </a>
       </li>
@@ -308,6 +360,26 @@
   
 
       
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../releases/" class="md-tabs__link">
+          
+  
+  
+  Releases and versions
+
+        </a>
+      </li>
+    
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -319,7 +391,7 @@
           
             
               
-              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
                     
@@ -333,7 +405,7 @@
     <a href="../.." title="PyVELM" class="md-nav__button md-logo" aria-label="PyVELM" data-md-component="logo">
       
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
 
     </a>
     PyVELM
@@ -343,7 +415,7 @@
       <a href="https://github.com/coolsam726/pyvelm" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"></path></svg>
   </div>
   <div class="md-source__repository">
     GitHub
@@ -351,7 +423,7 @@
 </a>
     </div>
   
-  <ul class="md-nav__list" data-md-scrollfix>
+  <ul class="md-nav__list" data-md-scrollfix="">
     
       
       
@@ -386,33 +458,6 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../releases/unreleased/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Unreleased
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
     
     
     
@@ -429,17 +474,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2">
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    Guides
+    Start here
   
 
     
@@ -450,16 +495,16 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Guides
+    Start here
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -496,14 +541,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../multi-database/" class="md-nav__link">
+      <a href="../../learning-path/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Database layer (v1.0)
+    Learning path
   
 
     
@@ -516,6 +561,95 @@
   
 
               
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI quick reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3">
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build your app
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Build your app
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -839,35 +973,7 @@
   <span class="md-ellipsis">
     
   
-    Document layouts & PDF
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../navigation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Shell navigation
+    Document layouts &amp; PDF
   
 
     
@@ -909,6 +1015,67 @@
 
               
             
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4">
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operate and deploy
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operate and deploy
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
               
                 
   
@@ -916,14 +1083,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../branding/" class="md-nav__link">
+      <a href="../../security/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    White-label branding
+    Security
   
 
     
@@ -944,14 +1111,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security/" class="md-nav__link">
+      <a href="../../multi-database/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Security
+    Database layer (v1.0)
   
 
     
@@ -1000,14 +1167,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/" class="md-nav__link">
+      <a href="../../navigation/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    CLI reference
+    Shell navigation
   
 
     
@@ -1028,14 +1195,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../console/" class="md-nav__link">
+      <a href="../../branding/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Console commands
+    White-label branding
   
 
     
@@ -1064,6 +1231,95 @@
     
   
     IDE typing stubs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5">
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extend the framework
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Extend the framework
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../console/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console commands
   
 
     
@@ -1112,14 +1368,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../versioning/" class="md-nav__link">
+      <a href="../../adr/001-sqlalchemy-core/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Doc versions (mike)
+    ADR 001: SQLAlchemy Core
   
 
     
@@ -1165,10 +1421,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked="">
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -1186,8 +1442,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1195,7 +1451,7 @@
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -1250,17 +1506,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_2">
         
           
-          <label class="md-nav__link" for="__nav_4_2" id="__nav_4_2_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    Recordsets & fields
+    Recordsets &amp; fields
   
 
     
@@ -1271,16 +1527,16 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Recordsets & fields
+    Recordsets &amp; fields
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -1511,17 +1767,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_3">
         
           
-          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    Modules & loader
+    Modules &amp; loader
   
 
     
@@ -1532,16 +1788,16 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Modules & loader
+    Modules &amp; loader
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -1688,17 +1944,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_4">
         
           
-          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_4" id="__nav_6_4_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    Views & rendering
+    Views &amp; rendering
   
 
     
@@ -1709,16 +1965,16 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_4">
             <span class="md-nav__icon md-icon"></span>
             
   
-    Views & rendering
+    Views &amp; rendering
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -1809,10 +2065,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_5">
         
           
-          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_5" id="__nav_6_5_label" tabindex="">
             
   
   
@@ -1830,8 +2086,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1839,7 +2095,7 @@
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -1986,17 +2242,17 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_6" checked="">
         
           
-          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6_6" id="__nav_6_6_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    HTTP & CLI
+    HTTP &amp; CLI
   
 
     
@@ -2007,16 +2263,16 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6_6">
             <span class="md-nav__icon md-icon"></span>
             
   
-    HTTP & CLI
+    HTTP &amp; CLI
   
 
           </label>
-          <ul class="md-nav__list" data-md-scrollfix>
+          <ul class="md-nav__list" data-md-scrollfix="">
             
               
                 
@@ -2110,7 +2366,7 @@
       <span class="md-nav__icon md-icon"></span>
       Table of contents
     </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
       
         <li class="md-nav__item">
   <a href="#pyvelm.cli" class="md-nav__link">
@@ -2197,6 +2453,1939 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7">
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases and versions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Releases and versions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/unreleased/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unreleased
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_3">
+        
+          
+          <label class="md-nav__link" for="__nav_7_3" id="__nav_7_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1 series
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    v1 series
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.4.4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.4.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.4.3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.4.3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.4.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.4.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.4.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.4.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.4.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.4.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.3.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.3.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.3.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.3.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.3.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.3.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.2.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.2.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.1.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.1.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.1.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.0.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.0.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v1.0.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v1.0.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_4">
+        
+          
+          <label class="md-nav__link" for="__nav_7_4" id="__nav_7_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.26-v0.20
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    v0.26-v0.20
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.26.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.26.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.26.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.26.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.26.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.26.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.25.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.25.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.24.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.24.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.24.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.24.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.23.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.23.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.22.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.22.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.22.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.22.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.21.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.21.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.20.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.20.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.20.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.20.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.20.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.20.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_5">
+        
+          
+          <label class="md-nav__link" for="__nav_7_5" id="__nav_7_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.19-v0.10
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    v0.19-v0.10
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.19.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.19.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.18.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.18.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.17.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.17.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.16.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.16.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.15.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.15.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.15.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.15.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.14.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.14.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.13.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.13.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.12.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.12.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.11.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.11.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.10.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.10.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_6">
+        
+          
+          <label class="md-nav__link" for="__nav_7_6" id="__nav_7_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.9-v0.2
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    v0.9-v0.2
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.9.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.9.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.8.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.8.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.7.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.7.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.6.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.6.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.5.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.5.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.4.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.4.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.3.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.3.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.10
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.9/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.9
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.8/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.8
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.7/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.7
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.6/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.5/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.5
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.4/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.2.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../versioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Doc versions (mike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -2205,7 +4394,7 @@
             
             
               
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
                     
@@ -2221,7 +4410,7 @@
       <span class="md-nav__icon md-icon"></span>
       Table of contents
     </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
       
         <li class="md-nav__item">
   <a href="#pyvelm.cli" class="md-nav__link">
@@ -2304,7 +4493,7 @@
   
 
 
-<h1 id="pyvelmcli">pyvelm.cli<a class="headerlink" href="#pyvelmcli" title="Permanent link">&para;</a></h1>
+<h1 id="pyvelmcli">pyvelm.cli<a class="headerlink" href="#pyvelmcli" title="Permanent link">¶</a></h1>
 
 
 <div class="doc doc-object doc-module">
@@ -2315,7 +4504,7 @@
             <span class="doc doc-object-name doc-module-name">cli</span>
 
 
-<a href="#pyvelm.cli" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#pyvelm.cli" class="headerlink" title="Permanent link">¶</a></h2>
 
     <div class="doc doc-contents first">
 
@@ -2374,7 +4563,7 @@ PYVELM_CRON_INTERVAL    Seconds between cron ticks. Default 60.
             <span class="doc doc-object-name doc-function-name">cron_loop</span>
 
 
-<a href="#pyvelm.cli.cron_loop" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.cli.cron_loop" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">cron_loop</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">dsn</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Path</span><span class="p">],</span> <span class="n">interval</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
@@ -2387,7 +4576,7 @@ after the current tick — useful for graceful container restarts.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/cli.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-91"> 91</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-91"> 91</a></span>
 <span class="normal"><a href="#__codelineno-0-92"> 92</a></span>
 <span class="normal"><a href="#__codelineno-0-93"> 93</a></span>
 <span class="normal"><a href="#__codelineno-0-94"> 94</a></span>
@@ -2429,11 +4618,11 @@ after the current tick — useful for graceful container restarts.</p>
 <span class="normal"><a href="#__codelineno-0-130">130</a></span>
 <span class="normal"><a href="#__codelineno-0-131">131</a></span>
 <span class="normal"><a href="#__codelineno-0-132">132</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-91"><a id="__codelineno-0-91" name="__codelineno-0-91"></a><span class="k">def</span><span class="w"> </span><span class="nf">cron_loop</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">dsn</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Path</span><span class="p">],</span> <span class="n">interval</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Boot the registry against `dsn` + `roots`, then loop forever.</span>
+</span><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="w">    </span><span class="sd">"""Boot the registry against `dsn` + `roots`, then loop forever.</span>
 </span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a>
 </span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="sd">    SIGTERM / SIGINT flip a shutdown flag and the loop exits cleanly</span>
 </span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="sd">    after the current tick — useful for graceful container restarts.</span>
-</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="sd">    """</span>
 </span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_database_from_dsn</span><span class="p">,</span> <span class="n">normalize_dsn</span>
 </span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a>
 </span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a>    <span class="n">registry</span> <span class="o">=</span> <span class="n">Registry</span><span class="p">()</span>
@@ -2441,7 +4630,7 @@ after the current tick — useful for graceful container restarts.</p>
 </span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a>    <span class="k">with</span> <span class="n">database</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
 </span><span id="__span-0-102"><a id="__codelineno-0-102" name="__codelineno-0-102"></a>        <span class="n">env</span> <span class="o">=</span> <span class="n">Environment</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">registry</span><span class="o">=</span><span class="n">registry</span><span class="p">)</span>
 </span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a>        <span class="n">loader</span><span class="o">.</span><span class="n">load_and_install</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="n">env</span><span class="p">)</span>
-</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;loaded modules; cron runner ready&quot;</span><span class="p">)</span>
+</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"loaded modules; cron runner ready"</span><span class="p">)</span>
 </span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a>
 </span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a>    <span class="n">pool</span> <span class="o">=</span> <span class="n">database</span><span class="o">.</span><span class="n">pool</span>
 </span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>
@@ -2450,7 +4639,7 @@ after the current tick — useful for graceful container restarts.</p>
 </span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_sig</span><span class="p">(</span><span class="n">_signum</span><span class="p">,</span> <span class="n">_frame</span><span class="p">):</span>
 </span><span id="__span-0-111"><a id="__codelineno-0-111" name="__codelineno-0-111"></a>        <span class="k">nonlocal</span> <span class="n">shutdown</span>
 </span><span id="__span-0-112"><a id="__codelineno-0-112" name="__codelineno-0-112"></a>        <span class="n">shutdown</span> <span class="o">=</span> <span class="kc">True</span>
-</span><span id="__span-0-113"><a id="__codelineno-0-113" name="__codelineno-0-113"></a>        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;shutdown signal received&quot;</span><span class="p">)</span>
+</span><span id="__span-0-113"><a id="__codelineno-0-113" name="__codelineno-0-113"></a>        <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"shutdown signal received"</span><span class="p">)</span>
 </span><span id="__span-0-114"><a id="__codelineno-0-114" name="__codelineno-0-114"></a>
 </span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a>    <span class="n">signal</span><span class="o">.</span><span class="n">signal</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">SIGTERM</span><span class="p">,</span> <span class="n">_sig</span><span class="p">)</span>
 </span><span id="__span-0-116"><a id="__codelineno-0-116" name="__codelineno-0-116"></a>    <span class="n">signal</span><span class="o">.</span><span class="n">signal</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">SIGINT</span><span class="p">,</span> <span class="n">_sig</span><span class="p">)</span>
@@ -2460,9 +4649,9 @@ after the current tick — useful for graceful container restarts.</p>
 </span><span id="__span-0-120"><a id="__codelineno-0-120" name="__codelineno-0-120"></a>            <span class="k">try</span><span class="p">:</span>
 </span><span id="__span-0-121"><a id="__codelineno-0-121" name="__codelineno-0-121"></a>                <span class="n">_tick</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">registry</span><span class="p">)</span>
 </span><span id="__span-0-122"><a id="__codelineno-0-122" name="__codelineno-0-122"></a>            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
-</span><span id="__span-0-123"><a id="__codelineno-0-123" name="__codelineno-0-123"></a>                <span class="c1"># Don&#39;t kill the runner on a single failed tick — log</span>
+</span><span id="__span-0-123"><a id="__codelineno-0-123" name="__codelineno-0-123"></a>                <span class="c1"># Don't kill the runner on a single failed tick — log</span>
 </span><span id="__span-0-124"><a id="__codelineno-0-124" name="__codelineno-0-124"></a>                <span class="c1"># and try again next interval.</span>
-</span><span id="__span-0-125"><a id="__codelineno-0-125" name="__codelineno-0-125"></a>                <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;cron tick failed&quot;</span><span class="p">)</span>
+</span><span id="__span-0-125"><a id="__codelineno-0-125" name="__codelineno-0-125"></a>                <span class="n">log</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">"cron tick failed"</span><span class="p">)</span>
 </span><span id="__span-0-126"><a id="__codelineno-0-126" name="__codelineno-0-126"></a>            <span class="c1"># Sleep in 1-second slices so the signal handler can pre-empt.</span>
 </span><span id="__span-0-127"><a id="__codelineno-0-127" name="__codelineno-0-127"></a>            <span class="n">elapsed</span> <span class="o">=</span> <span class="mf">0.0</span>
 </span><span id="__span-0-128"><a id="__codelineno-0-128" name="__codelineno-0-128"></a>            <span class="k">while</span> <span class="n">elapsed</span> <span class="o">&lt;</span> <span class="n">interval</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">shutdown</span><span class="p">:</span>
@@ -2470,7 +4659,7 @@ after the current tick — useful for graceful container restarts.</p>
 </span><span id="__span-0-130"><a id="__codelineno-0-130" name="__codelineno-0-130"></a>                <span class="n">elapsed</span> <span class="o">+=</span> <span class="mf">1.0</span>
 </span><span id="__span-0-131"><a id="__codelineno-0-131" name="__codelineno-0-131"></a>    <span class="k">finally</span><span class="p">:</span>
 </span><span id="__span-0-132"><a id="__codelineno-0-132" name="__codelineno-0-132"></a>        <span class="n">database</span><span class="o">.</span><span class="n">dispose</span><span class="p">()</span>
-</span></code></pre></div></td></tr></table></div>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2483,7 +4672,7 @@ after the current tick — useful for graceful container restarts.</p>
             <span class="doc doc-object-name doc-function-name">bootstrap_command_env</span>
 
 
-<a href="#pyvelm.cli.bootstrap_command_env" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.cli.bootstrap_command_env" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">bootstrap_command_env</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
@@ -2494,7 +4683,7 @@ after the current tick — useful for graceful container restarts.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/cli.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-695">695</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-695">695</a></span>
 <span class="normal"><a href="#__codelineno-0-696">696</a></span>
 <span class="normal"><a href="#__codelineno-0-697">697</a></span>
 <span class="normal"><a href="#__codelineno-0-698">698</a></span>
@@ -2512,14 +4701,14 @@ after the current tick — useful for graceful container restarts.</p>
 <span class="normal"><a href="#__codelineno-0-710">710</a></span>
 <span class="normal"><a href="#__codelineno-0-711">711</a></span>
 <span class="normal"><a href="#__codelineno-0-712">712</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-695"><a id="__codelineno-0-695" name="__codelineno-0-695"></a><span class="k">def</span><span class="w"> </span><span class="nf">bootstrap_command_env</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-696"><a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load registry + DB env for commands with ``requires_db=True``.&quot;&quot;&quot;</span>
+</span><span id="__span-0-696"><a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="w">    </span><span class="sd">"""Load registry + DB env for commands with ``requires_db=True``."""</span>
 </span><span id="__span-0-697"><a id="__codelineno-0-697" name="__codelineno-0-697"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_database_from_dsn</span><span class="p">,</span> <span class="n">normalize_dsn</span>
 </span><span id="__span-0-698"><a id="__codelineno-0-698" name="__codelineno-0-698"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">.env</span><span class="w"> </span><span class="kn">import</span> <span class="n">Environment</span>
 </span><span id="__span-0-699"><a id="__codelineno-0-699" name="__codelineno-0-699"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">Registry</span>
 </span><span id="__span-0-700"><a id="__codelineno-0-700" name="__codelineno-0-700"></a>
-</span><span id="__span-0-701"><a id="__codelineno-0-701" name="__codelineno-0-701"></a>    <span class="n">dsn</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PYVELM_DSN&quot;</span><span class="p">)</span>
+</span><span id="__span-0-701"><a id="__codelineno-0-701" name="__codelineno-0-701"></a>    <span class="n">dsn</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"PYVELM_DSN"</span><span class="p">)</span>
 </span><span id="__span-0-702"><a id="__codelineno-0-702" name="__codelineno-0-702"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">dsn</span><span class="p">:</span>
-</span><span id="__span-0-703"><a id="__codelineno-0-703" name="__codelineno-0-703"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="s2">&quot;PYVELM_DSN not set (required for this command)&quot;</span><span class="p">)</span>
+</span><span id="__span-0-703"><a id="__codelineno-0-703" name="__codelineno-0-703"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="s2">"PYVELM_DSN not set (required for this command)"</span><span class="p">)</span>
 </span><span id="__span-0-704"><a id="__codelineno-0-704" name="__codelineno-0-704"></a>    <span class="n">specs</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">discover</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">roots</span><span class="p">)</span>
 </span><span id="__span-0-705"><a id="__codelineno-0-705" name="__codelineno-0-705"></a>    <span class="n">ordered</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">resolve_order</span><span class="p">(</span><span class="n">specs</span><span class="p">)</span>
 </span><span id="__span-0-706"><a id="__codelineno-0-706" name="__codelineno-0-706"></a>    <span class="n">registry</span> <span class="o">=</span> <span class="n">Registry</span><span class="p">()</span>
@@ -2529,7 +4718,7 @@ after the current tick — useful for graceful container restarts.</p>
 </span><span id="__span-0-710"><a id="__codelineno-0-710" name="__codelineno-0-710"></a>    <span class="n">conn</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">open_connection</span><span class="p">()</span>
 </span><span id="__span-0-711"><a id="__codelineno-0-711" name="__codelineno-0-711"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">registry</span> <span class="o">=</span> <span class="n">registry</span>
 </span><span id="__span-0-712"><a id="__codelineno-0-712" name="__codelineno-0-712"></a>    <span class="n">ctx</span><span class="o">.</span><span class="n">env</span> <span class="o">=</span> <span class="n">Environment</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">registry</span><span class="o">=</span><span class="n">registry</span><span class="p">)</span>
-</span></code></pre></div></td></tr></table></div>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2542,7 +4731,7 @@ after the current tick — useful for graceful container restarts.</p>
             <span class="doc doc-object-name doc-function-name">main</span>
 
 
-<a href="#pyvelm.cli.main" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.cli.main" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
@@ -2553,7 +4742,7 @@ after the current tick — useful for graceful container restarts.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/cli.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-869">869</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-869">869</a></span>
 <span class="normal"><a href="#__codelineno-0-870">870</a></span>
 <span class="normal"><a href="#__codelineno-0-871">871</a></span>
 <span class="normal"><a href="#__codelineno-0-872">872</a></span>
@@ -2571,7 +4760,7 @@ after the current tick — useful for graceful container restarts.</p>
 <span class="normal"><a href="#__codelineno-0-884">884</a></span>
 <span class="normal"><a href="#__codelineno-0-885">885</a></span>
 <span class="normal"><a href="#__codelineno-0-886">886</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-869"><a id="__codelineno-0-869" name="__codelineno-0-869"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-870"><a id="__codelineno-0-870" name="__codelineno-0-870"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;``pyvelm`` entry point — subcommand dispatch.&quot;&quot;&quot;</span>
+</span><span id="__span-0-870"><a id="__codelineno-0-870" name="__codelineno-0-870"></a><span class="w">    </span><span class="sd">"""``pyvelm`` entry point — subcommand dispatch."""</span>
 </span><span id="__span-0-871"><a id="__codelineno-0-871" name="__codelineno-0-871"></a>    <span class="n">_load_dotenv</span><span class="p">()</span>
 </span><span id="__span-0-872"><a id="__codelineno-0-872" name="__codelineno-0-872"></a>    <span class="n">argv</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
 </span><span id="__span-0-873"><a id="__codelineno-0-873" name="__codelineno-0-873"></a>    <span class="k">if</span> <span class="n">argv</span> <span class="ow">and</span> <span class="n">_try_dispatch_module_command</span><span class="p">(</span><span class="n">argv</span><span class="p">):</span>
@@ -2580,15 +4769,15 @@ after the current tick — useful for graceful container restarts.</p>
 </span><span id="__span-0-876"><a id="__codelineno-0-876" name="__codelineno-0-876"></a>    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">(</span><span class="n">argv</span><span class="p">)</span>
 </span><span id="__span-0-877"><a id="__codelineno-0-877" name="__codelineno-0-877"></a>    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-0-878"><a id="__codelineno-0-878" name="__codelineno-0-878"></a>        <span class="n">parser</span><span class="o">.</span><span class="n">print_help</span><span class="p">()</span>
-</span><span id="__span-0-879"><a id="__codelineno-0-879" name="__codelineno-0-879"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">More commands (run `pyvelm list` for the full list):&quot;</span><span class="p">)</span>
+</span><span id="__span-0-879"><a id="__codelineno-0-879" name="__codelineno-0-879"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">More commands (run `pyvelm list` for the full list):"</span><span class="p">)</span>
 </span><span id="__span-0-880"><a id="__codelineno-0-880" name="__codelineno-0-880"></a>        <span class="n">reg</span> <span class="o">=</span> <span class="n">_command_registry</span><span class="p">()</span>
 </span><span id="__span-0-881"><a id="__codelineno-0-881" name="__codelineno-0-881"></a>        <span class="k">for</span> <span class="n">cmd</span> <span class="ow">in</span> <span class="n">reg</span><span class="o">.</span><span class="n">all</span><span class="p">()[:</span><span class="mi">8</span><span class="p">]:</span>
-</span><span id="__span-0-882"><a id="__codelineno-0-882" name="__codelineno-0-882"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">cmd</span><span class="o">.</span><span class="n">name</span><span class="si">:</span><span class="s2">&lt;20</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">cmd</span><span class="o">.</span><span class="n">description</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-882"><a id="__codelineno-0-882" name="__codelineno-0-882"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  </span><span class="si">{</span><span class="n">cmd</span><span class="o">.</span><span class="n">name</span><span class="si">:</span><span class="s2">&lt;20</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">cmd</span><span class="o">.</span><span class="n">description</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="s1">''</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </span><span id="__span-0-883"><a id="__codelineno-0-883" name="__codelineno-0-883"></a>        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">reg</span><span class="o">.</span><span class="n">all</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">8</span><span class="p">:</span>
-</span><span id="__span-0-884"><a id="__codelineno-0-884" name="__codelineno-0-884"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  … and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">reg</span><span class="o">.</span><span class="n">all</span><span class="p">())</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">8</span><span class="si">}</span><span class="s2"> more&quot;</span><span class="p">)</span>
+</span><span id="__span-0-884"><a id="__codelineno-0-884" name="__codelineno-0-884"></a>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  … and </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">reg</span><span class="o">.</span><span class="n">all</span><span class="p">())</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">8</span><span class="si">}</span><span class="s2"> more"</span><span class="p">)</span>
 </span><span id="__span-0-885"><a id="__codelineno-0-885" name="__codelineno-0-885"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 </span><span id="__span-0-886"><a id="__codelineno-0-886" name="__codelineno-0-886"></a>    <span class="n">args</span><span class="o">.</span><span class="n">func</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
-</span></code></pre></div></td></tr></table></div>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2601,7 +4790,7 @@ after the current tick — useful for graceful container restarts.</p>
             <span class="doc doc-object-name doc-function-name">cron_main</span>
 
 
-<a href="#pyvelm.cli.cron_main" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#pyvelm.cli.cron_main" class="headerlink" title="Permanent link">¶</a></h3>
 <div class="doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">cron_main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
@@ -2616,7 +4805,7 @@ pyvelm upgrade without edits.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>pyvelm/cli.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-889">889</a></span>
+              <div class="highlight"><table class="highlighttable"><tbody><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-889">889</a></span>
 <span class="normal"><a href="#__codelineno-0-890">890</a></span>
 <span class="normal"><a href="#__codelineno-0-891">891</a></span>
 <span class="normal"><a href="#__codelineno-0-892">892</a></span>
@@ -2635,25 +4824,25 @@ pyvelm upgrade without edits.</p>
 <span class="normal"><a href="#__codelineno-0-905">905</a></span>
 <span class="normal"><a href="#__codelineno-0-906">906</a></span>
 <span class="normal"><a href="#__codelineno-0-907">907</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-889"><a id="__codelineno-0-889" name="__codelineno-0-889"></a><span class="k">def</span><span class="w"> </span><span class="nf">cron_main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-890"><a id="__codelineno-0-890" name="__codelineno-0-890"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;``pyvelm-cron`` legacy entry point.</span>
+</span><span id="__span-0-890"><a id="__codelineno-0-890" name="__codelineno-0-890"></a><span class="w">    </span><span class="sd">"""``pyvelm-cron`` legacy entry point.</span>
 </span><span id="__span-0-891"><a id="__codelineno-0-891" name="__codelineno-0-891"></a>
 </span><span id="__span-0-892"><a id="__codelineno-0-892" name="__codelineno-0-892"></a><span class="sd">    Same shape as the old ``pyvelm-cron`` command (``--interval``,</span>
 </span><span id="__span-0-893"><a id="__codelineno-0-893" name="__codelineno-0-893"></a><span class="sd">    ``--roots``), still works without subcommand prefix. Kept so</span>
 </span><span id="__span-0-894"><a id="__codelineno-0-894" name="__codelineno-0-894"></a><span class="sd">    existing docker-compose files and systemd units survive a</span>
 </span><span id="__span-0-895"><a id="__codelineno-0-895" name="__codelineno-0-895"></a><span class="sd">    pyvelm upgrade without edits.</span>
-</span><span id="__span-0-896"><a id="__codelineno-0-896" name="__codelineno-0-896"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-896"><a id="__codelineno-0-896" name="__codelineno-0-896"></a><span class="sd">    """</span>
 </span><span id="__span-0-897"><a id="__codelineno-0-897" name="__codelineno-0-897"></a>    <span class="n">_load_dotenv</span><span class="p">()</span>
 </span><span id="__span-0-898"><a id="__codelineno-0-898" name="__codelineno-0-898"></a>    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span>
-</span><span id="__span-0-899"><a id="__codelineno-0-899" name="__codelineno-0-899"></a>        <span class="n">prog</span><span class="o">=</span><span class="s2">&quot;pyvelm-cron&quot;</span><span class="p">,</span>
+</span><span id="__span-0-899"><a id="__codelineno-0-899" name="__codelineno-0-899"></a>        <span class="n">prog</span><span class="o">=</span><span class="s2">"pyvelm-cron"</span><span class="p">,</span>
 </span><span id="__span-0-900"><a id="__codelineno-0-900" name="__codelineno-0-900"></a>        <span class="n">description</span><span class="o">=</span><span class="p">(</span>
-</span><span id="__span-0-901"><a id="__codelineno-0-901" name="__codelineno-0-901"></a>            <span class="s2">&quot;Legacy entry; same as `pyvelm cron`. Kept for &quot;</span>
-</span><span id="__span-0-902"><a id="__codelineno-0-902" name="__codelineno-0-902"></a>            <span class="s2">&quot;backward-compat with existing deployment configs.&quot;</span>
+</span><span id="__span-0-901"><a id="__codelineno-0-901" name="__codelineno-0-901"></a>            <span class="s2">"Legacy entry; same as `pyvelm cron`. Kept for "</span>
+</span><span id="__span-0-902"><a id="__codelineno-0-902" name="__codelineno-0-902"></a>            <span class="s2">"backward-compat with existing deployment configs."</span>
 </span><span id="__span-0-903"><a id="__codelineno-0-903" name="__codelineno-0-903"></a>        <span class="p">),</span>
 </span><span id="__span-0-904"><a id="__codelineno-0-904" name="__codelineno-0-904"></a>    <span class="p">)</span>
 </span><span id="__span-0-905"><a id="__codelineno-0-905" name="__codelineno-0-905"></a>    <span class="n">_add_cron_args</span><span class="p">(</span><span class="n">parser</span><span class="p">)</span>
 </span><span id="__span-0-906"><a id="__codelineno-0-906" name="__codelineno-0-906"></a>    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
 </span><span id="__span-0-907"><a id="__codelineno-0-907" name="__codelineno-0-907"></a>    <span class="n">_run_cron</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
-</span></code></pre></div></td></tr></table></div>
+</span></code></pre></div></td></tr></tbody></table></div>
             </details>
     </div>
 
@@ -2686,9 +4875,9 @@ pyvelm upgrade without edits.</p>
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
-          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden="">
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"></path></svg>
   Back to top
 </button>
         
@@ -2716,7 +4905,7 @@ pyvelm upgrade without edits.</p>
     
     
     <a href="https://github.com/sponsors/coolsam726" target="_blank" rel="noopener" title="Sponsor on GitHub" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="m241 87.1 15 20.7 15-20.7C296 52.5 336.2 32 378.9 32 452.4 32 512 91.6 512 165.1v2.6c0 112.2-139.9 242.5-212.9 298.2-12.4 9.4-27.6 14.1-43.1 14.1s-30.8-4.6-43.1-14.1C139.9 410.2 0 279.9 0 167.7v-2.6C0 91.6 59.6 32 133.1 32 175.8 32 216 52.5 241 87.1"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="m241 87.1 15 20.7 15-20.7C296 52.5 336.2 32 378.9 32 452.4 32 512 91.6 512 165.1v2.6c0 112.2-139.9 242.5-212.9 298.2-12.4 9.4-27.6 14.1-43.1 14.1s-30.8-4.6-43.1-14.1C139.9 410.2 0 279.9 0 167.7v-2.6C0 91.6 59.6 32 133.1 32 175.8 32 216 52.5 241 87.1"></path></svg>
     </a>
   
 </div>
@@ -2740,5 +4929,7 @@ pyvelm upgrade without edits.</p>
       <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
-  </body>
-</html>
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "zoom", "closeEffect": "zoom", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>
