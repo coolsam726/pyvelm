@@ -57,7 +57,7 @@ or (chatter_context and chatter_context.enabled)
         <div class="pv-form-split__main space-y-6">
             {% endif %}
 
-            {# Action toolbar — pinned to dialog footer when opened in PvDialog. #}
+            {# Action toolbar — sticky at bottom of dialog body when in PvDialog. #}
             <div class="pv-form-actions-bar flex items-center justify-between gap-3
                         {% if not in_dialog %}sticky top-0 z-20 -mx-1 px-1 py-2 mb-2
                         bg-neutral-primary/95 backdrop-blur-sm border-b border-default/80{% endif %}"

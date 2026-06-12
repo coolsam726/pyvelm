@@ -128,6 +128,26 @@
         gap: 0.5rem;
         padding: 0.75rem 1rem;
       }
+      /* In-body action bars stay inside their <form> (HTMX needs that) but
+         pin to the bottom of the scrollable dialog body like a fixed footer. */
+      .pv-fdialog-card .pv-fdialog-body form:has([data-pv-dialog-footer]) {
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+      }
+      .pv-fdialog-card [data-pv-dialog-footer] {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        flex-shrink: 0;
+        margin-top: auto;
+        margin-left: -1rem;
+        margin-right: -1rem;
+        margin-bottom: -1rem;
+        padding: 0.75rem 1rem;
+        border-top: 1px solid var(--color-default);
+        background: var(--color-neutral-secondary);
+      }
       .pv-fdialog-resize-handle {
         position: absolute;
         right: 0;
@@ -578,9 +598,10 @@
                      data-pv-form-shell
                      class="pv-fdialog-body p-4 relative min-h-[8rem]">
                 </div>
-                <div x-ref="footer" class="pv-fdialog-footer">
-                    <div x-show="mode === 'confirm' || mode === 'alert'"
-                         class="pv-fdialog-footer-inner">
+                <div x-show="mode === 'confirm' || mode === 'alert'"
+                     x-ref="footer"
+                     class="pv-fdialog-footer">
+                    <div class="pv-fdialog-footer-inner">
                         <button type="button"
                                 x-show="mode === 'confirm'"
                                 @click="close()"
@@ -592,7 +613,6 @@
                                 x-text="confirmLabel"
                                 :class="confirmBtnClass"></button>
                     </div>
-                    <div x-ref="footerContent"></div>
                 </div>
                 <div x-show="mode === 'content' && !fullscreen"
                      class="pv-fdialog-resize-handle"
@@ -1050,7 +1070,8 @@
                     const verb = ((req.verb || req.method || 'get') + '').toUpperCase();
                     // openWith() already inits the initial GET body load.
                     if (verb === 'GET' && window.pvIsDialogHtmxRequest(ev.detail)) return;
-                    this._reinitDialogContent(content);
+                    const root = (target && content.contains(target)) ? target : content;
+                    this._reinitDialogContent(root);
                 });
             },
 
@@ -1144,30 +1165,6 @@
                 if (typeof window.pvInitImportTemplateColumns === 'function') {
                     window.pvInitImportTemplateColumns(root);
                 }
-                this._syncDialogFooter(root);
-            },
-
-            _syncDialogFooter(root) {
-                const slot = this.$refs.footerContent;
-                if (!slot) return;
-                slot.innerHTML = '';
-                if (!root || this.mode !== 'content') return;
-                root.querySelectorAll('[data-pv-dialog-footer]').forEach((bar) => {
-                    const form = bar.closest('form');
-                    let formId = form && form.id;
-                    if (form && !formId) {
-                        formId = 'pv-dialog-form-'
-                            + Math.random().toString(36).slice(2, 9);
-                        form.id = formId;
-                    }
-                    bar.querySelectorAll(
-                        'button[type="submit"], input[type="submit"]',
-                    ).forEach((btn) => {
-                        if (formId) btn.setAttribute('form', formId);
-                    });
-                    bar.classList.add('pv-fdialog-footer-inner');
-                    slot.appendChild(bar);
-                });
             },
 
             _popFrame(result) {
@@ -1222,8 +1219,6 @@
                     this._resetGeometry();
                     this.loading = false;
                     this.open = true;
-                    const footerContent = this.$refs.footerContent;
-                    if (footerContent) footerContent.innerHTML = '';
                     this.$nextTick(() => this.center());
                 });
             },
@@ -1304,8 +1299,6 @@
                 this._stack = [];
                 const content = this.$refs.content;
                 if (content) content.innerHTML = '';
-                const footerContent = this.$refs.footerContent;
-                if (footerContent) footerContent.innerHTML = '';
                 if (cb) {
                     try { cb(result || null); } catch (_) {}
                 }
