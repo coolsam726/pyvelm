@@ -1,6 +1,8 @@
-# Project context — pyvelm v1.4.4
+# Project context — pyvelm v1.4.6
 
 Building an Odoo-style ERP framework in Python.
+
+**v1.4.6 (released 2026-06-12)** — Schema field reactivity See [docs/releases/v1.4.6.md](docs/releases/v1.4.6.md).
 
 **v1.4.4 (released 2026-06-12)** — List import / export See [docs/releases/v1.4.4.md](docs/releases/v1.4.4.md).
 

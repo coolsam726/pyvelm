@@ -7,6 +7,22 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.4.6] — 2026-06-12
+
+### Added
+
+- **Schema field reactivity** — Filament-style ``Field.make()`` chains: inferred
+  HTMX live drivers from ``depends_on`` and ``*_when`` domains, ``options_domain``
+  for Many2one/Many2many picker filtering, nested dotted paths
+  (``company_id.currency_id.code``) on live forms, and ``/api/m2o/search?domain=…``.
+- **Docs onboarding** — learning path, security guide refresh, and screenshot
+  lightbox on the docs site.
+
+### Fixed
+
+- **Release packaging** — restore CHANGELOG section required by the release
+  workflow (v1.4.5 tag publish failed without it).
+
 ## [1.4.4] — 2026-06-12
 
 ### Added
