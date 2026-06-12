@@ -7,6 +7,7 @@ to the same evaluator used for list search domains.
 from __future__ import annotations
 
 import inspect
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -24,6 +25,7 @@ class SchemaContext:
     record: Any = None
     submitted: dict[str, Any] = field(default_factory=dict)
     mode: str = "edit"
+    model_cls: Any = None
 
     def get(self, name: str, default: Any = None) -> Any:
         if name in self.submitted:
@@ -42,6 +44,73 @@ class SchemaContext:
                 return value.id
             return value
         return default
+
+
+def _model_for_ctx(ctx: SchemaContext):
+    if ctx.model_cls is not None:
+        return ctx.model_cls
+    if ctx.record is not None:
+        return type(ctx.record)
+    return None
+
+
+def _coerce_relational_value(
+    ctx: SchemaContext,
+    model_cls,
+    fname: str,
+    raw: Any,
+) -> Any:
+    """Turn submitted M2O ids into recordsets so dotted paths can be walked."""
+    if raw is None or raw is False or raw == "":
+        return None
+    if hasattr(raw, "_fields"):
+        return raw if getattr(raw, "_ids", None) else None
+    if model_cls is None or ctx.env is None:
+        return raw
+    from pyvelm.fields import Many2one
+
+    fld = model_cls._fields.get(fname)
+    if fld is None or not isinstance(fld, Many2one):
+        return raw
+    try:
+        rid = int(raw)
+    except (TypeError, ValueError):
+        return raw
+    if rid <= 0:
+        return None
+    rec = ctx.env[fld.comodel_name].browse(rid)
+    return rec if rec._ids else None
+
+
+def _walk_relational_path(record: Any, tail: str) -> Any:
+    """Follow ``tail`` across browseable recordsets (``country_id.code``, …)."""
+    parts = tail.split(".")
+    cur = record
+    for part in parts:
+        if cur is None:
+            return None
+        if not getattr(cur, "_fields", None):
+            return getattr(cur, part, None) if part == parts[-1] else None
+        if not getattr(cur, "_ids", None):
+            return None
+        try:
+            cur = getattr(cur, part)
+        except (AttributeError, KeyError):
+            return None
+    from pyvelm.fields import Many2one
+
+    if (
+        parts
+        and getattr(cur, "_fields", None)
+        and parts[-1] in cur._fields
+        and isinstance(cur._fields[parts[-1]], Many2one)
+        and cur is not None
+        and getattr(cur, "_ids", None)
+    ):
+        v = getattr(cur, parts[-1], None)
+        if v is not None and getattr(v, "_ids", None):
+            return v.id
+    return cur
 
 
 def _call_value_fn(fn: Callable[..., Any], ctx: SchemaContext) -> Any:
@@ -82,33 +151,28 @@ def _call_predicate(fn: Callable[..., bool], ctx: SchemaContext) -> bool:
 
 
 def _resolve_leaf_value(ctx: SchemaContext, path: str) -> Any:
+    """Resolve a dotted path against submitted vals and/or the record.
+
+  Scalars and M2O ids from live forms are coerced through ``env`` so
+  nested domains like ``company_id.currency_id.code`` work the same as
+  in SQL search domains.
+    """
     if "." not in path:
         return ctx.get(path)
     head, tail = path.split(".", 1)
-    value = ctx.get(head)
+    model_cls = _model_for_ctx(ctx)
+    raw = ctx.get(head)
+    if raw is None:
+        return None
+    value = (
+        _coerce_relational_value(ctx, model_cls, head, raw)
+        if model_cls is not None
+        else raw
+    )
     if value is None:
         return None
     if hasattr(value, "_fields"):
-        parts = tail.split(".")
-        cur = value
-        for part in parts:
-            if cur is None:
-                return None
-            if not getattr(cur, "_ids", None):
-                return None
-            try:
-                cur = getattr(cur, part)
-            except (AttributeError, KeyError):
-                return None
-        from pyvelm.fields import Many2one
-
-        if parts and parts[-1] in getattr(cur, "_fields", {}):
-            leaf = cur._fields[parts[-1]]
-            if isinstance(leaf, Many2one) and cur is not None:
-                v = getattr(cur, parts[-1], None)
-                if v is not None and getattr(v, "_ids", None):
-                    return v.id
-        return cur
+        return _walk_relational_path(value, tail)
     return getattr(value, tail, None)
 
 
@@ -241,3 +305,84 @@ def parse_live_spec(raw: Any) -> dict[str, Any] | None:
             "on_blur": bool(raw.get("on_blur")),
         }
     return None
+
+
+def _domain_leaf_heads(domain: list | tuple) -> set[str]:
+    """Return root field names referenced in a domain's leaf paths."""
+    from pyvelm.domain import iter_domain_leaves
+
+    heads: set[str] = set()
+    for leaf in iter_domain_leaves(domain):
+        heads.add(str(leaf[0]).split(".", 1)[0])
+    return heads
+
+
+def collect_schema_live_drivers(specs: list[dict]) -> set[str]:
+    """Field names that should trigger HTMX live re-renders.
+
+    Includes explicit ``live()`` fields plus any field referenced by a
+    sibling's ``depends_on`` or ``*_when`` / ``options_domain`` domain.
+    """
+    drivers: set[str] = set()
+    for spec in specs:
+        if parse_live_spec(spec.get("live")):
+            drivers.add(spec["name"])
+        for dep in spec.get("depends_on") or []:
+            drivers.add(str(dep).split(".", 1)[0])
+        for key in ("visible_when", "required_when", "readonly_when"):
+            dom = spec.get(key)
+            if isinstance(dom, (list, tuple)):
+                drivers |= _domain_leaf_heads(dom)
+        dom = spec.get("options_domain")
+        if isinstance(dom, (list, tuple)):
+            drivers |= _domain_leaf_heads(dom)
+    return drivers
+
+
+def _resolve_domain_value_ref(ctx: SchemaContext, ref: str) -> Any:
+    """Resolve ``$field`` or ``$company_id.currency_id.code`` in a domain value."""
+    if ref.startswith("$"):
+        return _resolve_leaf_value(ctx, ref[1:])
+    return _resolve_leaf_value(ctx, ref)
+
+
+def _resolve_domain_values(domain: list, ctx: SchemaContext) -> list:
+    """Materialize ``$path`` and sibling-field references in domain leaf values."""
+    out: list = []
+    for token in domain:
+        if is_domain_leaf(token):
+            field, op, val = token[0], token[1], token[2]
+            if isinstance(val, str):
+                if val.startswith("$"):
+                    val = _resolve_domain_value_ref(ctx, val)
+                elif val == str(field).split(".", 1)[0]:
+                    val = _resolve_leaf_value(ctx, val)
+            leaf = (field, op, val)
+            if len(token) > 3:
+                leaf = leaf + tuple(token[3:])
+            out.append(leaf)
+        else:
+            out.append(token)
+    return out
+
+
+def resolve_schema_domain(
+    raw: list | tuple | Callable[..., Sequence] | None,
+    ctx: SchemaContext,
+) -> list | None:
+    """Evaluate a schema domain from a static list or a module-level callable."""
+    if raw is None:
+        return None
+    if callable(raw):
+        result = _call_value_fn(raw, ctx)
+        if not result:
+            return []
+        return _resolve_domain_values(list(result), ctx)
+    if isinstance(raw, (list, tuple)):
+        return _resolve_domain_values(list(raw), ctx)
+    return None
+
+
+def resolve_options_domain(spec: dict, ctx: SchemaContext) -> list | None:
+    """Evaluate ``Field.options_domain()`` for M2O/M2M search filtering."""
+    return resolve_schema_domain(spec.get("options_domain"), ctx)

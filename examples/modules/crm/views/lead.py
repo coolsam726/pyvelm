@@ -35,11 +35,26 @@ views_data = (
         ),
         FormView.make("lead.form")
         .model("crm.lead")
-        .section("main", "Opportunity", ["name", "partner_id", "stage", "priority"])
+        .section(
+            "main",
+            "Opportunity",
+            [
+                "name",
+                "partner_id",
+                Field.make("stage").live(),
+                "priority",
+            ],
+        )
         .section(
             "financials",
             "Financials",
-            ["expected_revenue", "probability", "salesperson"],
+            [
+                Field.make("expected_revenue").readonly_when([("stage", "=", "lost")]),
+                Field.make("probability")
+                .visible_when([("stage", "in", ["proposal", "won"])])
+                .required_when([("stage", "=", "won")]),
+                "salesperson",
+            ],
         )
         .section(
             "scheduling",

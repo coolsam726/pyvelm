@@ -920,6 +920,7 @@ def create_app(
     def m2o_search(
         model: str = Query(...),
         q: str = Query(default=""),
+        domain: str = Query(default=""),
         limit: int = Query(default=10, ge=1, le=100),
         env: Environment = Depends(get_env),
     ):
@@ -932,6 +933,7 @@ def create_app(
         # Search the comodel by `name` ILIKE when available; otherwise
         # fall back to whatever stored Char field exists.
         cls = registry[model]
+        from .domain import expand_or_groups, normalize_domain
         from .fields import Char, Text
 
         text_field = None
@@ -942,10 +944,12 @@ def create_app(
                 if isinstance(field, (Char, Text)) and field.is_stored:
                     text_field = fname
                     break
-        domain = []
+        search_domain: list = list(_parse_domain(domain))
         if q and text_field is not None:
-            domain.append((text_field, "ilike", f"%{q}%"))
-        recs = Model.search(domain, limit=limit, order='"id" ASC')
+            search_domain.append((text_field, "ilike", f"%{q}%"))
+        if search_domain:
+            search_domain = normalize_domain(expand_or_groups(search_domain))
+        recs = Model.search(search_domain, limit=limit, order='"id" ASC')
         return {
             "results": [{"id": r.id, "label": _display_value(r)} for r in recs],
         }

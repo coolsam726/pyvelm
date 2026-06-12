@@ -1,5 +1,7 @@
 """View declarations for the ``partners`` module."""
 
+from __future__ import annotations
+
 from pyvelm.builders import (
     Action,
     ActionForm,
@@ -11,6 +13,14 @@ from pyvelm.builders import (
     Page,
     ViewsData,
 )
+
+
+def _parent_options_domain(record, env, get) -> list:
+    """Filter parent contacts to the selected company (schema ``options_domain``)."""
+    company_id = get("company_id")
+    if company_id:
+        return [("company_id", "=", company_id)]
+    return [("id", "=", -1)]
 
 views_data = (
     ViewsData.make()
@@ -58,11 +68,20 @@ views_data = (
                 # Filament-style schema: live re-render + domain visibility.
                 Field.make("age").live(debounce=200),
                 Field.make("birth_date").visible_when([("age", ">=", 18)]),
-                Field.make("phone").visible_when([("email", "like", "@")]),
+                # ``email`` is an inferred live driver (phone predicates).
                 "email",
+                Field.make("phone")
+                .visible_when([("email", "like", "@")])
+                .required_when([("email", "like", "@")]),
                 "country_id",
-                "company_id",
-                "parent_id",
+                Field.make("company_id").live(),
+                # Callable when empty-company → no matches; or static domain:
+                # .options_domain([("company_id", "=", "company_id")])
+                Field.make("parent_id")
+                .depends_on("company_id")
+                .options_domain(_parent_options_domain),
+                # Nested domain example (SQL + live forms):
+                # .visible_when([("company_id.currency_id.code", "=", "KES")])
                 Field.make("active").live(on_blur=True),
             ],
         )

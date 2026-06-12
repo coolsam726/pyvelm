@@ -15,11 +15,15 @@ from pyvelm.schema_eval import (
     SchemaContext,
     _call_predicate,
     _compare_leaf,
+    _coerce_relational_value,
     _eval_domain_tree,
     _resolve_leaf_value,
+    collect_schema_live_drivers,
     parse_live_spec,
     record_matches_domain,
+    resolve_options_domain,
     resolve_schema_bool,
+    resolve_schema_domain,
     spec_readonly as spec_readonly_legacy,
     spec_readonly_schema,
     spec_required,
@@ -93,6 +97,109 @@ class SchemaEvalTests(unittest.TestCase):
         self.assertEqual(spec["visible_when"], [("type", "=", "biz")])
         self.assertEqual(spec["live"], "blur")
         self.assertEqual(spec["depends_on"], ["type"])
+
+    def test_reactive_alias_matches_live(self):
+        spec = Field.make("x").reactive(debounce=150).to_dict()
+        self.assertEqual(spec["live"], 150)
+
+    def test_collect_schema_live_drivers(self):
+        specs = [
+            Field.make("age").live(debounce=100).to_dict(),
+            Field.make("birth_date").visible_when([("age", ">=", 18)]).to_dict(),
+            Field.make("parent_id")
+            .depends_on("company_id")
+            .options_domain([("company_id", "=", "company_id")])
+            .to_dict(),
+            Field.make("phone").visible_when([("email", "like", "@")]).to_dict(),
+        ]
+        drivers = collect_schema_live_drivers(specs)
+        self.assertEqual(drivers, {"age", "company_id", "email"})
+
+    def test_nested_domain_via_submitted_m2o_id(self):
+        reg = Registry()
+        with reg.activate():
+            from pyvelm import Many2one
+
+            class Currency(BaseModel):
+                _name = "test.nested.currency"
+                code = Char()
+
+            class Company(BaseModel):
+                _name = "test.nested.company"
+                currency_id = Many2one("test.nested.currency")
+
+            class Partner(BaseModel):
+                _name = "test.nested.partner"
+                company_id = Many2one("test.nested.company")
+
+        kes = _FakeRecord(Currency._fields, {"code": "KES"})
+        kes._ids = (10,)
+        company = _FakeRecord(Company._fields, {"currency_id": kes})
+        company._ids = (5,)
+
+        env = MagicMock()
+
+        def _env_get(model_name):
+            model = MagicMock()
+            if model_name == "test.nested.company":
+                model.browse.return_value = company
+            return model
+
+        env.__getitem__.side_effect = _env_get
+
+        ctx = SchemaContext(
+            env=env,
+            submitted={"company_id": "5"},
+            model_cls=Partner,
+        )
+        self.assertEqual(
+            _resolve_leaf_value(ctx, "company_id.currency_id.code"),
+            "KES",
+        )
+        self.assertTrue(
+            record_matches_domain(
+                [("company_id.currency_id.code", "=", "KES")],
+                ctx,
+            )
+        )
+        self.assertTrue(
+            _coerce_relational_value(ctx, Partner, "company_id", "5") is not None
+        )
+
+    def test_resolve_domain_dotted_dollar_ref(self):
+        ctx = SchemaContext(env=None, submitted={"company_id": 3})
+        domain = resolve_schema_domain(
+            [("parent_id", "=", "$company_id")],
+            ctx,
+        )
+        self.assertEqual(domain, [("parent_id", "=", 3)])
+
+    def test_resolve_options_domain_callable_and_sibling_ref(self):
+        spec = {
+            "name": "parent_id",
+            "options_domain": lambda _r, _e, g: [("company_id", "=", g("company_id"))],
+        }
+        ctx = SchemaContext(env=None, submitted={"company_id": 7})
+        self.assertEqual(
+            resolve_options_domain(spec, ctx),
+            [("company_id", "=", 7)],
+        )
+        static = {
+            "name": "parent_id",
+            "options_domain": [("company_id", "=", "company_id")],
+        }
+        self.assertEqual(
+            resolve_options_domain(static, ctx),
+            [("company_id", "=", 7)],
+        )
+        dollar = {
+            "name": "parent_id",
+            "options_domain": [("company_id", "=", "$company_id")],
+        }
+        self.assertEqual(
+            resolve_options_domain(dollar, ctx),
+            [("company_id", "=", 7)],
+        )
 
     def test_record_matches_domain_and_or_not(self):
         ctx = SchemaContext(env=None, submitted={"a": 1, "b": 2, "tag": "vip"})
