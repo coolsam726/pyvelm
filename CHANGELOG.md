@@ -7,6 +7,31 @@ out of the 0.x line.
 
 ## Unreleased
 
+## [1.4.4] — 2026-06-12
+
+### Added
+
+- **List import / export** — Odoo-style wizard in ``PvDialog``: upload CSV/Excel,
+  column mapping, dry-run **Test**, partial **Import** (valid rows commit; failures
+  download as ``{model}_import_failed.xlsx`` with an **Error** column).
+- **Import template builder** — pick columns, drag-reorder, optional pre-fill from
+  current list data; Many2one cells resolve by numeric **ID**, **name**, or **code**
+  (e.g. country ISO).
+- **List toolbar ⋮ menu** — Import, Export CSV, and Export Excel grouped under
+  **More actions** (after **New**).
+- **Floating dialog UX** — fixed header and footer with scrollable body, corner
+  resize, and a full-screen toggle on content dialogs.
+
+### Fixed
+
+- **Dialog footer submits** — action bars stay inside their ``<form>`` (sticky at
+  the bottom of the dialog body) so HTMX posts include ``payload`` and field
+  mappings; fixes import **Test** returning **422** and navigating to an unstyled page.
+- **Import update-by-id** — ``browse().exists()`` replaced with ``search`` so stale
+  IDs do not match deleted rows.
+- **Dialog record edit access** — edit routes respect ``record_form_access`` like
+  full-page forms.
+
 ## [1.4.3] — 2026-06-11
 
 ### Fixed

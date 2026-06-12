@@ -8,12 +8,12 @@ dict-op patches, and admin UX patterns familiar from Laravel and Filament—on a
 bespoke **Tailwind + HTMX** interface with its own layout and widgets. Built on a
 portable **SQLAlchemy Core** database layer (PostgreSQL or SQLite), FastAPI, and Jinja2.
 
-**Latest release:** [v1.4.3](releases/v1.4.3.md) — see [CHANGELOG](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#143--2026-06-11).
+**Latest release:** [v1.4.4](releases/v1.4.4.md) — see [CHANGELOG](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#144--2026-06-12).
 [Unreleased](releases/unreleased.md) for work on `main` after the tag. Use the
 header picker for older doc versions ([versioning](versioning.md)).
 
 ```bash
-pip install pyvelm==1.4.3
+pip install pyvelm==1.4.4
 ```
 
 Published on [PyPI](https://pypi.org/project/pyvelm/).  
@@ -59,7 +59,8 @@ python examples/basic.py
 
 | Version | Highlights |
 |---------|------------|
-| [Unreleased](releases/unreleased.md) | *(none yet after v1.4.3)* |
+| [Unreleased](releases/unreleased.md) | *(none yet after v1.4.4)* |
+| [v1.4.4](releases/v1.4.4.md) | **List import/export**; floating dialog resize & fullscreen; footer HTMX fix |
 | [v1.4.3](releases/v1.4.3.md) | **POST action 405 fix**; view callable persistence; DATA relative imports |
 | [v1.4.2](releases/v1.4.2.md) | **Odoo 19 layouts** (Wave/Bubble/Folder); module sync fix; editor & workflow polish |
 | [v1.4.1](releases/v1.4.1.md) | PyPI publish workflow `skip-existing` |
