@@ -23,7 +23,7 @@ import base64
 import json
 import re
 from datetime import datetime, timezone
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -1837,6 +1837,7 @@ def _enrich_specs_for_edit(
     fields_spec,
     *,
     view_module: str | None = None,
+    schema_ctx=None,
 ) -> list[dict]:
     """For each Many2one field-spec, stash the data the combobox widget
     needs without re-resolving it per row:
@@ -1851,8 +1852,13 @@ def _enrich_specs_for_edit(
     `_form_view_url` powers the inline "open record" link next to a
     rendered Many2one value, harmless when no widget needs it.
 
+    When *schema_ctx* is provided, ``options_domain`` is evaluated and
+    appended to ``_search_url`` as a JSON ``domain`` query param.
+
     Mutates a copy of each spec; caller's list is untouched.
     """
+    from pyvelm.schema_eval import resolve_options_domain
+
     out = []
     for spec in fields_spec:
         spec_copy = dict(spec)
@@ -1901,6 +1907,12 @@ def _enrich_specs_for_edit(
             spec_copy["readonly"] = True
         elif field is not None and field.compute and "readonly" not in spec_copy:
             spec_copy["readonly"] = True
+        if schema_ctx is not None and spec_copy.get("_search_url"):
+            domain = resolve_options_domain(spec_copy, schema_ctx)
+            if domain is not None:
+                spec_copy["_search_url"] = _append_search_domain(
+                    spec_copy["_search_url"], domain
+                )
         out.append(spec_copy)
     return out
 
@@ -2537,6 +2549,33 @@ def _resolve_colspan(raw, cols: int) -> int:
     return min(n, cols)
 
 
+def _normalize_field_spec(raw) -> dict:
+    if isinstance(raw, str):
+        return {"name": raw}
+    return dict(raw)
+
+
+def _iter_form_field_specs(arch: dict) -> list[dict]:
+    """Flatten every field spec declared on a form arch."""
+    specs: list[dict] = []
+    for section in arch.get("sections", []):
+        pages = section.get("pages")
+        if pages is not None:
+            for page in pages:
+                for raw in page.get("fields", []):
+                    specs.append(_normalize_field_spec(raw))
+        else:
+            for raw in section.get("fields", []):
+                specs.append(_normalize_field_spec(raw))
+    return specs
+
+
+def _append_search_domain(url: str, domain: list) -> str:
+    payload = json.dumps(domain, separators=(",", ":"))
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}domain={quote(payload)}"
+
+
 def _form_section_html(
     section_spec,
     record_or_none,
@@ -2551,6 +2590,7 @@ def _form_section_html(
     *,
     view_module: str | None = None,
     view_name: str | None = None,
+    live_drivers: set[str] | None = None,
 ) -> list[dict]:
     """Build the per-field HTML for one section.
 
@@ -2574,17 +2614,23 @@ def _form_section_html(
     errors = errors or {}
     submitted = submitted or {}
     prefill = prefill or {}
+    live_drivers = live_drivers or set()
     schema_ctx = SchemaContext(
         env=env,
         record=record_or_none,
         submitted=submitted,
         mode=mode,
+        model_cls=model_cls,
     )
     fields_spec = list(section_spec.get("fields", []))
     # Spec enrichment (URLs for relationship widgets) is harmless in
     # display mode and required by the O2m table widget, so always run.
     fields_spec = _enrich_specs_for_edit(
-        env, model_cls, fields_spec, view_module=view_module
+        env,
+        model_cls,
+        fields_spec,
+        view_module=view_module,
+        schema_ctx=schema_ctx,
     )
     record_id = record_or_none.id if record_or_none and record_or_none._ids else None
     live_base = None
@@ -2715,6 +2761,12 @@ def _form_section_html(
                     field_error = msg
                     break
         live_cfg = parse_live_spec(spec.get("live")) if mode in ("edit", "new") else None
+        if (
+            live_cfg is None
+            and mode in ("edit", "new")
+            and fname in live_drivers
+        ):
+            live_cfg = parse_live_spec(True)
         live_post = None
         live_trigger = None
         if live_cfg and live_base:
@@ -2758,6 +2810,7 @@ def _form_layout_cells(
     cols: int,
     view_module: str | None,
     view_name: str | None = None,
+    live_drivers: set[str] | None = None,
 ) -> list[dict]:
     """Render a field list (section or notebook page) to form cells."""
     section_spec = {"fields": fields_spec}
@@ -2774,6 +2827,7 @@ def _form_layout_cells(
         cols=cols,
         view_module=view_module,
         view_name=view_name,
+        live_drivers=live_drivers,
     )
 
 
@@ -2788,11 +2842,13 @@ def _form_sections(
     form_playback=None,
 ) -> list[dict]:
     from .views import resolve_arch
+    from pyvelm.schema_eval import collect_schema_live_drivers
 
     arch = resolve_arch(view)
     model_cls = env.registry[view.model]
     sections_spec = arch.get("sections", [])
     form_cols = _resolve_form_cols(arch.get("cols"))
+    live_drivers = collect_schema_live_drivers(_iter_form_field_specs(arch))
     out: list[dict] = []
     for spec in sections_spec:
         pages_spec = spec.get("pages")
@@ -2821,6 +2877,7 @@ def _form_sections(
                             cols=page_cols,
                             view_module=view.module,
                             view_name=view.name,
+                            live_drivers=live_drivers,
                         ),
                     }
                 )
@@ -2855,6 +2912,7 @@ def _form_sections(
                     cols=section_cols,
                     view_module=view.module,
                     view_name=view.name,
+                    live_drivers=live_drivers,
                 ),
             }
         )
