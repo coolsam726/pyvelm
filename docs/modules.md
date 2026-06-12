@@ -5,6 +5,15 @@ combination of models, views, and seed data. Modules are the unit of
 install, upgrade, and uninstall — they're how you ship your code as
 a self-contained piece other apps can depend on or extend.
 
+## When to read this page
+
+Use this guide after [Getting started](getting-started.md) and your first
+generated module. It explains the structure you will maintain long-term:
+
+1. Manifest and dependency metadata
+2. Data files (`views_data`) and menus
+3. Install/upgrade lifecycle, migrations, and seeders
+
 ## Shape on disk
 
 ```

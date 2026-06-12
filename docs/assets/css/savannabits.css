@@ -1,0 +1,17 @@
+/* Light mode */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #286291;
+  --md-primary-fg-color--light: #3a7ab0;
+  --md-primary-fg-color--dark: #1a4a72;
+  --md-primary-bg-color: #ffffff;
+  --md-accent-fg-color: #F1511B;
+}
+
+/* Dark mode */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #F1511B;
+  --md-primary-fg-color--light: #f4724a;
+  --md-primary-fg-color--dark: #c73d0f;
+  --md-primary-bg-color: #ffffff;
+  --md-accent-fg-color: #286291;
+}

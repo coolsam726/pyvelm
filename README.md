@@ -13,10 +13,13 @@
 **Odoo's semantics. Laravel's ergonomics. Filament's craft — in a Tailwind-native
 ERP shell that exists only here.**
 
-**PyVELM** is a declarative Python ERP on **PostgreSQL or SQLite** (SQLAlchemy Core):
+**PyVELM** is a declarative Python ERP on **SQLAlchemy-backed databases**
+(PostgreSQL, SQLite, MySQL/MariaDB, SQL Server, Oracle, and other supported dialects):
 recordsets and modules in the Odoo tradition, developer and admin patterns borrowed
 from Laravel and Filament, and a bespoke **Tailwind v4 + HTMX** interface—its own
 layout, widgets, and look & feel—not Odoo's web client or Filament's Blade stack.
+
+Backend matrix and DSN examples: [docs/multi-database.md](docs/multi-database.md).
 
 **Latest: [v1.4.4](https://github.com/coolsam726/pyvelm/blob/main/CHANGELOG.md#144--2026-06-12)** —
 bundled **contacts** module with `res.partner` list/form views. See the

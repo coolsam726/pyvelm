@@ -1,16 +1,23 @@
 # Getting started
 
-This walks through creating a brand-new **PyVELM** app, from
-`pip install pyvelm` to your first custom module showing in the browser.
-Three steps:
+This guide walks from zero to a running PyVELM app with one custom module.
 
-1. Install the `pyvelm` package and scaffold a project.
-2. Boot the app and explore.
-3. Add a module.
+You do not need internal framework knowledge to complete this page. For design
+decisions and internals, read [Architecture](architecture.md) later.
 
-You don't need to know how the framework works internally to follow
-this — the [Architecture](architecture.md) page covers concepts when
-you want them.
+## Outcome
+
+By the end, you will:
+
+1. Scaffold a project.
+2. Boot it with Docker, a local database, or SQLite.
+3. Generate and install your first module.
+
+## Prerequisites
+
+- Python 3.11+ available in your shell.
+- Optional but recommended: Docker and Docker Compose.
+- A writable project directory.
 
 ## 1. Install + scaffold
 
@@ -31,9 +38,13 @@ for the full tree.
 
 ## 2. Boot the app
 
-Three paths — pick whichever fits your machine. Docker is the easiest on a clean
-system because it provides Postgres. **SQLite** needs no database server (good for
-a quick try or CI).
+Choose one path. Docker is the quickest if you want Postgres without local DB setup.
+SQLite is fine for quick iteration and tests.
+
+PyVELM supports additional SQLAlchemy dialects (for example MySQL/MariaDB,
+SQL Server, and Oracle). This page uses Postgres/SQLite as the shortest
+first-run path. For backend matrix and DSN examples, see
+[Multi-database support](multi-database.md).
 
 ### Path A — Docker
 
@@ -42,15 +53,20 @@ cp .env.example .env       # adjust passwords for non-toy use
 docker compose up --build
 ```
 
-The compose file runs Postgres, the web app, and a dedicated cron
-worker. When the build finishes, open
+The compose file runs Postgres, the web app, and a dedicated cron worker.
+When the build finishes, open
 `http://localhost:8000/login` and sign in as `admin` / `admin`.
 
-### Path B — local Postgres + venv
+![Login screen](assets/screenshots/getting-started/getting-started-01-login.png)
+
+*Login page after the first successful boot.*
+
+### Path B — local database + venv (Postgres example)
 
 ```bash
 cp .env.example .env
-# Edit .env so PYVELM_DSN points at a Postgres database you control.
+# Edit .env so PYVELM_DSN points at a database you control.
+# Example below uses PostgreSQL; other supported SQLAlchemy DSNs also work.
 
 python3 -m venv venv
 source venv/bin/activate
@@ -61,7 +77,7 @@ python -m app.serve --reload
 ```
 
 `python -m app.serve` defaults to **development** (`PYVELM_ENV=development`):
-OpenAPI docs at `/docs`, debug logging, no `Secure` cookies (works on plain HTTP).
+OpenAPI docs at `/docs`, debug logging, and no `Secure` cookie requirement.
 
 For **production** locally: `PYVELM_ENV=production python -m app.serve --host 0.0.0.0`
 or use gunicorn as in [Deployment](deployment.md).
@@ -77,19 +93,22 @@ cp .env.example .env
 python3 -m venv venv
 source venv/bin/activate
 pip install -e .
-pyvelm db migrate --all    # model-driven schema; skips Postgres-only SQL scripts
+pyvelm db migrate --all    # model-driven schema; skips backend-specific SQL scripts when unsupported
 python -m app.serve --reload
 ```
 
-SQLite suits local development and tests. Use **PostgreSQL** for production
-multi-worker deployments. See [Database layer (v1.0)](multi-database.md).
+SQLite suits local development and tests. For production, choose a backend that
+matches your deployment constraints (PostgreSQL is the reference default).
+See [Database layer (v1.0)](multi-database.md).
 
 ### What you'll see
 
-A fresh install is empty — the bundled `base` and `admin` modules
-give you the login screen, the sidebar shell, the Apps catalog, and
-the settings pages. There's no demo data because this is your
-project, not the framework's example tree.
+A fresh app installs `base` and `admin`, which provide login,
+navigation shell, Apps catalog, and admin settings.
+
+![Shell home after login](assets/screenshots/getting-started/getting-started-02-shell-home.png)
+
+*Initial authenticated shell view.*
 
 Depending on configuration, visiting `/` as an anonymous user may show
 the public landing page (Get started → login). This is controlled by
@@ -105,18 +124,21 @@ Click around:
 - **Workflows** — server actions, automation rules, cron jobs, the
   mail outbox.
 
-## 3. Add a module
+![Apps catalog](assets/screenshots/getting-started/getting-started-03-apps-catalog.png)
 
-Run `pyvelm new` from inside the project — it auto-detects the
-modules root via the `pyvelm.toml` marker dropped by `pyvelm init`:
+*Apps catalog with bundled modules visible.*
+
+## 3. Add your first module
+
+Run `pyvelm new` inside the project. It auto-detects the module root
+from the `pyvelm.toml` marker created by `pyvelm init`:
 
 ```bash
 pyvelm new tasks
 ```
 
-That creates an **empty shell** under `./app/modules/tasks/` (manifest,
-`hooks.py`, empty `models/` and `views/` packages — no models or menus
-yet). Add code with generators:
+This creates an empty shell under `./app/modules/tasks/` (manifest, hooks,
+and empty `models/` and `views/`). Then scaffold model/view/menu files:
 
 ```bash
 pyvelm make:model tasks.todo --module=tasks
@@ -125,14 +147,32 @@ pyvelm make:menu --view=todo.list --module=tasks
 pyvelm make:stubs
 ```
 
-`make:model` scaffolds `class Todo(models.Model)` (Odoo-style). After
-you have records, fluent searches use the same ACL path as `search()`:
+![CLI scaffolding output](assets/screenshots/getting-started/getting-started-04-cli-scaffold.png)
+
+*Scaffolding commands creating the module files.*
+
+Make sure those generated view files are referenced in
+`app/modules/tasks/__pyvelm__.py` via `.data(...)`:
+
+```python
+manifest = (
+    Manifest.make("tasks")
+    # ...
+    .data("views/todo.py", "views/menu.py")
+)
+```
+
+`make:view` and `make:menu` usually update this for you, but it is worth
+verifying before running migrations.
+
+`make:model` scaffolds `class Todo(models.Model)`. Once records exist,
+you can query with the fluent API (same ACL path as `search()`):
 
 ```python
 open_items = env["tasks.todo"].query().where("active", True).order_by("name").get()
 ```
 
-Apply schema and register the module:
+Apply schema changes and sync module metadata:
 
 ```bash
 pyvelm db autogen tasks --with-views
@@ -140,25 +180,31 @@ pyvelm db migrate
 # or: docker compose up   # runs migrate, then app + cron
 ```
 
-**Apps boot** (`app/serve.py`) and **`pyvelm db migrate`** only auto-install
-**base** and **admin** on a fresh database; use **Apps → Install**,
-**`pyvelm db migrate --module tasks`**, or **`--all`** for everything else.
+On a fresh database, app boot and `pyvelm db migrate` auto-install only
+`base` and `admin`. Install your module with Apps UI, or run
+`pyvelm db migrate --module tasks` (or `--all`).
 
-The Apps page lists `tasks` in the catalog. After migrate it should show
-**Installed**; otherwise click **Install**. The shell gains a **tasks** app in the sidebar (and its pages in the
-top bar under the default `apps` layout) once menus are synced. See
-[Navigation](navigation.md) to switch layouts.
+![Tasks module installed](assets/screenshots/getting-started/getting-started-05-tasks-installed.png)
 
-For model changes later, see [Migrations workflow](migrations.md).
+*`tasks` module marked as installed in Apps.*
+
+The Apps page should show `tasks` as **Installed** after migrate. If not,
+click **Install**. Once menus are synced, the shell exposes your module.
+See [Navigation](navigation.md) for layout behavior.
+
+![Tasks menu in shell](assets/screenshots/getting-started/getting-started-06-tasks-menu.png)
+
+*New module menu visible in the shell navigation.*
+
+For future model changes, follow [Migrations workflow](migrations.md).
 
 `make:stubs` (above) writes `.pyvelm/typing/` and merges
 `pyrightconfig.json` so your editor validates model and view string
 literals (including `env.query("tasks.todo")`). See
 [IDE typing stubs](ide-typing.md).
 
-See the [CLI reference](cli.md#pyvelm-new) for the full command
-shape, including the `--in <path>` override when you're working
-outside an init'd tree.
+See [CLI reference](cli.md#pyvelm-new) for full command options,
+including `--in <path>` when working outside an init'd tree.
 
 ## What's next
 
@@ -174,5 +220,5 @@ outside an init'd tree.
   arches without forking them.
 - **[Security](security.md)** — groups, ACL, record rules,
   multi-company.
-- **[Deploying pyvelm](deployment.md)** — Docker layout, gunicorn
+- **[Deployment](deployment.md)** — Docker layout, gunicorn
   tuning, the cron worker, sending email.

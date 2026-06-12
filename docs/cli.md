@@ -6,6 +6,21 @@
 pyvelm <subcommand> [options]
 ```
 
+## Start with this
+
+If you're new, run commands in this order:
+
+```bash
+pyvelm init my_erp
+cd my_erp
+pyvelm new tasks
+pyvelm make:model tasks.todo --module=tasks
+pyvelm make:view tasks.todo --module=tasks
+pyvelm db migrate
+```
+
+Then use this page as the full reference for command options and safety notes.
+
 Subcommands:
 
 | Command | What it does |
