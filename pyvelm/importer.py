@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import re
+from datetime import date, datetime
 from typing import Any
 
 from pyvelm.fields import (
@@ -210,7 +211,14 @@ def _clean_cell(value: Any) -> Any:
         return ""
     if isinstance(value, bool):
         return value
+    if isinstance(value, (datetime, date)):
+        return value.isoformat(sep=" ", timespec="seconds")
     return value
+
+
+def _record_by_id(Model, record_id: int):
+    """Singleton recordset for *record_id*, or empty if not in the database."""
+    return Model.search([("id", "=", int(record_id))], limit=1)
 
 
 def _resolve_m2o(env, comodel: str, raw: Any) -> int | None:
@@ -219,9 +227,9 @@ def _resolve_m2o(env, comodel: str, raw: Any) -> int | None:
     Model = env[comodel]
     text = str(raw).strip()
     if text.isdigit():
-        rec = Model.browse(int(text))
-        if rec.exists():
-            return rec.id
+        found = _record_by_id(Model, int(text))
+        if found:
+            return found.id
     for key in _m2o_lookup_field_names(env, comodel):
         field = Model._fields.get(key)
         if field is None:
@@ -299,8 +307,14 @@ def import_rows(
     mapping: dict[int, str],
     *,
     update_by_id: bool = False,
+    atomic: bool = True,
 ) -> dict[str, Any]:
-    """Create or update records from parsed tabular rows."""
+    """Create or update records from parsed tabular rows.
+
+    When *atomic* is true (default), any row error aborts the whole batch
+    by raising :class:`ImportBatchError` so the caller's transaction rolls
+    back and no rows are persisted.
+    """
     env.check_access(model, "create")
     Model = env[model]
     created = 0
@@ -314,8 +328,8 @@ def import_rows(
             record_id = vals.pop("id", None)
             if update_by_id and record_id:
                 env.check_access(model, "write")
-                rec = Model.browse(int(record_id))
-                if not rec.exists():
+                rec = _record_by_id(Model, int(record_id))
+                if not rec:
                     raise ValueError(f"Record id={record_id} not found")
                 rec.write(vals)
                 updated += 1
@@ -324,12 +338,71 @@ def import_rows(
                 created += 1
         except Exception as exc:  # noqa: BLE001
             errors.append({"line": line_no, "error": str(exc)})
-    return {
+    result = {
         "created": created,
         "updated": updated,
         "errors": errors,
         "total": len(rows),
     }
+    if atomic and errors:
+        raise ImportBatchError(result)
+    return result
+
+
+def import_data_line_no(row_index: int) -> int:
+    """Spreadsheet line number for a zero-based data row (line 1 = headers)."""
+    return row_index + 2
+
+
+def import_errors_by_line(errors: list[dict[str, Any]] | None) -> dict[int, str]:
+    """Map spreadsheet line numbers to messages from :func:`import_rows`."""
+    out: dict[int, str] = {}
+    for entry in errors or []:
+        line = entry.get("line")
+        if line is None:
+            continue
+        out[int(line)] = str(entry.get("error") or "")
+    return out
+
+
+def failed_import_sheet(
+    headers: list[str],
+    rows: list[list[Any]],
+    errors: list[dict[str, Any]],
+) -> tuple[list[str], list[list[Any]]]:
+    """Build tabular failed rows with an appended Error column."""
+    errors_by_line = import_errors_by_line(errors)
+    if not errors_by_line:
+        return list(headers) + ["Error"], []
+    out_headers = list(headers) + ["Error"]
+    out_rows: list[list[Any]] = []
+    col_count = len(headers)
+    for idx, row in enumerate(rows):
+        line_no = import_data_line_no(idx)
+        err = errors_by_line.get(line_no)
+        if not err:
+            continue
+        cells = list(row)
+        if len(cells) < col_count:
+            cells.extend([""] * (col_count - len(cells)))
+        elif len(cells) > col_count:
+            cells = cells[:col_count]
+        out_rows.append(cells + [err])
+    return out_headers, out_rows
+
+
+def failed_import_xlsx_bytes(
+    headers: list[str],
+    rows: list[list[Any]],
+    errors: list[dict[str, Any]],
+    *,
+    title: str = "Failed rows",
+) -> bytes:
+    """Excel workbook of rows that failed import, with an Error column."""
+    sheet_headers, sheet_rows = failed_import_sheet(headers, rows, errors)
+    return import_template_xlsx_bytes(
+        sheet_headers, title=title, rows=sheet_rows,
+    )
 
 
 def export_list_data(
@@ -392,13 +465,34 @@ def import_template_headers(fields: list[dict[str, Any]]) -> list[str]:
     return [spec.get("label") or spec["name"] for spec in fields]
 
 
+def import_template_data_rows(
+    env,
+    model: str,
+    fields: list[dict[str, Any]],
+    records,
+) -> list[list[Any]]:
+    """Build template data rows for *records* using the selected import columns."""
+    fields_spec = [
+        {"name": f["name"], "label": f.get("label") or f["name"]}
+        for f in fields
+    ]
+    _headers, rows = export_list_data(env, model, fields_spec, records)
+    return rows
+
+
 def import_template_xlsx_bytes(
     headers: list[str],
     *,
     title: str = "Import",
+    rows: list[list[Any]] | None = None,
 ) -> bytes:
-    """Blank Excel import template (header row only) via openpyxl."""
-    return export_xlsx_bytes(headers, [], title=title)
+    """Excel import template via openpyxl (headers only, or with optional data rows)."""
+    return export_xlsx_bytes(headers, rows or [], title=title)
+
+
+def parse_include_data_query(value: str | None) -> bool:
+    """True when the user asked to pre-fill the template with existing records."""
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def export_csv_bytes(headers: list[str], rows: list[list[Any]]) -> bytes:
@@ -431,7 +525,7 @@ def export_xlsx_bytes(headers: list[str], rows: list[list[Any]], *, title: str =
 def encode_import_payload(headers: list[str], rows: list[list[Any]]) -> str:
     """JSON payload for the preview → run step (capped)."""
     capped = rows[:_MAX_IMPORT_ROWS]
-    return json.dumps({"headers": headers, "rows": capped})
+    return json.dumps({"headers": headers, "rows": capped}, default=str)
 
 
 def decode_import_payload(raw: str) -> tuple[list[str], list[list[Any]]]:
@@ -458,6 +552,16 @@ def mapping_from_form(
     if not mapping:
         mapping = suggest_column_mapping(headers, fields)
     return mapping
+
+
+class ImportBatchError(Exception):
+    """Raised when an atomic import has row errors — rolls back the transaction."""
+
+    def __init__(self, result: dict[str, Any]):
+        self.result = result
+        super().__init__(
+            f"{len(result.get('errors') or [])} import error(s) — batch aborted"
+        )
 
 
 class ImportTestAbort(Exception):

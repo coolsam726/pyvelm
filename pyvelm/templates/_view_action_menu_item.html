@@ -1,0 +1,48 @@
+{% if menu_item.kind == 'dialog' and menu_item.url %}
+<button type="button"
+        role="menuitem"
+        data-pv-dialog
+        data-pv-dialog-url="{{ menu_item.url }}"
+        data-pv-dialog-title="{{ menu_item.dialog_title or menu_item.label }}"
+        @click="open = false"
+        class="block w-full text-left px-3 py-1.5 text-sm text-body
+               hover:bg-neutral-secondary hover:text-heading whitespace-nowrap">
+    {{ menu_item.label }}
+</button>
+{% elif menu_item.kind == 'inline_form' and menu_item.form_url %}
+<button type="button"
+        role="menuitem"
+        @click="open = false; window.PvDialog && window.PvDialog.open({
+            url: {{ menu_item.form_url | tojson }},
+            title: {{ menu_item.label | tojson }},
+            onResult: function() {
+                window.dispatchEvent(new CustomEvent('pv-list-reload'));
+                if (window.location.pathname.indexOf('/record/') !== -1) {
+                    window.location.reload();
+                }
+            }
+        })"
+        class="block w-full text-left px-3 py-1.5 text-sm text-body
+               hover:bg-neutral-secondary hover:text-heading whitespace-nowrap">
+    {{ menu_item.label }}
+</button>
+{% elif menu_item.method == 'GET' and menu_item.url and (menu_item.full_page or not menu_item.url.startswith('/web/views/' ~ view.module ~ '/' ~ view.name)) %}
+<a href="{{ menu_item.url }}"
+   role="menuitem"
+   @click="open = false"
+   class="block px-3 py-1.5 text-sm text-body hover:bg-neutral-secondary
+          hover:text-heading whitespace-nowrap">
+    {{ menu_item.label }}
+</a>
+{% elif menu_item.url %}
+<button type="button"
+        role="menuitem"
+        @click="open = false"
+        hx-{{ menu_item.method | lower }}="{{ menu_item.url }}"
+        hx-swap="none"
+        {% if menu_item.confirm %}hx-confirm="{{ menu_item.confirm }}"{% endif %}
+        class="block w-full text-left px-3 py-1.5 text-sm text-body
+               hover:bg-neutral-secondary hover:text-heading whitespace-nowrap">
+    {{ menu_item.label }}
+</button>
+{% endif %}

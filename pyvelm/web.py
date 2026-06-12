@@ -1252,8 +1252,13 @@ def create_app(
         env: Environment,
         *,
         selected_fields: list[str] | None = None,
+        include_data: bool = False,
+        search: str = "",
+        order: str = "",
+        filters: str = "",
     ) -> Response:
         from .importer import (
+            import_template_data_rows,
             import_template_fields_for_view,
             import_template_headers,
             import_template_xlsx_bytes,
@@ -1265,8 +1270,19 @@ def create_app(
             env, view, selected_names=selected_fields,
         )
         headers = import_template_headers(fields)
+        rows: list = []
+        if include_data:
+            env.check_access(view.model, "read")
+            _fields_spec, records = _list_export_records(
+                env, view, search=search, order=order, filters=filters,
+            )
+            rows = import_template_data_rows(
+                env, view.model, fields, records,
+            )
         title = _view_title(view, resolve_arch(view))
-        body = import_template_xlsx_bytes(headers, title=title or view.name)
+        body = import_template_xlsx_bytes(
+            headers, title=title or view.name, rows=rows,
+        )
         safe = re.sub(r"[^A-Za-z0-9._-]+", "_", title or view.name).strip("_") or view.name
         return Response(
             content=body,
@@ -1285,17 +1301,27 @@ def create_app(
         name: str,
         request: Request,
         fields: list[str] = Query(default=[]),
+        include_data: str = Query(default=""),
+        search: str = Query(default=""),
+        order: str = Query(default=""),
+        filters: str = Query(default=""),
         env: Environment = Depends(get_env),
     ):
         if env.uid is None:
             return _auth_required_response(request)
-        from .importer import parse_fields_query
+        from .importer import parse_fields_query, parse_include_data_query
 
         view = _require_list_view(env, module, name)
         if not env.has_access(view.model, "create"):
             raise PermissionError(f"You cannot import {view.model} records.")
         return _list_import_template_response(
-            view, env, selected_fields=parse_fields_query(fields),
+            view,
+            env,
+            selected_fields=parse_fields_query(fields),
+            include_data=parse_include_data_query(include_data),
+            search=search,
+            order=order,
+            filters=filters,
         )
 
     @app.get("/web/views/{module}/{name}/import")
@@ -1305,11 +1331,15 @@ def create_app(
         request: Request,
         download: str = Query(default=""),
         fields: list[str] = Query(default=[]),
+        include_data: str = Query(default=""),
+        search: str = Query(default=""),
+        order: str = Query(default=""),
+        filters: str = Query(default=""),
         env: Environment = Depends(get_env),
     ):
         if env.uid is None:
             return _auth_required_response(request)
-        from .importer import parse_fields_query
+        from .importer import parse_fields_query, parse_include_data_query
         from .render import render_list_import_page
 
         view = _require_list_view(env, module, name)
@@ -1318,11 +1348,25 @@ def create_app(
         selected = parse_fields_query(fields)
         if download.lower() in ("template", "xlsx", "1"):
             return _list_import_template_response(
-                view, env, selected_fields=selected,
+                view,
+                env,
+                selected_fields=selected,
+                include_data=parse_include_data_query(include_data),
+                search=search,
+                order=order,
+                filters=filters,
             )
+        csrf = getattr(request.state, "csrf_token", "") or ""
         return HTMLResponse(
             render_list_import_page(
-                view, env, step="upload", selected_fields=selected,
+                view,
+                env,
+                step="upload",
+                selected_fields=selected,
+                list_search=search,
+                list_order=order,
+                list_filters=filters,
+                csrf_token=csrf,
             )
         )
 
@@ -1348,6 +1392,7 @@ def create_app(
         view = _require_list_view(env, module, name)
         if not env.has_access(view.model, "create"):
             raise PermissionError(f"You cannot import {view.model} records.")
+        csrf = getattr(request.state, "csrf_token", "") or ""
         content = await file.read()
         try:
             headers, rows = parse_tabular_upload(content, file.filename or "upload.csv")
@@ -1355,6 +1400,7 @@ def create_app(
             return HTMLResponse(
                 render_list_import_page(
                     view, env, step="upload", error=str(exc),
+                    csrf_token=csrf, fragment=True,
                 ),
                 status_code=422,
             )
@@ -1362,11 +1408,22 @@ def create_app(
             return HTMLResponse(
                 render_list_import_page(
                     view, env, step="upload", error="The file has no header row.",
+                    csrf_token=csrf, fragment=True,
                 ),
                 status_code=422,
             )
         fields = list_importable_fields(env, view.model)
         mapping = suggest_column_mapping(headers, fields)
+        try:
+            payload = encode_import_payload(headers, rows)
+        except (TypeError, ValueError) as exc:
+            return HTMLResponse(
+                render_list_import_page(
+                    view, env, step="upload", error=str(exc),
+                    csrf_token=csrf, fragment=True,
+                ),
+                status_code=422,
+            )
         return HTMLResponse(
             render_list_import_page(
                 view,
@@ -1376,9 +1433,11 @@ def create_app(
                 headers=headers,
                 rows=rows,
                 mapping=mapping,
-                payload=encode_import_payload(headers, rows),
+                payload=payload,
                 update_by_id=bool(update_by_id),
                 filename=file.filename or "upload",
+                csrf_token=csrf,
+                fragment=True,
             )
         )
 
@@ -1404,6 +1463,7 @@ def create_app(
         view = _require_list_view(env, module, name)
         if not env.has_access(view.model, "create"):
             raise PermissionError(f"You cannot import {view.model} records.")
+        csrf = getattr(request.state, "csrf_token", "") or ""
         form = await request.form()
         try:
             headers, rows = decode_import_payload(payload)
@@ -1412,11 +1472,13 @@ def create_app(
                 render_list_import_page(
                     view, env, step="upload",
                     error="Import session expired — upload the file again.",
+                    csrf_token=csrf, fragment=True,
                 ),
                 status_code=422,
             )
         fields = list_importable_fields(env, view.model)
         mapping = mapping_from_form(form, headers, fields)
+        filename = str(form.get("filename") or "import")
         with env.transaction():
             result = import_rows(
                 env,
@@ -1424,11 +1486,68 @@ def create_app(
                 rows,
                 mapping,
                 update_by_id=bool(update_by_id),
+                atomic=False,
             )
+        imported = result["created"] + result["updated"]
         return HTMLResponse(
             render_list_import_page(
-                view, env, step="result", result=result,
+                view,
+                env,
+                step="result",
+                result=result,
+                headers=headers,
+                payload=payload,
+                filename=filename,
+                auto_download_failed=bool(result.get("errors")),
+                import_had_success=imported > 0,
+                csrf_token=csrf,
+                fragment=True,
             )
+        )
+
+    @app.post("/web/views/{module}/{name}/import/failed.xlsx")
+    async def web_list_import_failed_xlsx(
+        module: str,
+        name: str,
+        request: Request,
+        payload: str = Form(...),
+        errors: str = Form(...),
+        env: Environment = Depends(get_env),
+    ):
+        if env.uid is None:
+            return _auth_required_response(request)
+        from .importer import decode_import_payload, failed_import_xlsx_bytes
+        from .render import _view_title
+        from .views import resolve_arch
+
+        view = _require_list_view(env, module, name)
+        if not env.has_access(view.model, "create"):
+            raise PermissionError(f"You cannot import {view.model} records.")
+        try:
+            headers, rows = decode_import_payload(payload)
+            error_rows = json.loads(errors)
+            if not isinstance(error_rows, list):
+                raise ValueError("errors must be a JSON array")
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        title = _view_title(view, resolve_arch(view))
+        body = failed_import_xlsx_bytes(
+            headers, rows, error_rows, title=f"{title or view.name} — failed",
+        )
+        safe = re.sub(
+            r"[^A-Za-z0-9._-]+", "_", title or view.name,
+        ).strip("_") or view.name
+        return Response(
+            content=body,
+            media_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="{safe}_import_failed.xlsx"'
+                ),
+                "Cache-Control": "no-store",
+            },
         )
 
     @app.post("/web/views/{module}/{name}/import/test", response_class=HTMLResponse)
@@ -1443,6 +1562,7 @@ def create_app(
         if env.uid is None:
             return _auth_required_response(request)
         from .importer import (
+            ImportBatchError,
             ImportTestAbort,
             decode_import_payload,
             import_rows,
@@ -1454,6 +1574,7 @@ def create_app(
         view = _require_list_view(env, module, name)
         if not env.has_access(view.model, "create"):
             raise PermissionError(f"You cannot import {view.model} records.")
+        csrf = getattr(request.state, "csrf_token", "") or ""
         form = await request.form()
         filename = str(form.get("filename") or "upload")
         try:
@@ -1463,6 +1584,7 @@ def create_app(
                 render_list_import_page(
                     view, env, step="upload",
                     error="Import session expired — upload the file again.",
+                    csrf_token=csrf, fragment=True,
                 ),
                 status_code=422,
             )
@@ -1478,13 +1600,15 @@ def create_app(
                     update_by_id=bool(update_by_id),
                 )
                 raise ImportTestAbort(result)
+        except ImportBatchError as exc:
+            result = exc.result
         except ImportTestAbort as exc:
             result = exc.args[0]
         if result["errors"]:
             msg = (
                 f"Test found {len(result['errors'])} error"
                 f"{'s' if len(result['errors']) != 1 else ''}. "
-                "Fix the file or mapping and test again."
+                "Nothing would be imported until all rows are valid."
             )
         else:
             parts = []
@@ -1516,6 +1640,9 @@ def create_app(
                 update_by_id=bool(update_by_id),
                 filename=filename,
                 test_message=msg,
+                test_errors=result.get("errors") or [],
+                csrf_token=csrf,
+                fragment=True,
             )
         )
 

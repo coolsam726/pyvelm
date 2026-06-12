@@ -104,9 +104,7 @@ class RecordFormAccessTests(unittest.TestCase):
         env.can.return_value = True
         env.collect_record_rules.return_value = [("active", "=", True)]
         Model = MagicMock()
-        found = MagicMock()
-        found.exists.return_value = False
-        Model.search.return_value = found
+        Model.search.return_value = MagicMock(__bool__=MagicMock(return_value=False))
         env.__getitem__ = MagicMock(return_value=Model)
         rec = MagicMock(_name="demo.item", _ids=(1,), id=1)
         access = record_form_access(env, rec)

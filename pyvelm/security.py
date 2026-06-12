@@ -213,7 +213,7 @@ def record_form_access(env: Environment, record, *, view=None) -> dict[str, Any]
             Model = env[model]
             domain = [("id", "=", record.id)] + list(rule_leaves)
             found = Model.search(domain, limit=1)
-            if not found or not found.exists():
+            if not found:
                 can_write = False
                 readonly_reason = "This record is read-only."
 

@@ -1,0 +1,30 @@
+{# Ellipsis dropdown for grouped toolbar actions (e.g. Import / Export). #}
+<div class="relative"
+     x-data="{ open: false }"
+     @click.outside="open = false"
+     @keydown.escape.window="open = false">
+    <button type="button"
+            @click="open = !open"
+            aria-haspopup="menu"
+            :aria-expanded="open.toString()"
+            aria-label="More actions"
+            title="More actions"
+            class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[2.125rem]
+                   text-sm font-medium leading-5
+                   border border-default text-body rounded-md hover:bg-neutral-secondary transition">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 6.75a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 6.75a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 6.75a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z"/>
+        </svg>
+    </button>
+    <div x-show="open"
+         x-cloak
+         x-transition
+         role="menu"
+         class="absolute right-0 top-full z-50 mt-1 min-w-[10rem] rounded-lg
+                bg-neutral-primary border border-default shadow-lg py-1">
+        {% for item in act['items'] or [] %}
+        {% set menu_item = item %}
+        {% include "_view_action_menu_item.html" %}
+        {% endfor %}
+    </div>
+</div>

@@ -3545,20 +3545,20 @@ def _default_list_io_actions(
     *,
     list_nav_query: str = "",
 ) -> list[dict]:
-    """Built-in Import / Export toolbar actions for every list view."""
+    """Built-in Import / Export menu for every list view (ellipsis dropdown)."""
     qs = f"?{list_nav_query}" if list_nav_query else ""
-    actions: list[dict] = []
+    items: list[dict] = []
     if env.has_access(view.model, "create"):
-        actions.append({
+        items.append({
             "label": "Import",
             "dialog_title": "Import a File",
-            "url": f"/web/views/{view.module}/{view.name}/import",
+            "url": f"/web/views/{view.module}/{view.name}/import{qs}",
             "method": "GET",
             "kind": "dialog",
             "action_key": "import",
         })
     if env.has_access(view.model, "read"):
-        actions.append({
+        items.append({
             "label": "Export CSV",
             "url": f"/web/views/{view.module}/{view.name}/export.csv{qs}",
             "method": "GET",
@@ -3566,7 +3566,7 @@ def _default_list_io_actions(
             "action_key": "export-csv",
             "full_page": True,
         })
-        actions.append({
+        items.append({
             "label": "Export Excel",
             "url": f"/web/views/{view.module}/{view.name}/export.xlsx{qs}",
             "method": "GET",
@@ -3574,15 +3574,35 @@ def _default_list_io_actions(
             "action_key": "export-xlsx",
             "full_page": True,
         })
-    return actions
+    if not items:
+        return []
+    return [{
+        "kind": "menu",
+        "action_key": "import-export",
+        "label": "More actions",
+        "items": items,
+    }]
 
 
 def _merge_list_page_actions(declared: list[dict], defaults: list[dict]) -> list[dict]:
-    """Append built-in IO actions unless the view already declares them."""
+    """Append built-in IO menu unless the view already declares those actions."""
     labels = {(a.get("label") or "").lower() for a in declared or []}
     keys = {(a.get("action_key") or "").lower() for a in declared or []}
     out = list(declared or [])
-    for act in defaults:
+    for act in defaults or []:
+        if act.get("kind") == "menu":
+            menu_items = []
+            for item in act.get("items") or []:
+                item_label = (item.get("label") or "").lower()
+                item_key = (item.get("action_key") or "").lower()
+                if item_label in labels or item_key in keys:
+                    continue
+                menu_items.append(item)
+            if menu_items:
+                merged = dict(act)
+                merged["items"] = menu_items
+                out.append(merged)
+            continue
         label = (act.get("label") or "").lower()
         key = (act.get("action_key") or "").lower()
         if label in labels or key in keys:
@@ -5362,18 +5382,35 @@ def render_list_import_page(
     update_by_id: bool = False,
     filename: str = "",
     test_message: str | None = None,
+    test_errors: list[dict] | None = None,
     selected_fields: list[str] | None = None,
+    import_rolled_back: bool = False,
+    import_had_success: bool = False,
+    auto_download_failed: bool = False,
+    list_search: str = "",
+    list_order: str = "",
+    list_filters: str = "",
+    csrf_token: str = "",
+    fragment: bool = False,
 ) -> str:
     """Import wizard fragment for PvDialog (upload → preview → result)."""
-    from .importer import filter_import_fields, list_importable_fields
+    from .importer import (
+        filter_import_fields,
+        import_errors_by_line,
+        list_importable_fields,
+    )
 
     importable = fields or list_importable_fields(env, view.model)
     all_importable = list_importable_fields(env, view.model)
     selected_set = {
         f["name"] for f in filter_import_fields(all_importable, selected_fields)
     } if selected_fields else {f["name"] for f in all_importable}
-    template = _env.get_template("list_import.html")
-    preview_rows = (rows or [])[:5]
+    template = _env.get_template(
+        "list_import_inner.html" if fragment else "list_import.html"
+    )
+    tested = test_errors is not None
+    preview_rows = (rows or []) if tested else (rows or [])[:5]
+    row_errors = import_errors_by_line(test_errors) if tested else {}
     return template.render(
         view=view,
         step=step,
@@ -5391,8 +5428,21 @@ def render_list_import_page(
         filename=filename,
         total_rows=len(rows or []),
         test_message=test_message,
+        test_has_errors=bool(test_errors),
+        show_row_errors=tested,
+        row_errors=row_errors,
+        csrf_token=csrf_token,
+        import_rolled_back=import_rolled_back,
+        import_had_success=import_had_success,
+        auto_download_failed=auto_download_failed,
         template_base_url=f"/web/views/{view.module}/{view.name}/import",
+        failed_download_url=(
+            f"/web/views/{view.module}/{view.name}/import/failed.xlsx"
+        ),
         template_filename=f"{view.name}_import_template.xlsx",
+        list_search=list_search,
+        list_order=list_order,
+        list_filters=list_filters,
     )
 
 

@@ -1,0 +1,340 @@
+{# Import wizard body — swapped via HTMX into #pv-import-wizard. #}
+    {% if error %}
+    <p class="text-fg-danger bg-danger-soft border border-fg-danger/30 rounded-md px-3 py-2">
+        {{ error }}
+    </p>
+    {% endif %}
+
+    {% if test_message %}
+    <p class="rounded-md px-3 py-2
+              {% if test_has_errors %}
+              text-fg-danger bg-danger-soft border border-fg-danger/30
+              {% else %}
+              text-heading bg-success-soft border border-success/30
+              {% endif %}">
+        {{ test_message }}
+    </p>
+    {% endif %}
+
+    {% if step == 'upload' %}
+    <p class="text-body-subtle">
+        Import records from an Excel file (.xlsx) or CSV. Column headers are
+        matched automatically to field names or labels. Related fields (Many2one)
+        accept a record <strong>ID</strong> or a matching <strong>name</strong>
+        — countries also accept the <strong>ISO code</strong> (e.g. <code>US</code>,
+        <code>KE</code>).
+    </p>
+    <form method="get"
+          action="{{ template_base_url }}"
+          class="space-y-3 border border-default rounded-lg p-4 bg-neutral-secondary/30">
+        <input type="hidden" name="download" value="template">
+        <div class="flex items-center justify-between gap-2">
+            <p class="font-medium text-heading">Template columns</p>
+            <div class="flex gap-2 text-xs">
+                <button type="button"
+                        onclick="this.closest('form').querySelector('#pv-import-template-fields').querySelectorAll('input[name=fields]').forEach(c => { c.checked = true; })"
+                        class="text-fg-brand hover:underline">Select all</button>
+                <button type="button"
+                        onclick="this.closest('form').querySelector('#pv-import-template-fields').querySelectorAll('input[name=fields]').forEach(c => { c.checked = false; })"
+                        class="text-body-subtle hover:underline">Clear</button>
+            </div>
+        </div>
+        <p class="text-body-subtle text-2xs">Drag to reorder columns in the downloaded file.</p>
+        <ul id="pv-import-template-fields"
+            class="space-y-0.5 max-h-48 overflow-y-auto text-xs list-none m-0 p-0">
+            {% for f in template_field_choices %}
+            <li data-field="{{ f.name }}"
+                class="pv-import-template-row flex items-start gap-2 rounded-md px-1 py-1
+                       border border-transparent hover:bg-neutral-primary/60">
+                <span data-pv-import-drag-handle
+                      draggable="true"
+                      class="mt-0.5 inline-flex items-center justify-center w-5 h-5 shrink-0
+                             rounded cursor-grab active:cursor-grabbing
+                             text-body-subtle/50 hover:text-fg-brand hover:bg-neutral-tertiary"
+                      title="Drag to reorder"
+                      aria-label="Drag to reorder">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                         viewBox="0 0 24 24" stroke-width="2.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M3.75 9h16.5m-16.5 6.75h16.5"/>
+                    </svg>
+                </span>
+                <label class="flex items-start gap-2 cursor-pointer flex-1 min-w-0">
+                    <input type="checkbox" name="fields" value="{{ f.name }}"
+                           {% if f.name in selected_field_names %}checked{% endif %}
+                           class="mt-0.5 rounded border-default text-fg-brand shrink-0">
+                    <span class="min-w-0">
+                        <span class="text-body">{{ f.label }}</span>
+                        {% if f.import_hint %}
+                        <span class="block text-body-subtle text-2xs">{{ f.import_hint }}</span>
+                        {% endif %}
+                    </span>
+                </label>
+            </li>
+            {% endfor %}
+        </ul>
+        <label class="flex items-start gap-2 cursor-pointer text-xs">
+            <input type="checkbox" name="include_data" value="1"
+                   class="mt-0.5 rounded border-default text-fg-brand shrink-0">
+            <span class="text-body">
+                Include existing records
+                <span class="block text-body-subtle text-2xs">
+                    Pre-fill rows from the current list (search and filters).
+                    Leave unchecked for a blank template.
+                </span>
+            </span>
+        </label>
+        {% if list_search %}
+        <input type="hidden" name="search" value="{{ list_search }}">
+        {% endif %}
+        {% if list_order %}
+        <input type="hidden" name="order" value="{{ list_order }}">
+        {% endif %}
+        {% if list_filters %}
+        <input type="hidden" name="filters" value="{{ list_filters }}">
+        {% endif %}
+        <button type="submit"
+                class="text-fg-brand font-medium hover:underline text-left">
+            Download Excel import template
+        </button>
+    </form>
+    <form method="post"
+          action="/web/views/{{ view.module }}/{{ view.name }}/import/preview{% if csrf_token %}?_csrf={{ csrf_token }}{% endif %}"
+          enctype="multipart/form-data"
+          hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/preview{% if csrf_token %}?_csrf={{ csrf_token }}{% endif %}"
+          hx-encoding="multipart/form-data"
+          hx-target="#pv-import-wizard"
+          hx-swap="innerHTML"
+          class="space-y-4 border border-dashed border-default rounded-lg p-4 bg-neutral-secondary/30">
+        {% if csrf_token %}
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        {% endif %}
+        <div>
+            <label class="block font-medium text-heading mb-2">Load file</label>
+            <input type="file" name="file" required accept=".csv,.xlsx,.xlsm"
+                   class="block w-full text-sm text-body
+                          file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0
+                          file:text-sm file:font-medium file:bg-fg-brand file:text-white
+                          hover:file:opacity-90 file:cursor-pointer cursor-pointer">
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="update_by_id" value="1"
+                   class="w-4 h-4 rounded border-default text-fg-brand">
+            <span>Update existing records when an <code>id</code> column is mapped</span>
+        </label>
+        <div class="flex justify-end gap-2" data-pv-dialog-footer>
+            <button type="button"
+                    onclick="window.PvDialog && window.PvDialog.close()"
+                    class="px-3 py-1.5 border border-default rounded-md hover:bg-neutral-secondary">
+                Cancel
+            </button>
+            <button type="submit"
+                    class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
+                Load
+            </button>
+        </div>
+    </form>
+
+    {% elif step == 'preview' %}
+    <p class="text-body-subtle">
+        <span class="font-medium text-heading">{{ filename }}</span> —
+        {{ total_rows }} row{{ 's' if total_rows != 1 else '' }} to import.
+        Map each file column to a field, then test or import.
+    </p>
+    <form method="post"
+          action="/web/views/{{ view.module }}/{{ view.name }}/import/run"
+          hx-target="#pv-import-wizard"
+          hx-swap="innerHTML"
+          class="space-y-4">
+        {% if csrf_token %}
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        {% endif %}
+        <input type="hidden" name="payload" value="{{ payload }}">
+        <input type="hidden" name="filename" value="{{ filename }}">
+        <input type="hidden" name="update_by_id" value="{{ '1' if update_by_id else '' }}">
+        <div class="overflow-x-auto border border-default rounded-lg
+                    {% if show_row_errors %}max-h-80{% else %}max-h-48{% endif %}">
+            <table class="min-w-full text-xs">
+                <thead class="bg-neutral-secondary sticky top-0">
+                    <tr>
+                        {% for idx in range(headers|length) %}
+                        <th class="px-2 py-1 text-left font-medium text-heading whitespace-nowrap">
+                            {{ headers[idx] }}
+                        </th>
+                        {% endfor %}
+                        {% if show_row_errors %}
+                        <th class="px-2 py-1 text-left font-medium text-fg-danger whitespace-nowrap">
+                            Error
+                        </th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in preview_rows %}
+                    {% set line_no = loop.index0 + 2 %}
+                    {% set row_error = row_errors.get(line_no, '') %}
+                    <tr class="border-t border-default{% if row_error %} bg-danger-soft/30{% endif %}">
+                        {% for cell in row %}
+                        <td class="px-2 py-1 text-body whitespace-nowrap max-w-[10rem] truncate"
+                            title="{{ cell }}">{{ cell }}</td>
+                        {% endfor %}
+                        {% if show_row_errors %}
+                        <td class="px-2 py-1 whitespace-nowrap max-w-[16rem] truncate
+                                   {% if row_error %}text-fg-danger{% else %}text-body-subtle{% endif %}"
+                            title="{{ row_error }}">{{ row_error or '—' }}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if not show_row_errors and total_rows > preview_rows|length %}
+        <p class="text-body-subtle">Preview: first {{ preview_rows|length }} data rows.</p>
+        {% elif show_row_errors and total_rows > preview_rows|length %}
+        <p class="text-body-subtle">Showing {{ preview_rows|length }} of {{ total_rows }} rows.</p>
+        {% endif %}
+        <div class="border border-default rounded-lg divide-y divide-default">
+            <div class="px-3 py-2 bg-neutral-secondary text-xs font-medium text-heading grid grid-cols-2 gap-2">
+                <span>File column</span>
+                <span>Field</span>
+            </div>
+            {% for idx in range(headers|length) %}
+            <div class="px-3 py-2 grid grid-cols-2 gap-2 items-center">
+                <span class="text-body truncate" title="{{ headers[idx] }}">{{ headers[idx] }}</span>
+                <select name="map_{{ idx }}"
+                        class="w-full text-xs border border-default rounded px-2 py-1.5 bg-neutral-primary">
+                    <option value="">— skip —</option>
+                    {% for f in fields %}
+                    <option value="{{ f.name }}"
+                            {% if mapping.get(idx) == f.name %}selected{% endif %}
+                            title="{{ f.import_hint or '' }}">
+                        {{ f.label }}{% if f.type == 'Many2one' %} → {{ f.comodel }}{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="flex justify-end gap-2" data-pv-dialog-footer>
+            <button type="button"
+                    onclick="window.PvDialog && window.PvDialog.close()"
+                    class="px-3 py-1.5 border border-default rounded-md hover:bg-neutral-secondary">
+                Cancel
+            </button>
+            <button type="submit"
+                    formaction="/web/views/{{ view.module }}/{{ view.name }}/import/test"
+                    hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/test"
+                    class="px-3 py-1.5 border border-default rounded-md hover:bg-neutral-secondary font-medium">
+                Test
+            </button>
+            <button type="submit"
+                    formaction="/web/views/{{ view.module }}/{{ view.name }}/import/run"
+                    hx-post="/web/views/{{ view.module }}/{{ view.name }}/import/run"
+                    class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
+                Import
+            </button>
+        </div>
+    </form>
+
+    {% elif step == 'result' %}
+    <div class="space-y-2">
+        {% if import_rolled_back %}
+        <p class="font-medium text-heading">Import aborted</p>
+        <p class="text-body-subtle">
+            No records were saved. Fix every error below, then test or import again.
+        </p>
+        {% elif result.errors and import_had_success %}
+        <p class="font-medium text-heading">Import partially complete</p>
+        <ul class="list-disc pl-5 text-body">
+            <li>{{ result.created }} record{{ 's' if result.created != 1 else '' }} created</li>
+            {% if result.updated %}
+            <li>{{ result.updated }} record{{ 's' if result.updated != 1 else '' }} updated</li>
+            {% endif %}
+            <li class="text-fg-danger">
+                {{ result.errors|length }} row{{ 's' if result.errors|length != 1 else '' }} failed
+            </li>
+        </ul>
+        <p class="text-body-subtle text-xs">
+            Failed rows are downloading as Excel with an Error column.
+            Fix them and import again.
+        </p>
+        {% elif result.errors %}
+        <p class="font-medium text-heading">Import failed</p>
+        <p class="text-body-subtle">
+            No records were imported.
+            Failed rows are downloading as Excel with an Error column.
+        </p>
+        {% else %}
+        <p class="font-medium text-heading">Import complete</p>
+        <ul class="list-disc pl-5 text-body">
+            <li>{{ result.created }} record{{ 's' if result.created != 1 else '' }} created</li>
+            {% if result.updated %}
+            <li>{{ result.updated }} record{{ 's' if result.updated != 1 else '' }} updated</li>
+            {% endif %}
+        </ul>
+        {% endif %}
+        {% if result.errors and not auto_download_failed %}
+        <div class="max-h-40 overflow-y-auto border border-default rounded-md p-2 text-xs">
+            {% for err in result.errors[:20] %}
+            <p>Line {{ err.line }}: {{ err.error }}</p>
+            {% endfor %}
+            {% if result.errors|length > 20 %}
+            <p class="text-body-subtle">… and {{ result.errors|length - 20 }} more</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% if auto_download_failed and payload and result.errors %}
+    <p class="text-xs">
+        <button type="button"
+                id="pv-import-failed-download-btn"
+                class="text-fg-brand hover:underline">
+            Download failed rows again
+        </button>
+    </p>
+    <script>
+    (function () {
+        const url = {{ failed_download_url | tojson }};
+        const payload = {{ payload | tojson }};
+        const errors = {{ result.errors | tojson }};
+        const token = {{ csrf_token | tojson }};
+        const btn = document.getElementById('pv-import-failed-download-btn');
+        const download = function () {
+            const body = new FormData();
+            body.append('payload', payload);
+            body.append('errors', JSON.stringify(errors));
+            if (token) body.append('_csrf', token);
+            const headers = token ? { 'X-CSRF-Token': token } : {};
+            fetch(url, { method: 'POST', body: body, headers })
+                .then(function (res) {
+                    if (!res.ok) throw new Error('download failed');
+                    const dispo = res.headers.get('Content-Disposition') || '';
+                    const match = dispo.match(/filename=\"?([^\";]+)\"?/i);
+                    const name = match ? match[1] : 'import_failed.xlsx';
+                    return res.blob().then(function (blob) {
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = name;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        setTimeout(function () {
+                            URL.revokeObjectURL(a.href);
+                        }, 2000);
+                    });
+                })
+                .catch(function () {});
+        };
+        if (btn) btn.addEventListener('click', download);
+        download();
+    })();
+    </script>
+    {% endif %}
+    <div class="flex justify-end" data-pv-dialog-footer>
+        <button type="button"
+                onclick="{% if import_had_success %}window.dispatchEvent(new CustomEvent('pv-list-reload')); {% endif %}window.PvDialog && window.PvDialog.close(true)"
+                class="px-3 py-1.5 font-medium text-white bg-fg-brand rounded-md hover:opacity-90">
+            Done
+        </button>
+    </div>
+    {% endif %}

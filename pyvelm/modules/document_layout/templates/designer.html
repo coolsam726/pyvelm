@@ -7,7 +7,10 @@
      data-pv-csrf="{{ csrf_token }}">
   <style>
     /* Widen the (otherwise 720px) PvDialog card only when it hosts the designer. */
-    .pv-fdialog-card:has(.pv-ld) { width: min(96vw, 1120px) !important; max-width: 1120px !important; }
+    .pv-fdialog-card:has(.pv-ld):not(.pv-fdialog-card--fullscreen) {
+        width: min(96vw, 1120px) !important;
+        max-width: 1120px !important;
+    }
     .pv-ld label { display:block; font-size:12px; font-weight:600; color:#374151; margin:12px 0 4px; }
     .pv-ld label:first-of-type { margin-top:0; }
     .pv-ld select, .pv-ld input[type=text] { width:100%; padding:7px 9px;
